@@ -55,6 +55,7 @@ fn collect_collision_pairs<H: CollisionHooks>(
     mut contact_graph: ResMut<ContactGraph>,
     joint_graph: Res<JointGraph>,
     mut diagnostics: ResMut<CollisionDiagnostics>,
+    ignored_collisions: Query<&IgnoredCollisions>,
 ) where
     for<'w, 's> SystemParamItem<'w, 's, H>: CollisionHooks,
 {
@@ -96,6 +97,7 @@ fn collect_collision_pairs<H: CollisionHooks>(
                         &contact_graph,
                         &joint_graph,
                         &mut pairs,
+                        ignored_collisions,
                     );
 
                     // Query kinematic tree.
@@ -112,6 +114,7 @@ fn collect_collision_pairs<H: CollisionHooks>(
                         &contact_graph,
                         &joint_graph,
                         &mut pairs,
+                        ignored_collisions,
                     );
 
                     // Skip static-static body collisions unless sensors or standalone colliders are involved.
@@ -130,6 +133,7 @@ fn collect_collision_pairs<H: CollisionHooks>(
                             &contact_graph,
                             &joint_graph,
                             &mut pairs,
+                            ignored_collisions,
                         );
                     }
 
@@ -147,6 +151,7 @@ fn collect_collision_pairs<H: CollisionHooks>(
                         &contact_graph,
                         &joint_graph,
                         &mut pairs,
+                        ignored_collisions,
                     );
                 }
             });
@@ -211,6 +216,7 @@ fn query_tree(
     contact_graph: &ContactGraph,
     joint_graph: &JointGraph,
     pairs: &mut Vec<(ColliderTreeProxyKey, ColliderTreeProxyKey)>,
+    ignored_collisions: Query<&IgnoredCollisions>,
 ) {
     tree.bvh.aabb_traverse(proxy1.aabb, |bvh, node_index| {
         let node = &bvh.nodes[node_index as usize];
@@ -255,6 +261,26 @@ fn query_tree(
 
             let entity1 = proxy1.collider;
             let entity2 = proxy2.collider;
+
+            let ent1_ignored_collisions = ignored_collisions.get(entity1).ok();
+            // Check ignored collisions of `ent1`
+            if ent1_ignored_collisions
+                .as_ref()
+                .map(|i| i.contains(&entity2))
+                .unwrap_or_default()
+            {
+                continue;
+            }
+
+            // Check ignored collisions of `ent2`
+            let ent2_ignored_collisions = ignored_collisions.get(entity2).ok();
+            if ent2_ignored_collisions
+                .as_ref()
+                .map(|i| i.contains(&entity1))
+                .unwrap_or_default()
+            {
+                continue;
+            }
 
             // Avoid duplicate pairs.
             let pair_key = PairKey::new(entity1.index_u32(), entity2.index_u32());
