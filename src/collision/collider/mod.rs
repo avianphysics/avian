@@ -542,6 +542,54 @@ impl ColliderAabb {
         let z_overlaps = self.min.z <= other.max.z && self.max.z >= other.min.z;
         x_overlaps && y_overlaps && z_overlaps
     }
+
+    /// Checks if `self` contains `other`.
+    #[inline(always)]
+    pub fn contains(&self, other: &Self) -> bool {
+        self.min.cmple(other.min).all() && self.max.cmpge(other.max).all()
+    }
+}
+
+/// An Axis-Aligned Bounding Box that contains the [`ColliderAabb`] with an additional margin.
+///
+/// This is used to avoid updating the Bounding Volume Hierarchy acceleration structure
+/// every time a collider moves only a small amount.
+///
+/// The enlarged AABB is updated automatically whenever the [`ColliderAabb`]
+/// moves beyond the bounds of the current enlarged AABB.
+#[derive(Reflect, Clone, Copy, Component, Debug, Default, Deref, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(Debug, Component, PartialEq)]
+pub struct EnlargedAabb(ColliderAabb);
+
+impl EnlargedAabb {
+    /// Creates a new [`EnlargedAabb`] from the given [`ColliderAabb`].
+    pub fn new(aabb: ColliderAabb) -> Self {
+        Self(aabb)
+    }
+
+    /// Updates the enlarged AABB with the given [`ColliderAabb`] and margin.
+    ///
+    /// If the AABB is already contained within the enlarged AABB, nothing happens.
+    ///
+    /// Returns `true` if the AABB was updated.
+    pub fn update(&mut self, aabb: &ColliderAabb, margin: Scalar) -> bool {
+        if self.contains(aabb) {
+            return false;
+        }
+
+        let margin = Vector::splat(margin);
+        self.0.min = aabb.min - margin;
+        self.0.max = aabb.max + margin;
+
+        true
+    }
+
+    /// Gets the [`ColliderAabb`] of the enlarged AABB.
+    pub fn get(&self) -> ColliderAabb {
+        self.0
+    }
 }
 
 /// A component that adds an extra margin or "skin" around [`Collider`] shapes to help maintain

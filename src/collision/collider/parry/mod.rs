@@ -10,7 +10,8 @@ mod primitives3d;
 #[cfg(feature = "2d")]
 pub use primitives2d::{EllipseColliderShape, RegularPolygonColliderShape};
 
-use crate::{make_isometry, prelude::*};
+use super::EnlargedAabb;
+use crate::{collision::broad_phase::BroadPhaseProxyIndex, make_isometry, prelude::*};
 #[cfg(feature = "collider-from-mesh")]
 use bevy::render::mesh::{Indices, VertexAttributeValues};
 use bevy::{log, prelude::*};
@@ -355,6 +356,8 @@ impl From<TrimeshFlags> for parry::shape::TriMeshFlags {
     ColliderMarker,
     ColliderAabb,
     CollisionLayers,
+    EnlargedAabb,
+    BroadPhaseProxyIndex(0),
     ColliderDensity,
     ColliderMassProperties
 )]

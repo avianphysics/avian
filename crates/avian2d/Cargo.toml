@@ -30,6 +30,7 @@ simd = ["parry2d?/simd-stable", "parry2d-f64?/simd-stable"]
 parallel = [
     "dep:thread_local",
     "bevy/multi_threaded",
+    "obvhs/parallel",
     "parry2d?/parallel",
     "parry2d-f64?/parallel",
 ]
@@ -88,9 +89,11 @@ nalgebra = { version = "0.33", features = ["convert-glam029"], optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 derive_more = "1"
 arrayvec = "0.7"
+slab = { version = "0.4.9", default-features = false }
 itertools = "0.13"
 bitflags = "2.5.0"
 thread_local = { version = "1.1", optional = true }
+obvhs = { git = "https://github.com/DGriffin91/obvhs", branch = "insertion_removal" }
 
 [dev-dependencies]
 examples_common_2d = { path = "../examples_common_2d" }

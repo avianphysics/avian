@@ -6,17 +6,11 @@ use core::marker::PhantomData;
 
 #[cfg(feature = "collider-from-mesh")]
 use crate::collision::collider::cache::ColliderCache;
-use crate::{
-    collision::broad_phase::BroadPhaseSet, prelude::*, prepare::PrepareSet, sync::SyncConfig,
-};
+use crate::{prelude::*, prepare::PrepareSet, sync::SyncConfig};
 #[cfg(all(feature = "bevy_scene", feature = "default-collider"))]
 use bevy::scene::SceneInstance;
 use bevy::{
-    ecs::{
-        intern::Interned,
-        schedule::ScheduleLabel,
-        system::{StaticSystemParam, SystemId},
-    },
+    ecs::{intern::Interned, schedule::ScheduleLabel, system::SystemId},
     prelude::*,
 };
 use mass_properties::{components::RecomputeMassProperties, MassPropertySystems};
@@ -259,20 +253,6 @@ impl<C: ScalableCollider> Plugin for ColliderBackendPlugin<C> {
             ),
         );
 
-        let physics_schedule = app
-            .get_schedule_mut(PhysicsSchedule)
-            .expect("add PhysicsSchedule first");
-
-        // Allowing ambiguities is required so that it's possible
-        // to have multiple collision backends at the same time.
-        physics_schedule.add_systems(
-            update_aabb::<C>
-                .in_set(PhysicsStepSet::BroadPhase)
-                .after(BroadPhaseSet::First)
-                .before(BroadPhaseSet::UpdateStructures)
-                .ambiguous_with_all(),
-        );
-
         #[cfg(feature = "default-collider")]
         app.add_systems(
             Update,
@@ -482,135 +462,6 @@ fn init_collider_constructor_hierarchies(
 fn pretty_name(name: Option<&Name>, entity: Entity) -> String {
     name.map(|n| n.to_string())
         .unwrap_or_else(|| format!("<unnamed entity {}>", entity.index()))
-}
-
-/// Updates the Axis-Aligned Bounding Boxes of all colliders.
-#[allow(clippy::type_complexity)]
-fn update_aabb<C: AnyCollider>(
-    mut colliders: Query<
-        (
-            Entity,
-            &C,
-            &mut ColliderAabb,
-            &Position,
-            &Rotation,
-            Option<&ColliderOf>,
-            Option<&CollisionMargin>,
-            Option<&SpeculativeMargin>,
-            Has<SweptCcd>,
-            Option<&LinearVelocity>,
-            Option<&AngularVelocity>,
-        ),
-        Or<(
-            Changed<Position>,
-            Changed<Rotation>,
-            Changed<LinearVelocity>,
-            Changed<AngularVelocity>,
-            Changed<C>,
-        )>,
-    >,
-    rb_velocities: Query<
-        (
-            &Position,
-            &ComputedCenterOfMass,
-            Option<&LinearVelocity>,
-            Option<&AngularVelocity>,
-        ),
-        With<Children>,
-    >,
-    narrow_phase_config: Res<NarrowPhaseConfig>,
-    length_unit: Res<PhysicsLengthUnit>,
-    time: Res<Time>,
-    collider_context: StaticSystemParam<C::Context>,
-) {
-    let delta_secs = time.delta_seconds_adjusted();
-    let default_speculative_margin = length_unit.0 * narrow_phase_config.default_speculative_margin;
-    let contact_tolerance = length_unit.0 * narrow_phase_config.contact_tolerance;
-
-    for (
-        entity,
-        collider,
-        mut aabb,
-        pos,
-        rot,
-        collider_of,
-        collision_margin,
-        speculative_margin,
-        has_swept_ccd,
-        lin_vel,
-        ang_vel,
-    ) in &mut colliders
-    {
-        let collision_margin = collision_margin.map_or(0.0, |margin| margin.0);
-        let speculative_margin = if has_swept_ccd {
-            Scalar::MAX
-        } else {
-            speculative_margin.map_or(default_speculative_margin, |margin| margin.0)
-        };
-
-        let context = AabbContext::new(entity, &*collider_context);
-
-        if speculative_margin <= 0.0 {
-            *aabb = collider
-                .aabb_with_context(pos.0, *rot, context)
-                .grow(Vector::splat(contact_tolerance + collision_margin));
-            continue;
-        }
-
-        // Expand the AABB based on the body's velocity and CCD speculative margin.
-        let (lin_vel, ang_vel) = if let (Some(lin_vel), Some(ang_vel)) = (lin_vel, ang_vel) {
-            (*lin_vel, *ang_vel)
-        } else if let Some(Ok((rb_pos, center_of_mass, Some(lin_vel), Some(ang_vel)))) =
-            collider_of.map(|&ColliderOf { body }| rb_velocities.get(body))
-        {
-            // If the rigid body is rotating, off-center colliders will orbit around it,
-            // which affects their linear velocities. We need to compute the linear velocity
-            // at the offset position.
-            // TODO: This assumes that the colliders would continue moving in the same direction,
-            //       but because they are orbiting, the direction will change. We should take
-            //       into account the uniform circular motion.
-            let offset = pos.0 - rb_pos.0 - center_of_mass.0;
-            #[cfg(feature = "2d")]
-            let vel_at_offset =
-                lin_vel.0 + Vector::new(-ang_vel.0 * offset.y, ang_vel.0 * offset.x) * 1.0;
-            #[cfg(feature = "3d")]
-            let vel_at_offset = lin_vel.0 + ang_vel.cross(offset);
-            (LinearVelocity(vel_at_offset), *ang_vel)
-        } else {
-            (LinearVelocity::ZERO, AngularVelocity::ZERO)
-        };
-
-        // Current position and predicted position for next feame
-        let (start_pos, start_rot) = (*pos, *rot);
-        let (end_pos, end_rot) = {
-            #[cfg(feature = "2d")]
-            {
-                (
-                    pos.0
-                        + (lin_vel.0 * delta_secs)
-                            .clamp_length_max(speculative_margin.max(contact_tolerance)),
-                    *rot * Rotation::radians(ang_vel.0 * delta_secs),
-                )
-            }
-            #[cfg(feature = "3d")]
-            {
-                let end_rot =
-                    Rotation(Quaternion::from_scaled_axis(ang_vel.0 * delta_secs) * rot.0)
-                        .fast_renormalize();
-                (
-                    pos.0
-                        + (lin_vel.0 * delta_secs)
-                            .clamp_length_max(speculative_margin.max(contact_tolerance)),
-                    end_rot,
-                )
-            }
-        };
-        // Compute swept AABB, the space that the body would occupy if it was integrated for one frame
-        // TODO: Should we expand the AABB in all directions for speculative contacts?
-        *aabb = collider
-            .swept_aabb_with_context(start_pos.0, start_rot, end_pos, end_rot, context)
-            .grow(Vector::splat(collision_margin));
-    }
 }
 
 /// Updates the scale of colliders based on [`Transform`] scale.
