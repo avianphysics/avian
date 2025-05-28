@@ -1,6 +1,6 @@
 [package]
 name = "avian2d"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = ["Joona Aalto <jondolf.dev@gmail.com>"]
@@ -27,13 +27,18 @@ f64 = []
 
 debug-plugin = ["bevy/bevy_gizmos", "bevy/bevy_render"]
 simd = ["parry2d?/simd-stable", "parry2d-f64?/simd-stable"]
-parallel = ["parry2d?/parallel", "parry2d-f64?/parallel", "bevy/multi_threaded"]
+parallel = [
+    "dep:thread_local",
+    "bevy/multi_threaded",
+    "parry2d?/parallel",
+    "parry2d-f64?/parallel",
+]
 enhanced-determinism = [
     "dep:libm",
-    "parry2d?/enhanced-determinism",
-    "parry2d-f64?/enhanced-determinism",
     "bevy_math/libm",
     "bevy_heavy/libm",
+    "parry2d?/enhanced-determinism",
+    "parry2d-f64?/enhanced-determinism",
 ]
 
 default-collider = ["dep:nalgebra"]
@@ -68,33 +73,37 @@ bench = false
 
 [dependencies]
 avian_derive = { path = "../avian_derive", version = "0.2" }
-bevy = { version = "0.15", default-features = false }
-bevy_math = { version = "0.15" }
-bevy_heavy = { version = "0.1" }
-bevy_transform_interpolation = { version = "0.1" }
+bevy = { version = "0.16", default-features = false, features = [
+    "std",
+    "bevy_log",
+] }
+bevy_math = { version = "0.16" }
+bevy_heavy = { version = "0.2" }
+bevy_transform_interpolation = { version = "0.2" }
 libm = { version = "0.2", optional = true }
+approx = "0.5"
 parry2d = { version = "0.17", optional = true }
 parry2d-f64 = { version = "0.17", optional = true }
 nalgebra = { version = "0.33", features = ["convert-glam029"], optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 derive_more = "1"
-indexmap = "2.0.0"
 arrayvec = "0.7"
-fxhash = "0.2.1"
 itertools = "0.13"
 bitflags = "2.5.0"
-thread_local = "1.1"
+thread_local = { version = "1.1", optional = true }
 
 [dev-dependencies]
 examples_common_2d = { path = "../examples_common_2d" }
 benches_common_2d = { path = "../benches_common_2d" }
-bevy_math = { version = "0.15", features = ["approx"] }
-bevy_heavy = { version = "0.1", features = ["approx"] }
+bevy_math = { version = "0.16", features = ["approx"] }
+bevy_heavy = { version = "0.2", features = ["approx"] }
 glam = { version = "0.29", features = ["bytemuck"] }
-approx = "0.5"
 bytemuck = "1.19"
 criterion = { version = "0.5", features = ["html_reports"] }
-bevy_mod_debugdump = { version = "0.12" }
+bevy_mod_debugdump = { version = "0.13" }
+
+[lints]
+workspace = true
 
 [package.metadata.docs.rs]
 # Enable features when building the docs on docs.rs
@@ -142,6 +151,10 @@ required-features = ["2d", "default-collider"]
 
 [[example]]
 name = "prismatic_joint_2d"
+required-features = ["2d", "default-collider"]
+
+[[example]]
+name = "pyramid_2d"
 required-features = ["2d", "default-collider"]
 
 [[example]]

@@ -13,6 +13,8 @@ use bevy::{
 };
 use dynamics::solver::SolverDiagnostics;
 
+use super::solver::solver_body::SolverBody;
+
 /// Integrates Newton's 2nd law of motion, applying forces and moving entities according to their velocities.
 ///
 /// This acts as a prediction for the next positions and orientations of the bodies. The [solver](dynamics::solver)
@@ -27,7 +29,7 @@ pub struct IntegratorPlugin {
 }
 
 impl IntegratorPlugin {
-    /// Creates a [`IntegratorPlugin`] with the schedule that is used for running the [`PhysicsSchedule`].
+    /// Creates an [`IntegratorPlugin`] with the schedule that the integration systems should run in.
     ///
     /// The default schedule is [`SubstepSchedule`].
     pub fn new(schedule: impl ScheduleLabel) -> Self {
@@ -72,8 +74,8 @@ impl Plugin for IntegratorPlugin {
             .expect("add PhysicsSchedule first")
             .add_systems(
                 (
-                    apply_impulses.before(SolverSet::Substep),
-                    clear_forces_and_impulses.after(SolverSet::Substep),
+                    apply_impulses.before(SolverSet::PrepareSolverBodies),
+                    clear_forces_and_impulses.after(SolverSet::Finalize),
                 )
                     .in_set(PhysicsStepSet::Solver),
             );
@@ -146,12 +148,9 @@ impl Gravity {
 #[query_data(mutable)]
 struct VelocityIntegrationQuery {
     rb: &'static RigidBody,
-    pos: &'static Position,
-    prev_pos: Option<&'static mut PreSolveAccumulatedTranslation>,
+    solver_body: &'static mut SolverBody,
     #[cfg(feature = "3d")]
     rot: &'static Rotation,
-    lin_vel: &'static mut LinearVelocity,
-    ang_vel: &'static mut AngularVelocity,
     force: &'static ExternalForce,
     torque: &'static ExternalTorque,
     mass: &'static ComputedMass,
@@ -173,24 +172,23 @@ fn integrate_velocities(
     time: Res<Time>,
     mut diagnostics: ResMut<SolverDiagnostics>,
 ) {
-    let start = bevy::utils::Instant::now();
+    let start = crate::utils::Instant::now();
 
     let delta_secs = time.delta_seconds_adjusted();
 
-    bodies.par_iter_mut().for_each(|mut body| {
-        if let Some(mut previous_position) = body.prev_pos {
-            previous_position.0 = body.pos.0;
-        }
+    // TODO: Only compute velocity increments once per time step (except for fast bodies in 3D?).
+    //       This way, we can only iterate over solver bodies, and avoid branching and change detection.
+    bodies.par_iter_mut().for_each(|body| {
+        #[cfg(feature = "3d")]
+        let is_gyroscopic = body.solver_body.is_gyroscopic();
 
-        if body.rb.is_static() {
-            if *body.lin_vel != LinearVelocity::ZERO {
-                *body.lin_vel = LinearVelocity::ZERO;
-            }
-            if *body.ang_vel != AngularVelocity::ZERO {
-                *body.ang_vel = AngularVelocity::ZERO;
-            }
-            return;
-        }
+        let SolverBody {
+            linear_velocity,
+            angular_velocity,
+            #[cfg(feature = "3d")]
+            delta_rotation,
+            ..
+        } = body.solver_body.into_inner();
 
         if body.rb.is_dynamic() {
             let locked_axes = body
@@ -199,23 +197,25 @@ fn integrate_velocities(
 
             // Apply damping
             if let Some(lin_damping) = body.lin_damping {
-                if body.lin_vel.0 != Vector::ZERO && lin_damping.0 != 0.0 {
-                    body.lin_vel.0 *= 1.0 / (1.0 + delta_secs * lin_damping.0);
+                if *linear_velocity != Vector::ZERO && lin_damping.0 != 0.0 {
+                    *linear_velocity *= 1.0 / (1.0 + delta_secs * lin_damping.0);
                 }
             }
             if let Some(ang_damping) = body.ang_damping {
-                if body.ang_vel.0 != AngularVelocity::ZERO.0 && ang_damping.0 != 0.0 {
-                    body.ang_vel.0 *= 1.0 / (1.0 + delta_secs * ang_damping.0);
+                if *angular_velocity != AngularVelocity::ZERO.0 && ang_damping.0 != 0.0 {
+                    *angular_velocity *= 1.0 / (1.0 + delta_secs * ang_damping.0);
                 }
             }
 
             let external_force = body.force.force();
             let external_torque = body.torque.torque() + body.force.torque();
             let gravity = gravity.0 * body.gravity_scale.map_or(1.0, |scale| scale.0);
+            #[cfg(feature = "3d")]
+            let rotation = *delta_rotation * *body.rot;
 
             semi_implicit_euler::integrate_velocity(
-                &mut body.lin_vel.0,
-                &mut body.ang_vel.0,
+                linear_velocity,
+                angular_velocity,
                 external_force,
                 external_torque,
                 *body.mass,
@@ -223,30 +223,32 @@ fn integrate_velocities(
                 #[cfg(feature = "3d")]
                 body.global_angular_inertia,
                 #[cfg(feature = "3d")]
-                *body.rot,
+                rotation,
                 locked_axes,
                 gravity,
                 delta_secs,
+                #[cfg(feature = "3d")]
+                is_gyroscopic,
             );
         }
 
         // Clamp velocities
         if let Some(max_linear_speed) = body.max_linear_speed {
-            let linear_speed_squared = body.lin_vel.0.length_squared();
+            let linear_speed_squared = linear_velocity.length_squared();
             if linear_speed_squared > max_linear_speed.0.powi(2) {
-                body.lin_vel.0 *= max_linear_speed.0 / linear_speed_squared.sqrt();
+                *linear_velocity *= max_linear_speed.0 / linear_speed_squared.sqrt();
             }
         }
         if let Some(max_angular_speed) = body.max_angular_speed {
             #[cfg(feature = "2d")]
-            if body.ang_vel.abs() > max_angular_speed.0 {
-                body.ang_vel.0 = max_angular_speed.copysign(body.ang_vel.0);
+            if angular_velocity.abs() > max_angular_speed.0 {
+                *angular_velocity = max_angular_speed.copysign(*angular_velocity);
             }
             #[cfg(feature = "3d")]
             {
-                let angular_speed_squared = body.ang_vel.0.length_squared();
+                let angular_speed_squared = angular_velocity.length_squared();
                 if angular_speed_squared > max_angular_speed.0.powi(2) {
-                    body.ang_vel.0 *= max_angular_speed.0 / angular_speed_squared.sqrt();
+                    *angular_velocity *= max_angular_speed.0 / angular_speed_squared.sqrt();
                 }
             }
         }
@@ -257,57 +259,34 @@ fn integrate_velocities(
 
 #[allow(clippy::type_complexity)]
 fn integrate_positions(
-    mut bodies: Query<
-        (
-            &RigidBody,
-            &Position,
-            Option<&mut PreSolveAccumulatedTranslation>,
-            &mut AccumulatedTranslation,
-            &mut Rotation,
-            &LinearVelocity,
-            &AngularVelocity,
-            Option<&LockedAxes>,
-        ),
-        RigidBodyActiveFilter,
-    >,
+    mut solver_bodies: Query<&mut SolverBody>,
     time: Res<Time>,
     mut diagnostics: ResMut<SolverDiagnostics>,
 ) {
-    let start = bevy::utils::Instant::now();
+    let start = crate::utils::Instant::now();
 
     let delta_secs = time.delta_seconds_adjusted();
 
-    bodies.par_iter_mut().for_each(
-        |(
-            rb,
-            pos,
-            pre_solve_accumulated_translation,
-            mut accumulated_translation,
-            mut rot,
-            lin_vel,
-            ang_vel,
-            locked_axes,
-        )| {
-            if let Some(mut previous_position) = pre_solve_accumulated_translation {
-                previous_position.0 = pos.0;
-            }
+    solver_bodies.par_iter_mut().for_each(|body| {
+        let SolverBody {
+            linear_velocity,
+            angular_velocity,
+            delta_position,
+            delta_rotation,
+            ..
+        } = body.into_inner();
 
-            if rb.is_static() || (lin_vel.0 == Vector::ZERO && *ang_vel == AngularVelocity::ZERO) {
-                return;
-            }
-
-            let locked_axes = locked_axes.map_or(LockedAxes::default(), |locked_axes| *locked_axes);
-
-            semi_implicit_euler::integrate_position(
-                &mut accumulated_translation.0,
-                &mut rot,
-                lin_vel.0,
-                ang_vel.0,
-                locked_axes,
-                delta_secs,
-            );
-        },
-    );
+        *delta_position += *linear_velocity * delta_secs;
+        #[cfg(feature = "2d")]
+        {
+            *delta_rotation = delta_rotation.add_angle_fast(*angular_velocity * delta_secs);
+        }
+        #[cfg(feature = "3d")]
+        {
+            delta_rotation.0 =
+                Quaternion::from_scaled_axis(*angular_velocity * delta_secs) * delta_rotation.0;
+        }
+    });
 
     diagnostics.integrate_positions += start.elapsed();
 }

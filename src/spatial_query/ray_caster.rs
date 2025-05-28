@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use bevy::{
     ecs::{
-        component::ComponentId,
+        component::HookContext,
         entity::{EntityMapper, MapEntities},
         world::DeferredWorld,
     },
@@ -202,12 +202,6 @@ impl RayCaster {
         self
     }
 
-    /// Sets the maximum time of impact, i.e. the maximum distance that the ray is allowed to travel.
-    #[deprecated(since = "0.2.0", note = "Renamed to `with_max_distance`")]
-    pub fn with_max_time_of_impact(self, max_time_of_impact: Scalar) -> Self {
-        self.with_max_distance(max_time_of_impact)
-    }
-
     /// Sets the maximum number of allowed hits.
     pub fn with_max_hits(mut self, max_hits: u32) -> Self {
         self.max_hits = max_hits;
@@ -282,13 +276,16 @@ impl RayCaster {
                 self.solid,
             );
 
-            if let Some(hit) = query_pipeline.qbvh.traverse_best_first(&mut visitor).map(
-                |(_, (entity_index, hit))| RayHitData {
-                    entity: query_pipeline.entity_from_index(entity_index),
-                    distance: hit.time_of_impact,
-                    normal: hit.normal.into(),
-                },
-            ) {
+            if let Some(hit) =
+                query_pipeline
+                    .qbvh
+                    .traverse_best_first(&mut visitor)
+                    .map(|(_, (index, hit))| RayHitData {
+                        entity: query_pipeline.proxies[index as usize].entity,
+                        distance: hit.time_of_impact,
+                        normal: hit.normal.into(),
+                    })
+            {
                 if (hits.vector.len() as u32) < hits.count + 1 {
                     hits.vector.push(hit);
                 } else {
@@ -302,25 +299,24 @@ impl RayCaster {
                 self.global_direction().adjust_precision().into(),
             );
 
-            let mut leaf_callback = &mut |entity_index: &u32| {
-                let entity = query_pipeline.entity_from_index(*entity_index);
-                if let Some((iso, shape, layers)) = query_pipeline.colliders.get(&entity) {
-                    if self.query_filter.test(entity, *layers) {
-                        if let Some(hit) = shape.shape_scaled().cast_ray_and_get_normal(
-                            iso,
+            let mut leaf_callback = &mut |index: &u32| {
+                if let Some(proxy) = query_pipeline.proxies.get(*index as usize) {
+                    if self.query_filter.test(proxy.entity, proxy.layers) {
+                        if let Some(hit) = proxy.collider.shape_scaled().cast_ray_and_get_normal(
+                            &proxy.isometry,
                             &ray,
                             self.max_distance,
                             self.solid,
                         ) {
                             if (hits.vector.len() as u32) < hits.count + 1 {
                                 hits.vector.push(RayHitData {
-                                    entity,
+                                    entity: proxy.entity,
                                     distance: hit.time_of_impact,
                                     normal: hit.normal.into(),
                                 });
                             } else {
                                 hits.vector[hits.count as usize] = RayHitData {
-                                    entity,
+                                    entity: proxy.entity,
                                     distance: hit.time_of_impact,
                                     normal: hit.normal.into(),
                                 };
@@ -342,8 +338,8 @@ impl RayCaster {
     }
 }
 
-fn on_add_ray_caster(mut world: DeferredWorld, entity: Entity, _component_id: ComponentId) {
-    let ray_caster = world.get::<RayCaster>(entity).unwrap();
+fn on_add_ray_caster(mut world: DeferredWorld, ctx: HookContext) {
+    let ray_caster = world.get::<RayCaster>(ctx.entity).unwrap();
     let max_hits = if ray_caster.max_hits == u32::MAX {
         10
     } else {
@@ -351,7 +347,7 @@ fn on_add_ray_caster(mut world: DeferredWorld, entity: Entity, _component_id: Co
     };
 
     // Initialize capacity for hits
-    world.get_mut::<RayHits>(entity).unwrap().vector = Vec::with_capacity(max_hits);
+    world.get_mut::<RayHits>(ctx.entity).unwrap().vector = Vec::with_capacity(max_hits);
 }
 
 /// Contains the hits of a ray cast by a [`RayCaster`].
@@ -422,14 +418,14 @@ impl RayHits {
     /// Returns an iterator over the hits in arbitrary order.
     ///
     /// If you want to get them sorted by distance, use `iter_sorted`.
-    pub fn iter(&self) -> std::slice::Iter<RayHitData> {
+    pub fn iter(&self) -> core::slice::Iter<RayHitData> {
         self.as_slice().iter()
     }
 
     /// Returns an iterator over the hits, sorted in ascending order according to the distance.
     ///
     /// Note that this creates and sorts a new vector. If you don't need the hits in order, use `iter`.
-    pub fn iter_sorted(&self) -> std::vec::IntoIter<RayHitData> {
+    pub fn iter_sorted(&self) -> alloc::vec::IntoIter<RayHitData> {
         let mut vector = self.as_slice().to_vec();
         vector.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
         vector.into_iter()
@@ -462,6 +458,6 @@ pub struct RayHitData {
 
 impl MapEntities for RayHitData {
     fn map_entities<M: EntityMapper>(&mut self, entity_mapper: &mut M) {
-        self.entity = entity_mapper.map_entity(self.entity);
+        self.entity = entity_mapper.get_mapped(self.entity);
     }
 }

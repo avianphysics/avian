@@ -1,13 +1,15 @@
 name: CI
 
 on:
-    push:
-        branches:
-            - main
-    pull_request:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 env:
     CARGO_TERM_COLOR: always
+    RUSTFLAGS: --deny warnings -C debuginfo=line-tables-only
+    RUSTDOCFLAGS: --deny warnings
 
 jobs:
     check:
@@ -16,8 +18,13 @@ jobs:
         steps:
             - uses: actions/checkout@v4
             - uses: dtolnay/rust-toolchain@stable
+            - uses: Swatinem/rust-cache@v2
+              with:
+                save-if: ${{ github.ref == 'refs/heads/main' }}
+                cache-all-crates: true
+                shared-key: lints
             - name: Run cargo check
-              run: cargo check
+              run: cargo check --locked --all-targets
 
     docs:
         name: Check Documentation
@@ -25,32 +32,85 @@ jobs:
         steps:
             - uses: actions/checkout@v4
             - uses: dtolnay/rust-toolchain@stable
+            - uses: Swatinem/rust-cache@v2
+              with:
+                save-if: ${{ github.ref == 'refs/heads/main' }}
+                cache-all-crates: true
+                shared-key: lints
             - name: Run cargo doc
-              run: cargo doc --workspace --no-deps --document-private-items --keep-going
-              env:
-                  RUSTDOCFLAGS: "-D warnings"
+              run: cargo doc --locked --workspace --no-deps --document-private-items --keep-going
 
     test:
         name: Test Suite
         strategy:
             matrix:
-                # TODO: Add ubuntu-latest back. It had CI storage issues, so it's left out for now.
-                os: [windows-latest, macos-latest]
+                os: [windows-latest, macos-latest, ubuntu-latest]
+        env:
+            RUSTFLAGS: --deny warnings -C debuginfo=line-tables-only -Zthreads=0
         runs-on: ${{ matrix.os }}
         timeout-minutes: 60
         steps:
             - uses: actions/checkout@v4
-            - uses: dtolnay/rust-toolchain@stable
+            - uses: dtolnay/rust-toolchain@nightly
+              with:
+                components: llvm-tools-preview
+            - uses: cargo-bins/cargo-binstall@main
+            - name: Install nextest
+              run: cargo binstall cargo-nextest --force
+            - name: Install LLD
+              run: cargo binstall cargo-binutils --force
+            - name: Activate CI cargo config
+              run: mv .cargo/config_ci.toml .cargo/config.toml
+            - name: set LD_LIBRARY_PATH on unix
+              id: ld-unix
+              run: |
+                # Linux
+                echo "LD_LIBRARY_PATH=$(rustc --print target-libdir)" >> "$GITHUB_ENV"
+                # macOS
+                echo "DYLD_LIBRARY_PATH=$(rustc --print target-libdir)" >> "$GITHUB_ENV"
+                echo "libdir=$(rustc --print target-libdir)" >> "$GITHUB_OUTPUT"
+              if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest' }}
+            - name: set LD_LIBRARY_PATH on Windows
+              id: ld-windows
+              run: |
+                $libDir = (rustc --print target-libdir)
+                Add-Content -Path $env:GITHUB_ENV -Value "RUST_LIB_DIR=$libDir"
+                Add-Content -Path $env:GITHUB_PATH -Value "$libDir"
+                "libdir=$libDir" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+              shell: pwsh
+              if: ${{ matrix.os == 'windows-latest' }}
+            - name: Restore Rust cache on Unix
+              uses: Swatinem/rust-cache@v2
+              if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest' }}
+              with:
+                save-if: ${{ github.ref == 'refs/heads/main' }}
+                cache-directories: ${{ steps.ld-unix.outputs.libdir }}
+                cache-all-crates: true
+            - name: Restore Rust cache on Windows
+              uses: Swatinem/rust-cache@v2
+              if: ${{ matrix.os == 'windows-latest' }}
+              with:
+                save-if: ${{ github.ref == 'refs/heads/main' }}
+                cache-directories: ${{ steps.ld-windows.outputs.libdir }}
+                cache-all-crates: true
             - name: Run cargo test
-              run: cargo test --no-default-features --features enhanced-determinism,collider-from-mesh,serialize,debug-plugin,avian2d/2d,avian3d/3d,avian2d/f64,avian3d/f64,default-collider,parry-f64,bevy_scene,bevy_picking,diagnostic_ui
-
+              run: cargo nextest run --locked --no-default-features --lib --bins --examples --no-fail-fast --features enhanced-determinism,parallel,collider-from-mesh,serialize,debug-plugin,avian2d/2d,avian3d/3d,avian2d/f64,avian3d/f64,default-collider,parry-f64,bevy_scene,bevy_picking,diagnostic_ui,bevy/dynamic_linking
+            - name: Run doc tests
+              run: cargo test --locked --doc --no-default-features --features enhanced-determinism,parallel,collider-from-mesh,serialize,debug-plugin,avian2d/2d,avian3d/3d,avian2d/f64,avian3d/f64,default-collider,parry-f64,bevy_scene,bevy_picking,diagnostic_ui,bevy/dynamic_linking
+  
+           
     lints:
         name: Lints
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
             - uses: dtolnay/rust-toolchain@stable
+            - uses: Swatinem/rust-cache@v2
+              with:
+                save-if: ${{ github.ref == 'refs/heads/main' }}
+                cache-all-crates: true
+                shared-key: lints
             - name: Run cargo fmt
               run: cargo fmt --all -- --check
             - name: Run cargo clippy
-              run: cargo clippy -- -D warnings
+              run: cargo clippy --locked --all-targets

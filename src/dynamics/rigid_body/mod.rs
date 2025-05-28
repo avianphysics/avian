@@ -273,14 +273,9 @@ use derive_more::From;
     ComputedMass,
     ComputedAngularInertia,
     ComputedCenterOfMass,
-    // Currently required for solver internals.
-    // Some of these might be removed in the future.
-    AccumulatedTranslation,
-    PreSolveAccumulatedTranslation,
-    PreSolveLinearVelocity,
-    PreSolveAngularVelocity,
-    PreSolveRotation,
-    PreviousRotation,
+    // TODO: We can remove these pre-solve deltas once joints don't use XPBD.
+    PreSolveDeltaPosition,
+    PreSolveDeltaRotation,
 )]
 #[cfg_attr(feature = "3d", require(GlobalAngularInertia))]
 pub enum RigidBody {
@@ -370,7 +365,7 @@ pub(crate) type RigidBodyActiveFilter = (Without<RigidBodyDisabled>, Without<Sle
 ///
 /// - [`ColliderDisabled`]: Disables a collider.
 /// - [`JointDisabled`]: Disables a joint constraint.
-#[derive(Reflect, Clone, Copy, Component, Debug, Default)]
+#[derive(Clone, Copy, Component, Reflect, Debug, Default)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, Component, Default)]
@@ -408,20 +403,6 @@ pub struct TimeSleeping(pub Scalar);
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, Component, Default, PartialEq)]
 pub struct SleepingDisabled;
-
-/// Translation accumulated during the physics frame.
-/// Used primarily by solver internals.
-///
-/// When updating position during integration or constraint solving, the required translation
-/// is added to [`AccumulatedTranslation`], instead of [`Position`]. This improves numerical stability
-/// of the simulation, especially for bodies far away from world origin.
-///
-/// At the end of each physics frame, the actual [`Position`] is updated in [`SolverSet::ApplyTranslation`].
-#[derive(Reflect, Clone, Copy, Component, Debug, Default, Deref, DerefMut, PartialEq, From)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
-#[reflect(Debug, Component, Default, PartialEq)]
-pub struct AccumulatedTranslation(pub Vector);
 
 /// The linear velocity of a [rigid body](RigidBody), typically in meters per second.
 ///
@@ -521,11 +502,6 @@ impl Default for MaxAngularSpeed {
     }
 }
 
-/// The linear velocity of a [rigid body](RigidBody) before the velocity solve is performed.
-#[derive(Reflect, Clone, Copy, Component, Debug, Default, Deref, DerefMut, PartialEq, From)]
-#[reflect(Component)]
-pub(crate) struct PreSolveLinearVelocity(pub Vector);
-
 /// The angular velocity of a [rigid body](RigidBody) in radians per second.
 /// Positive values will result in counterclockwise rotation.
 ///
@@ -602,20 +578,6 @@ impl AngularVelocity {
     #[cfg(feature = "3d")]
     pub const ZERO: AngularVelocity = AngularVelocity(Vector::ZERO);
 }
-
-/// The angular velocity of a [rigid body](RigidBody) in radians per second, before
-/// the velocity solve is performed. Positive values will result in counterclockwise rotation.
-#[cfg(feature = "2d")]
-#[derive(Reflect, Clone, Copy, Component, Debug, Default, PartialEq, From)]
-#[reflect(Component)]
-pub(crate) struct PreSolveAngularVelocity(pub Scalar);
-
-/// The angular velocity of a [rigid body](RigidBody) as a rotation axis
-/// multiplied by the angular speed in radians per second, before the velocity solve is performed.
-#[cfg(feature = "3d")]
-#[derive(Reflect, Clone, Copy, Component, Debug, Default, Deref, DerefMut, PartialEq, From)]
-#[reflect(Component)]
-pub(crate) struct PreSolveAngularVelocity(pub Vector);
 
 /// Controls how [gravity](Gravity) affects a specific [rigid body](RigidBody).
 ///

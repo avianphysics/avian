@@ -12,7 +12,7 @@
 //! If the `diagnostic_ui` feature is enabled and the [`PhysicsDiagnosticsUiPlugin`] is added to the app,
 //! a debug UI will also be available for displaying these diagnostics in real-time.
 //!
-//! [`NarrowPhasePlugin`]: crate::narrow_phase::NarrowPhasePlugin
+//! [`NarrowPhasePlugin`]: crate::collision::narrow_phase::NarrowPhasePlugin
 //! [`SolverPlugin`]: crate::dynamics::solver::SolverPlugin
 //! [`DiagnosticsStore`]: bevy::diagnostic::DiagnosticsStore
 //! [`PhysicsDiagnosticsUiPlugin`]: crate::diagnostics::ui::PhysicsDiagnosticsUiPlugin
@@ -79,9 +79,9 @@ use crate::{schedule::PhysicsSchedule, PhysicsStepSet};
 use bevy::{
     app::{App, Plugin},
     diagnostic::{Diagnostic, DiagnosticPath, Diagnostics, RegisterDiagnostic},
-    prelude::{IntoSystemConfigs, IntoSystemSetConfigs, Res, ResMut, Resource, SystemSet},
-    utils::Duration,
+    prelude::{IntoScheduleConfigs, Res, ResMut, Resource, SystemSet},
 };
+use core::time::Duration;
 
 /// A plugin that enables writing [physics diagnostics](crate::diagnostics)
 /// to [`bevy::diagnostic::DiagnosticsStore`]. It is not enabled by default

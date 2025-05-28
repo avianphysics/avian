@@ -14,7 +14,7 @@ impl Plugin for ExampleCommonPlugin {
         app.add_plugins((
             PhysicsDiagnosticsPlugin,
             PhysicsDiagnosticsUiPlugin,
-            FrameTimeDiagnosticsPlugin,
+            FrameTimeDiagnosticsPlugin::default(),
         ));
 
         // Configure the default physics diagnostics UI.

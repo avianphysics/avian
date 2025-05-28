@@ -2,11 +2,12 @@
 //!
 //! Only a very limited set of operations are supported.
 
+use core::ops::BitOrAssign;
 use core::slice;
-use std::ops::BitOrAssign;
 
 /// A dynamically sized compact bit vector with a fixed block size of 64 bits.
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct BitVec {
     blocks: Vec<u64>,
     block_capacity: usize,
@@ -116,7 +117,12 @@ impl BitVec {
     /// Performs an in-place bitwise OR operation with another [`BitVec`].
     #[inline]
     pub fn or(&mut self, other: &Self) {
-        debug_assert!(self.block_count == other.block_count);
+        debug_assert!(
+            self.block_count == other.block_count,
+            "block counts do not match for `BitVec::or` ({} != {})",
+            self.block_count,
+            other.block_count
+        );
 
         for i in 0..self.block_count {
             self.blocks[i] |= other.blocks[i];

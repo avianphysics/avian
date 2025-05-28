@@ -11,12 +11,7 @@ pub fn bench_app<M: Measurement>(
         move || {
             let mut app = App::new();
 
-            app.add_plugins((
-                MinimalPlugins,
-                HierarchyPlugin,
-                TransformPlugin,
-                PhysicsPlugins::default(),
-            ));
+            app.add_plugins((MinimalPlugins, TransformPlugin, PhysicsPlugins::default()));
 
             setup(&mut app);
 

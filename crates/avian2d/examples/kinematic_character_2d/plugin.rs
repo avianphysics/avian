@@ -1,4 +1,7 @@
-use avian2d::{math::*, prelude::*};
+use avian2d::{
+    math::*,
+    prelude::{NarrowPhaseSet, *},
+};
 use bevy::{ecs::query::Has, prelude::*};
 
 pub struct CharacterControllerPlugin;
@@ -23,8 +26,8 @@ impl Plugin for CharacterControllerPlugin {
                 //
                 // NOTE: The collision implementation here is very basic and a bit buggy.
                 //       A collide-and-slide algorithm would likely work better.
-                PostProcessCollisions,
-                kinematic_controller_collisions,
+                PhysicsSchedule,
+                kinematic_controller_collisions.in_set(NarrowPhaseSet::Last),
             );
     }
 }
@@ -71,7 +74,7 @@ pub struct MaxSlopeAngle(Scalar);
 #[derive(Bundle)]
 pub struct CharacterControllerBundle {
     character_controller: CharacterController,
-    rigid_body: RigidBody,
+    body: RigidBody,
     collider: Collider,
     ground_caster: ShapeCaster,
     gravity: ControllerGravity,
@@ -117,7 +120,7 @@ impl CharacterControllerBundle {
 
         Self {
             character_controller: CharacterController,
-            rigid_body: RigidBody::Kinematic,
+            body: RigidBody::Kinematic,
             collider,
             ground_caster: ShapeCaster::new(caster_shape, Vector::ZERO, 0.0, Dir2::NEG_Y)
                 .with_max_distance(10.0),
@@ -150,11 +153,11 @@ fn keyboard_input(
     let direction = horizontal as Scalar;
 
     if direction != 0.0 {
-        movement_event_writer.send(MovementAction::Move(direction));
+        movement_event_writer.write(MovementAction::Move(direction));
     }
 
     if keyboard_input.just_pressed(KeyCode::Space) {
-        movement_event_writer.send(MovementAction::Jump);
+        movement_event_writer.write(MovementAction::Jump);
     }
 }
 
@@ -165,11 +168,11 @@ fn gamepad_input(
 ) {
     for gamepad in gamepads.iter() {
         if let Some(x) = gamepad.get(GamepadAxis::LeftStickX) {
-            movement_event_writer.send(MovementAction::Move(x as Scalar));
+            movement_event_writer.write(MovementAction::Move(x as Scalar));
         }
 
         if gamepad.just_pressed(GamepadButton::South) {
-            movement_event_writer.send(MovementAction::Jump);
+            movement_event_writer.write(MovementAction::Jump);
         }
     }
 }
@@ -265,9 +268,9 @@ fn apply_movement_damping(mut query: Query<(&MovementDampingFactor, &mut LinearV
 /// and predict collisions using speculative contacts.
 #[allow(clippy::type_complexity)]
 fn kinematic_controller_collisions(
-    collisions: Res<Collisions>,
+    collisions: Collisions,
     bodies: Query<&RigidBody>,
-    collider_parents: Query<&ColliderParent, Without<Sensor>>,
+    collider_rbs: Query<&ColliderOf, Without<Sensor>>,
     mut character_controllers: Query<
         (&mut Position, &mut LinearVelocity, Option<&MaxSlopeAngle>),
         (With<RigidBody>, With<CharacterController>),
@@ -277,8 +280,8 @@ fn kinematic_controller_collisions(
     // Iterate through collisions and move the kinematic body to resolve penetration
     for contacts in collisions.iter() {
         // Get the rigid body entities of the colliders (colliders could be children)
-        let Ok([collider_parent1, collider_parent2]) =
-            collider_parents.get_many([contacts.entity1, contacts.entity2])
+        let Ok([&ColliderOf { body: rb1 }, &ColliderOf { body: rb2 }]) =
+            collider_rbs.get_many([contacts.collider1, contacts.collider2])
         else {
             continue;
         };
@@ -291,19 +294,15 @@ fn kinematic_controller_collisions(
         let is_other_dynamic: bool;
 
         let (mut position, mut linear_velocity, max_slope_angle) =
-            if let Ok(character) = character_controllers.get_mut(collider_parent1.get()) {
+            if let Ok(character) = character_controllers.get_mut(rb1) {
                 is_first = true;
-                character_rb = *bodies.get(collider_parent1.get()).unwrap();
-                is_other_dynamic = bodies
-                    .get(collider_parent2.get())
-                    .is_ok_and(|rb| rb.is_dynamic());
+                character_rb = *bodies.get(rb1).unwrap();
+                is_other_dynamic = bodies.get(rb2).is_ok_and(|rb| rb.is_dynamic());
                 character
-            } else if let Ok(character) = character_controllers.get_mut(collider_parent2.get()) {
+            } else if let Ok(character) = character_controllers.get_mut(rb2) {
                 is_first = false;
-                character_rb = *bodies.get(collider_parent2.get()).unwrap();
-                is_other_dynamic = bodies
-                    .get(collider_parent1.get())
-                    .is_ok_and(|rb| rb.is_dynamic());
+                character_rb = *bodies.get(rb2).unwrap();
+                is_other_dynamic = bodies.get(rb1).is_ok_and(|rb| rb.is_dynamic());
                 character
             } else {
                 continue;

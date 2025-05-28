@@ -7,7 +7,7 @@ edition = "2021"
 use-debug-plugin = []
 
 [dependencies]
-bevy = { version = "0.15", default-features = false, features = [
+bevy = { version = "0.16", default-features = false, features = [
     "bevy_core_pipeline",
     "bevy_state",
     "bevy_text",
@@ -28,3 +28,6 @@ bevy = { version = "0.15", default-features = false, features = [
 avian2d = { path = "../avian2d", default-features = false, features = [
     "diagnostic_ui",
 ] }
+
+[lints]
+workspace = true

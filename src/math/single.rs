@@ -4,13 +4,13 @@ use bevy_math::*;
 /// The floating point number type used by Avian.
 pub type Scalar = f32;
 /// The PI/2 constant.
-pub const FRAC_PI_2: Scalar = std::f32::consts::FRAC_PI_2;
+pub const FRAC_PI_2: Scalar = core::f32::consts::FRAC_PI_2;
 /// The PI constant.
-pub const PI: Scalar = std::f32::consts::PI;
+pub const PI: Scalar = core::f32::consts::PI;
 /// The TAU constant.
-pub const TAU: Scalar = std::f32::consts::TAU;
+pub const TAU: Scalar = core::f32::consts::TAU;
 /// 1/sqrt(2)
-pub const FRAC_1_SQRT_2: Scalar = std::f32::consts::FRAC_1_SQRT_2;
+pub const FRAC_1_SQRT_2: Scalar = core::f32::consts::FRAC_1_SQRT_2;
 
 /// The vector type used by Avian.
 #[cfg(feature = "2d")]

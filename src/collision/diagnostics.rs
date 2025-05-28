@@ -2,8 +2,8 @@ use bevy::{
     diagnostic::DiagnosticPath,
     prelude::{ReflectResource, Resource},
     reflect::Reflect,
-    utils::Duration,
 };
+use core::time::Duration;
 
 use crate::diagnostics::{impl_diagnostic_paths, PhysicsDiagnostics};
 
@@ -15,8 +15,6 @@ pub struct CollisionDiagnostics {
     pub broad_phase: Duration,
     /// Time spent updating contacts in the narrow phase.
     pub narrow_phase: Duration,
-    /// Time spent generating constraints from contacts.
-    pub generate_constraints: Duration,
     /// The number of contacts.
     pub contact_count: u32,
 }
@@ -26,7 +24,6 @@ impl PhysicsDiagnostics for CollisionDiagnostics {
         vec![
             (Self::BROAD_PHASE, self.broad_phase),
             (Self::NARROW_PHASE, self.narrow_phase),
-            (Self::GENERATE_CONSTRAINTS, self.generate_constraints),
         ]
     }
 
@@ -39,7 +36,6 @@ impl_diagnostic_paths! {
     impl CollisionDiagnostics {
         BROAD_PHASE: "avian/collision/broad_phase",
         NARROW_PHASE: "avian/collision/update_contacts",
-        GENERATE_CONSTRAINTS: "avian/collision/generate_constraints",
         CONTACT_COUNT: "avian/collision/contact_count",
     }
 }

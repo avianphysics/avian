@@ -3,8 +3,8 @@
 
 use crate::prelude::*;
 use bevy::prelude::*;
+use core::ops::{Deref, DerefMut};
 use derive_more::From;
-use std::ops::{Deref, DerefMut};
 
 #[cfg(feature = "2d")]
 pub(crate) type Torque = Scalar;

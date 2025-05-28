@@ -65,11 +65,10 @@ pub struct SpatialQuery<'w, 's> {
             &'static Position,
             &'static Rotation,
             &'static Collider,
-            Option<&'static CollisionLayers>,
+            &'static CollisionLayers,
         ),
         Without<ColliderDisabled>,
     >,
-    pub(crate) added_colliders: Query<'w, 's, Entity, Added<Collider>>,
     /// The [`SpatialQueryPipeline`].
     pub query_pipeline: ResMut<'w, SpatialQueryPipeline>,
 }
@@ -79,8 +78,7 @@ impl SpatialQuery<'_, '_> {
     /// [`PhysicsStepSet::SpatialQuery`], but if you modify colliders or their positions before that, you can
     /// call this to make sure the data is up to date when performing spatial queries using [`SpatialQuery`].
     pub fn update_pipeline(&mut self) {
-        self.query_pipeline
-            .update(self.colliders.iter(), self.added_colliders.iter());
+        self.query_pipeline.update(self.colliders.iter());
     }
 
     /// Casts a [ray](spatial_query#raycasting) and computes the closest [hit](RayHitData) with a collider.

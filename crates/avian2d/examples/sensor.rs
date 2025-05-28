@@ -110,7 +110,7 @@ fn keyboard_input1(
     }
     let space = keyboard_input.pressed(KeyCode::Space);
     if space {
-        movement_event_writer.send(MovementAction::Stop);
+        movement_event_writer.write(MovementAction::Stop);
         return;
     }
 
@@ -122,7 +122,7 @@ fn keyboard_input1(
     let vertical = up as i8 - down as i8;
     let direction = Vector::new(horizontal as Scalar, vertical as Scalar);
     if direction != Vector::ZERO {
-        movement_event_writer.send(MovementAction::Velocity(direction));
+        movement_event_writer.write(MovementAction::Velocity(direction));
     }
 }
 // use position offset
@@ -142,7 +142,7 @@ fn keyboard_input2(
     let vertical = up as i8 - down as i8;
     let direction = Vector::new(horizontal as Scalar, vertical as Scalar);
     if direction != Vector::ZERO {
-        movement_event_writer.send(MovementAction::Offset(direction));
+        movement_event_writer.write(MovementAction::Offset(direction));
     }
 }
 
@@ -221,16 +221,16 @@ fn update_velocity_text(
     character_query: Query<(&LinearVelocity, Has<Sleeping>), With<Character>>,
     pressure_plate_query: Query<Has<Sleeping>, With<PressurePlate>>,
     mut text_query: Query<&mut Text, With<CharacterVelocityText>>,
-) {
-    if let (Ok((velocity, character_sleeping)), Ok(pressure_plate_sleeping)) = (
-        character_query.get_single(),
-        pressure_plate_query.get_single(),
-    ) {
-        text_query.single_mut().0 = format!(
+) -> Result {
+    if let (Ok((velocity, character_sleeping)), Ok(pressure_plate_sleeping)) =
+        (character_query.single(), pressure_plate_query.single())
+    {
+        text_query.single_mut()?.0 = format!(
             "Velocity: {:.4}, {:.4}\nCharacter sleeping:{}\nPressure plate sleeping: {}",
             velocity.x, velocity.y, character_sleeping, pressure_plate_sleeping
         );
     }
+    Ok(())
 }
 
 fn log_events(mut started: EventReader<CollisionStarted>, mut ended: EventReader<CollisionEnded>) {

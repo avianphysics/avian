@@ -23,14 +23,11 @@ impl Plugin for PhysicsTypeRegistrationPlugin {
             .register_type::<TimeSleeping>()
             .register_type::<Position>()
             .register_type::<Rotation>()
-            .register_type::<PreSolveAccumulatedTranslation>()
-            .register_type::<PreviousRotation>()
+            .register_type::<PreSolveDeltaPosition>()
+            .register_type::<PreSolveDeltaRotation>()
             .register_type::<PreviousGlobalTransform>()
-            .register_type::<AccumulatedTranslation>()
             .register_type::<LinearVelocity>()
             .register_type::<AngularVelocity>()
-            .register_type::<PreSolveLinearVelocity>()
-            .register_type::<PreSolveAngularVelocity>()
             .register_type::<MaxLinearSpeed>()
             .register_type::<MaxAngularSpeed>()
             .register_type::<Restitution>()
@@ -45,7 +42,8 @@ impl Plugin for PhysicsTypeRegistrationPlugin {
             .register_type::<ColliderDensity>()
             .register_type::<ColliderMassProperties>()
             .register_type::<LockedAxes>()
-            .register_type::<ColliderParent>()
+            .register_type::<ColliderOf>()
+            .register_type::<RigidBodyColliders>()
             .register_type::<Dominance>()
             .register_type::<ColliderAabb>()
             .register_type::<CollisionLayers>()
@@ -65,12 +63,13 @@ impl Plugin for PhysicsTypeRegistrationPlugin {
             .register_type::<DistanceJoint>()
             .register_type::<FixedJoint>()
             .register_type::<PrismaticJoint>()
-            .register_type::<RevoluteJoint>();
+            .register_type::<RevoluteJoint>()
+            .register_type::<GlobalAngularInertia>();
 
         #[cfg(feature = "default-collider")]
         app.register_type::<ColliderConstructor>()
             .register_type::<ColliderConstructorHierarchy>()
-            .register_type::<ColliderConstructorHierarchyConfig>()
+            .register_type::<crate::collision::collider::ColliderConstructorHierarchyConfig>()
             .register_type::<ShapeCaster>();
 
         #[cfg(feature = "3d")]

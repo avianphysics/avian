@@ -142,7 +142,7 @@ impl MassPropertyHelper<'_, '_> {
     ///
     /// This ignores the [`NoAutoMass`], [`NoAutoAngularInertia`], and [`NoAutoCenterOfMass`] marker components.
     pub fn total_mass_properties(&self, entity: Entity) -> MassProperties {
-        std::iter::once(self.local_mass_properties(entity))
+        core::iter::once(self.local_mass_properties(entity))
             .chain(
                 self.children
                     .iter_descendants(entity)

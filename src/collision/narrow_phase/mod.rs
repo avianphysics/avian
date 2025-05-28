@@ -3,33 +3,35 @@
 //! See [`NarrowPhasePlugin`].
 
 mod system_param;
+use system_param::ContactStatusBits;
 pub use system_param::NarrowPhase;
-use system_param::{ContactStatusBits, ContactStatusBitsThreadLocal};
+#[cfg(feature = "parallel")]
+use system_param::NarrowPhaseThreadLocals;
 
-use std::marker::PhantomData;
+use core::marker::PhantomData;
 
-use crate::{
-    dynamics::solver::{ContactConstraints, ContactSoftnessCoefficients},
-    prelude::*,
-};
+use crate::{dynamics::solver::ContactConstraints, prelude::*};
 use bevy::{
     ecs::{
+        entity_disabling::Disabled,
         intern::Interned,
-        schedule::{ExecutorKind, LogLevel, ScheduleBuildSettings, ScheduleLabel},
-        system::{StaticSystemParam, SystemParamItem},
+        schedule::ScheduleLabel,
+        system::{StaticSystemParam, SystemParam, SystemParamItem, SystemState},
     },
     prelude::*,
 };
 use dynamics::solver::SolverDiagnostics;
 
+use super::CollisionDiagnostics;
+
 /// Manages contacts and generates contact constraints.
 ///
 /// # Overview
 ///
-/// Before the narrow phase, the [broad phase](broad_phase) creates a contact pair in the [`Collisions`]
-/// resource for each pair of intersecting [`ColliderAabb`]s.
+/// Before the narrow phase, the [broad phase](super::broad_phase) creates a contact pair
+/// in the [`ContactGraph`] resource for each pair of intersecting [`ColliderAabb`]s.
 ///
-/// The narrow phase then determines which contact pairs found in [`Collisions`] are touching,
+/// The narrow phase then determines which contact pairs found in the [`ContactGraph`] are touching,
 /// and computes updated contact points and normals in a parallel loop.
 ///
 /// Afterwards, the narrow phase removes contact pairs whose AABBs no longer overlap,
@@ -83,23 +85,30 @@ impl<C: AnyCollider, H: CollisionHooks> Default for NarrowPhasePlugin<C, H> {
     }
 }
 
+/// A resource that indicates that the narrow phase has been initialized.
+///
+/// This is used to ensure that some systems are only added once
+/// even with multiple collider types.
+#[derive(Resource, Default)]
+struct NarrowPhaseInitialized;
+
 impl<C: AnyCollider, H: CollisionHooks + 'static> Plugin for NarrowPhasePlugin<C, H>
 where
     for<'w, 's> SystemParamItem<'w, 's, H>: CollisionHooks,
 {
     fn build(&self, app: &mut App) {
-        // For some systems, we only want one instance, even if there are multiple
-        // `NarrowPhasePlugin` instances with different collider types.
-        let is_first_instance = !app.world().is_resource_added::<NarrowPhaseInitialized>();
+        let already_initialized = app.world().is_resource_added::<NarrowPhaseInitialized>();
 
-        app.init_resource::<NarrowPhaseInitialized>()
-            .init_resource::<NarrowPhaseConfig>()
-            .init_resource::<Collisions>()
+        app.init_resource::<NarrowPhaseConfig>()
+            .init_resource::<ContactGraph>()
             .init_resource::<ContactStatusBits>()
-            .init_resource::<ContactStatusBitsThreadLocal>()
             .init_resource::<DefaultFriction>()
-            .init_resource::<DefaultRestitution>()
-            .register_type::<(NarrowPhaseConfig, DefaultFriction, DefaultRestitution)>();
+            .init_resource::<DefaultRestitution>();
+
+        #[cfg(feature = "parallel")]
+        app.init_resource::<NarrowPhaseThreadLocals>();
+
+        app.register_type::<(NarrowPhaseConfig, DefaultFriction, DefaultRestitution)>();
 
         app.add_event::<CollisionStarted>()
             .add_event::<CollisionEnded>();
@@ -114,28 +123,15 @@ where
             (
                 NarrowPhaseSet::First,
                 NarrowPhaseSet::Update,
-                NarrowPhaseSet::PostProcess,
-                NarrowPhaseSet::GenerateConstraints,
                 NarrowPhaseSet::Last,
             )
                 .chain()
                 .in_set(PhysicsStepSet::NarrowPhase),
         );
-
-        // Remove collision pairs when colliders are disabled or removed.
-        app.add_observer(remove_collider_on::<OnAdd, ColliderDisabled>);
-        app.add_observer(remove_collider_on::<OnRemove, Collider>);
-
-        // Set up the `PostProcessCollisions` schedule for user-defined systems
-        // that filter and modify collisions.
-        app.edit_schedule(PostProcessCollisions, |schedule| {
-            schedule
-                .set_executor_kind(ExecutorKind::SingleThreaded)
-                .set_build_settings(ScheduleBuildSettings {
-                    ambiguity_detection: LogLevel::Error,
-                    ..default()
-                });
-        });
+        app.configure_sets(
+            self.schedule,
+            CollisionEventSystems.in_set(PhysicsStepSet::Finalize),
+        );
 
         // Perform narrow phase collision detection.
         app.add_systems(
@@ -147,24 +143,19 @@ where
                 .ambiguous_with_all(),
         );
 
-        if self.generate_constraints {
-            // Generate contact constraints.
+        if !already_initialized {
+            // Remove collision pairs when colliders are disabled or removed.
+            app.add_observer(remove_collider_on::<OnAdd, (Disabled, ColliderDisabled)>);
+            app.add_observer(remove_collider_on::<OnRemove, ColliderMarker>);
+
+            // Trigger collision events for colliders that started or stopped touching.
             app.add_systems(
-                self.schedule,
-                generate_constraints::<C>
-                    .in_set(NarrowPhaseSet::GenerateConstraints)
-                    // Allowing ambiguities is required so that it's possible
-                    // to have multiple collision backends at the same time.
-                    .ambiguous_with_all(),
+                PhysicsSchedule,
+                trigger_collision_events.in_set(CollisionEventSystems),
             );
         }
 
-        if is_first_instance {
-            app.add_systems(
-                self.schedule,
-                run_post_process_collisions_schedule.in_set(NarrowPhaseSet::PostProcess),
-            );
-        }
+        app.init_resource::<NarrowPhaseInitialized>();
     }
 
     fn finish(&self, app: &mut App) {
@@ -173,8 +164,12 @@ where
     }
 }
 
-#[derive(Resource, Default)]
-struct NarrowPhaseInitialized;
+/// A system set for triggering the [`OnCollisionStart`] and [`OnCollisionEnd`] events.
+///
+/// Runs in [`PhysicsStepSet::Finalize`], after the solver has run and contact impulses
+/// have been computed and applied.
+#[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct CollisionEventSystems;
 
 /// A resource for configuring the [narrow phase](NarrowPhasePlugin).
 #[derive(Resource, Reflect, Clone, Debug, PartialEq)]
@@ -240,18 +235,8 @@ impl Default for NarrowPhaseConfig {
 pub enum NarrowPhaseSet {
     /// Runs at the start of the narrow phase. Empty by default.
     First,
-    /// Updates contacts in [`Collisions`] and processes contact state changes.
+    /// Updates contacts in the [`ContactGraph`] and processes contact state changes.
     Update,
-    /// Responsible for running the [`PostProcessCollisions`] schedule to allow user-defined systems
-    /// to filter and modify collisions.
-    ///
-    /// If you want to modify or remove collisions after [`NarrowPhaseSet::CollectCollisions`], you can
-    /// add custom systems to this set, or to [`PostProcessCollisions`].
-    PostProcess,
-    /// Generates [`ContactConstraint`]s and adds them to [`ContactConstraints`].
-    ///
-    /// [`ContactConstraint`]: dynamics::solver::contact::ContactConstraint
-    GenerateConstraints,
     /// Runs at the end of the narrow phase. Empty by default.
     Last,
 }
@@ -262,127 +247,123 @@ fn update_narrow_phase<C: AnyCollider, H: CollisionHooks + 'static>(
     mut collision_ended_event_writer: EventWriter<CollisionEnded>,
     time: Res<Time>,
     hooks: StaticSystemParam<H>,
+    context: StaticSystemParam<C::Context>,
     mut commands: ParallelCommands,
     mut diagnostics: ResMut<CollisionDiagnostics>,
+    solver_diagnostics: Option<ResMut<SolverDiagnostics>>,
 ) where
     for<'w, 's> SystemParamItem<'w, 's, H>: CollisionHooks,
 {
-    let start = bevy::utils::Instant::now();
+    let start = crate::utils::Instant::now();
 
     narrow_phase.update::<H>(
         &mut collision_started_event_writer,
         &mut collision_ended_event_writer,
         time.delta_seconds_adjusted(),
-        &mut hooks.into_inner(),
+        &hooks,
+        &context,
         &mut commands,
     );
 
     diagnostics.narrow_phase = start.elapsed();
-    diagnostics.contact_count = narrow_phase.collisions.graph.edge_count() as u32;
+    diagnostics.contact_count = narrow_phase.contact_graph.internal.edge_count() as u32;
+
+    if let Some(mut solver_diagnostics) = solver_diagnostics {
+        solver_diagnostics.contact_constraint_count = narrow_phase.contact_constraints.len() as u32;
+    }
 }
 
-fn generate_constraints<C: AnyCollider>(
-    narrow_phase: NarrowPhase<C>,
-    mut constraints: ResMut<ContactConstraints>,
-    contact_softness: Res<ContactSoftnessCoefficients>,
-    time: Res<Time>,
-    mut collision_diagnostics: ResMut<CollisionDiagnostics>,
-    solver_diagnostics: Option<ResMut<SolverDiagnostics>>,
+#[derive(SystemParam)]
+struct TriggerCollisionEventsContext<'w, 's> {
+    query: Query<'w, 's, Option<&'static ColliderOf>, With<CollisionEventsEnabled>>,
+    started: EventReader<'w, 's, CollisionStarted>,
+    ended: EventReader<'w, 's, CollisionEnded>,
+}
+
+/// Triggers [`OnCollisionStart`] and [`OnCollisionEnd`] events for colliders
+/// that started or stopped touching and have the [`CollisionEventsEnabled`] component.
+fn trigger_collision_events(
+    // We use exclusive access here to avoid queuing a new command for each event.
+    world: &mut World,
+    state: &mut SystemState<TriggerCollisionEventsContext>,
+    // Cache pairs in buffers to avoid reallocating every time.
+    mut started_pairs: Local<Vec<(Entity, OnCollisionStart)>>,
+    mut ended_pairs: Local<Vec<(Entity, OnCollisionEnd)>>,
 ) {
-    let start = bevy::utils::Instant::now();
+    let mut state = state.get_mut(world);
 
-    let delta_secs = time.delta_seconds_adjusted();
-
-    constraints.clear();
-
-    // TODO: Parallelize.
-    for (i, contacts) in narrow_phase.collisions.iter().enumerate() {
-        let Ok([collider1, collider2]) = narrow_phase
-            .collider_query
-            .get_many([contacts.entity1, contacts.entity2])
-        else {
-            continue;
-        };
-
-        let body1_bundle = collider1
-            .parent
-            .and_then(|p| narrow_phase.body_query.get(p.get()).ok());
-        let body2_bundle = collider2
-            .parent
-            .and_then(|p| narrow_phase.body_query.get(p.get()).ok());
-        if let (Some((body1, rb_collision_margin1)), Some((body2, rb_collision_margin2))) = (
-            body1_bundle.map(|(body, rb_collision_margin1, _)| (body, rb_collision_margin1)),
-            body2_bundle.map(|(body, rb_collision_margin2, _)| (body, rb_collision_margin2)),
-        ) {
-            // At least one of the bodies must be dynamic for contact constraints
-            // to be generated.
-            if !body1.rb.is_dynamic() && !body2.rb.is_dynamic() {
-                continue;
-            }
-
-            // Use the collider's own collision margin if specified, and fall back to the body's
-            // collision margin.
-            //
-            // The collision margin adds artificial thickness to colliders for performance
-            // and stability. See the `CollisionMargin` documentation for more details.
-            let collision_margin1 = collider1
-                .collision_margin
-                .or(rb_collision_margin1)
-                .map_or(0.0, |margin| margin.0);
-            let collision_margin2 = collider2
-                .collision_margin
-                .or(rb_collision_margin2)
-                .map_or(0.0, |margin| margin.0);
-            let collision_margin_sum = collision_margin1 + collision_margin2;
-
-            // Generate contact constraints for the computed contacts
-            // and add them to `constraints`.
-            narrow_phase.generate_constraints(
-                i,
-                contacts,
-                &mut constraints,
-                &body1,
-                &body2,
-                &collider1,
-                &collider2,
-                collision_margin_sum,
-                *contact_softness,
-                delta_secs,
-            );
+    // Collect `OnCollisionStart` and `OnCollisionEnd` events
+    // for entities that have events enabled.
+    for event in state.started.read() {
+        if let Ok(collider_of) = state.query.get(event.0) {
+            let collider = event.1;
+            let body = collider_of.map(|c| c.body);
+            started_pairs.push((event.0, OnCollisionStart { collider, body }));
+        }
+        if let Ok(collider_of) = state.query.get(event.1) {
+            let collider = event.0;
+            let body = collider_of.map(|c| c.body);
+            started_pairs.push((event.1, OnCollisionStart { collider, body }));
+        }
+    }
+    for event in state.ended.read() {
+        if let Ok(collider_of) = state.query.get(event.0) {
+            let collider = event.1;
+            let body = collider_of.map(|c| c.body);
+            ended_pairs.push((event.0, OnCollisionEnd { collider, body }));
+        }
+        if let Ok(collider_of) = state.query.get(event.1) {
+            let collider = event.0;
+            let body = collider_of.map(|c| c.body);
+            ended_pairs.push((event.1, OnCollisionEnd { collider, body }));
         }
     }
 
-    collision_diagnostics.generate_constraints = start.elapsed();
-
-    if let Some(mut solver_diagnostics) = solver_diagnostics {
-        solver_diagnostics.contact_constraint_count = constraints.len() as u32;
-    }
+    // Trigger the events, draining the buffers in the process.
+    started_pairs.drain(..).for_each(|(entity, event)| {
+        world.trigger_targets(event, entity);
+    });
+    ended_pairs.drain(..).for_each(|(entity, event)| {
+        world.trigger_targets(event, entity);
+    });
 }
 
-fn remove_collider_on<E: Event, C: Component>(
-    trigger: Trigger<E, C>,
-    mut collisions: ResMut<Collisions>,
+/// Removes colliders from the [`ContactGraph`] when the given trigger is activated.
+///
+/// Also removes the collider from the [`CollidingEntities`] of the other entity,
+/// wakes up the other body, and sends a [`CollisionEnded`] event.
+fn remove_collider_on<E: Event, B: Bundle>(
+    trigger: Trigger<E, B>,
+    mut contact_graph: ResMut<ContactGraph>,
     mut query: Query<&mut CollidingEntities>,
     mut event_writer: EventWriter<CollisionEnded>,
     mut commands: Commands,
 ) {
-    let entity = trigger.entity();
+    let entity = trigger.target();
 
     // Remove the collider from the contact graph.
-    collisions.remove_collider_with(entity, |contact_pair| {
-        // Send collision ended event.
+    contact_graph.remove_collider_with(entity, |contact_pair| {
+        // If the contact pair was not touching, we don't need to do anything.
+        if !contact_pair.flags.contains(ContactPairFlags::TOUCHING) {
+            return;
+        }
+
+        // Send a collision ended event.
         if contact_pair
             .flags
             .contains(ContactPairFlags::CONTACT_EVENTS)
         {
-            event_writer.send(CollisionEnded(contact_pair.entity1, contact_pair.entity2));
+            event_writer.write(CollisionEnded(
+                contact_pair.collider1,
+                contact_pair.collider2,
+            ));
         }
 
         // Remove the entity from the `CollidingEntities` of the other entity.
-        let other_entity = if contact_pair.entity1 == entity {
-            contact_pair.entity2
+        let other_entity = if contact_pair.collider1 == entity {
+            contact_pair.collider2
         } else {
-            contact_pair.entity1
+            contact_pair.collider1
         };
         if let Ok(mut colliding_entities) = query.get_mut(other_entity) {
             colliding_entities.remove(&entity);
@@ -391,10 +372,4 @@ fn remove_collider_on<E: Event, C: Component>(
         // Wake up the other body.
         commands.queue(WakeUpBody(other_entity));
     });
-}
-
-/// Runs the [`PostProcessCollisions`] schedule.
-fn run_post_process_collisions_schedule(world: &mut World) {
-    trace!("running PostProcessCollisions");
-    world.run_schedule(PostProcessCollisions);
 }

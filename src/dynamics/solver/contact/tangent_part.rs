@@ -217,7 +217,12 @@ impl ContactTangentPart {
 
             // Compute the effective mass "seen" by the constraint along the tangent.
             // Note the guard against division by zero.
-            let effective_mass = (t11 + t22) * inv.max(1e-16).recip();
+            let effective_mass = (t11 + t22) * inv.recip();
+
+            // TODO: Could this be handled earlier reliably?
+            if !effective_mass.is_finite() {
+                return Vector::ZERO;
+            }
 
             // Compute the incremental tangent impoulse.
             let delta_impulse = effective_mass * Vector2::new(tangent_speed1, tangent_speed2);
@@ -225,10 +230,6 @@ impl ContactTangentPart {
             // Clamp the accumulated impulse.
             let new_impulse = (self.impulse - delta_impulse).clamp_length_max(impulse_limit);
             let impulse = new_impulse - self.impulse;
-
-            if !impulse.is_finite() {
-                return Vector::ZERO;
-            }
 
             self.impulse = new_impulse;
 

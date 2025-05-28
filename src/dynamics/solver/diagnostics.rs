@@ -2,8 +2,8 @@ use bevy::{
     diagnostic::DiagnosticPath,
     prelude::{ReflectResource, Resource},
     reflect::Reflect,
-    utils::Duration,
 };
+use core::time::Duration;
 
 use crate::diagnostics::{impl_diagnostic_paths, PhysicsDiagnostics};
 
@@ -23,7 +23,7 @@ pub struct SolverDiagnostics {
     pub relax_velocities: Duration,
     /// Time spent applying restitution.
     pub apply_restitution: Duration,
-    /// Time spent finalizing positions.
+    /// Time spent writing the final results to the bodies.
     pub finalize: Duration,
     /// Time spent storing impulses for warm starting.
     pub store_impulses: Duration,

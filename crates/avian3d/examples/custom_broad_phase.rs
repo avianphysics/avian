@@ -57,7 +57,7 @@ fn setup(
 }
 
 /// Finds pairs of entities with overlapping `ColliderAabb`s
-/// and creates contact pairs for them in `Collisions`.
+/// and creates contact pairs for them in the `ContactGraph`.
 ///
 // A brute force algorithm is used for simplicity.
 pub struct BruteForceBroadPhasePlugin;
@@ -74,7 +74,7 @@ impl Plugin for BruteForceBroadPhasePlugin {
 
 fn collect_collision_pairs(
     bodies: Query<(Entity, &ColliderAabb, &RigidBody)>,
-    mut collisions: ResMut<Collisions>,
+    mut collisions: ResMut<ContactGraph>,
 ) {
     // Loop through all entity combinations and collect pairs of bodies with intersecting AABBs.
     for [(entity1, aabb1, rb1), (entity2, aabb2, rb2)] in bodies.iter_combinations() {
@@ -92,7 +92,7 @@ fn collect_collision_pairs(
             // The narrow phase will determine if the entities are touching and compute contact data.
             // NOTE: To handle sensors, collision hooks, and child colliders, you may need to configure
             //       `flags` and other properties of the contact pair. This is not done here for simplicity.
-            collisions.add_pair_with_key(Contacts::new(entity1, entity2), key);
+            collisions.add_pair_with_key(ContactPair::new(entity1, entity2), key);
         }
     }
 }

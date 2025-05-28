@@ -36,7 +36,7 @@ fn main() {
         .insert_resource(Gravity(Vector::NEG_Y * 9.81 * 100.0))
         .add_systems(Startup, setup)
         .add_systems(Update, update_config)
-        .add_systems(PhysicsSchedule, spawn_balls.in_set(PhysicsStepSet::First))
+        .add_systems(FixedUpdate, spawn_balls)
         .run();
 }
 
@@ -127,7 +127,7 @@ fn spawn_balls(
     mut commands: Commands,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
-    time: Res<Time>,
+    time: Res<Time<Physics>>,
 ) {
     let circle = Circle::new(2.0);
 

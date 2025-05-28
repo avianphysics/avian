@@ -1,6 +1,5 @@
 use crate::prelude::*;
-use bevy::prelude::*;
-use bevy::utils::HashMap;
+use bevy::{platform::collections::HashMap, prelude::*};
 
 /// A component that will automatically generate [`Collider`]s on its descendants at runtime.
 /// The type of the generated collider can be specified using [`ColliderConstructor`].
@@ -9,7 +8,7 @@ use bevy::utils::HashMap;
 ///
 /// In contrast to [`ColliderConstructor`], this component will *not* generate a collider on its own entity.
 ///
-/// If this component is used on a scene, such as one spawned by a [`SceneBundle`], it will
+/// If this component is used on a scene, such as one spawned by a [`SceneRoot`], it will
 /// wait until the scene is loaded before generating colliders.
 ///
 /// The exact configuration for each descendant can be specified using the helper methods
@@ -392,6 +391,9 @@ pub enum ColliderConstructor {
     /// Constructs a collider with [`Collider::convex_hull`].
     #[cfg(feature = "3d")]
     ConvexHull { points: Vec<Vector> },
+    /// Constructs a collider with [`Collider::convex_polyline`].
+    #[cfg(feature = "2d")]
+    ConvexPolyline { points: Vec<Vector> },
     /// Constructs a collider with [`Collider::heightfield`].
     #[cfg(feature = "2d")]
     Heightfield { heights: Vec<Scalar>, scale: Vector },
@@ -445,9 +447,9 @@ impl ColliderConstructor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bevy::ecs::query::QueryData;
     #[cfg(feature = "bevy_scene")]
     use bevy::scene::ScenePlugin;
+    use bevy::{ecs::query::QueryData, render::mesh::MeshPlugin};
 
     #[test]
     fn collider_constructor_requires_no_mesh_on_primitive() {
@@ -646,6 +648,10 @@ mod tests {
 
     #[cfg(all(feature = "collider-from-mesh", feature = "bevy_scene"))]
     #[test]
+    #[cfg_attr(
+        target_os = "linux",
+        ignore = "The plugin setup requires access to the GPU, which is not available in the linux test environment"
+    )]
     fn collider_constructor_hierarchy_inserts_correct_configs_on_scene() {
         use parry::shape::ShapeType;
 
@@ -679,11 +685,16 @@ mod tests {
             ))
             .id();
 
-        for _ in 0..1000 {
+        let mut counter = 0;
+        loop {
             if app.world().contains_resource::<SceneReady>() {
                 break;
             }
             app.update();
+            counter += 1;
+            if counter > 1000 {
+                panic!("SceneInstanceReady was never triggered");
+            }
         }
         app.update();
 
@@ -736,7 +747,7 @@ mod tests {
             AssetPlugin::default(),
             #[cfg(feature = "bevy_scene")]
             ScenePlugin,
-            HierarchyPlugin,
+            MeshPlugin,
             PhysicsPlugins::default(),
         ))
         .init_resource::<Assets<Mesh>>();
@@ -748,6 +759,9 @@ mod tests {
     fn create_gltf_test_app() -> App {
         use bevy::{diagnostic::DiagnosticsPlugin, winit::WinitPlugin};
 
+        // Todo: it would be best to disable all rendering-related plugins,
+        // but we have so far not succeeded in finding the right plugin combination
+        // that still results in `SceneInstanceReady` being triggered.
         let mut app = App::new();
         app.add_plugins((
             DefaultPlugins

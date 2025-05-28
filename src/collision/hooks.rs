@@ -52,19 +52,19 @@ use bevy::{ecs::system::ReadOnlySystemParam, prelude::*};
 ///
 /// // Implement the `CollisionHooks` trait.
 /// impl CollisionHooks for MyHooks<'_, '_> {
-///     fn filter_pairs(&self, entity1: Entity, entity2: Entity, _commands: &mut Commands) -> bool {
+///     fn filter_pairs(&self, collider1: Entity, collider2: Entity, _commands: &mut Commands) -> bool {
 ///         // Only allow collisions between entities in the same interaction group.
 ///         // This could be a basic solution for "multiple physics worlds" that don't interact.
-///         let Ok([group1, group2]) = self.interaction_query.get_many([entity1, entity2]) else {
+///         let Ok([group1, group2]) = self.interaction_query.get_many([collider1, collider2]) else {
 ///            return true;
 ///         };
 ///         group1.0 == group2.0
 ///     }
 ///
-///     fn modify_contacts(&self, contacts: &mut Contacts, _commands: &mut Commands) -> bool {
+///     fn modify_contacts(&self, contacts: &mut ContactPair, _commands: &mut Commands) -> bool {
 ///         // Allow entities to pass through the bottom and sides of one-way platforms.
 ///         // See the `one_way_platform_2d` example for a full implementation.
-///         let (entity1, entity2) = (contacts.entity1, contacts.entity2);
+///         let (entity1, entity2) = (contacts.collider1, contacts.collider2);
 ///         !is_hitting_top_of_platform(entity1, entity2, &self.platform_query, &contacts)
 ///     }
 /// }
@@ -73,7 +73,7 @@ use bevy::{ecs::system::ReadOnlySystemParam, prelude::*};
 /// #     entity1: Entity,
 /// #     entity2: Entity,
 /// #     platform_query: &Query<&Transform, With<OneWayPlatform>>,
-/// #     contacts: &Contacts,
+/// #     contacts: &ContactPair,
 /// # ) -> bool {
 /// #     todo!()
 /// # }
@@ -139,16 +139,16 @@ use bevy::{ecs::system::ReadOnlySystemParam, prelude::*};
 /// - Only one set of collision hooks can be defined per broad phase and narrow phase.
 /// - Only read-only ECS access is allowed for the hook system parameter. Use the provided [`Commands`] for deferred ECS operations.
 ///   - Note that command execution order is unspecified if the `parallel` feature is enabled.
-/// - Access to the [`Collisions`] resource is not allowed inside [`CollisionHooks::filter_pairs`].
+/// - Access to the [`ContactGraph`] resource is not allowed inside [`CollisionHooks::filter_pairs`].
 ///   Trying to access it will result in a panic.
-/// - Access to the [`Collisions`] resource is not allowed inside [`CollisionHooks::modify_contacts`].
+/// - Access to the [`ContactGraph`] resource is not allowed inside [`CollisionHooks::modify_contacts`].
 ///   Trying to access it will result in a panic.
 #[expect(unused_variables)]
 pub trait CollisionHooks: ReadOnlySystemParam + Send + Sync {
     /// A contact pair filtering hook that determines whether contacts should be computed
-    /// between `entity1` and `entity2`. If `false` is returned, contacts will not be computed.
+    /// between `collider1` and `collider2`. If `false` is returned, contacts will not be computed.
     ///
-    /// This is called in the broad phase, before [`Contacts`] have been computed for the pair.
+    /// This is called in the broad phase, before the [`ContactPair`] has been computed.
     ///
     /// The provided [`Commands`] can be used for deferred ECS operations that run after
     /// broad phase pairs have been found.
@@ -157,20 +157,20 @@ pub trait CollisionHooks: ReadOnlySystemParam + Send + Sync {
     ///
     /// - Only called if at least one entity in the contact pair has [`ActiveCollisionHooks::FILTER_PAIRS`] set.
     /// - Only called if at least one entity in the contact pair is not [`RigidBody::Static`] and not [`Sleeping`].
-    /// - Access to the [`Collisions`] resource is not allowed in this method.
+    /// - Access to the [`ContactGraph`] resource is not allowed in this method.
     ///   Trying to access it will result in a panic.
-    fn filter_pairs(&self, entity1: Entity, entity2: Entity, commands: &mut Commands) -> bool {
+    fn filter_pairs(&self, collider1: Entity, collider2: Entity, commands: &mut Commands) -> bool {
         true
     }
 
     /// A contact modification hook that allows modifying the contacts for a given contact pair.
     /// If `false` is returned, the contact pair will be removed.
     ///
-    /// This is called in the narrow phase, after [`Contacts`] have been computed for the pair,
+    /// This is called in the narrow phase, after the [`ContactPair`] has been computed for the pair,
     /// but before constraints have been generated for the contact solver.
     ///
     /// The provided [`Commands`] can be used for deferred ECS operations that run after
-    /// narrow phase [`Contacts`] have been computed and constraints have been generated.
+    /// the narrow phase has computed contact pairs and generated constraints.
     ///
     /// # Notes
     ///
@@ -178,9 +178,9 @@ pub trait CollisionHooks: ReadOnlySystemParam + Send + Sync {
     /// - Only called if at least one entity in the contact pair is not [`RigidBody::Static`] and not [`Sleeping`].
     /// - Impulses stored in `contacts` are from the previous physics tick.
     /// - Command execution order is unspecified if the `parallel` feature is enabled.
-    /// - Access to the [`Collisions`] resource is not allowed in this method.
+    /// - Access to the [`ContactGraph`] resource is not allowed in this method.
     ///   Trying to access it will result in a panic.
-    fn modify_contacts(&self, contacts: &mut Contacts, commands: &mut Commands) -> bool {
+    fn modify_contacts(&self, contacts: &mut ContactPair, commands: &mut Commands) -> bool {
         true
     }
 }

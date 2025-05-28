@@ -1,56 +1,34 @@
 //! Functionality for marking ancestors of entities with marker components.
 
-use std::marker::PhantomData;
+use core::marker::PhantomData;
 
-use bevy::{
-    ecs::{intern::Interned, schedule::ScheduleLabel},
-    hierarchy::HierarchyEvent,
-    prelude::*,
-};
+use bevy::prelude::*;
 
 /// A plugin that marks the ancestors of entities that have the given component `C`
 /// with the [`AncestorMarker`] component.
 ///
 /// One use case is speeding up transform propagation: we only need to propagate
 /// down trees that have a certain type of entity, like a collider or a rigid body.
-pub struct AncestorMarkerPlugin<C: Component> {
-    schedule: Interned<dyn ScheduleLabel>,
-    system_set: Option<Interned<dyn SystemSet>>,
-    _phantom: PhantomData<C>,
-}
+pub struct AncestorMarkerPlugin<C: Component>(PhantomData<C>);
 
-impl<C: Component> AncestorMarkerPlugin<C> {
-    /// Creates a new [`AncestorMarkerPlugin`] with the schedule that the system
-    /// adding markers should run in.
-    pub fn new(schedule: impl ScheduleLabel) -> Self {
-        Self {
-            schedule: schedule.intern(),
-            system_set: None,
-            _phantom: PhantomData,
-        }
-    }
-
-    /// Configures which system set the system adding the [`AncestorMarker`]s should run in.
-    ///
-    /// Note: Unlike the normal `in_set` for system configurations, this *overwrites* the set,
-    /// so the system can only be added to a single system set at a time.
-    pub fn add_markers_in_set(mut self, set: impl SystemSet) -> Self {
-        self.system_set = Some(set.intern());
-        self
+impl<C: Component> Default for AncestorMarkerPlugin<C> {
+    fn default() -> Self {
+        Self(PhantomData)
     }
 }
 
 impl<C: Component> Plugin for AncestorMarkerPlugin<C> {
     fn build(&self, app: &mut App) {
-        // Add `AncestorMarker<C>` for the ancestors of added colliders,
+        // Add `AncestorMarker<C>` for the ancestors of colliders that are inserted as children,
         // until an ancestor that has other `AncestorMarker<C>` entities as children is encountered.
         app.add_observer(
-            |trigger: Trigger<OnAdd, C>,
+            |trigger: Trigger<OnInsert, (ChildOf, C)>,
              mut commands: Commands,
-             parent_query: Query<&Parent>,
+             collider_query: Query<&C>,
+             parent_query: Query<&ChildOf>,
              ancestor_query: Query<(), With<AncestorMarker<C>>>| {
-                let entity = trigger.entity();
-                if parent_query.contains(entity) {
+                let entity = trigger.target();
+                if collider_query.contains(entity) {
                     add_ancestor_markers(
                         entity,
                         &mut commands,
@@ -62,36 +40,25 @@ impl<C: Component> Plugin for AncestorMarkerPlugin<C> {
             },
         );
 
-        // Remove `AncestorMarker<C>` from removed colliders and their ancestors,
+        // Remove `AncestorMarker<C>` from the ancestors of colliders that have been removed or moved to another parent,
         // until an ancestor that has other `AncestorMarker<C>` entities as children is encountered.
         #[allow(clippy::type_complexity)]
         app.add_observer(
-            |trigger: Trigger<OnRemove, C>,
+            |trigger: Trigger<OnReplace, (ChildOf, C)>,
             mut commands: Commands,
+            collider_query: Query<&C>,
             child_query: Query<&Children>,
-            parent_query: Query<&Parent>,
+            parent_query: Query<&ChildOf>,
             ancestor_query: Query<
                 (Entity, Has<C>),
                 Or<(With<AncestorMarker<C>>, With<C>)>
             >| {
-                remove_ancestor_markers(trigger.entity(), &mut commands, &parent_query, &child_query, &ancestor_query, false);
+                let entity = trigger.target();
+                if collider_query.contains(entity) {
+                    remove_ancestor_markers(entity, &mut commands, &parent_query, &child_query, &ancestor_query, false);
+                }
             },
         );
-
-        // Initialize `HierarchyEvent` in case `HierarchyPlugin` is not added.
-        app.add_event::<HierarchyEvent>();
-
-        // Update markers when changes are made to the hierarchy.
-        // TODO: This should be an observer. It'd remove the need for this scheduling nonsense
-        //       and make the implementation more robust.
-        if let Some(set) = self.system_set {
-            app.add_systems(
-                self.schedule,
-                update_markers_on_hierarchy_changes::<C>.in_set(set),
-            );
-        } else {
-            app.add_systems(self.schedule, update_markers_on_hierarchy_changes::<C>);
-        }
     }
 }
 
@@ -119,82 +86,10 @@ impl<C: Component> Default for AncestorMarker<C> {
     }
 }
 
-// TODO: This should be an observer once there is a trigger for hierarchy changes.
-//       See https://github.com/bevyengine/bevy/pull/13925 for an implementation of that trigger.
-/// Marks ancestors of entities that have the given component `C` with the `AncestorMarker<C>` component.
-#[allow(clippy::type_complexity)]
-fn update_markers_on_hierarchy_changes<C: Component>(
-    mut commands: Commands,
-    entity_query: Query<(), With<C>>,
-    parent_query: Query<&Parent>,
-    child_query: Query<&Children>,
-    ancestor_query_1: Query<(), With<AncestorMarker<C>>>,
-    ancestor_query_2: Query<(Entity, Has<C>), Or<(With<AncestorMarker<C>>, With<C>)>>,
-    mut hierarchy_event: EventReader<HierarchyEvent>,
-) {
-    for event in hierarchy_event.read().cloned() {
-        match event {
-            HierarchyEvent::ChildAdded { child, parent } => {
-                if entity_query.contains(child) {
-                    // Mark the child's ancestors.
-                    add_ancestor_markers(
-                        parent,
-                        &mut commands,
-                        &parent_query,
-                        &ancestor_query_1,
-                        true,
-                    );
-                }
-            }
-
-            HierarchyEvent::ChildRemoved { child, parent } => {
-                if entity_query.contains(child) {
-                    // Remove markers from the parent and its ancestors.
-                    remove_ancestor_markers(
-                        parent,
-                        &mut commands,
-                        &parent_query,
-                        &child_query,
-                        &ancestor_query_2,
-                        true,
-                    );
-                }
-            }
-
-            HierarchyEvent::ChildMoved {
-                child,
-                previous_parent,
-                new_parent,
-            } => {
-                if entity_query.contains(child) {
-                    // Remove markers from the previous parent and its ancestors.
-                    remove_ancestor_markers(
-                        previous_parent,
-                        &mut commands,
-                        &parent_query,
-                        &child_query,
-                        &ancestor_query_2,
-                        true,
-                    );
-
-                    // Mark the new parent and its ancestors.
-                    add_ancestor_markers(
-                        new_parent,
-                        &mut commands,
-                        &parent_query,
-                        &ancestor_query_1,
-                        true,
-                    );
-                }
-            }
-        }
-    }
-}
-
 fn add_ancestor_markers<C: Component>(
     entity: Entity,
     commands: &mut Commands,
-    parent_query: &Query<&Parent>,
+    parent_query: &Query<&ChildOf>,
     ancestor_query: &Query<(), With<AncestorMarker<C>>>,
     include_self: bool,
 ) {
@@ -219,8 +114,8 @@ fn add_ancestor_markers<C: Component>(
 
 /// Remove the component from entity, unless it is already despawned.
 fn remove_component<T: Bundle>(commands: &mut Commands, entity: Entity) {
-    if let Some(mut entity_commands) = commands.get_entity(entity) {
-        entity_commands.remove::<T>();
+    if let Ok(mut entity_commands) = commands.get_entity(entity) {
+        entity_commands.try_remove::<T>();
     }
 }
 
@@ -228,7 +123,7 @@ fn remove_component<T: Bundle>(commands: &mut Commands, entity: Entity) {
 fn remove_ancestor_markers<C: Component>(
     entity: Entity,
     commands: &mut Commands,
-    parent_query: &Query<&Parent>,
+    parent_query: &Query<&ChildOf>,
     child_query: &Query<&Children>,
     ancestor_query: &Query<(Entity, Has<C>), Or<(With<AncestorMarker<C>>, With<C>)>>,
     include_self: bool,
@@ -287,10 +182,7 @@ mod tests {
     fn add_and_remove_component() {
         let mut app = App::new();
 
-        app.add_plugins((
-            AncestorMarkerPlugin::<C>::new(FixedPostUpdate),
-            HierarchyPlugin,
-        ));
+        app.add_plugins(AncestorMarkerPlugin::<C>::default());
 
         // Set up an entity tree like the following:
         //
@@ -307,16 +199,14 @@ mod tests {
 
         let an = app.world_mut().spawn_empty().id();
 
-        let bn = app.world_mut().spawn_empty().set_parent(an).id();
-        let cy = app.world_mut().spawn(C).set_parent(an).id();
+        let bn = app.world_mut().spawn(ChildOf(an)).id();
+        let cy = app.world_mut().spawn((C, ChildOf(an))).id();
 
-        let dn = app.world_mut().spawn_empty().set_parent(cy).id();
-        let en = app.world_mut().spawn_empty().set_parent(cy).id();
+        let dn = app.world_mut().spawn(ChildOf(cy)).id();
+        let en = app.world_mut().spawn(ChildOf(cy)).id();
 
-        let fy = app.world_mut().spawn(C).set_parent(dn).id();
-        let gy = app.world_mut().spawn(C).set_parent(dn).id();
-
-        app.world_mut().run_schedule(FixedPostUpdate);
+        let fy = app.world_mut().spawn((C, ChildOf(dn))).id();
+        let gy = app.world_mut().spawn((C, ChildOf(dn))).id();
 
         // Check that the correct entities have the `AncestorMarker<C>` component.
         assert!(app.world().entity(an).contains::<AncestorMarker<C>>());
@@ -331,8 +221,6 @@ mod tests {
         let mut entity_mut = app.world_mut().entity_mut(fy);
         entity_mut.remove::<C>();
 
-        app.world_mut().run_schedule(FixedPostUpdate);
-
         assert!(app.world().entity(dn).contains::<AncestorMarker<C>>());
         assert!(app.world().entity(cy).contains::<AncestorMarker<C>>());
         assert!(app.world().entity(an).contains::<AncestorMarker<C>>());
@@ -341,8 +229,6 @@ mod tests {
         // now be removed from DN and CY, but it should remain on AN.
         let mut entity_mut = app.world_mut().entity_mut(gy);
         entity_mut.remove::<C>();
-
-        app.world_mut().run_schedule(FixedPostUpdate);
 
         assert!(!app.world().entity(dn).contains::<AncestorMarker<C>>());
         assert!(!app.world().entity(cy).contains::<AncestorMarker<C>>());
@@ -353,8 +239,6 @@ mod tests {
         let mut entity_mut = app.world_mut().entity_mut(cy);
         entity_mut.remove::<C>();
 
-        app.world_mut().run_schedule(FixedPostUpdate);
-
         assert!(!app.world().entity(an).contains::<AncestorMarker<C>>());
     }
 
@@ -362,10 +246,7 @@ mod tests {
     fn remove_children() {
         let mut app = App::new();
 
-        app.add_plugins((
-            AncestorMarkerPlugin::<C>::new(FixedPostUpdate),
-            HierarchyPlugin,
-        ));
+        app.add_plugins(AncestorMarkerPlugin::<C>::default());
 
         // Set up an entity tree like the following:
         //
@@ -382,16 +263,14 @@ mod tests {
 
         let an = app.world_mut().spawn_empty().id();
 
-        let bn = app.world_mut().spawn_empty().set_parent(an).id();
-        let cy = app.world_mut().spawn(C).set_parent(an).id();
+        let bn = app.world_mut().spawn(ChildOf(an)).id();
+        let cy = app.world_mut().spawn((C, ChildOf(an))).id();
 
-        let dn = app.world_mut().spawn_empty().set_parent(cy).id();
-        let en = app.world_mut().spawn_empty().set_parent(cy).id();
+        let dn = app.world_mut().spawn(ChildOf(cy)).id();
+        let en = app.world_mut().spawn(ChildOf(cy)).id();
 
-        let fy = app.world_mut().spawn(C).set_parent(dn).id();
-        let gy = app.world_mut().spawn(C).set_parent(dn).id();
-
-        app.world_mut().run_schedule(FixedPostUpdate);
+        let fy = app.world_mut().spawn((C, ChildOf(dn))).id();
+        let gy = app.world_mut().spawn((C, ChildOf(dn))).id();
 
         // Check that the correct entities have the `AncestorMarker<C>` component.
         assert!(app.world().entity(an).contains::<AncestorMarker<C>>());
@@ -403,10 +282,8 @@ mod tests {
         assert!(!app.world().entity(gy).contains::<AncestorMarker<C>>());
 
         // Make FY an orphan.
-        let mut entity_mut = app.world_mut().entity_mut(dn);
-        entity_mut.remove_children(&[fy]);
-
-        app.world_mut().run_schedule(FixedPostUpdate);
+        let mut entity_mut = app.world_mut().entity_mut(fy);
+        entity_mut.remove::<ChildOf>();
 
         assert!(app.world().entity(dn).contains::<AncestorMarker<C>>());
         assert!(app.world().entity(cy).contains::<AncestorMarker<C>>());
@@ -414,10 +291,8 @@ mod tests {
 
         // Make GY an orphan. The `AncestorMarker<C>` marker should
         // now be removed from DN and CY, but it should remain on AN.
-        let mut entity_mut = app.world_mut().entity_mut(dn);
-        entity_mut.remove_children(&[gy]);
-
-        app.world_mut().run_schedule(FixedPostUpdate);
+        let mut entity_mut = app.world_mut().entity_mut(gy);
+        entity_mut.remove::<ChildOf>();
 
         assert!(!app.world().entity(dn).contains::<AncestorMarker<C>>());
         assert!(!app.world().entity(cy).contains::<AncestorMarker<C>>());
@@ -425,10 +300,8 @@ mod tests {
 
         // Make CY an orphan. The `AncestorMarker<C>` marker should
         // now be removed from AN.
-        let mut entity_mut = app.world_mut().entity_mut(an);
-        entity_mut.remove_children(&[cy]);
-
-        app.world_mut().run_schedule(FixedPostUpdate);
+        let mut entity_mut = app.world_mut().entity_mut(cy);
+        entity_mut.remove::<ChildOf>();
 
         assert!(!app.world().entity(an).contains::<AncestorMarker<C>>());
 
@@ -436,26 +309,19 @@ mod tests {
         // now be added to AN.
         let mut entity_mut = app.world_mut().entity_mut(an);
         entity_mut.add_child(cy);
-
-        app.world_mut().run_schedule(FixedPostUpdate);
         assert!(app.world().entity(an).contains::<AncestorMarker<C>>());
 
         // Make CY an orphan and delete AN. This must not crash.
-        let mut entity_mut = app.world_mut().entity_mut(an);
-        entity_mut.remove_children(&[cy]);
+        let mut entity_mut = app.world_mut().entity_mut(cy);
+        entity_mut.remove::<ChildOf>();
         entity_mut.despawn();
-
-        app.world_mut().run_schedule(FixedPostUpdate);
     }
 
     #[test]
     fn move_children() {
         let mut app = App::new();
 
-        app.add_plugins((
-            AncestorMarkerPlugin::<C>::new(FixedPostUpdate),
-            HierarchyPlugin,
-        ));
+        app.add_plugins(AncestorMarkerPlugin::<C>::default());
 
         // Set up an entity tree like the following:
         //
@@ -472,16 +338,14 @@ mod tests {
 
         let an = app.world_mut().spawn_empty().id();
 
-        let bn = app.world_mut().spawn_empty().set_parent(an).id();
-        let cy = app.world_mut().spawn(C).set_parent(an).id();
+        let bn = app.world_mut().spawn(ChildOf(an)).id();
+        let cy = app.world_mut().spawn((C, ChildOf(an))).id();
 
-        let dn = app.world_mut().spawn_empty().set_parent(cy).id();
-        let en = app.world_mut().spawn_empty().set_parent(cy).id();
+        let dn = app.world_mut().spawn(ChildOf(cy)).id();
+        let en = app.world_mut().spawn(ChildOf(cy)).id();
 
-        let fy = app.world_mut().spawn(C).set_parent(dn).id();
-        let gy = app.world_mut().spawn(C).set_parent(dn).id();
-
-        app.world_mut().run_schedule(FixedPostUpdate);
+        let fy = app.world_mut().spawn((C, ChildOf(dn))).id();
+        let gy = app.world_mut().spawn((C, ChildOf(dn))).id();
 
         // Check that the correct entities have the `AncestorMarker<C>` component.
         assert!(app.world().entity(an).contains::<AncestorMarker<C>>());
@@ -496,8 +360,6 @@ mod tests {
         let mut entity_mut = app.world_mut().entity_mut(bn);
         entity_mut.add_child(fy);
 
-        app.world_mut().run_schedule(FixedPostUpdate);
-
         assert!(app.world().entity(bn).contains::<AncestorMarker<C>>());
         assert!(app.world().entity(dn).contains::<AncestorMarker<C>>());
         assert!(app.world().entity(cy).contains::<AncestorMarker<C>>());
@@ -508,8 +370,6 @@ mod tests {
         let mut entity_mut = app.world_mut().entity_mut(bn);
         entity_mut.add_child(gy);
 
-        app.world_mut().run_schedule(FixedPostUpdate);
-
         assert!(!app.world().entity(dn).contains::<AncestorMarker<C>>());
         assert!(!app.world().entity(cy).contains::<AncestorMarker<C>>());
         assert!(app.world().entity(an).contains::<AncestorMarker<C>>());
@@ -519,8 +379,6 @@ mod tests {
         let mut entity_mut = app.world_mut().entity_mut(cy);
         entity_mut.add_children(&[fy, gy]);
 
-        app.world_mut().run_schedule(FixedPostUpdate);
-
         assert!(!app.world().entity(bn).contains::<AncestorMarker<C>>());
         assert!(app.world().entity(cy).contains::<AncestorMarker<C>>());
         assert!(app.world().entity(an).contains::<AncestorMarker<C>>());
@@ -528,7 +386,5 @@ mod tests {
         // Move all children from CY to BN and remove CY. This must not crash.
         let mut entity_mut = app.world_mut().entity_mut(bn);
         entity_mut.add_children(&[dn, en, fy, gy]);
-
-        app.world_mut().run_schedule(FixedPostUpdate);
     }
 }

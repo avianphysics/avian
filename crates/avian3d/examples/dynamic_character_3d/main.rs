@@ -64,7 +64,7 @@ fn setup(
     // Environment (see the `collider_constructors` example for creating colliders from scenes)
     commands.spawn((
         SceneRoot(assets.load("character_controller_demo.glb#Scene0")),
-        Transform::from_rotation(Quat::from_rotation_y(-std::f32::consts::PI * 0.5)),
+        Transform::from_rotation(Quat::from_rotation_y(-core::f32::consts::PI * 0.5)),
         ColliderConstructorHierarchy::new(ColliderConstructor::ConvexHullFromMesh),
         RigidBody::Static,
     ));

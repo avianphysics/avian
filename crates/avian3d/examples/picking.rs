@@ -6,7 +6,7 @@
 //!
 //! Cameras can further filter which entities are pickable with the [`PhysicsPickingFilter`] component.
 
-use std::f32::consts::PI;
+use core::f32::consts::PI;
 
 use avian3d::{math::Vector, prelude::*};
 use bevy::{color::palettes::tailwind::*, picking::pointer::PointerInteraction, prelude::*};
@@ -96,8 +96,8 @@ fn setup_scene(
             ))
             .observe(update_material_on::<Pointer<Over>>(hover_matl.clone()))
             .observe(update_material_on::<Pointer<Out>>(white_matl.clone()))
-            .observe(update_material_on::<Pointer<Down>>(pressed_matl.clone()))
-            .observe(update_material_on::<Pointer<Up>>(hover_matl.clone()))
+            .observe(update_material_on::<Pointer<Pressed>>(pressed_matl.clone()))
+            .observe(update_material_on::<Pointer<Released>>(hover_matl.clone()))
             .observe(rotate_on_drag);
     }
 
@@ -107,7 +107,7 @@ fn setup_scene(
         MeshMaterial3d(ground_matl.clone()),
         RigidBody::Static,
         Collider::cuboid(50.0, 0.1, 50.0),
-        PickingBehavior::IGNORE, // Disable picking for the ground plane.
+        Pickable::IGNORE, // Disable picking for the ground plane.
     ));
 
     // Light
@@ -148,7 +148,7 @@ fn update_material_on<E>(
     // versions of this observer, each triggered by a different event and with a different hardcoded
     // material. Instead, the event type is a generic, and the material is passed in.
     move |trigger, mut query| {
-        if let Ok(mut material) = query.get_mut(trigger.entity()) {
+        if let Ok(mut material) = query.get_mut(trigger.target()) {
             material.0 = new_material.clone();
         }
     }
@@ -168,7 +168,7 @@ fn draw_pointer_intersections(pointers: Query<&PointerInteraction>, mut gizmos: 
 
 /// An observer to rotate an entity when it is dragged.
 fn rotate_on_drag(drag: Trigger<Pointer<Drag>>, mut transforms: Query<&mut Transform>) {
-    let mut transform = transforms.get_mut(drag.entity()).unwrap();
+    let mut transform = transforms.get_mut(drag.target()).unwrap();
     transform.rotate_y(drag.delta.x * 0.02);
     transform.rotate_x(drag.delta.y * 0.02);
 }

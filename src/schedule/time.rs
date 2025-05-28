@@ -21,7 +21,7 @@ use bevy::prelude::*;
 /// ```no_run
 #[cfg_attr(feature = "2d", doc = "use avian2d::prelude::*;")]
 #[cfg_attr(feature = "3d", doc = "use avian3d::prelude::*;")]
-/// use bevy::{prelude::*, utils::Duration};
+/// use bevy::prelude::*;
 ///
 /// fn main() {
 ///     App::new()
@@ -59,7 +59,8 @@ use bevy::prelude::*;
 /// ```
 #[cfg_attr(feature = "2d", doc = "use avian2d::prelude::*;")]
 #[cfg_attr(feature = "3d", doc = "use avian3d::prelude::*;")]
-/// use bevy::{prelude::*, utils::Duration};
+/// use bevy::prelude::*;
+/// use core::time::Duration;
 ///
 /// fn run_physics(world: &mut World) {
 ///     // Advance the simulation by 10 steps at 120 Hz

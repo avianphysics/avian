@@ -23,7 +23,7 @@ fn main() {
 // Enable contact modification for conveyor belts with the `ActiveCollisionHooks` component.
 // Here we use required components, but you could also add it manually.
 #[derive(Component)]
-#[require(ActiveCollisionHooks(|| ActiveCollisionHooks::MODIFY_CONTACTS))]
+#[require(ActiveCollisionHooks::MODIFY_CONTACTS)]
 struct ConveyorBelt {
     local_direction: Vec3,
     speed: f32,
@@ -38,14 +38,14 @@ struct ConveyorHooks<'w, 's> {
 
 // Implement the `CollisionHooks` trait for our custom system parameter.
 impl CollisionHooks for ConveyorHooks<'_, '_> {
-    fn modify_contacts(&self, contacts: &mut Contacts, _commands: &mut Commands) -> bool {
+    fn modify_contacts(&self, contacts: &mut ContactPair, _commands: &mut Commands) -> bool {
         // Get the conveyor belt and its global transform.
         // We don't know which entity is the conveyor belt, if any, so we need to check both.
         // This also affects the sign used for the conveyor belt's speed to apply it in the correct direction.
         let (Ok((conveyor_belt, global_transform)), sign) = self
             .conveyor_query
-            .get(contacts.entity1)
-            .map_or((self.conveyor_query.get(contacts.entity2), 1.0), |q| {
+            .get(contacts.collider1)
+            .map_or((self.conveyor_query.get(contacts.collider2), 1.0), |q| {
                 (Ok(q), -1.0)
             })
         else {

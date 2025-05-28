@@ -10,7 +10,7 @@ mod gizmos;
 pub use configuration::*;
 pub use gizmos::*;
 
-use crate::prelude::*;
+use crate::{dynamics::solver::xpbd::EntityConstraint, prelude::*};
 use bevy::{
     ecs::{intern::Interned, query::Has, schedule::ScheduleLabel},
     prelude::*,
@@ -25,13 +25,13 @@ use bevy::{
 /// - [AABBs](ColliderAabb)
 /// - [Collider] wireframes
 /// - Using different colors for [sleeping](Sleeping) bodies
-/// - [Contacts]
+/// - [Contacts](ContactPair)
 /// - [Joints](dynamics::solver::joints)
 /// - [`RayCaster`]
 /// - [`ShapeCaster`]
 /// - Changing the visibility of entities to only show debug rendering
 ///
-/// By default, [AABBs](ColliderAabb) and [contacts](Contacts) are not debug rendered.
+/// By default, [AABBs](ColliderAabb) and [contacts](ContactPair) are not debug rendered.
 /// You can configure the [`PhysicsGizmos`] retrieved from `GizmoConfigStore` for the global configuration
 /// and the [`DebugRender`] component for entity-level configuration.
 ///
@@ -101,11 +101,11 @@ impl Plugin for PhysicsDebugPlugin {
         let config = store.config_mut::<PhysicsGizmos>().0;
         #[cfg(feature = "2d")]
         {
-            config.line_width = 2.0;
+            config.line.width = 2.0;
         }
         #[cfg(feature = "3d")]
         {
-            config.line_width = 1.5;
+            config.line.width = 1.5;
         }
 
         app.register_type::<PhysicsGizmos>()
@@ -201,7 +201,7 @@ fn debug_render_aabbs(
     aabbs: Query<(
         Entity,
         &ColliderAabb,
-        Option<&ColliderParent>,
+        Option<&ColliderOf>,
         Option<&DebugRender>,
     )>,
     sleeping: Query<(), With<Sleeping>>,
@@ -210,12 +210,12 @@ fn debug_render_aabbs(
 ) {
     let config = store.config::<PhysicsGizmos>().1;
     #[cfg(feature = "2d")]
-    for (entity, aabb, collider_parent, render_config) in &aabbs {
+    for (entity, aabb, collider_rb, render_config) in &aabbs {
         if let Some(mut color) = render_config.map_or(config.aabb_color, |c| c.aabb_color) {
-            let collider_parent = collider_parent.map_or(entity, |p| p.get());
+            let collider_rb = collider_rb.map_or(entity, |c| c.body);
 
             // If the body is sleeping, multiply the color by the sleeping color multiplier
-            if sleeping.contains(collider_parent) {
+            if sleeping.contains(collider_rb) {
                 let hsla = Hsla::from(color).to_vec4();
                 if let Some(mul) = render_config.map_or(config.sleeping_color_multiplier, |c| {
                     c.sleeping_color_multiplier
@@ -233,12 +233,12 @@ fn debug_render_aabbs(
     }
 
     #[cfg(feature = "3d")]
-    for (entity, aabb, collider_parent, render_config) in &aabbs {
+    for (entity, aabb, collider_rb, render_config) in &aabbs {
         if let Some(mut color) = render_config.map_or(config.aabb_color, |c| c.aabb_color) {
-            let collider_parent = collider_parent.map_or(entity, |p| p.get());
+            let collider_rb = collider_rb.map_or(entity, |c| c.body);
 
             // If the body is sleeping, multiply the color by the sleeping color multiplier
-            if sleeping.contains(collider_parent) {
+            if sleeping.contains(collider_rb) {
                 let hsla = Hsla::from(color).to_vec4();
                 if let Some(mul) = render_config.map_or(config.sleeping_color_multiplier, |c| {
                     c.sleeping_color_multiplier
@@ -267,7 +267,7 @@ fn debug_render_colliders(
         &Collider,
         &Position,
         &Rotation,
-        Option<&ColliderParent>,
+        Option<&ColliderOf>,
         Option<&DebugRender>,
     )>,
     sleeping: Query<(), With<Sleeping>>,
@@ -275,12 +275,12 @@ fn debug_render_colliders(
     store: Res<GizmoConfigStore>,
 ) {
     let config = store.config::<PhysicsGizmos>().1;
-    for (entity, collider, position, rotation, collider_parent, render_config) in &mut colliders {
+    for (entity, collider, position, rotation, collider_rb, render_config) in &mut colliders {
         if let Some(mut color) = render_config.map_or(config.collider_color, |c| c.collider_color) {
-            let collider_parent = collider_parent.map_or(entity, |p| p.get());
+            let collider_rb = collider_rb.map_or(entity, |c| c.body);
 
             // If the body is sleeping, multiply the color by the sleeping color multiplier
-            if sleeping.contains(collider_parent) {
+            if sleeping.contains(collider_rb) {
                 let hsla = Hsla::from(color).to_vec4();
                 if let Some(mul) = render_config.map_or(config.sleeping_color_multiplier, |c| {
                     c.sleeping_color_multiplier
@@ -295,7 +295,7 @@ fn debug_render_colliders(
 
 fn debug_render_contacts(
     colliders: Query<(&Position, &Rotation)>,
-    collisions: Res<Collisions>,
+    collisions: Collisions,
     mut gizmos: Gizmos<PhysicsGizmos>,
     store: Res<GizmoConfigStore>,
     time: Res<Time<Substeps>>,
@@ -308,10 +308,10 @@ fn debug_render_contacts(
     }
 
     for contacts in collisions.iter() {
-        let Ok((position1, rotation1)) = colliders.get(contacts.entity1) else {
+        let Ok((position1, rotation1)) = colliders.get(contacts.collider1) else {
             continue;
         };
-        let Ok((position2, rotation2)) = colliders.get(contacts.entity2) else {
+        let Ok((position2, rotation2)) = colliders.get(contacts.collider2) else {
             continue;
         };
 
@@ -372,7 +372,7 @@ fn debug_render_contacts(
     }
 }
 
-fn debug_render_joints<T: Joint>(
+fn debug_render_joints<T: Joint + EntityConstraint<2>>(
     bodies: Query<(&Position, &Rotation, Has<Sleeping>)>,
     joints: Query<(&T, Option<&DebugRender>)>,
     mut gizmos: Gizmos<PhysicsGizmos>,

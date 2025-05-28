@@ -1,7 +1,4 @@
-use bevy::{
-    ecs::entity::{EntityHash, EntityHashSet},
-    prelude::*,
-};
+use bevy::{ecs::entity::hash_set::EntityHashSet, prelude::*};
 
 use crate::prelude::*;
 
@@ -53,7 +50,7 @@ impl SpatialQueryFilter {
     /// and has no excluded entities.
     pub const DEFAULT: Self = Self {
         mask: LayerMask::ALL,
-        excluded_entities: EntityHashSet::with_hasher(EntityHash),
+        excluded_entities: EntityHashSet::new(),
     };
 
     /// Creates a new [`SpatialQueryFilter`] with the given [`LayerMask`] determining

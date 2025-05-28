@@ -139,7 +139,7 @@ pub fn mark_sleeping_bodies(
         ),
         (Without<Sleeping>, Without<SleepingDisabled>),
     >,
-    collisions: Res<Collisions>,
+    contact_graph: Res<ContactGraph>,
     rb_query: Query<&RigidBody>,
     deactivation_time: Res<DeactivationTime>,
     sleep_threshold: Res<SleepingThreshold>,
@@ -150,11 +150,11 @@ pub fn mark_sleeping_bodies(
     let delta_secs = time.delta_seconds_adjusted();
 
     for (entity, rb, mut lin_vel, mut ang_vel, mut time_sleeping) in &mut query {
-        let colliding_entities = collisions.collisions_with(entity).map(|c| {
-            if entity == c.entity1 {
-                c.entity2
+        let colliding_entities = contact_graph.collisions_with(entity).map(|c| {
+            if entity == c.collider1 {
+                c.collider2
             } else {
-                c.entity1
+                c.collider1
             }
         });
 

@@ -1,4 +1,4 @@
-use std::time::Duration;
+use core::time::Duration;
 
 use bevy::{
     diagnostic::{Diagnostic, DiagnosticPath, Diagnostics, DiagnosticsStore, RegisterDiagnostic},
@@ -26,7 +26,7 @@ impl Plugin for PhysicsTotalDiagnosticsPlugin {
         );
 
         // Initialize `PhysicsStepStart` for tracking the time at which the physics step started.
-        app.insert_resource::<PhysicsStepStart>(PhysicsStepStart(bevy::utils::Instant::now()));
+        app.insert_resource::<PhysicsStepStart>(PhysicsStepStart(crate::utils::Instant::now()));
 
         // Add systems for updating total physics diagnostics.
         app.add_systems(
@@ -84,10 +84,10 @@ fn increment_physics_step_number(
 /// The time at which the physics step started.
 #[derive(Resource, Debug, Reflect)]
 #[reflect(Resource, Debug)]
-struct PhysicsStepStart(pub bevy::utils::Instant);
+struct PhysicsStepStart(pub crate::utils::Instant);
 
 fn update_physics_step_start(mut start: ResMut<PhysicsStepStart>) {
-    start.0 = bevy::utils::Instant::now();
+    start.0 = crate::utils::Instant::now();
 }
 
 fn update_step_time(

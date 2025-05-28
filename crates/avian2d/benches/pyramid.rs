@@ -1,4 +1,4 @@
-use std::time::Duration;
+use core::time::Duration;
 
 use avian2d::math::*;
 use avian2d::prelude::*;

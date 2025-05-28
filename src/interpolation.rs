@@ -5,11 +5,14 @@
 use bevy::{ecs::query::QueryData, prelude::*};
 use bevy_transform_interpolation::{prelude::*, VelocitySource};
 
-pub use bevy_transform_interpolation::prelude::{
-    NoRotationEasing, NoScaleEasing, NoTransformEasing, NoTranslationEasing, RotationExtrapolation,
-    RotationHermiteEasing, RotationInterpolation, ScaleInterpolation, TransformExtrapolation,
-    TransformHermiteEasing, TransformInterpolation, TranslationExtrapolation,
-    TranslationHermiteEasing, TranslationInterpolation,
+pub use bevy_transform_interpolation::{
+    prelude::{
+        NoRotationEasing, NoScaleEasing, NoTransformEasing, NoTranslationEasing,
+        RotationExtrapolation, RotationHermiteEasing, RotationInterpolation, ScaleInterpolation,
+        TransformExtrapolation, TransformHermiteEasing, TransformInterpolation,
+        TranslationExtrapolation, TranslationHermiteEasing, TranslationInterpolation,
+    },
+    TransformEasingSet,
 };
 
 use crate::prelude::*;

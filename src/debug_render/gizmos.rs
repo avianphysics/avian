@@ -432,6 +432,10 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
             TypedShape::Custom(_id) => {
                 #[cfg(feature = "2d")]
                 {
+                    use crate::collision::collider::{
+                        EllipseColliderShape, RegularPolygonColliderShape,
+                    };
+
                     if let Some(ellipse) =
                         collider.shape_scaled().as_shape::<EllipseColliderShape>()
                     {

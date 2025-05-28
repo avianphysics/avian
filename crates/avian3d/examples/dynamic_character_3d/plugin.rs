@@ -57,7 +57,7 @@ pub struct MaxSlopeAngle(Scalar);
 #[derive(Bundle)]
 pub struct CharacterControllerBundle {
     character_controller: CharacterController,
-    rigid_body: RigidBody,
+    body: RigidBody,
     collider: Collider,
     ground_caster: ShapeCaster,
     locked_axes: LockedAxes,
@@ -103,7 +103,7 @@ impl CharacterControllerBundle {
 
         Self {
             character_controller: CharacterController,
-            rigid_body: RigidBody::Dynamic,
+            body: RigidBody::Dynamic,
             collider,
             ground_caster: ShapeCaster::new(
                 caster_shape,
@@ -144,11 +144,11 @@ fn keyboard_input(
     let direction = Vector2::new(horizontal as Scalar, vertical as Scalar).clamp_length_max(1.0);
 
     if direction != Vector2::ZERO {
-        movement_event_writer.send(MovementAction::Move(direction));
+        movement_event_writer.write(MovementAction::Move(direction));
     }
 
     if keyboard_input.just_pressed(KeyCode::Space) {
-        movement_event_writer.send(MovementAction::Jump);
+        movement_event_writer.write(MovementAction::Jump);
     }
 }
 
@@ -162,13 +162,13 @@ fn gamepad_input(
             gamepad.get(GamepadAxis::LeftStickX),
             gamepad.get(GamepadAxis::LeftStickY),
         ) {
-            movement_event_writer.send(MovementAction::Move(
+            movement_event_writer.write(MovementAction::Move(
                 Vector2::new(x as Scalar, y as Scalar).clamp_length_max(1.0),
             ));
         }
 
         if gamepad.just_pressed(GamepadButton::South) {
-            movement_event_writer.send(MovementAction::Jump);
+            movement_event_writer.write(MovementAction::Jump);
         }
     }
 }

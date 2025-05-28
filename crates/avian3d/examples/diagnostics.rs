@@ -19,7 +19,7 @@ fn main() {
             // in a debug UI. Requires the `diagnostic_ui` feature.
             PhysicsDiagnosticsUiPlugin,
             // Optional: Add the `FrameTimeDiagnosticsPlugin` to display frame time.
-            FrameTimeDiagnosticsPlugin,
+            FrameTimeDiagnosticsPlugin::default(),
         ))
         // The `PhysicsDiagnosticsUiSettings` resource can be used to configure the diagnostics UI.
         //

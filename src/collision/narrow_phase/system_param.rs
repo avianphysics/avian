@@ -1,29 +1,35 @@
-use std::cell::RefCell;
+#[cfg(feature = "parallel")]
+use core::cell::RefCell;
+use core::cmp::Ordering;
 
 use crate::{
-    data_structures::{bit_vec::BitVec, graph::EdgeIndex, pair_key::PairKey},
+    collision::collider::ColliderQuery,
+    data_structures::{bit_vec::BitVec, graph::EdgeIndex},
     dynamics::solver::{contact::ContactConstraint, ContactSoftnessCoefficients},
     prelude::*,
 };
 use bevy::{
     ecs::system::{SystemParam, SystemParamItem},
     prelude::*,
-    tasks::{ComputeTaskPool, ParallelSliceMut},
 };
+use dynamics::solver::{
+    contact::{ContactConstraintPoint, ContactNormalPart, ContactTangentPart},
+    ContactConstraints,
+};
+#[cfg(feature = "parallel")]
 use thread_local::ThreadLocal;
 
 /// A system parameter for managing the narrow phase.
 ///
 /// Responsibilities:
 ///
-/// - Updates contacts for each contact pair in [`Collisions`].
+/// - Updates contacts for each contact pair in the [`ContactGraph`].
 /// - Sends collision events when colliders start or stop touching.
-/// - Removes contact pairs from the [`Collisions`] resource when AABBs stop overlapping.
+/// - Removes contact pairs from the [`ContactGraph`] when AABBs stop overlapping.
 /// - Generates contact constraints for each contact pair that is touching or expected to start touching.
 #[derive(SystemParam)]
 #[expect(missing_docs)]
 pub struct NarrowPhase<'w, 's, C: AnyCollider> {
-    parallel_commands: ParallelCommands<'w, 's>,
     pub collider_query: Query<'w, 's, ColliderQuery<C>, Without<ColliderDisabled>>,
     pub colliding_entities_query: Query<'w, 's, &'static mut CollidingEntities>,
     pub body_query: Query<
@@ -36,12 +42,15 @@ pub struct NarrowPhase<'w, 's, C: AnyCollider> {
         ),
         Without<RigidBodyDisabled>,
     >,
-    pub collisions: ResMut<'w, Collisions>,
+    pub contact_graph: ResMut<'w, ContactGraph>,
     contact_status_bits: ResMut<'w, ContactStatusBits>,
-    contact_status_bits_thread_local: ResMut<'w, ContactStatusBitsThreadLocal>,
+    pub contact_constraints: ResMut<'w, ContactConstraints>,
+    #[cfg(feature = "parallel")]
+    thread_locals: ResMut<'w, NarrowPhaseThreadLocals>,
     pub config: Res<'w, NarrowPhaseConfig>,
     default_friction: Res<'w, DefaultFriction>,
     default_restitution: Res<'w, DefaultRestitution>,
+    contact_softness: Res<'w, ContactSoftnessCoefficients>,
     length_unit: Res<'w, PhysicsLengthUnit>,
     // These are scaled by the length unit.
     default_speculative_margin: Local<'s, Scalar>,
@@ -53,23 +62,39 @@ pub struct NarrowPhase<'w, 's, C: AnyCollider> {
 #[derive(Resource, Default, Deref, DerefMut)]
 pub(super) struct ContactStatusBits(pub BitVec);
 
-/// A thread-local bit vector for tracking contact status changes.
-/// Set bits correspond to contact pairs that were either added or removed.
+/// A resource storing thread-local context for the narrow phase.
+#[cfg(feature = "parallel")]
 #[derive(Resource, Default, Deref, DerefMut)]
-pub(super) struct ContactStatusBitsThreadLocal(pub ThreadLocal<RefCell<BitVec>>);
+pub(super) struct NarrowPhaseThreadLocals(pub ThreadLocal<RefCell<NarrowPhaseThreadContext>>);
+
+/// A thread-local context for the narrow phase.
+#[cfg(feature = "parallel")]
+#[derive(Default)]
+pub(super) struct NarrowPhaseThreadContext {
+    /// A bit vector for tracking contact status changes.
+    /// Set bits correspond to contact pairs that were either added or removed.
+    ///
+    /// The thread-local bit vectors are combined with the global [`ContactStatusBits`].
+    pub contact_status_bits: BitVec,
+    /// A vector for storing generated contact constraints.
+    ///
+    /// The thread-local constraints are combined with the global [`ContactConstraints`].
+    pub contact_constraints: Vec<ContactConstraint>,
+}
 
 impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
     /// Updates the narrow phase.
     ///
-    /// - Updates contacts for each contact pair in [`Collisions`].
+    /// - Updates contacts for each contact pair in the [`ContactGraph`].
     /// - Sends collision events when colliders start or stop touching.
-    /// - Removes pairs from [`Collisions`] when AABBs stop overlapping.
+    /// - Removes pairs from the [`ContactGraph`] when AABBs stop overlapping.
     pub fn update<H: CollisionHooks>(
         &mut self,
         collision_started_event_writer: &mut EventWriter<CollisionStarted>,
         collision_ended_event_writer: &mut EventWriter<CollisionEnded>,
         delta_secs: Scalar,
-        hooks: &mut H::Item<'_, '_>,
+        hooks: &SystemParamItem<H>,
+        context: &SystemParamItem<C::Context>,
         commands: &mut ParallelCommands,
     ) where
         for<'w, 's> SystemParamItem<'w, 's, H>: CollisionHooks,
@@ -82,13 +107,13 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
         }
 
         // Update contacts for all contact pairs.
-        self.update_contacts::<H>(delta_secs, hooks, commands);
+        self.update_contacts::<H>(delta_secs, hooks, context, commands);
 
         // Contact pairs that should be removed.
         // TODO: This is needed because removing pairs while iterating over the bit vec can invalidate indices.
         //       With a stable mapping between contact pair indices and bits, we could remove this.
         // TODO: Pre-allocate this with some reasonable capacity?
-        let mut pairs_to_remove = Vec::<EdgeIndex>::new();
+        let mut pairs_to_remove = Vec::<(Entity, Entity)>::new();
 
         // Process contact status changes, iterating over set bits serially to maintain determinism.
         //
@@ -100,10 +125,10 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                 let pair_index = EdgeIndex(i as u32 * 64 + trailing_zeros);
 
                 let contact_pair = self
-                    .collisions
-                    .graph
+                    .contact_graph
+                    .internal
                     .edge_weight_mut(pair_index)
-                    .unwrap_or_else(|| panic!("Contact pair not found for {:?}", pair_index));
+                    .unwrap_or_else(|| panic!("Contact pair not found for {pair_index:?}"));
 
                 // Three options:
                 // 1. The AABBs are no longer overlapping, and the contact pair should be removed.
@@ -115,49 +140,46 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                         .flags
                         .contains(ContactPairFlags::TOUCHING | ContactPairFlags::CONTACT_EVENTS);
                     if send_event {
-                        collision_ended_event_writer
-                            .send(CollisionEnded(contact_pair.entity1, contact_pair.entity2));
+                        collision_ended_event_writer.write(CollisionEnded(
+                            contact_pair.collider1,
+                            contact_pair.collider2,
+                        ));
                     }
 
                     // Remove from `CollidingEntities`.
                     Self::remove_colliding_entities(
                         &mut self.colliding_entities_query,
-                        contact_pair.entity1,
-                        contact_pair.entity2,
+                        contact_pair.collider1,
+                        contact_pair.collider2,
                     );
 
                     // Wake up the bodies.
                     // TODO: When we have simulation islands, this will be more efficient.
                     commands.command_scope(|mut commands| {
                         commands.queue(WakeUpBody(
-                            contact_pair.body_entity1.unwrap_or(contact_pair.entity1),
+                            contact_pair.body1.unwrap_or(contact_pair.collider1),
                         ));
                         commands.queue(WakeUpBody(
-                            contact_pair.body_entity2.unwrap_or(contact_pair.entity2),
+                            contact_pair.body2.unwrap_or(contact_pair.collider2),
                         ));
                     });
 
-                    // Remove the contact pair from the pair set.
-                    // This is normally done by `Collisions::remove_pair`,
-                    // but since we're removing edges manually, we need to do it here.
-                    let pair_key =
-                        PairKey::new(contact_pair.entity1.index(), contact_pair.entity2.index());
-                    self.collisions.pair_set.remove(&pair_key);
-
                     // Queue the contact pair for removal.
-                    pairs_to_remove.push(pair_index);
+                    pairs_to_remove.push((contact_pair.collider1, contact_pair.collider2));
                 } else if contact_pair.collision_started() {
                     // Send collision started event.
                     if contact_pair.events_enabled() {
-                        collision_started_event_writer
-                            .send(CollisionStarted(contact_pair.entity1, contact_pair.entity2));
+                        collision_started_event_writer.write(CollisionStarted(
+                            contact_pair.collider1,
+                            contact_pair.collider2,
+                        ));
                     }
 
                     // Add to `CollidingEntities`.
                     Self::add_colliding_entities(
                         &mut self.colliding_entities_query,
-                        contact_pair.entity1,
-                        contact_pair.entity2,
+                        contact_pair.collider1,
+                        contact_pair.collider2,
                     );
 
                     debug_assert!(
@@ -174,25 +196,27 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                 {
                     // Send collision ended event.
                     if contact_pair.events_enabled() {
-                        collision_ended_event_writer
-                            .send(CollisionEnded(contact_pair.entity1, contact_pair.entity2));
+                        collision_ended_event_writer.write(CollisionEnded(
+                            contact_pair.collider1,
+                            contact_pair.collider2,
+                        ));
                     }
 
                     // Remove from `CollidingEntities`.
                     Self::remove_colliding_entities(
                         &mut self.colliding_entities_query,
-                        contact_pair.entity1,
-                        contact_pair.entity2,
+                        contact_pair.collider1,
+                        contact_pair.collider2,
                     );
 
                     // Wake up the bodies.
                     // TODO: When we have simulation islands, this will be more efficient.
                     commands.command_scope(|mut commands| {
                         commands.queue(WakeUpBody(
-                            contact_pair.body_entity1.unwrap_or(contact_pair.entity1),
+                            contact_pair.body1.unwrap_or(contact_pair.collider1),
                         ));
                         commands.queue(WakeUpBody(
-                            contact_pair.body_entity2.unwrap_or(contact_pair.entity2),
+                            contact_pair.body2.unwrap_or(contact_pair.collider2),
                         ));
                     });
 
@@ -213,7 +237,7 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
 
         // Remove the contact pairs that were marked for removal.
         for pair_index in pairs_to_remove.drain(..) {
-            self.collisions.graph.remove_edge(pair_index);
+            self.contact_graph.remove_pair(pair_index.0, pair_index.1);
         }
     }
 
@@ -245,7 +269,7 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
         }
     }
 
-    /// Updates contacts for all contact pairs in [`Collisions`].
+    /// Updates contacts for all contact pairs in the [`ContactGraph`].
     ///
     /// Also updates the [`ContactStatusBits`] resource to track status changes for each contact pair.
     /// Set bits correspond to contact pairs that were either added or removed,
@@ -255,52 +279,78 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
     fn update_contacts<H: CollisionHooks>(
         &mut self,
         delta_secs: Scalar,
-        hooks: &H::Item<'_, '_>,
+        hooks: &SystemParamItem<H>,
+        collider_context: &SystemParamItem<C::Context>,
         par_commands: &mut ParallelCommands,
     ) where
         for<'w, 's> SystemParamItem<'w, 's, H>: CollisionHooks,
     {
-        let task_pool = ComputeTaskPool::get();
-        let contact_pair_count = self.collisions.graph.edge_count();
+        let contact_pair_count = self.contact_graph.internal.edge_count();
 
         // Clear the bit vector used to track status changes for each contact pair.
         self.contact_status_bits
             .set_bit_count_and_clear(contact_pair_count);
 
-        self.contact_status_bits_thread_local
-            .iter_mut()
-            .for_each(|bit_vec| {
-                let mut bit_vec_mut = bit_vec.borrow_mut();
-                bit_vec_mut.set_bit_count_and_clear(contact_pair_count);
-            });
+        #[cfg(feature = "parallel")]
+        self.thread_locals.iter_mut().for_each(|context| {
+            let bit_vec_mut = &mut context.borrow_mut().contact_status_bits;
+            bit_vec_mut.set_bit_count_and_clear(contact_pair_count);
+        });
 
-        // Compute contacts for all contact pairs in parallel.
+        // Clear the contact constraints.
+        self.contact_constraints.clear();
+
+        // Compute contacts for all contact pairs in parallel or serially
+        // based on the `parallel` feature.
         //
-        // Each thread writes status changes to its own local bit vector,
+        // Constraints are also generated for each contact pair that is touching
+        // or expected to start touching.
+        //
+        // If parallelism is used, status changes are written to thread-local bit vectors,
         // where set bits correspond to contact pairs that were added or removed.
         // At the end, the bit vectors are combined using bit-wise OR.
         //
+        // If parallelism is not used, status changes are instead written
+        // directly to the global bit vector.
+        //
         // TODO: An alternative to thread-local bit vectors could be to have one larger bit vector
         //       and to chunk it into smaller bit vectors for each thread. Might not be any faster though.
-        let mut slice = self.collisions.graph.raw_edges_mut();
-        let chunk_size = (slice.len() / task_pool.thread_num()).max(1);
-        slice.par_chunk_map_mut(task_pool, chunk_size, |chunk_index, chunk| {
-            let index_offset = chunk_index * chunk_size;
-            for (i, contacts) in chunk.iter_mut().enumerate() {
-                // Get the index of the contact pair in the bit vector.
-                let contact_index = index_offset + i;
+        crate::utils::par_for_each!(
+            self.contact_graph.internal.raw_edges_mut(),
+            |contact_index, contacts| {
+                #[cfg(not(feature = "parallel"))]
+                let status_change_bits = &mut self.contact_status_bits;
+                #[cfg(not(feature = "parallel"))]
+                let constraints = &mut self.contact_constraints;
 
-                // Get the thread-local bit vector for tracking status changes.
-                let mut state_change_bits = self
-                    .contact_status_bits_thread_local
-                    .get_or(|| RefCell::new(BitVec::new(contact_pair_count)))
+                // TODO: Move this out of the chunk iteration? Requires refactoring `par_for_each!`.
+                #[cfg(feature = "parallel")]
+                // Get the thread-local narrow phase context.
+                let mut thread_context = self
+                    .thread_locals
+                    .get_or(|| {
+                        // No thread-local bit vector exists for this thread yet.
+                        // Create a new one with the same capacity as the global bit vector.
+                        let mut contact_status_bits = BitVec::new(contact_pair_count);
+                        contact_status_bits.set_bit_count_and_clear(contact_pair_count);
+                        RefCell::new(NarrowPhaseThreadContext {
+                            contact_status_bits,
+                            contact_constraints: Vec::new(),
+                        })
+                    })
                     .borrow_mut();
+                #[cfg(feature = "parallel")]
+                let NarrowPhaseThreadContext {
+                    contact_status_bits: status_change_bits,
+                    contact_constraints: constraints,
+                } = &mut *thread_context;
 
                 let contacts = &mut contacts.weight;
 
+                // Get the colliders for the contact pair.
                 let Ok([collider1, collider2]) = self
                     .collider_query
-                    .get_many([contacts.entity1, contacts.entity2])
+                    .get_many([contacts.collider1, contacts.collider2])
                 else {
                     return;
                 };
@@ -308,19 +358,22 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                 // Check if the AABBs of the colliders still overlap and the contact pair is valid.
                 let overlap = collider1.aabb.intersects(&collider2.aabb);
 
-                if !overlap {
+                // Also check if the collision layers are still compatible and the contact pair is valid.
+                // TODO: Ideally, we would have fine-grained change detection for `CollisionLayers`
+                //       rather than checking it for every pair here.
+                if !overlap || !collider1.layers.interacts_with(*collider2.layers) {
                     // The AABBs no longer overlap. The contact pair should be removed.
                     contacts.flags.set(ContactPairFlags::DISJOINT_AABB, true);
-                    state_change_bits.set(contact_index);
+                    status_change_bits.set(contact_index);
                 } else {
                     // The AABBs overlap. Compute contacts.
 
                     let body1_bundle = collider1
-                        .parent
-                        .and_then(|p| self.body_query.get(p.get()).ok());
+                        .body()
+                        .and_then(|body| self.body_query.get(body).ok());
                     let body2_bundle = collider2
-                        .parent
-                        .and_then(|p| self.body_query.get(p.get()).ok());
+                        .body()
+                        .and_then(|body| self.body_query.get(body).ok());
 
                     // The rigid body's friction, restitution, collision margin, and speculative margin
                     // will be used if the collider doesn't have them specified.
@@ -408,6 +461,8 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                             Some(margin.0)
                         });
 
+                    let relative_linear_velocity: Vector;
+
                     // Compute the effective speculative margin, clamping it based on velocities and the maximum bound.
                     let effective_speculative_margin = {
                         let speculative_margin1 =
@@ -428,7 +483,8 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
 
                         // Compute the effective margin based on how much the bodies
                         // are expected to move relative to each other.
-                        delta_secs * (lin_vel1 - lin_vel2).length()
+                        relative_linear_velocity = lin_vel2 - lin_vel1;
+                        delta_secs * relative_linear_velocity.length()
                     };
 
                     // The maximum distance at which contacts are detected.
@@ -436,9 +492,6 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     let max_contact_distance = effective_speculative_margin
                         .max(*self.contact_tolerance)
                         + collision_margin_sum;
-
-                    let position1 = collider1.current_position();
-                    let position2 = collider2.current_position();
 
                     let was_touching = contacts.flags.contains(ContactPairFlags::TOUCHING);
 
@@ -448,14 +501,20 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     // TODO: It'd be good to persist the manifolds and let Parry match contacts.
                     //       This isn't currently done because it requires using Parry's contact manifold type.
                     // Compute the contact manifolds using the effective speculative margin.
-                    collider1.shape.contact_manifolds(
+                    let context = ContactManifoldContext::new(
+                        collider1.entity,
+                        collider2.entity,
+                        collider_context,
+                    );
+                    collider1.shape.contact_manifolds_with_context(
                         collider2.shape,
-                        position1,
+                        collider1.position.0,
                         *collider1.rotation,
-                        position2,
+                        collider2.position.0,
                         *collider2.rotation,
                         max_contact_distance,
                         &mut contacts.manifolds,
+                        context,
                     );
 
                     // Set the initial surface properties.
@@ -506,102 +565,206 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     if touching && !was_touching {
                         // The colliders started touching.
                         contacts.flags.set(ContactPairFlags::STARTED_TOUCHING, true);
-                        state_change_bits.set(contact_index);
+                        status_change_bits.set(contact_index);
                     } else if !touching && was_touching {
                         // The colliders stopped touching.
                         contacts.flags.set(ContactPairFlags::STOPPED_TOUCHING, true);
-                        state_change_bits.set(contact_index);
+                        status_change_bits.set(contact_index);
+                    }
+
+                    // Now, we generate contact constraints for the contact pair.
+                    let Some(((body1, _, _), (body2, _, _))) = body1_bundle.zip(body2_bundle)
+                    else {
+                        return;
+                    };
+
+                    let inactive1 = body1.rb.is_static() || body1.is_sleeping;
+                    let inactive2 = body2.rb.is_static() || body2.is_sleeping;
+
+                    // No collision response if both bodies are static or sleeping
+                    // or if either of the colliders is a sensor collider.
+                    if (inactive1 && inactive2) || contacts.is_sensor() {
+                        return;
+                    }
+
+                    // When an active body collides with a sleeping body, wake up the sleeping body.
+                    par_commands.command_scope(|mut commands| {
+                        if body1.is_sleeping {
+                            commands.queue(WakeUpBody(body1.entity));
+                        } else if body2.is_sleeping {
+                            commands.queue(WakeUpBody(body2.entity));
+                        }
+                    });
+
+                    // Compute the relative dominance of the bodies.
+                    let relative_dominance = body1.dominance() - body2.dominance();
+
+                    // Compute the inverse mass and angular inertia, taking into account the relative dominance.
+                    // TODO: How should we properly take locked axes into account for mass?
+                    let (inv_mass1, i1, inv_mass2, i2) = match relative_dominance.cmp(&0) {
+                        Ordering::Equal => (
+                            body1.mass().inverse(),
+                            body1.effective_global_angular_inertia(),
+                            body2.mass().inverse(),
+                            body2.effective_global_angular_inertia(),
+                        ),
+                        Ordering::Greater => (
+                            0.0,
+                            ComputedAngularInertia::INFINITY,
+                            body2.mass().inverse(),
+                            body2.effective_global_angular_inertia(),
+                        ),
+                        Ordering::Less => (
+                            body1.mass().inverse(),
+                            body1.effective_global_angular_inertia(),
+                            0.0,
+                            ComputedAngularInertia::INFINITY,
+                        ),
+                    };
+
+                    let contact_softness = if inactive1 || inactive2 {
+                        self.contact_softness.non_dynamic
+                    } else {
+                        self.contact_softness.dynamic
+                    };
+
+                    let inverse_mass_sum = inv_mass1 + inv_mass2;
+
+                    // Generate a contact constraint for each contact manifold.
+                    for (manifold_index, manifold) in contacts.manifolds.iter_mut().enumerate() {
+                        let mut constraint = ContactConstraint {
+                            body1: body1.entity,
+                            body2: body2.entity,
+                            collider1: collider1.entity,
+                            collider2: collider2.entity,
+                            relative_dominance,
+                            friction: manifold.friction,
+                            restitution: manifold.restitution,
+                            #[cfg(feature = "2d")]
+                            tangent_speed: manifold.tangent_speed,
+                            #[cfg(feature = "3d")]
+                            tangent_velocity: manifold.tangent_velocity,
+                            normal: manifold.normal,
+                            points: Vec::with_capacity(manifold.points.len()),
+                            #[cfg(feature = "parallel")]
+                            pair_index: contact_index,
+                            manifold_index,
+                        };
+
+                        let tangents = constraint
+                            .tangent_directions(body1.linear_velocity.0, body2.linear_velocity.0);
+
+                        for mut contact in manifold.points.iter().copied() {
+                            // Transform contact points from collider-space to body-space.
+                            if let Some(transform) = collider1.transform.copied() {
+                                contact.local_point1 = transform.rotation * contact.local_point1
+                                    + transform.translation;
+                            }
+                            if let Some(transform) = collider2.transform.copied() {
+                                contact.local_point2 = transform.rotation * contact.local_point2
+                                    + transform.translation;
+                            }
+
+                            contact.penetration += collision_margin_sum;
+
+                            let effective_distance = -contact.penetration;
+
+                            let local_anchor1 = contact.local_point1 - body1.center_of_mass.0;
+                            let local_anchor2 = contact.local_point2 - body2.center_of_mass.0;
+
+                            // Store fixed world-space anchors.
+                            // This improves rolling behavior for shapes like balls and capsules.
+                            let r1 = *body1.rotation * local_anchor1;
+                            let r2 = *body2.rotation * local_anchor2;
+
+                            // Relative velocity at the contact point.
+                            // body2.velocity_at_point(r2) - body1.velocity_at_point(r1)
+                            #[cfg(feature = "2d")]
+                            let relative_velocity = relative_linear_velocity
+                                + body2.angular_velocity.0 * r2.perp()
+                                - body1.angular_velocity.0 * r1.perp();
+                            #[cfg(feature = "3d")]
+                            let relative_velocity = relative_linear_velocity
+                                + body2.angular_velocity.0.cross(r2)
+                                - body1.angular_velocity.0.cross(r1);
+
+                            // Keep the contact if (1) the separation distance is below the required threshold,
+                            // or if (2) the bodies are expected to come into contact within the next frame.
+                            let normal_speed = relative_velocity.dot(constraint.normal);
+                            let keep_contact = effective_distance < effective_speculative_margin
+                                || {
+                                    let delta_distance = normal_speed * delta_secs;
+                                    effective_distance + delta_distance
+                                        < effective_speculative_margin
+                                };
+
+                            if !keep_contact {
+                                continue;
+                            }
+
+                            let point = ContactConstraintPoint {
+                                // TODO: Apply warm starting scale here instead of in `warm_start`?
+                                normal_part: ContactNormalPart::generate(
+                                    inverse_mass_sum,
+                                    i1,
+                                    i2,
+                                    r1,
+                                    r2,
+                                    constraint.normal,
+                                    self.config.match_contacts.then_some(contact.normal_impulse),
+                                    contact_softness,
+                                ),
+                                // There should only be a friction part if the coefficient of friction is non-negative.
+                                tangent_part: (friction > 0.0).then_some(
+                                    ContactTangentPart::generate(
+                                        inverse_mass_sum,
+                                        i1,
+                                        i2,
+                                        r1,
+                                        r2,
+                                        tangents,
+                                        self.config
+                                            .match_contacts
+                                            .then_some(contact.tangent_impulse),
+                                    ),
+                                ),
+                                max_normal_impulse: 0.0,
+                                anchor1: r1,
+                                anchor2: r2,
+                                normal_speed,
+                                initial_separation: -contact.penetration
+                                    - (r2 - r1).dot(constraint.normal),
+                            };
+
+                            constraint.points.push(point);
+                        }
+
+                        if !constraint.points.is_empty() {
+                            constraints.push(constraint);
+                        }
                     }
                 };
             }
-        });
+        );
 
-        // Combine the thread-local bit vectors serially using bit-wise OR.
-        self.contact_status_bits_thread_local
-            .iter_mut()
-            .for_each(|bit_vec| {
-                self.contact_status_bits.or(bit_vec.get_mut());
-            });
-    }
-
-    /// Generates [`ContactConstraint`]s for the given bodies and their corresponding colliders
-    /// based on the given `contacts`. The constraints are added to the `constraints` vector.
-    ///
-    /// The `collision_margin` can be used to add artificial thickness to the colliders,
-    /// which can improve performance and stability in some cases. See [`CollisionMargin`]
-    /// for more details.
-    ///
-    /// The `contact_softness` is used to tune the damping and stiffness of the contact constraints.
-    #[allow(clippy::too_many_arguments)]
-    pub fn generate_constraints(
-        &self,
-        contact_pair_index: usize,
-        contacts: &Contacts,
-        constraints: &mut Vec<ContactConstraint>,
-        body1: &RigidBodyQueryReadOnlyItem,
-        body2: &RigidBodyQueryReadOnlyItem,
-        collider1: &ColliderQueryItem<C>,
-        collider2: &ColliderQueryItem<C>,
-        collision_margin: impl Into<CollisionMargin> + Copy,
-        contact_softness: ContactSoftnessCoefficients,
-        delta_secs: Scalar,
-    ) {
-        let inactive1 = body1.rb.is_static() || body1.is_sleeping;
-        let inactive2 = body2.rb.is_static() || body2.is_sleeping;
-
-        // No collision response if both bodies are static or sleeping
-        // or if either of the colliders is a sensor collider.
-        if (inactive1 && inactive2)
-            || (collider1.is_sensor || body1.is_sensor)
-            || (collider2.is_sensor || body2.is_sensor)
+        #[cfg(feature = "parallel")]
         {
-            return;
-        }
+            // Combine the thread-local bit vectors serially using bit-wise OR,
+            // and drain the thread-local contact constraints into the global contact constraints.
+            self.thread_locals.iter_mut().for_each(|context| {
+                let mut context_mut = context.borrow_mut();
+                self.contact_status_bits
+                    .or(&context_mut.contact_status_bits);
+                self.contact_constraints
+                    .extend(context_mut.contact_constraints.drain(..));
+            });
 
-        // When an active body collides with a sleeping body, wake up the sleeping body.
-        self.parallel_commands.command_scope(|mut commands| {
-            if body1.is_sleeping {
-                commands.queue(WakeUpBody(body1.entity));
-            } else if body2.is_sleeping {
-                commands.queue(WakeUpBody(body2.entity));
-            }
-        });
-
-        let contact_softness = if !body1.rb.is_dynamic() || !body2.rb.is_dynamic() {
-            contact_softness.non_dynamic
-        } else {
-            contact_softness.dynamic
-        };
-
-        // Generate contact constraints for each contact.
-        for (i, contact_manifold) in contacts.manifolds.iter().enumerate() {
-            let constraint = ContactConstraint::generate(
-                contact_pair_index,
-                i,
-                contact_manifold,
-                body1,
-                body2,
-                collider1.entity,
-                collider2.entity,
-                collider1.transform.copied(),
-                collider2.transform.copied(),
-                collision_margin,
-                // TODO: Shouldn't this be the effective speculative margin?
-                *self.default_speculative_margin,
-                contact_manifold.friction,
-                contact_manifold.restitution,
-                #[cfg(feature = "2d")]
-                contact_manifold.tangent_speed,
-                #[cfg(feature = "3d")]
-                contact_manifold.tangent_velocity,
-                contact_softness,
-                self.config.match_contacts,
-                delta_secs,
-            );
-
-            if !constraint.points.is_empty() {
-                constraints.push(constraint);
-            }
+            // Sort the contact constraints by pair index to maintain determinism.
+            // NOTE: `sort_by_key` is faster than `sort_unstable_by_key` here,
+            //       because the constraints within chunks are already sorted.
+            // TODO: We should figure out an approach that doesn't require sorting.
+            self.contact_constraints
+                .sort_by_key(|constraint| constraint.pair_index);
         }
     }
 }

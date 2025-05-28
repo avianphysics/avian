@@ -2,5 +2,10 @@
 members = ["crates/avian2d", "crates/avian3d"]
 resolver = "2"
 
+[workspace.lints.clippy]
+alloc_instead_of_core = "warn"
+std_instead_of_alloc = "warn"
+std_instead_of_core = "warn"
+
 [profile.dev]
 opt-level = 1 # Use slightly better optimization, so examples work

@@ -218,11 +218,15 @@ impl Plugin for SpatialQueryPlugin {
 }
 
 /// Updates the [`SpatialQueryPipeline`].
+#[cfg(all(
+    feature = "default-collider",
+    any(feature = "parry-f32", feature = "parry-f64")
+))]
 pub fn update_spatial_query_pipeline(
     mut spatial_query: SpatialQuery,
     mut diagnostics: ResMut<SpatialQueryDiagnostics>,
 ) {
-    let start = bevy::utils::Instant::now();
+    let start = crate::utils::Instant::now();
 
     spatial_query.update_pipeline();
 
@@ -233,7 +237,7 @@ type RayCasterPositionQueryComponents = (
     &'static mut RayCaster,
     Option<&'static Position>,
     Option<&'static Rotation>,
-    Option<&'static Parent>,
+    Option<&'static ChildOf>,
     Option<&'static GlobalTransform>,
 );
 
@@ -270,7 +274,7 @@ fn update_ray_caster_positions(
         }
 
         if let Some(Ok((parent_position, parent_rotation, parent_transform))) =
-            parent.map(|p| parents.get(p.get()))
+            parent.map(|&ChildOf(parent)| parents.get(parent))
         {
             let parent_position = parent_position
                 .copied()
@@ -301,7 +305,7 @@ type ShapeCasterPositionQueryComponents = (
     &'static mut ShapeCaster,
     Option<&'static Position>,
     Option<&'static Rotation>,
-    Option<&'static Parent>,
+    Option<&'static ChildOf>,
     Option<&'static GlobalTransform>,
 );
 
@@ -358,7 +362,7 @@ fn update_shape_caster_positions(
         }
 
         if let Some(Ok((parent_position, parent_rotation, parent_transform))) =
-            parent.map(|p| parents.get(p.get()))
+            parent.map(|&ChildOf(parent)| parents.get(parent))
         {
             let parent_position = parent_position
                 .copied()
@@ -399,7 +403,7 @@ fn raycast(
     spatial_query: SpatialQuery,
     mut diagnostics: ResMut<SpatialQueryDiagnostics>,
 ) {
-    let start = bevy::utils::Instant::now();
+    let start = crate::utils::Instant::now();
 
     for (entity, mut ray, mut hits) in &mut rays {
         if ray.enabled {
@@ -418,7 +422,7 @@ fn shapecast(
     spatial_query: SpatialQuery,
     mut diagnostics: ResMut<SpatialQueryDiagnostics>,
 ) {
-    let start = bevy::utils::Instant::now();
+    let start = crate::utils::Instant::now();
 
     for (entity, shape_caster, mut hits) in &mut shape_casters {
         if shape_caster.enabled {

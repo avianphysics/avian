@@ -1,6 +1,12 @@
 //! [`RevoluteJoint`] component.
 
-use crate::{dynamics::solver::xpbd::*, prelude::*};
+use crate::{
+    dynamics::solver::{
+        solver_body::{SolverBody, SolverBodyInertia},
+        xpbd::*,
+    },
+    prelude::*,
+};
 use bevy::{
     ecs::{
         entity::{EntityMapper, MapEntities},
@@ -21,10 +27,8 @@ pub struct RevoluteJoint {
     pub entity1: Entity,
     /// Second entity constrained by the joint.
     pub entity2: Entity,
-    /// Attachment point on the first body.
-    pub local_anchor1: Vector,
-    /// Attachment point on the second body.
-    pub local_anchor2: Vector,
+    /// The point-to-point constraint that prevents relative translation of the attached bodies.
+    pub point_constraint: PointConstraint,
     /// A unit vector that controls which axis should be aligned for both entities.
     ///
     /// In 2D this should always be the Z axis.
@@ -39,62 +43,113 @@ pub struct RevoluteJoint {
     pub damping_linear: Scalar,
     /// Angular damping applied by the joint.
     pub damping_angular: Scalar,
-    /// Lagrange multiplier for the positional correction.
-    pub position_lagrange: Scalar,
+    /// The relative dominance of the bodies.
+    ///
+    /// If the relative dominance is positive, the first body is dominant
+    /// and is considered to have infinite mass.
+    pub relative_dominance: i16,
+    /// The joint's compliance for aligning the bodies along the `aligned_axis`, the inverse of stiffness (N * m / rad).
+    pub align_compliance: Scalar,
+    /// The joint's compliance for the angle limit, the inverse of stiffness (N * m / rad).
+    pub limit_compliance: Scalar,
     /// Lagrange multiplier for the angular correction caused by the alignment of the bodies.
     pub align_lagrange: Scalar,
     /// Lagrange multiplier for the angular correction caused by the angle limits.
-    pub angle_limit_lagrange: Scalar,
-    /// The joint's compliance, the inverse of stiffness, has the unit meters / Newton.
-    pub compliance: Scalar,
-    /// The force exerted by the joint.
-    pub force: Vector,
+    pub limit_lagrange: Scalar,
     /// The torque exerted by the joint when aligning the bodies.
     pub align_torque: Torque,
     /// The torque exerted by the joint when limiting the relative rotation of the bodies around the `aligned_axis`.
-    pub angle_limit_torque: Torque,
+    pub limit_torque: Torque,
+    pre_step: RevoluteJointPreStepData,
 }
 
-impl XpbdConstraint<2> for RevoluteJoint {
+#[derive(Clone, Copy, Debug, Default, PartialEq, Reflect)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(Debug, PartialEq)]
+struct RevoluteJointPreStepData {
+    #[cfg(feature = "2d")]
+    rotation_difference: Scalar,
+    #[cfg(feature = "3d")]
+    axis1: Vector,
+    #[cfg(feature = "3d")]
+    axis2: Vector,
+}
+
+impl EntityConstraint<2> for RevoluteJoint {
     fn entities(&self) -> [Entity; 2] {
         [self.entity1, self.entity2]
     }
+}
 
+impl XpbdConstraint<2> for RevoluteJoint {
     fn clear_lagrange_multipliers(&mut self) {
-        self.position_lagrange = 0.0;
+        self.point_constraint.clear_lagrange_multipliers();
         self.align_lagrange = 0.0;
-        self.angle_limit_lagrange = 0.0;
+        self.limit_lagrange = 0.0;
     }
 
-    fn solve(&mut self, bodies: [&mut RigidBodyQueryItem; 2], dt: Scalar) {
+    fn prepare(&mut self, bodies: [&RigidBodyQueryReadOnlyItem; 2], _dt: Scalar) {
+        // Prepare the point-to-point constraint.
+        self.point_constraint.prepare(bodies, _dt);
+
+        // Prepare the base rotation difference.
+        #[cfg(feature = "2d")]
+        {
+            self.pre_step.rotation_difference =
+                bodies[0].rotation.angle_between(*bodies[1].rotation);
+        }
+        #[cfg(feature = "3d")]
+        {
+            // Prepare the base axes.
+            self.pre_step.axis1 = bodies[0].rotation * self.aligned_axis;
+            self.pre_step.axis2 = bodies[1].rotation * self.aligned_axis;
+        }
+
+        // Prepare the relative dominance.
+        self.relative_dominance = bodies[0].dominance() - bodies[1].dominance();
+    }
+
+    fn solve(
+        &mut self,
+        bodies: [&mut SolverBody; 2],
+        inertias: [&SolverBodyInertia; 2],
+        dt: Scalar,
+    ) {
         let [body1, body2] = bodies;
-        let compliance = self.compliance;
+        let [inertia1, inertia2] = inertias;
+
+        // Get the effective inverse angular inertia of the bodies.
+        let inv_angular_inertia1 = inertia1.effective_inv_angular_inertia();
+        let inv_angular_inertia2 = inertia2.effective_inv_angular_inertia();
 
         #[cfg(feature = "3d")]
         {
             // Constrain the relative rotation of the bodies, only allowing rotation around one free axis
-            let difference = self.get_rotation_difference(&body1.rotation, &body2.rotation);
+            let a1 = body1.delta_rotation * self.pre_step.axis1;
+            let a2 = body2.delta_rotation * self.pre_step.axis2;
+            let difference = a1.cross(a2);
+
             let mut lagrange = self.align_lagrange;
-            self.align_torque =
-                self.align_orientation(body1, body2, difference, &mut lagrange, compliance, dt);
+            self.align_torque = self.align_orientation(
+                body1,
+                body2,
+                inv_angular_inertia1,
+                inv_angular_inertia2,
+                difference,
+                &mut lagrange,
+                self.align_compliance,
+                dt,
+            );
             self.align_lagrange = lagrange;
         }
 
         // Apply angle limits when rotating around the free axis
-        self.angle_limit_torque = self.apply_angle_limits(body1, body2, dt);
+        self.limit_torque =
+            self.apply_angle_limits(body1, body2, inv_angular_inertia1, inv_angular_inertia2, dt);
 
         // Align positions
-        let mut lagrange = self.position_lagrange;
-        self.force = self.align_position(
-            body1,
-            body2,
-            self.local_anchor1,
-            self.local_anchor2,
-            &mut lagrange,
-            compliance,
-            dt,
-        );
-        self.position_lagrange = lagrange;
+        self.point_constraint.solve([body1, body2], inertias, dt);
     }
 }
 
@@ -103,78 +158,145 @@ impl Joint for RevoluteJoint {
         Self {
             entity1,
             entity2,
-            local_anchor1: Vector::ZERO,
-            local_anchor2: Vector::ZERO,
+            point_constraint: PointConstraint::default(),
             aligned_axis: Vector3::Z,
             angle_limit: None,
             damping_linear: 1.0,
             damping_angular: 1.0,
-            position_lagrange: 0.0,
+            relative_dominance: 0,
             align_lagrange: 0.0,
-            angle_limit_lagrange: 0.0,
-            compliance: 0.0,
-            force: Vector::ZERO,
+            limit_lagrange: 0.0,
+            align_compliance: 0.0,
+            limit_compliance: 0.0,
             #[cfg(feature = "2d")]
             align_torque: 0.0,
             #[cfg(feature = "3d")]
             align_torque: Vector::ZERO,
             #[cfg(feature = "2d")]
-            angle_limit_torque: 0.0,
+            limit_torque: 0.0,
             #[cfg(feature = "3d")]
-            angle_limit_torque: Vector::ZERO,
+            limit_torque: Vector::ZERO,
+            pre_step: RevoluteJointPreStepData::default(),
         }
     }
 
-    fn with_compliance(self, compliance: Scalar) -> Self {
-        Self { compliance, ..self }
+    #[inline]
+    fn local_anchor_1(&self) -> Vector {
+        self.point_constraint.local_anchor1
     }
 
-    fn with_local_anchor_1(self, anchor: Vector) -> Self {
-        Self {
-            local_anchor1: anchor,
-            ..self
-        }
+    #[inline]
+    fn local_anchor_2(&self) -> Vector {
+        self.point_constraint.local_anchor2
     }
 
-    fn with_local_anchor_2(self, anchor: Vector) -> Self {
-        Self {
-            local_anchor2: anchor,
-            ..self
-        }
+    #[inline]
+    fn damping_linear(&self) -> Scalar {
+        self.damping_linear
     }
 
-    fn with_linear_velocity_damping(self, damping: Scalar) -> Self {
+    #[inline]
+    fn damping_angular(&self) -> Scalar {
+        self.damping_angular
+    }
+
+    #[inline]
+    fn relative_dominance(&self) -> i16 {
+        self.relative_dominance
+    }
+}
+
+impl RevoluteJoint {
+    /// Sets the joint's compliance (inverse of stiffness, m / N).
+    #[inline]
+    #[deprecated(
+        since = "0.4.0",
+        note = "Use `with_point_compliance`, `with_align_compliance`, and `with_limit_compliance` instead."
+    )]
+    pub fn with_compliance(mut self, compliance: Scalar) -> Self {
+        self.point_constraint.compliance = compliance;
+        self.align_compliance = compliance;
+        self.limit_compliance = compliance;
+        self
+    }
+
+    /// Sets the compliance of the point-to-point constraint (inverse of stiffness, m / N).
+    #[inline]
+    pub fn with_point_compliance(mut self, compliance: Scalar) -> Self {
+        self.point_constraint.compliance = compliance;
+        self
+    }
+
+    /// Sets the compliance of the axis alignment constraint (inverse of stiffness, N * m / rad).
+    #[inline]
+    pub fn with_align_compliance(mut self, compliance: Scalar) -> Self {
+        self.align_compliance = compliance;
+        self
+    }
+
+    /// Sets the compliance of the angle limit (inverse of stiffness, N * m / rad).
+    #[inline]
+    pub fn with_limit_compliance(mut self, compliance: Scalar) -> Self {
+        self.limit_compliance = compliance;
+        self
+    }
+
+    /// Sets the attachment point on the first body.
+    #[inline]
+    pub fn with_local_anchor_1(mut self, anchor: Vector) -> Self {
+        self.point_constraint.local_anchor1 = anchor;
+        self
+    }
+
+    /// Sets the attachment point on the second body.
+    #[inline]
+    pub fn with_local_anchor_2(mut self, anchor: Vector) -> Self {
+        self.point_constraint.local_anchor2 = anchor;
+        self
+    }
+
+    /// Sets the linear velocity damping caused by the joint.
+    #[inline]
+    pub fn with_linear_velocity_damping(self, damping: Scalar) -> Self {
         Self {
             damping_linear: damping,
             ..self
         }
     }
 
-    fn with_angular_velocity_damping(self, damping: Scalar) -> Self {
+    /// Sets the angular velocity damping caused by the joint.
+    #[inline]
+    pub fn with_angular_velocity_damping(self, damping: Scalar) -> Self {
         Self {
             damping_angular: damping,
             ..self
         }
     }
 
-    fn local_anchor_1(&self) -> Vector {
-        self.local_anchor1
+    /// Returns the Lagrange multiplier used for the positional correction.
+    #[inline]
+    pub fn point_lagrange(&self) -> Scalar {
+        self.point_constraint.lagrange()
     }
 
-    fn local_anchor_2(&self) -> Vector {
-        self.local_anchor2
+    /// Returns the Lagrange multiplier used for the axis alignment correction.
+    #[inline]
+    pub fn align_lagrange(&self) -> Scalar {
+        self.align_lagrange
     }
 
-    fn damping_linear(&self) -> Scalar {
-        self.damping_linear
+    /// Returns the Lagrange multiplier used for the angle limit correction.
+    #[inline]
+    pub fn limit_lagrange(&self) -> Scalar {
+        self.limit_lagrange
     }
 
-    fn damping_angular(&self) -> Scalar {
-        self.damping_angular
+    /// Returns the force exerted by the joint.
+    #[inline]
+    pub fn force(&self) -> Vector {
+        self.point_constraint.force()
     }
-}
 
-impl RevoluteJoint {
     /// Sets the axis that the bodies should be aligned on.
     #[cfg(feature = "3d")]
     pub fn with_aligned_axis(self, axis: Vector) -> Self {
@@ -192,42 +314,47 @@ impl RevoluteJoint {
         }
     }
 
-    #[cfg(feature = "3d")]
-    fn get_rotation_difference(&self, rot1: &Rotation, rot2: &Rotation) -> Vector3 {
-        let a1 = rot1 * self.aligned_axis;
-        let a2 = rot2 * self.aligned_axis;
-        a1.cross(a2)
-    }
-
     /// Applies angle limits to limit the relative rotation of the bodies around the `aligned_axis`.
     #[allow(clippy::too_many_arguments)]
     fn apply_angle_limits(
         &mut self,
-        body1: &mut RigidBodyQueryItem,
-        body2: &mut RigidBodyQueryItem,
+        body1: &mut SolverBody,
+        body2: &mut SolverBody,
+        inv_angular_inertia1: Tensor,
+        inv_angular_inertia2: Tensor,
         dt: Scalar,
     ) -> Torque {
         let Some(Some(correction)) = self.angle_limit.map(|angle_limit| {
             #[cfg(feature = "2d")]
             {
-                angle_limit.compute_correction(*body1.rotation, *body2.rotation, PI)
+                let rotation_difference = self.pre_step.rotation_difference
+                    + body1.delta_rotation.angle_between(body2.delta_rotation);
+                angle_limit.compute_correction(rotation_difference, PI)
             }
             #[cfg(feature = "3d")]
             {
                 // [n, n1, n2] = [a1, b1, b2], where [a, b, c] are perpendicular unit axes on the bodies.
-                let a1 = *body1.rotation * self.aligned_axis;
-                let b1 = *body1.rotation * self.aligned_axis.any_orthonormal_vector();
-                let b2 = *body2.rotation * self.aligned_axis.any_orthonormal_vector();
+                let a1 = body1.delta_rotation * self.aligned_axis;
+                let b1 = a1.any_orthonormal_vector();
+                let b2 = body2.delta_rotation * self.aligned_axis.any_orthonormal_vector();
                 angle_limit.compute_correction(a1, b1, b2, PI)
             }
         }) else {
             return Torque::ZERO;
         };
 
-        let mut lagrange = self.angle_limit_lagrange;
-        let torque =
-            self.align_orientation(body1, body2, correction, &mut lagrange, self.compliance, dt);
-        self.angle_limit_lagrange = lagrange;
+        let mut lagrange = self.limit_lagrange;
+        let torque = self.align_orientation(
+            body1,
+            body2,
+            inv_angular_inertia1,
+            inv_angular_inertia2,
+            correction,
+            &mut lagrange,
+            self.align_compliance,
+            dt,
+        );
+        self.limit_lagrange = lagrange;
         torque
     }
 }
@@ -238,7 +365,7 @@ impl AngularConstraint for RevoluteJoint {}
 
 impl MapEntities for RevoluteJoint {
     fn map_entities<M: EntityMapper>(&mut self, entity_mapper: &mut M) {
-        self.entity1 = entity_mapper.map_entity(self.entity1);
-        self.entity2 = entity_mapper.map_entity(self.entity2);
+        self.entity1 = entity_mapper.get_mapped(self.entity1);
+        self.entity2 = entity_mapper.get_mapped(self.entity2);
     }
 }

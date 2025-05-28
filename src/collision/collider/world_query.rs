@@ -11,10 +11,9 @@ use bevy::{ecs::query::QueryData, prelude::*};
 #[derive(QueryData)]
 pub struct ColliderQuery<C: AnyCollider> {
     pub entity: Entity,
-    pub parent: Option<&'static ColliderParent>,
+    pub of: Option<&'static ColliderOf>,
     pub position: Ref<'static, Position>,
     pub rotation: Ref<'static, Rotation>,
-    pub accumulated_translation: Option<Ref<'static, AccumulatedTranslation>>,
     pub transform: Option<&'static ColliderTransform>,
     pub aabb: Ref<'static, ColliderAabb>,
     pub collision_margin: Option<&'static CollisionMargin>,
@@ -25,18 +24,17 @@ pub struct ColliderQuery<C: AnyCollider> {
     pub friction: Option<&'static Friction>,
     pub restitution: Option<&'static Restitution>,
     pub shape: &'static C,
+    pub layers: &'static CollisionLayers,
     pub active_hooks: Option<&'static ActiveCollisionHooks>,
 }
 
 impl<C: AnyCollider> ColliderQueryItem<'_, C> {
-    /// Returns the current position of the body. This is a sum of the [`Position`] and
-    /// [`AccumulatedTranslation`] components.
-    pub fn current_position(&self) -> Vector {
-        self.position.0
-            + self
-                .accumulated_translation
-                .as_ref()
-                .map_or_else(default, |t| t.0)
+    /// Returns the entity of the rigid body that the collider is attached to.
+    ///
+    /// If the collider is not attached to a rigid body, this will return `None`.
+    #[inline(always)]
+    pub fn body(&self) -> Option<Entity> {
+        self.of.map(|ColliderOf { body }| *body)
     }
 
     /// Returns the [`ActiveCollisionHooks`] for the collider.

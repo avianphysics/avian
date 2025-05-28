@@ -59,7 +59,7 @@ fn setup(
         commands.spawn(
             RevoluteJoint::new(previous_particle, current_particle)
                 .with_local_anchor_2(Vector::Y * (particle_radius * 2.0 + 1.0))
-                .with_compliance(0.0000001),
+                .with_point_compliance(0.0000001),
         );
 
         previous_particle = current_particle;
@@ -71,11 +71,11 @@ fn follow_mouse(
     windows: Query<&Window, With<PrimaryWindow>>,
     camera: Query<(&Camera, &GlobalTransform)>,
     mut follower: Query<&mut Transform, With<FollowMouse>>,
-) {
+) -> Result {
     if buttons.pressed(MouseButton::Left) {
-        let window = windows.single();
-        let (camera, camera_transform) = camera.single();
-        let mut follower_position = follower.single_mut();
+        let window = windows.single()?;
+        let (camera, camera_transform) = camera.single()?;
+        let mut follower_position = follower.single_mut()?;
 
         if let Some(cursor_world_pos) = window
             .cursor_position()
@@ -85,4 +85,6 @@ fn follow_mouse(
                 cursor_world_pos.extend(follower_position.translation.z);
         }
     }
+
+    Ok(())
 }

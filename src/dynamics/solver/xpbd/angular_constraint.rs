@@ -1,4 +1,5 @@
 use super::XpbdConstraint;
+use crate::dynamics::solver::solver_body::SolverBody;
 use crate::prelude::*;
 
 /// An angular constraint applies an angular correction around a given axis.
@@ -10,15 +11,23 @@ pub trait AngularConstraint: XpbdConstraint<2> {
     #[cfg(feature = "2d")]
     fn apply_angular_lagrange_update(
         &self,
-        body1: &mut RigidBodyQueryItem,
-        body2: &mut RigidBodyQueryItem,
+        body1: &mut SolverBody,
+        body2: &mut SolverBody,
+        inv_angular_inertia1: Tensor,
+        inv_angular_inertia2: Tensor,
         delta_lagrange: Scalar,
     ) -> Scalar {
         if delta_lagrange.abs() <= Scalar::EPSILON {
             return 0.0;
         }
 
-        self.apply_angular_impulse(body1, body2, -delta_lagrange)
+        self.apply_angular_impulse(
+            body1,
+            body2,
+            inv_angular_inertia1,
+            inv_angular_inertia2,
+            -delta_lagrange,
+        )
     }
 
     /// Applies an angular impulse to two bodies.
@@ -28,22 +37,18 @@ pub trait AngularConstraint: XpbdConstraint<2> {
     #[cfg(feature = "2d")]
     fn apply_angular_impulse(
         &self,
-        body1: &mut RigidBodyQueryItem,
-        body2: &mut RigidBodyQueryItem,
+        body1: &mut SolverBody,
+        body2: &mut SolverBody,
+        inv_angular_inertia1: Tensor,
+        inv_angular_inertia2: Tensor,
         impulse: Scalar,
     ) -> Scalar {
-        let inv_inertia1 = body1.effective_global_angular_inertia().inverse();
-        let inv_inertia2 = body2.effective_global_angular_inertia().inverse();
-
         // Apply rotational updates
-        if body1.rb.is_dynamic() && body1.dominance() <= body2.dominance() {
-            let delta_angle = Self::get_delta_rot(inv_inertia1, impulse);
-            *body1.rotation = body1.rotation.add_angle(delta_angle);
-        }
-        if body2.rb.is_dynamic() && body2.dominance() <= body1.dominance() {
-            let delta_angle = Self::get_delta_rot(inv_inertia2, -impulse);
-            *body2.rotation = body2.rotation.add_angle(delta_angle);
-        }
+        let delta_angle = Self::get_delta_rot(inv_angular_inertia1, impulse);
+        body1.delta_rotation = body1.delta_rotation.add_angle_fast(delta_angle);
+
+        let delta_angle = Self::get_delta_rot(inv_angular_inertia2, -impulse);
+        body2.delta_rotation = body2.delta_rotation.add_angle_fast(delta_angle);
 
         impulse
     }
@@ -55,8 +60,10 @@ pub trait AngularConstraint: XpbdConstraint<2> {
     #[cfg(feature = "3d")]
     fn apply_angular_lagrange_update(
         &self,
-        body1: &mut RigidBodyQueryItem,
-        body2: &mut RigidBodyQueryItem,
+        body1: &mut SolverBody,
+        body2: &mut SolverBody,
+        inv_angular_inertia1: Tensor,
+        inv_angular_inertia2: Tensor,
         delta_lagrange: Scalar,
         axis: Vector,
     ) -> Vector {
@@ -66,7 +73,13 @@ pub trait AngularConstraint: XpbdConstraint<2> {
 
         let impulse = -delta_lagrange * axis;
 
-        self.apply_angular_impulse(body1, body2, impulse)
+        self.apply_angular_impulse(
+            body1,
+            body2,
+            inv_angular_inertia1,
+            inv_angular_inertia2,
+            impulse,
+        )
     }
 
     /// Applies an angular impulse to two bodies.
@@ -76,29 +89,18 @@ pub trait AngularConstraint: XpbdConstraint<2> {
     #[cfg(feature = "3d")]
     fn apply_angular_impulse(
         &self,
-        body1: &mut RigidBodyQueryItem,
-        body2: &mut RigidBodyQueryItem,
+        body1: &mut SolverBody,
+        body2: &mut SolverBody,
+        inv_angular_inertia1: Tensor,
+        inv_angular_inertia2: Tensor,
         impulse: Vector,
     ) -> Vector {
-        let inv_inertia1 = body1.effective_global_angular_inertia().inverse();
-        let inv_inertia2 = body2.effective_global_angular_inertia().inverse();
-
         // Apply rotational updates
-        if body1.rb.is_dynamic() {
-            // In 3D, adding quaternions can result in unnormalized rotations,
-            // which causes stability issues (see #235) and panics when trying to rotate unit vectors.
-            // TODO: It would be nice to avoid normalization if possible.
-            //       Maybe the math above can be done in a way that keeps rotations normalized?
-            let delta_quat = Self::get_delta_rot(inv_inertia1, impulse);
-            body1.rotation.0 = delta_quat * body1.rotation.0;
-            *body1.rotation = body1.rotation.fast_renormalize();
-        }
-        if body2.rb.is_dynamic() {
-            // See comments for `body1` above.
-            let delta_quat = Self::get_delta_rot(inv_inertia2, -impulse);
-            body2.rotation.0 = delta_quat * body2.rotation.0;
-            *body2.rotation = body2.rotation.fast_renormalize();
-        }
+        let delta_quat = Self::get_delta_rot(inv_angular_inertia1, impulse);
+        body1.delta_rotation.0 = delta_quat * body1.delta_rotation.0;
+
+        let delta_quat = Self::get_delta_rot(inv_angular_inertia2, -impulse);
+        body2.delta_rotation.0 = delta_quat * body2.delta_rotation.0;
 
         impulse
     }
@@ -109,8 +111,10 @@ pub trait AngularConstraint: XpbdConstraint<2> {
     #[cfg(feature = "2d")]
     fn align_orientation(
         &self,
-        body1: &mut RigidBodyQueryItem,
-        body2: &mut RigidBodyQueryItem,
+        body1: &mut SolverBody,
+        body2: &mut SolverBody,
+        inv_angular_inertia1: Tensor,
+        inv_angular_inertia2: Tensor,
         angle: Scalar,
         lagrange: &mut Scalar,
         compliance: Scalar,
@@ -120,16 +124,20 @@ pub trait AngularConstraint: XpbdConstraint<2> {
             return Torque::ZERO;
         }
 
-        let w1 = body1.effective_global_angular_inertia().inverse();
-        let w2 = body2.effective_global_angular_inertia().inverse();
-        let w = [w1, w2];
+        let w = [inv_angular_inertia1, inv_angular_inertia2];
 
         // Compute Lagrange multiplier update
         let delta_lagrange = self.compute_lagrange_update(*lagrange, angle, &w, compliance, dt);
         *lagrange += delta_lagrange;
 
         // Apply angular correction to aling the bodies
-        self.apply_angular_lagrange_update(body1, body2, delta_lagrange);
+        self.apply_angular_lagrange_update(
+            body1,
+            body2,
+            inv_angular_inertia1,
+            inv_angular_inertia2,
+            delta_lagrange,
+        );
 
         // Return constraint torque
         self.compute_torque(delta_lagrange, dt)
@@ -141,8 +149,10 @@ pub trait AngularConstraint: XpbdConstraint<2> {
     #[cfg(feature = "3d")]
     fn align_orientation(
         &self,
-        body1: &mut RigidBodyQueryItem,
-        body2: &mut RigidBodyQueryItem,
+        body1: &mut SolverBody,
+        body2: &mut SolverBody,
+        inv_angular_inertia1: Tensor,
+        inv_angular_inertia2: Tensor,
         rotation_difference: Vector,
         lagrange: &mut Scalar,
         compliance: Scalar,
@@ -157,8 +167,10 @@ pub trait AngularConstraint: XpbdConstraint<2> {
         let axis = rotation_difference / angle;
 
         // Compute generalized inverse masses
-        let w1 = AngularConstraint::compute_generalized_inverse_mass(self, body1, axis);
-        let w2 = AngularConstraint::compute_generalized_inverse_mass(self, body2, axis);
+        let w1 =
+            AngularConstraint::compute_generalized_inverse_mass(self, inv_angular_inertia1, axis);
+        let w2 =
+            AngularConstraint::compute_generalized_inverse_mass(self, inv_angular_inertia2, axis);
         let w = [w1, w2];
 
         // Compute Lagrange multiplier update
@@ -166,7 +178,14 @@ pub trait AngularConstraint: XpbdConstraint<2> {
         *lagrange += delta_lagrange;
 
         // Apply angular correction to aling the bodies
-        self.apply_angular_lagrange_update(body1, body2, delta_lagrange, axis);
+        self.apply_angular_lagrange_update(
+            body1,
+            body2,
+            inv_angular_inertia1,
+            inv_angular_inertia2,
+            delta_lagrange,
+            axis,
+        );
 
         // Return constraint torque
         self.compute_torque(delta_lagrange, axis, dt)
@@ -180,8 +199,10 @@ pub trait AngularConstraint: XpbdConstraint<2> {
     #[cfg(feature = "2d")]
     fn apply_angular_correction(
         &self,
-        body1: &mut RigidBodyQueryItem,
-        body2: &mut RigidBodyQueryItem,
+        body1: &mut SolverBody,
+        body2: &mut SolverBody,
+        inv_angular_inertia1: Tensor,
+        inv_angular_inertia2: Tensor,
         delta_lagrange: Scalar,
         axis: Vector3,
     ) -> Scalar {
@@ -193,18 +214,12 @@ pub trait AngularConstraint: XpbdConstraint<2> {
         // `axis.z` is 1 or -1 and it controls if the body should rotate counterclockwise or clockwise
         let p = -delta_lagrange * axis.z;
 
-        let inv_inertia1 = body1.effective_global_angular_inertia().inverse();
-        let inv_inertia2 = body2.effective_global_angular_inertia().inverse();
-
         // Apply rotational updates
-        if body1.rb.is_dynamic() && body1.dominance() <= body2.dominance() {
-            let delta_angle = Self::get_delta_rot(inv_inertia1, p);
-            *body1.rotation = body1.rotation.add_angle(delta_angle);
-        }
-        if body2.rb.is_dynamic() && body2.dominance() <= body1.dominance() {
-            let delta_angle = Self::get_delta_rot(inv_inertia2, -p);
-            *body2.rotation = body2.rotation.add_angle(delta_angle);
-        }
+        let delta_angle = Self::get_delta_rot(inv_angular_inertia1, p);
+        body1.delta_rotation = body1.delta_rotation.add_angle_fast(delta_angle);
+
+        let delta_angle = Self::get_delta_rot(inv_angular_inertia2, -p);
+        body2.delta_rotation = body2.delta_rotation.add_angle_fast(delta_angle);
 
         p
     }
@@ -215,8 +230,10 @@ pub trait AngularConstraint: XpbdConstraint<2> {
     #[cfg(feature = "3d")]
     fn apply_angular_correction(
         &self,
-        body1: &mut RigidBodyQueryItem,
-        body2: &mut RigidBodyQueryItem,
+        body1: &mut SolverBody,
+        body2: &mut SolverBody,
+        inv_angular_inertia1: Tensor,
+        inv_angular_inertia2: Tensor,
         delta_lagrange: Scalar,
         axis: Vector,
     ) -> Vector {
@@ -227,25 +244,12 @@ pub trait AngularConstraint: XpbdConstraint<2> {
         // Compute angular impulse
         let p = -delta_lagrange * axis;
 
-        let inv_inertia1 = body1.effective_global_angular_inertia().inverse();
-        let inv_inertia2 = body2.effective_global_angular_inertia().inverse();
-
         // Apply rotational updates
-        if body1.rb.is_dynamic() {
-            // In 3D, adding quaternions can result in unnormalized rotations,
-            // which causes stability issues (see #235) and panics when trying to rotate unit vectors.
-            // TODO: It would be nice to avoid normalization if possible.
-            //       Maybe the math above can be done in a way that keeps rotations normalized?
-            let delta_quat = Self::get_delta_rot(inv_inertia1, p);
-            body1.rotation.0 = delta_quat * body1.rotation.0;
-            *body1.rotation = body1.rotation.fast_renormalize();
-        }
-        if body2.rb.is_dynamic() {
-            // See comments for `body1` above.
-            let delta_quat = Self::get_delta_rot(inv_inertia2, -p);
-            body2.rotation.0 = delta_quat * body2.rotation.0;
-            *body2.rotation = body2.rotation.fast_renormalize();
-        }
+        let delta_quat = Self::get_delta_rot(inv_angular_inertia1, p);
+        body1.delta_rotation.0 = delta_quat * body1.delta_rotation.0;
+
+        let delta_quat = Self::get_delta_rot(inv_angular_inertia2, -p);
+        body2.delta_rotation.0 = delta_quat * body2.delta_rotation.0;
 
         p
     }
@@ -255,38 +259,24 @@ pub trait AngularConstraint: XpbdConstraint<2> {
     ///
     /// In 2D, `axis` should only have the z axis set to either -1 or 1 to indicate counterclockwise or
     /// clockwise rotation.
-    #[cfg(feature = "2d")]
-    fn compute_generalized_inverse_mass(&self, body: &RigidBodyQueryItem, axis: Vector3) -> Scalar {
-        if body.rb.is_dynamic() {
-            axis.dot(body.angular_inertia.inverse() * axis)
-        } else {
-            // Static and kinematic bodies are a special case, where 0.0 can be thought of as infinite mass.
-            0.0
-        }
-    }
-
-    /// Computes the generalized inverse mass of a body when applying an angular correction
-    /// around `axis`.
-    #[cfg(feature = "3d")]
-    fn compute_generalized_inverse_mass(&self, body: &RigidBodyQueryItem, axis: Vector) -> Scalar {
-        if body.rb.is_dynamic() {
-            axis.dot(body.effective_global_angular_inertia().inverse() * axis)
-        } else {
-            // Static and kinematic bodies are a special case, where 0.0 can be thought of as infinite mass.
-            0.0
-        }
+    fn compute_generalized_inverse_mass(
+        &self,
+        inv_angular_inertia: Tensor,
+        axis: Vector3,
+    ) -> Scalar {
+        axis.dot(inv_angular_inertia * axis)
     }
 
     /// Computes the update in rotation when applying an angular correction `p`.
     #[cfg(feature = "2d")]
-    fn get_delta_rot(inverse_inertia: Scalar, p: Scalar) -> Scalar {
+    fn get_delta_rot(inverse_inertia: Tensor, p: Scalar) -> Scalar {
         // Equation 8/9 but in 2D
         inverse_inertia * p
     }
 
     /// Computes the update in rotation when applying an angular correction `p`.
     #[cfg(feature = "3d")]
-    fn get_delta_rot(inverse_inertia: Matrix3, p: Vector) -> Quaternion {
+    fn get_delta_rot(inverse_inertia: Tensor, p: Vector) -> Quaternion {
         // Equation 8/9
         Quaternion::from_scaled_axis(inverse_inertia * p)
     }

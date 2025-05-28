@@ -3,11 +3,12 @@
 //!
 //! See [`SyncPlugin`].
 
-use crate::{prelude::*, prepare::PrepareSet};
-use ancestor_marker::{AncestorMarker, AncestorMarkerPlugin};
+use crate::prelude::*;
+use ancestor_marker::AncestorMarkerPlugin;
 use bevy::{
     ecs::{intern::Interned, schedule::ScheduleLabel},
     prelude::*,
+    transform::systems::{mark_dirty_trees, propagate_parent_transforms, sync_simple_transforms},
 };
 
 // TODO: Where should this be?
@@ -54,9 +55,6 @@ impl Default for SyncPlugin {
     }
 }
 
-#[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
-struct MarkRigidBodyAncestors;
-
 impl Plugin for SyncPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SyncConfig>()
@@ -78,23 +76,16 @@ impl Plugin for SyncPlugin {
         // Mark ancestors of colliders with `AncestorMarker<RigidBody>`.
         // This is used to speed up transform propagation by skipping
         // trees that have no rigid bodies.
-        app.add_plugins(
-            AncestorMarkerPlugin::<RigidBody>::new(self.schedule)
-                .add_markers_in_set(MarkRigidBodyAncestors),
-        );
-
-        app.configure_sets(
-            self.schedule,
-            MarkRigidBodyAncestors.in_set(PrepareSet::First),
-        );
+        app.add_plugins(AncestorMarkerPlugin::<RigidBody>::default());
 
         // Initialize `PreviousGlobalTransform` and apply `Transform` changes that happened
         // between the end of the previous physics frame and the start of this physics frame.
         app.add_systems(
             self.schedule,
             (
-                sync_simple_transforms_physics,
-                propagate_transforms_physics,
+                mark_dirty_trees,
+                propagate_parent_transforms,
+                sync_simple_transforms,
                 init_previous_global_transform,
                 transform_to_position,
                 // Update `PreviousGlobalTransform` for the physics step's `GlobalTransform` change detection
@@ -111,8 +102,9 @@ impl Plugin for SyncPlugin {
         app.add_systems(
             self.schedule,
             (
-                sync_simple_transforms_physics,
-                propagate_transforms_physics,
+                mark_dirty_trees,
+                propagate_parent_transforms,
+                sync_simple_transforms,
                 transform_to_position,
             )
                 .chain()
@@ -132,8 +124,9 @@ impl Plugin for SyncPlugin {
         app.add_systems(
             self.schedule,
             (
-                sync_simple_transforms_physics,
-                propagate_transforms_physics,
+                mark_dirty_trees,
+                propagate_parent_transforms,
+                sync_simple_transforms,
                 update_previous_global_transforms,
             )
                 .chain()
@@ -159,7 +152,7 @@ pub struct SyncConfig {
     /// Updates [`Collider::scale()`] based on transform changes,
     /// allowing you to scale colliders using [`Transform`]. Defaults to true.
     ///
-    /// This operation is run in [`PrepareSet::Finalize`]
+    /// This operation is run in [`PrepareSet::Finalize`](crate::prepare::PrepareSet::Finalize).
     pub transform_to_collider_scale: bool,
 }
 
@@ -251,7 +244,7 @@ type PosToTransformComponents = (
     &'static mut Transform,
     &'static Position,
     &'static Rotation,
-    Option<&'static Parent>,
+    Option<&'static ChildOf>,
 );
 
 type PosToTransformFilter = (With<RigidBody>, Or<(Changed<Position>, Changed<Rotation>)>);
@@ -273,8 +266,8 @@ pub fn position_to_transform(
     parents: Query<ParentComponents, With<Children>>,
 ) {
     for (mut transform, pos, rot, parent) in &mut query {
-        if let Some(parent) = parent {
-            if let Ok((parent_transform, parent_pos, parent_rot)) = parents.get(**parent) {
+        if let Some(&ChildOf(parent)) = parent {
+            if let Ok((parent_transform, parent_pos, parent_rot)) = parents.get(parent) {
                 // Compute the global transform of the parent using its Position and Rotation
                 let parent_transform = parent_transform.compute_transform();
                 let parent_pos = parent_pos.map_or(parent_transform.translation, |pos| {
@@ -320,8 +313,8 @@ pub fn position_to_transform(
     parents: Query<ParentComponents, With<Children>>,
 ) {
     for (mut transform, pos, rot, parent) in &mut query {
-        if let Some(parent) = parent {
-            if let Ok((parent_transform, parent_pos, parent_rot)) = parents.get(**parent) {
+        if let Some(&ChildOf(parent)) = parent {
+            if let Ok((parent_transform, parent_pos, parent_rot)) = parents.get(parent) {
                 // Compute the global transform of the parent using its Position and Rotation
                 let parent_transform = parent_transform.compute_transform();
                 let parent_pos = parent_pos.map_or(parent_transform.translation, |pos| pos.f32());
@@ -354,298 +347,5 @@ pub fn update_previous_global_transforms(
 ) {
     for (transform, mut previous_transform) in &mut bodies {
         previous_transform.0 = *transform;
-    }
-}
-
-// Below are copies of Bevy's transform propagation systems, but optimized to only traverse trees with rigid bodies.
-// Propagation is unnecessary for everything else, because the physics engine should only modify the positions
-// of rigid bodies and their descendants. Bevy runs its own propagation near the end of the frame.
-
-/// Updates the [`GlobalTransform`] component of physics entities that don't have other physics entities in the hierarchy.
-#[allow(clippy::type_complexity)]
-pub fn sync_simple_transforms_physics(
-    mut query: ParamSet<(
-        Query<
-            (&Transform, &mut GlobalTransform),
-            (
-                Or<(Changed<Transform>, Added<GlobalTransform>)>,
-                Without<Parent>,
-                Or<(
-                    Without<AncestorMarker<RigidBody>>,
-                    Without<AncestorMarker<ColliderMarker>>,
-                )>,
-                Or<(With<RigidBody>, With<ColliderMarker>)>,
-            ),
-        >,
-        Query<
-            (Ref<Transform>, &mut GlobalTransform),
-            (
-                Without<Parent>,
-                Or<(
-                    Without<AncestorMarker<RigidBody>>,
-                    Without<AncestorMarker<ColliderMarker>>,
-                )>,
-                Or<(With<RigidBody>, With<ColliderMarker>)>,
-            ),
-        >,
-    )>,
-    mut orphaned: RemovedComponents<Parent>,
-) {
-    // Update changed entities.
-    query
-        .p0()
-        .par_iter_mut()
-        .for_each(|(transform, mut global_transform)| {
-            *global_transform = GlobalTransform::from(*transform);
-        });
-    // Update orphaned entities.
-    let mut query = query.p1();
-    let mut iter = query.iter_many_mut(orphaned.read());
-    while let Some((transform, mut global_transform)) = iter.fetch_next() {
-        if !transform.is_changed() && !global_transform.is_added() {
-            *global_transform = GlobalTransform::from(*transform);
-        }
-    }
-}
-
-// Below is a diagram of an example hierarchy.
-//
-//   A
-//  / \
-// N   A
-//    / \
-//   P   N
-//  / \
-// N   N
-//
-// P = a physics entity
-// A = a physics entity ancestor
-// N = not a physics entity ancestor
-//
-// We can stop propagation, if:
-//
-// 1. we encounter an N that doesn't have any P as an ancestor.
-// 2. we encounter a P with no children.
-
-// TODO: A general `PhysicsMarker` for both rigid bodies and colliders could be nice.
-
-type TransformQueryData = (
-    Ref<'static, Transform>,
-    &'static mut GlobalTransform,
-    Option<&'static Children>,
-    Has<RigidBody>,
-    Has<ColliderMarker>,
-);
-
-type ParentQueryData = (
-    Entity,
-    Ref<'static, Parent>,
-    Has<RigidBody>,
-    Has<ColliderMarker>,
-);
-
-type PhysicsObjectOrAncestorFilter = Or<(
-    Or<(With<RigidBody>, With<AncestorMarker<RigidBody>>)>,
-    Or<(With<ColliderMarker>, With<AncestorMarker<ColliderMarker>>)>,
-)>;
-
-/// Update [`GlobalTransform`] component of physics entities based on entity hierarchy and
-/// [`Transform`] component.
-#[allow(clippy::type_complexity)]
-pub fn propagate_transforms_physics(
-    mut root_query: Query<
-        (
-            Entity,
-            &Children,
-            Ref<Transform>,
-            &mut GlobalTransform,
-            Has<RigidBody>,
-            Has<ColliderMarker>,
-        ),
-        (
-            Without<Parent>,
-            Or<(
-                With<AncestorMarker<RigidBody>>,
-                With<AncestorMarker<ColliderMarker>>,
-            )>,
-        ),
-    >,
-    mut orphaned: RemovedComponents<Parent>,
-    transform_query: Query<TransformQueryData, With<Parent>>,
-    // This is used if the entity has no physics entity ancestor.
-    parent_query_1: Query<ParentQueryData>,
-    // This is used if the entity is a physics entity with children *or* if any ancestor is a physics entity.
-    parent_query_2: Query<ParentQueryData, PhysicsObjectOrAncestorFilter>,
-    mut orphaned_entities: Local<Vec<Entity>>,
-) {
-    orphaned_entities.clear();
-    orphaned_entities.extend(orphaned.read());
-    orphaned_entities.sort_unstable();
-    root_query.par_iter_mut().for_each(
-        |(entity, children, transform, mut global_transform, is_root_rb, is_root_collider)| {
-            let changed = transform.is_changed() || global_transform.is_added() || orphaned_entities.binary_search(&entity).is_ok();
-            if changed {
-                *global_transform = GlobalTransform::from(*transform);
-            }
-
-            let handle = |(child, actual_parent, is_parent_rb, is_parent_collider): (Entity, Ref<Parent>, bool, bool)| {
-                assert_eq!(
-                    actual_parent.get(), entity,
-                    "Malformed hierarchy. This probably means that your hierarchy has been improperly maintained, or contains a cycle"
-                );
-                // SAFETY:
-                // - `child` must have consistent parentage, or the above assertion would panic.
-                // Since `child` is parented to a root entity, the entire hierarchy leading to it is consistent.
-                // - We may operate as if all descendants are consistent, since `propagate_recursive` will panic before 
-                //   continuing to propagate if it encounters an entity with inconsistent parentage.
-                // - Since each root entity is unique and the hierarchy is consistent and forest-like,
-                //   other root entities' `propagate_recursive` calls will not conflict with this one.
-                // - Since this is the only place where `transform_query` gets used, there will be no conflicting fetches elsewhere.
-                #[allow(unsafe_code)]
-                unsafe {
-                    propagate_transforms_physics_recursive(
-                        &global_transform,
-                        &transform_query,
-                        &parent_query_1,
-                        &parent_query_2,
-                        child,
-                        changed || actual_parent.is_changed(),
-                        is_parent_rb || is_parent_collider,
-                    );
-                }
-            };
-
-            if is_root_rb || is_root_collider {
-                parent_query_1.iter_many(children).for_each(handle);
-            } else {
-                parent_query_2.iter_many(children).for_each(handle);
-            }
-        },
-    );
-}
-
-/// Recursively propagates the transforms for `entity` and all of its descendants.
-///
-/// # Panics
-///
-/// If `entity`'s descendants have a malformed hierarchy, this function will panic occur before propagating
-/// the transforms of any malformed entities and their descendants.
-///
-/// # Safety
-///
-/// - While this function is running, `transform_query` must not have any fetches for `entity`,
-///   nor any of its descendants.
-/// - The caller must ensure that the hierarchy leading to `entity`
-///   is well-formed and must remain as a tree or a forest. Each entity must have at most one parent.
-#[allow(clippy::type_complexity)]
-unsafe fn propagate_transforms_physics_recursive(
-    parent: &GlobalTransform,
-    transform_query: &Query<TransformQueryData, With<Parent>>,
-    // This is used if the entity has no physics entity ancestor.
-    parent_query_1: &Query<ParentQueryData>,
-    // This is used if the entity is a physics entity with children *or* if any ancestor is a physics entity.
-    parent_query_2: &Query<ParentQueryData, PhysicsObjectOrAncestorFilter>,
-    entity: Entity,
-    mut changed: bool,
-    mut any_ancestor_is_physics_entity: bool,
-) {
-    let (global_matrix, children) = {
-        let Ok((transform, mut global_transform, children, is_rb, is_collider)) =
-            // SAFETY: This call cannot create aliased mutable references.
-            //   - The top level iteration parallelizes on the roots of the hierarchy.
-            //   - The caller ensures that each child has one and only one unique parent throughout the entire
-            //     hierarchy.
-            //
-            // For example, consider the following malformed hierarchy:
-            //
-            //     A
-            //   /   \
-            //  B     C
-            //   \   /
-            //     D
-            //
-            // D has two parents, B and C. If the propagation passes through C, but the Parent component on D points to B,
-            // the above check will panic as the origin parent does match the recorded parent.
-            //
-            // Also consider the following case, where A and B are roots:
-            //
-            //  A       B
-            //   \     /
-            //    C   D
-            //     \ /
-            //      E
-            //
-            // Even if these A and B start two separate tasks running in parallel, one of them will panic before attempting
-            // to mutably access E.
-            (unsafe { transform_query.get_unchecked(entity) }) else {
-                return;
-            };
-
-        if any_ancestor_is_physics_entity || is_rb || is_collider {
-            any_ancestor_is_physics_entity = true;
-
-            changed |= transform.is_changed() || global_transform.is_added();
-            if changed {
-                *global_transform = parent.mul_transform(*transform);
-            }
-        }
-
-        (*global_transform, children)
-    };
-
-    let Some(children) = children else { return };
-
-    // If the entity has a physics entity ancestor, propagate down regardless of the child type.
-    // Otherwise, only propagate to entities that are physics entities or physics entity ancestors.
-    if any_ancestor_is_physics_entity {
-        for (child, actual_parent, is_parent_rb, is_parent_collider) in
-            parent_query_1.iter_many(children)
-        {
-            assert_eq!(
-                actual_parent.get(), entity,
-                "Malformed hierarchy. This probably means that your hierarchy has been improperly maintained, or contains a cycle"
-            );
-            // SAFETY: The caller guarantees that `transform_query` will not be fetched
-            // for any descendants of `entity`, so it is safe to call `propagate_transforms_physics_recursive` for each child.
-            //
-            // The above assertion ensures that each child has one and only one unique parent throughout the
-            // entire hierarchy.
-            unsafe {
-                propagate_transforms_physics_recursive(
-                    &global_matrix,
-                    transform_query,
-                    parent_query_1,
-                    parent_query_2,
-                    child,
-                    changed || actual_parent.is_changed(),
-                    any_ancestor_is_physics_entity || is_parent_rb || is_parent_collider,
-                );
-            }
-        }
-    } else {
-        for (child, actual_parent, is_parent_rb, is_parent_collider) in
-            parent_query_2.iter_many(children)
-        {
-            assert_eq!(
-                actual_parent.get(), entity,
-                "Malformed hierarchy. This probably means that your hierarchy has been improperly maintained, or contains a cycle"
-            );
-            // SAFETY: The caller guarantees that `transform_query` will not be fetched
-            // for any descendants of `entity`, so it is safe to call `propagate_transforms_physics_recursive` for each child.
-            //
-            // The above assertion ensures that each child has one and only one unique parent throughout the
-            // entire hierarchy.
-            unsafe {
-                propagate_transforms_physics_recursive(
-                    &global_matrix,
-                    transform_query,
-                    parent_query_1,
-                    parent_query_2,
-                    child,
-                    changed || actual_parent.is_changed(),
-                    any_ancestor_is_physics_entity || is_parent_rb || is_parent_collider,
-                );
-            }
-        }
     }
 }

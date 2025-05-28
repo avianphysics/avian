@@ -1,8 +1,5 @@
-//! Handles transform propagation, scale updates, and [`ColliderParent`] updates for colliders.
-//!
-//! See [`ColliderHierarchyPlugin`].
-
 use crate::{
+    collision::narrow_phase::NarrowPhaseSet,
     prelude::*,
     prepare::{match_any, PrepareSet},
     sync::ancestor_marker::{AncestorMarker, AncestorMarkerPlugin},
@@ -10,22 +7,22 @@ use crate::{
 use bevy::{
     ecs::{intern::Interned, schedule::ScheduleLabel},
     prelude::*,
+    transform::systems::{mark_dirty_trees, propagate_parent_transforms, sync_simple_transforms},
 };
-use narrow_phase::NarrowPhaseSet;
 
-/// A plugin for managing the collider hierarchy and related updates.
+/// A plugin for propagating and updating transforms for colliders.
 ///
-/// - Updates [`ColliderParent`].
-/// - Propagates [`ColliderTransform`].
+/// - Propagates [`Transform`] to [`GlobalTransform`] and [`ColliderTransform`].
+/// - Updates [`Position`] and [`Rotation`] for colliders.
 ///
-/// This plugin requires Bevy's `HierarchyPlugin` and that colliders have the `ColliderMarker` component,
+/// This plugin requires that colliders have the [`ColliderMarker`] component,
 /// which is added automatically for colliders if the [`ColliderBackendPlugin`] is enabled.
-pub struct ColliderHierarchyPlugin {
+pub struct ColliderTransformPlugin {
     schedule: Interned<dyn ScheduleLabel>,
 }
 
-impl ColliderHierarchyPlugin {
-    /// Creates a [`ColliderHierarchyPlugin`] with the schedule that is used for running the [`PhysicsSchedule`].
+impl ColliderTransformPlugin {
+    /// Creates a [`ColliderTransformPlugin`] with the schedule that is used for running the [`PhysicsSchedule`].
     ///
     /// The default schedule is `FixedPostUpdate`.
     pub fn new(schedule: impl ScheduleLabel) -> Self {
@@ -35,7 +32,7 @@ impl ColliderHierarchyPlugin {
     }
 }
 
-impl Default for ColliderHierarchyPlugin {
+impl Default for ColliderTransformPlugin {
     fn default() -> Self {
         Self {
             schedule: FixedPostUpdate.intern(),
@@ -43,39 +40,21 @@ impl Default for ColliderHierarchyPlugin {
     }
 }
 
-#[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
-struct MarkColliderAncestors;
-
-impl Plugin for ColliderHierarchyPlugin {
+impl Plugin for ColliderTransformPlugin {
     fn build(&self, app: &mut App) {
         // Mark ancestors of colliders with `AncestorMarker<ColliderMarker>`.
         // This is used to speed up `ColliderTransform` propagation by skipping
         // trees that have no colliders.
-        app.add_plugins(
-            AncestorMarkerPlugin::<ColliderMarker>::new(self.schedule)
-                .add_markers_in_set(MarkColliderAncestors),
-        );
-
-        app.configure_sets(
-            self.schedule,
-            MarkColliderAncestors.before(PrepareSet::PropagateTransforms),
-        );
-
-        // Update collider parents.
-        app.add_systems(
-            self.schedule,
-            update_collider_parents
-                .after(PrepareSet::PropagateTransforms)
-                .before(PrepareSet::Finalize),
-        );
+        app.add_plugins(AncestorMarkerPlugin::<ColliderMarker>::default());
 
         // Run transform propagation if new colliders without rigid bodies have been added.
         // The `PreparePlugin` should handle transform propagation for new rigid bodies.
         app.add_systems(
             self.schedule,
             (
-                crate::sync::sync_simple_transforms_physics,
-                crate::sync::propagate_transforms_physics,
+                mark_dirty_trees,
+                propagate_parent_transforms,
+                sync_simple_transforms,
             )
                 .chain()
                 .run_if(match_any::<(Added<ColliderMarker>, Without<RigidBody>)>)
@@ -100,101 +79,38 @@ impl Plugin for ColliderHierarchyPlugin {
             .get_schedule_mut(PhysicsSchedule)
             .expect("add PhysicsSchedule first");
 
-        physics_schedule
-            .add_systems(handle_rigid_body_removals.after(PhysicsStepSet::SpatialQuery));
-
         // Update child collider positions before narrow phase collision detection.
         // Only traverses trees with `AncestorMarker<ColliderMarker>`.
         physics_schedule.add_systems(update_child_collider_position.in_set(NarrowPhaseSet::First));
-    }
-
-    fn finish(&self, app: &mut App) {
-        if !app.is_plugin_added::<HierarchyPlugin>() {
-            warn!("`ColliderHierarchyPlugin` requires Bevy's `HierarchyPlugin` to function. If you don't need collider hierarchies, consider disabling this plugin.",);
-        }
-    }
-}
-
-/// Updates [`ColliderParent`] for descendant colliders of [`RigidBody`] entities.
-///
-/// The [`ColliderBackendPlugin`] handles collider parents for colliders that are
-/// on the same entity as the rigid body.
-#[allow(clippy::type_complexity)]
-fn update_collider_parents(
-    mut commands: Commands,
-    mut bodies: Query<Entity, (With<RigidBody>, With<AncestorMarker<ColliderMarker>>)>,
-    children: Query<&Children>,
-    mut child_colliders: Query<
-        Option<&mut ColliderParent>,
-        (With<ColliderMarker>, Without<RigidBody>),
-    >,
-) {
-    for entity in &mut bodies {
-        for child in children.iter_descendants(entity) {
-            if let Ok(collider_parent) = child_colliders.get_mut(child) {
-                if let Some(mut collider_parent) = collider_parent {
-                    collider_parent.0 = entity;
-                } else {
-                    commands.entity(child).insert((
-                        ColliderParent(entity),
-                        // TODO: This probably causes a one frame delay. Compute real value?
-                        ColliderTransform::default(),
-                    ));
-                }
-            }
-        }
-    }
-}
-
-/// Updates colliders when the rigid bodies they were attached to have been removed.
-fn handle_rigid_body_removals(
-    mut commands: Commands,
-    colliders: Query<(Entity, &ColliderParent), Without<RigidBody>>,
-    bodies: Query<(), With<RigidBody>>,
-    removals: RemovedComponents<RigidBody>,
-) {
-    // Return if no rigid bodies have been removed
-    if removals.is_empty() {
-        return;
-    }
-
-    for (collider_entity, collider_parent) in &colliders {
-        // If the body associated with the collider parent entity doesn't exist,
-        // remove ColliderParent and ColliderTransform.
-        if !bodies.contains(collider_parent.get()) {
-            commands
-                .entity(collider_entity)
-                .remove::<(ColliderParent, ColliderTransform)>();
-        }
     }
 }
 
 #[allow(clippy::type_complexity)]
 pub(crate) fn update_child_collider_position(
-    mut colliders: Query<
+    mut collider_query: Query<
         (
             &ColliderTransform,
             &mut Position,
             &mut Rotation,
-            &ColliderParent,
+            &ColliderOf,
         ),
         Without<RigidBody>,
     >,
-    parents: Query<(&Position, &Rotation), (With<RigidBody>, With<Children>)>,
+    rb_query: Query<(&Position, &Rotation), (With<RigidBody>, With<Children>)>,
 ) {
-    for (collider_transform, mut position, mut rotation, parent) in &mut colliders {
-        let Ok((parent_pos, parent_rot)) = parents.get(parent.get()) else {
+    for (collider_transform, mut position, mut rotation, collider_of) in &mut collider_query {
+        let Ok((rb_pos, rb_rot)) = rb_query.get(collider_of.body) else {
             continue;
         };
 
-        position.0 = parent_pos.0 + parent_rot * collider_transform.translation;
+        position.0 = rb_pos.0 + rb_rot * collider_transform.translation;
         #[cfg(feature = "2d")]
         {
-            *rotation = *parent_rot * collider_transform.rotation;
+            *rotation = *rb_rot * collider_transform.rotation;
         }
         #[cfg(feature = "3d")]
         {
-            *rotation = (parent_rot.0 * collider_transform.rotation.0)
+            *rotation = (rb_rot.0 * collider_transform.rotation.0)
                 .normalize()
                 .into();
         }
@@ -214,7 +130,7 @@ type ShouldPropagate = Or<(With<AncestorMarker<ColliderMarker>>, With<ColliderMa
 pub(crate) fn propagate_collider_transforms(
     mut root_query: Query<
         (Entity, Ref<Transform>, &Children),
-        (Without<Parent>, With<AncestorMarker<ColliderMarker>>),
+        (Without<ChildOf>, With<AncestorMarker<ColliderMarker>>),
     >,
     collider_query: Query<
         (
@@ -222,18 +138,18 @@ pub(crate) fn propagate_collider_transforms(
             Option<&mut ColliderTransform>,
             Option<&Children>,
         ),
-        (With<Parent>, ShouldPropagate),
+        (With<ChildOf>, ShouldPropagate),
     >,
-    parent_query: Query<(Entity, Ref<Transform>, Has<RigidBody>, Ref<Parent>), ShouldPropagate>,
+    parent_query: Query<(Entity, Ref<Transform>, Has<RigidBody>, Ref<ChildOf>), ShouldPropagate>,
 ) {
     root_query.par_iter_mut().for_each(
         |(entity, transform, children)| {
-            for (child, child_transform, is_child_rb, parent) in parent_query.iter_many(children) {
+            for (child, child_transform, is_child_rb, child_of) in parent_query.iter_many(children) {
                 assert_eq!(
-                    parent.get(), entity,
+                    child_of.parent(), entity,
                     "Malformed hierarchy. This probably means that your hierarchy has been improperly maintained, or contains a cycle"
                 );
-                let changed = transform.is_changed() || parent.is_changed();
+                let changed = transform.is_changed() || child_of.is_changed();
                 let parent_transform = ColliderTransform::from(*transform);
                 let child_transform = ColliderTransform::from(*child_transform);
                 let scale = parent_transform.scale * child_transform.scale;
@@ -241,7 +157,7 @@ pub(crate) fn propagate_collider_transforms(
                 // SAFETY:
                 // - `child` must have consistent parentage, or the above assertion would panic.
                 // Since `child` is parented to a root entity, the entire hierarchy leading to it is consistent.
-                // - We may operate as if all descendants are consistent, since `propagate_collider_transform_recursive` will panic before 
+                // - We may operate as if all descendants are consistent, since `propagate_collider_transform_recursive` will panic before
                 //   continuing to propagate if it encounters an entity with inconsistent parentage.
                 // - Since each root entity is unique and the hierarchy is consistent and forest-like,
                 //   other root entities' `propagate_collider_transform_recursive` calls will not conflict with this one.
@@ -296,9 +212,9 @@ unsafe fn propagate_collider_transforms_recursive(
             Option<&mut ColliderTransform>,
             Option<&Children>,
         ),
-        (With<Parent>, ShouldPropagate),
+        (With<ChildOf>, ShouldPropagate),
     >,
-    parent_query: &Query<(Entity, Ref<Transform>, Has<RigidBody>, Ref<Parent>), ShouldPropagate>,
+    parent_query: &Query<(Entity, Ref<Transform>, Has<RigidBody>, Ref<ChildOf>), ShouldPropagate>,
     entity: Entity,
     mut changed: bool,
 ) {
@@ -316,7 +232,7 @@ unsafe fn propagate_collider_transforms_recursive(
         //   \   /
         //     D
         //
-        // D has two parents, B and C. If the propagation passes through C, but the Parent component on D points to B,
+        // D has two parents, B and C. If the propagation passes through C, but the ChildOf component on D points to B,
         // the above check will panic as the origin parent does match the recorded parent.
         //
         // Also consider the following case, where A and B are roots:
@@ -348,9 +264,9 @@ unsafe fn propagate_collider_transforms_recursive(
     };
 
     let Some(children) = children else { return };
-    for (child, child_transform, is_rb, parent) in parent_query.iter_many(children) {
+    for (child, child_transform, is_rb, child_of) in parent_query.iter_many(children) {
         assert_eq!(
-            parent.get(), entity,
+            child_of.parent(), entity,
             "Malformed hierarchy. This probably means that your hierarchy has been improperly maintained, or contains a cycle"
         );
 
@@ -379,7 +295,7 @@ unsafe fn propagate_collider_transforms_recursive(
                 collider_query,
                 parent_query,
                 child,
-                changed || parent.is_changed(),
+                changed || child_of.is_changed(),
             );
         }
     }

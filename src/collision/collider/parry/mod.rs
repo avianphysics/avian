@@ -1,12 +1,6 @@
 #![allow(clippy::unnecessary_cast)]
 
-use crate::{make_isometry, prelude::*};
-#[cfg(feature = "collider-from-mesh")]
-use bevy::render::mesh::{Indices, VertexAttributeValues};
-use bevy::{log, prelude::*};
-use collision::contact_query::UnsupportedShape;
-use itertools::Either;
-use parry::shape::{RoundShape, SharedShape, TypedShape};
+pub mod contact_query;
 
 #[cfg(feature = "2d")]
 mod primitives2d;
@@ -15,6 +9,14 @@ mod primitives3d;
 
 #[cfg(feature = "2d")]
 pub use primitives2d::{EllipseColliderShape, RegularPolygonColliderShape};
+
+use crate::{make_isometry, prelude::*};
+#[cfg(feature = "collider-from-mesh")]
+use bevy::render::mesh::{Indices, VertexAttributeValues};
+use bevy::{log, prelude::*};
+use contact_query::UnsupportedShape;
+use itertools::Either;
+use parry::shape::{RoundShape, SharedShape, TypedShape};
 
 impl<T: IntoCollider<Collider>> From<T> for Collider {
     fn from(value: T) -> Self {
@@ -234,7 +236,7 @@ impl From<TrimeshFlags> for parry::shape::TriMeshFlags {
 /// ```
 ///
 /// Colliders on their own only detect contacts and generate
-/// [collision events](collision#collision-events).
+/// [collision events](crate::collision#collision-events).
 /// To make colliders apply contact forces, they have to be attached
 /// to [rigid bodies](RigidBody):
 ///
@@ -314,11 +316,11 @@ impl From<TrimeshFlags> for parry::shape::TriMeshFlags {
 /// ```
 ///
 /// Colliders can be arbitrarily nested and transformed relative to the parent.
-/// The rigid body that a collider is attached to can be accessed using the [`ColliderParent`] component.
+/// The rigid body that a collider is attached to can be accessed using the [`ColliderOf`] component.
 ///
 /// The benefit of using separate entities for the colliders is that each collider can have its own
 /// [friction](Friction), [restitution](Restitution), [collision layers](CollisionLayers),
-/// and other configuration options, and they send separate [collision events](collision#collision-events).
+/// and other configuration options, and they send separate [collision events](crate::collision#collision-events).
 ///
 /// # See More
 ///
@@ -333,8 +335,9 @@ impl From<TrimeshFlags> for parry::shape::TriMeshFlags {
     doc = "- Generating colliders for meshes and scenes with [`ColliderConstructor`] and [`ColliderConstructorHierarchy`]"
 )]
 /// - [Get colliding entities](CollidingEntities)
-/// - [Collision events](collision#collision-events)
-/// - [Accessing, filtering and modifying collisions](Collisions)
+/// - [Collision events](crate::collision#collision-events)
+/// - [Accessing collision data](Collisions)
+/// - [Filtering and modifying contacts with hooks](CollisionHooks)
 /// - [Manual contact queries](contact_query)
 ///
 /// # Advanced Usage
@@ -348,7 +351,13 @@ impl From<TrimeshFlags> for parry::shape::TriMeshFlags {
 /// `Collider` is currently not `Reflect`. If you need to reflect it, you can use [`ColliderConstructor`] as a workaround.
 #[derive(Clone, Component, Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[require(ColliderMarker, ColliderAabb, ColliderDensity, ColliderMassProperties)]
+#[require(
+    ColliderMarker,
+    ColliderAabb,
+    CollisionLayers,
+    ColliderDensity,
+    ColliderMassProperties
+)]
 pub struct Collider {
     /// The raw unscaled collider shape.
     shape: SharedShape,
@@ -385,7 +394,14 @@ impl Default for Collider {
 }
 
 impl AnyCollider for Collider {
-    fn aabb(&self, position: Vector, rotation: impl Into<Rotation>) -> ColliderAabb {
+    type Context = ();
+
+    fn aabb_with_context(
+        &self,
+        position: Vector,
+        rotation: impl Into<Rotation>,
+        _: AabbContext<Self::Context>,
+    ) -> ColliderAabb {
         let aabb = self
             .shape_scaled()
             .compute_aabb(&make_isometry(position, rotation));
@@ -395,8 +411,7 @@ impl AnyCollider for Collider {
         }
     }
 
-    #[inline]
-    fn contact_manifolds(
+    fn contact_manifolds_with_context(
         &self,
         other: &Self,
         position1: Vector,
@@ -405,6 +420,7 @@ impl AnyCollider for Collider {
         rotation2: impl Into<Rotation>,
         prediction_distance: Scalar,
         manifolds: &mut Vec<ContactManifold>,
+        _: ContactManifoldContext<Self::Context>,
     ) {
         contact_query::contact_manifolds(
             self,
@@ -926,6 +942,15 @@ impl Collider {
         SharedShape::convex_hull(&points).map(Into::into)
     }
 
+    /// Creates a collider with a [convex polygon](https://en.wikipedia.org/wiki/Convex_polygon) shape **without** computing
+    /// the [convex hull](https://en.wikipedia.org/wiki/Convex_hull) of the given points: convexity of the input is
+    /// assumed and not checked.
+    #[cfg(feature = "2d")]
+    pub fn convex_polyline(points: Vec<Vector>) -> Option<Self> {
+        let points = points.iter().map(|v| (*v).into()).collect::<Vec<_>>();
+        SharedShape::convex_polyline(points).map(Into::into)
+    }
+
     /// Creates a collider with a heightfield shape.
     ///
     /// A 2D heightfield is a segment along the `X` axis, subdivided at regular intervals.
@@ -1220,6 +1245,8 @@ impl Collider {
             ColliderConstructor::ConvexHull { points } => Self::convex_hull(points),
             #[cfg(feature = "3d")]
             ColliderConstructor::ConvexHull { points } => Self::convex_hull(points),
+            #[cfg(feature = "2d")]
+            ColliderConstructor::ConvexPolyline { points } => Self::convex_polyline(points),
             #[cfg(feature = "2d")]
             ColliderConstructor::Heightfield { heights, scale } => {
                 Some(Self::heightfield(heights, scale))

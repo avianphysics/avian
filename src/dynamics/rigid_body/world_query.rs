@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 
-use crate::{prelude::*, utils::get_pos_translation};
+use crate::prelude::*;
 use bevy::{
     ecs::query::QueryData,
     prelude::{Entity, Has, Ref},
@@ -14,12 +14,8 @@ pub struct RigidBodyQuery {
     pub rb: Ref<'static, RigidBody>,
     pub position: &'static mut Position,
     pub rotation: &'static mut Rotation,
-    pub previous_rotation: &'static mut PreviousRotation,
-    pub accumulated_translation: &'static mut AccumulatedTranslation,
     pub linear_velocity: &'static mut LinearVelocity,
-    pub(crate) pre_solve_linear_velocity: &'static mut PreSolveLinearVelocity,
     pub angular_velocity: &'static mut AngularVelocity,
-    pub(crate) pre_solve_angular_velocity: &'static mut PreSolveAngularVelocity,
     pub mass: &'static mut ComputedMass,
     pub angular_inertia: &'static mut ComputedAngularInertia,
     #[cfg(feature = "3d")]
@@ -87,18 +83,6 @@ impl RigidBodyQueryItem<'_> {
         }
 
         angular_inertia
-    }
-
-    /// Returns the current position of the body. This is a sum of the [`Position`] and
-    /// [`AccumulatedTranslation`] components.
-    pub fn current_position(&self) -> Vector {
-        self.position.0
-            + get_pos_translation(
-                &self.accumulated_translation,
-                &self.previous_rotation,
-                &self.rotation,
-                &self.center_of_mass,
-            )
     }
 
     /// Returns the [dominance](Dominance) of the body.
@@ -178,27 +162,15 @@ impl RigidBodyQueryReadOnlyItem<'_> {
         angular_inertia
     }
 
-    /// Returns the current position of the body. This is a sum of the [`Position`] and
-    /// [`AccumulatedTranslation`] components.
-    pub fn current_position(&self) -> Vector {
-        self.position.0
-            + get_pos_translation(
-                self.accumulated_translation,
-                self.previous_rotation,
-                self.rotation,
-                self.center_of_mass,
-            )
-    }
-
     /// Returns the [dominance](Dominance) of the body.
     ///
     /// If it isn't specified, the default of `0` is returned for dynamic bodies.
-    /// For static and kinematic bodies, `i8::MAX` (`127`) is always returned instead.
-    pub fn dominance(&self) -> i8 {
+    /// For static and kinematic bodies, `i8::MAX + 1` (`128`) is always returned instead.
+    pub fn dominance(&self) -> i16 {
         if !self.rb.is_dynamic() {
-            i8::MAX
+            i8::MAX as i16 + 1
         } else {
-            self.dominance.map_or(0, |dominance| dominance.0)
+            self.dominance.map_or(0, |dominance| dominance.0) as i16
         }
     }
 }

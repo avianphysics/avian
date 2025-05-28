@@ -14,11 +14,11 @@
 //! For geometric queries that query the entire world for intersections, like raycasting, shapecasting
 //! and point projection, see [spatial queries](spatial_query).
 
-use crate::prelude::*;
+use crate::{collision::contact_types::SingleContact, prelude::*};
 use bevy::prelude::*;
 use parry::query::{PersistentQueryDispatcher, ShapeCastOptions, Unsupported};
 
-/// An error indicating that a [contact query](contact_query) is not supported for one of the [`Collider`] shapes.
+/// An error indicating that a [contact query](self) is not supported for one of the [`Collider`] shapes.
 pub type UnsupportedShape = Unsupported;
 
 /// Computes one pair of contact points between two [`Collider`]s.
@@ -30,9 +30,9 @@ pub type UnsupportedShape = Unsupported;
 ///
 /// ```
 /// # #[cfg(feature = "2d")]
-/// # use avian2d::prelude::{contact_query::contact, *};
+/// # use avian2d::{collision::collider::contact_query::contact, prelude::*};
 /// # #[cfg(feature = "3d")]
-/// use avian3d::prelude::{contact_query::contact, *};
+/// use avian3d::{collision::collider::contact_query::contact, prelude::*};
 /// use bevy::prelude::*;
 ///
 /// # #[cfg(all(feature = "3d", feature = "f32"))]
@@ -120,9 +120,9 @@ pub fn contact(
 ///
 /// ```
 /// # #[cfg(feature = "2d")]
-/// # use avian2d::prelude::{contact_query::contact_manifolds, *};
+/// # use avian2d::{collision::collider::contact_query::contact_manifolds, prelude::*};
 /// # #[cfg(feature = "3d")]
-/// use avian3d::prelude::{contact_query::contact_manifolds, *};
+/// use avian3d::{collision::collider::contact_query::contact_manifolds, prelude::*};
 /// use bevy::prelude::*;
 ///
 /// # #[cfg(all(feature = "3d", feature = "f32"))]
@@ -131,7 +131,8 @@ pub fn contact(
 /// let collider2 = Collider::cuboid(1.0, 1.0, 1.0);
 ///
 /// // Compute contact manifolds a collision that should be penetrating
-/// let manifolds = contact_manifolds(
+/// let mut manifolds = Vec::new();
+/// contact_manifolds(
 ///     // First collider
 ///     &collider1,
 ///     Vec3::default(),
@@ -142,6 +143,8 @@ pub fn contact(
 ///     Quat::default(),
 ///     // Prediction distance
 ///     0.0,
+///     // Output manifolds
+///     &mut manifolds,
 /// );
 ///
 /// assert_eq!(manifolds.is_empty(), false);
@@ -277,9 +280,9 @@ pub enum ClosestPoints {
 ///
 /// ```
 /// # #[cfg(feature = "2d")]
-/// # use avian2d::prelude::{contact_query::*, *};
+/// # use avian2d::{collision::collider::contact_query::*, prelude::*};
 /// # #[cfg(feature = "3d")]
-/// use avian3d::prelude::{contact_query::*, *};
+/// use avian3d::{collision::collider::contact_query::*, prelude::*};
 /// use bevy::prelude::*;
 ///
 /// # #[cfg(all(feature = "3d", feature = "f32"))]
@@ -372,9 +375,9 @@ pub fn closest_points(
 ///
 /// ```
 /// # #[cfg(feature = "2d")]
-/// # use avian2d::prelude::{contact_query::distance, *};
+/// # use avian2d::{collision::collider::contact_query::distance, prelude::*};
 /// # #[cfg(feature = "3d")]
-/// use avian3d::prelude::{contact_query::distance, *};
+/// use avian3d::{collision::collider::contact_query::distance, prelude::*};
 /// use bevy::prelude::*;
 ///
 /// # #[cfg(all(feature = "3d", feature = "f32"))]
@@ -440,9 +443,9 @@ pub fn distance(
 ///
 /// ```
 /// # #[cfg(feature = "2d")]
-/// # use avian2d::prelude::{contact_query::intersection_test, *};
+/// # use avian2d::{collision::collider::contact_query::intersection_test, prelude::*};
 /// # #[cfg(feature = "3d")]
-/// use avian3d::prelude::{contact_query::intersection_test, *};
+/// use avian3d::{collision::collider::contact_query::intersection_test, prelude::*};
 /// use bevy::prelude::*;
 ///
 /// # #[cfg(all(feature = "3d", feature = "f32"))]
@@ -533,9 +536,9 @@ pub struct TimeOfImpact {
 ///
 /// ```
 /// # #[cfg(feature = "2d")]
-/// # use avian2d::prelude::{contact_query::time_of_impact, *};
+/// # use avian2d::{collision::collider::contact_query::time_of_impact, prelude::*};
 /// # #[cfg(feature = "3d")]
-/// use avian3d::prelude::{contact_query::time_of_impact, *};
+/// use avian3d::{collision::collider::contact_query::time_of_impact, prelude::*};
 /// use bevy::prelude::*;
 ///
 /// # #[cfg(all(feature = "3d", feature = "f32"))]

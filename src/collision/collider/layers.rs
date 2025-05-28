@@ -1,4 +1,4 @@
-use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
+use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 
 use bevy::prelude::*;
 
@@ -253,7 +253,7 @@ impl Not for LayerMask {
 /// The memberships and filters are stored as [`LayerMask`]s, which represent [bitmasks] for layers.
 /// The first bit `0b0001` is reserved for the default layer, which all entities belong to by default.
 ///
-/// Colliders without this component have all filters and can interact with any layer.
+/// By default, colliders have all filters and can interact with any layer.
 ///
 /// [bitmasks]: https://en.wikipedia.org/wiki/Mask_(computing)
 ///

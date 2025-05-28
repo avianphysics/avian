@@ -83,12 +83,18 @@
 //! [See the code implementations](https://github.com/Jondolf/avian/tree/main/src/constraints/joints)
 //! of the implemented joints to get a better idea of how to create joints.
 
+mod fixed_angle_constraint;
+mod point_constraint;
+
 mod distance;
 mod fixed;
 mod prismatic;
 mod revolute;
 #[cfg(feature = "3d")]
 mod spherical;
+
+pub use fixed_angle_constraint::*;
+pub use point_constraint::*;
 
 pub use distance::*;
 pub use fixed::*;
@@ -105,81 +111,23 @@ pub trait Joint: Component + PositionConstraint + AngularConstraint {
     /// Creates a new joint between two entities.
     fn new(entity1: Entity, entity2: Entity) -> Self;
 
-    /// Sets the joint's compliance (inverse of stiffness, meters / Newton).
-    fn with_compliance(self, compliance: Scalar) -> Self;
-
-    /// Sets the attachment point on the first body.
-    fn with_local_anchor_1(self, anchor: Vector) -> Self;
-
-    /// Sets the attachment point on the second body.
-    fn with_local_anchor_2(self, anchor: Vector) -> Self;
-
-    /// Sets the linear velocity damping caused by the joint.
-    fn with_linear_velocity_damping(self, damping: Scalar) -> Self;
-
-    /// Sets the angular velocity damping caused by the joint.
-    fn with_angular_velocity_damping(self, damping: Scalar) -> Self;
-
     /// Returns the local attachment point on the first body.
     fn local_anchor_1(&self) -> Vector;
 
     /// Returns the local attachment point on the second body.
     fn local_anchor_2(&self) -> Vector;
 
-    /// Returns the linear velocity damping of the joint.
+    /// Returns the linear velocity damping applied by the joint.
     fn damping_linear(&self) -> Scalar;
 
-    /// Returns the angular velocity damping of the joint.
+    /// Returns the angular velocity damping applied by the joint.
     fn damping_angular(&self) -> Scalar;
 
-    /// Applies a positional correction that aligns the positions of the local attachment points `r1` and `r2`.
+    /// Returns the relative dominance of the bodies.
     ///
-    /// Returns the force exerted by the alignment.
-    #[allow(clippy::too_many_arguments)]
-    fn align_position(
-        &self,
-        body1: &mut RigidBodyQueryItem,
-        body2: &mut RigidBodyQueryItem,
-        r1: Vector,
-        r2: Vector,
-        lagrange: &mut Scalar,
-        compliance: Scalar,
-        dt: Scalar,
-    ) -> Vector {
-        let world_r1 = *body1.rotation * r1;
-        let world_r2 = *body2.rotation * r2;
-
-        let (dir, magnitude) = DistanceLimit::new(0.0, 0.0).compute_correction(
-            body1.current_position() + world_r1,
-            body2.current_position() + world_r2,
-        );
-
-        if magnitude <= Scalar::EPSILON {
-            return Vector::ZERO;
-        }
-
-        // Compute generalized inverse masses
-        let w1 = PositionConstraint::compute_generalized_inverse_mass(self, body1, world_r1, dir);
-        let w2 = PositionConstraint::compute_generalized_inverse_mass(self, body2, world_r2, dir);
-
-        // Compute Lagrange multiplier update
-        let delta_lagrange =
-            self.compute_lagrange_update(*lagrange, magnitude, &[w1, w2], compliance, dt);
-        *lagrange += delta_lagrange;
-
-        // Apply positional correction to align the positions of the bodies
-        self.apply_positional_lagrange_update(
-            body1,
-            body2,
-            delta_lagrange,
-            dir,
-            world_r1,
-            world_r2,
-        );
-
-        // Return constraint force
-        self.compute_force(*lagrange, dir, dt)
-    }
+    /// If the relative dominance is positive, the first body is dominant
+    /// and is considered to have infinite mass.
+    fn relative_dominance(&self) -> i16;
 }
 
 /// A limit that indicates that the distance between two points should be between `min` and `max`.
@@ -204,32 +152,32 @@ impl DistanceLimit {
     }
 
     /// Returns the direction and magnitude of the positional correction required
-    /// to limit the distance between `p1` and `p2` to be within the distance limit.
-    pub fn compute_correction(&self, p1: Vector, p2: Vector) -> (Vector, Scalar) {
-        let pos_offset = p2 - p1;
-        let distance = pos_offset.length();
+    /// to limit the given `separation` to be within the distance limit.
+    pub fn compute_correction(&self, separation: Vector) -> (Vector, Scalar) {
+        let distance_squared = separation.length_squared();
 
-        if distance <= Scalar::EPSILON {
+        if distance_squared <= Scalar::EPSILON {
             return (Vector::ZERO, 0.0);
         }
+
+        let distance = distance_squared.sqrt();
 
         // Equation 25
         if distance < self.min {
             // Separation distance lower limit
-            (-pos_offset / distance, (distance - self.min))
+            (-separation / distance, (distance - self.min))
         } else if distance > self.max {
             // Separation distance upper limit
-            (-pos_offset / distance, (distance - self.max))
+            (-separation / distance, (distance - self.max))
         } else {
             (Vector::ZERO, 0.0)
         }
     }
 
-    /// Returns the positional correction required to limit the distance between `p1` and `p2`
+    /// Returns the positional correction required to limit the given `separation`
     /// to be within the distance limit along a given `axis`.
-    pub fn compute_correction_along_axis(&self, p1: Vector, p2: Vector, axis: Vector) -> Vector {
-        let pos_offset = p2 - p1;
-        let a = pos_offset.dot(axis);
+    pub fn compute_correction_along_axis(&self, separation: Vector, axis: Vector) -> Vector {
+        let a = separation.dot(axis);
 
         // Equation 25
         if a < self.min {
@@ -265,21 +213,18 @@ impl AngleLimit {
         Self { min, max }
     }
 
-    /// Returns the angular correction required to limit the angle between two rotations
+    /// Returns the angular correction required to limit the `angle_difference`
     /// to be within the angle limits.
     #[cfg(feature = "2d")]
     pub fn compute_correction(
         &self,
-        rotation1: Rotation,
-        rotation2: Rotation,
+        angle_difference: Scalar,
         max_correction: Scalar,
     ) -> Option<Scalar> {
-        let angle = rotation1.angle_between(rotation2);
-
-        let correction = if angle < self.min {
-            angle - self.min
-        } else if angle > self.max {
-            angle - self.max
+        let correction = if angle_difference < self.min {
+            angle_difference - self.min
+        } else if angle_difference > self.max {
+            angle_difference - self.max
         } else {
             return None;
         };

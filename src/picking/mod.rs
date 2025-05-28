@@ -2,7 +2,7 @@
 //!
 //! Add the [`PhysicsPickingPlugin`] to enable picking for [colliders](Collider).
 //! By default, all colliders are pickable. Picking can be disabled for individual entities
-//! by adding [`PickingBehavior::IGNORE`].
+//! by adding [`Pickable::IGNORE`].
 //!
 //! To make physics picking entirely opt-in, set [`PhysicsPickingSettings::require_markers`]
 //! to `true` and add a [`PhysicsPickable`] component to the desired camera and target entities.
@@ -20,7 +20,7 @@ use crate::{
     prelude::*,
 };
 use bevy::{
-    ecs::entity::EntityHashSet,
+    ecs::entity::hash_set::EntityHashSet,
     picking::{
         backend::{ray::RayMap, HitData, PointerHits},
         PickSet,
@@ -28,7 +28,7 @@ use bevy::{
     prelude::*,
 };
 
-use std::time::Duration;
+use core::time::Duration;
 
 use bevy::{
     diagnostic::DiagnosticPath,
@@ -149,16 +149,16 @@ pub fn update_hits(
         Option<&PhysicsPickable>,
     )>,
     ray_map: Res<RayMap>,
-    pickables: Query<&PickingBehavior>,
+    pickables: Query<&Pickable>,
     marked_targets: Query<&PhysicsPickable>,
     backend_settings: Res<PhysicsPickingSettings>,
     spatial_query: SpatialQuery,
     mut output_events: EventWriter<PointerHits>,
     mut diagnostics: ResMut<PhysicsPickingDiagnostics>,
 ) {
-    let start_time = bevy::utils::Instant::now();
+    let start_time = crate::utils::Instant::now();
 
-    for (&ray_id, &ray) in ray_map.map().iter() {
+    for (&ray_id, &ray) in ray_map.map.iter() {
         let Ok((camera, picking_filter, cam_pickable)) = picking_cameras.get(ray_id.camera) else {
             continue;
         };
@@ -182,7 +182,7 @@ pub fn update_hits(
 
                     let is_pickable = pickables
                         .get(entity)
-                        .map(|p| *p != PickingBehavior::IGNORE)
+                        .map(|p| *p != Pickable::IGNORE)
                         .unwrap_or(true);
 
                     if marker_requirement && is_pickable {
@@ -196,7 +196,7 @@ pub fn update_hits(
                 },
             );
 
-            output_events.send(PointerHits::new(ray_id.pointer, hits, camera.order as f32));
+            output_events.write(PointerHits::new(ray_id.pointer, hits, camera.order as f32));
         }
         #[cfg(feature = "3d")]
         {
@@ -213,7 +213,7 @@ pub fn update_hits(
 
                         let is_pickable = pickables
                             .get(entity)
-                            .map(|p| *p != PickingBehavior::IGNORE)
+                            .map(|p| *p != Pickable::IGNORE)
                             .unwrap_or(true);
 
                         marker_requirement && is_pickable
@@ -231,7 +231,7 @@ pub fn update_hits(
                     (ray_hit_data.entity, hit_data)
                 })
             {
-                output_events.send(PointerHits::new(
+                output_events.write(PointerHits::new(
                     ray_id.pointer,
                     vec![(entity, hit_data)],
                     camera.order as f32,

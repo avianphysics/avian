@@ -230,6 +230,8 @@
 //! Finally, making the [physics timestep](Physics) smaller can also help.
 //! However, this comes at the cost of worse performance for the entire simulation.
 
+#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
+use super::solver::solver_body::SolverBody;
 use crate::prelude::*;
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 use bevy::ecs::query::QueryData;
@@ -494,13 +496,10 @@ pub enum SweepMode {
 #[query_data(mutable)]
 struct SweptCcdBodyQuery {
     entity: Entity,
+    solver_body: Option<&'static mut SolverBody>,
     rb: &'static RigidBody,
     pos: &'static Position,
-    translation: Option<&'static mut AccumulatedTranslation>,
-    rot: &'static mut Rotation,
-    prev_rot: Option<&'static mut PreviousRotation>,
-    lin_vel: Option<&'static LinearVelocity>,
-    ang_vel: Option<&'static AngularVelocity>,
+    rot: &'static Rotation,
     ccd: Option<&'static SweptCcd>,
     collider: &'static Collider,
     com: &'static ComputedCenterOfMass,
@@ -518,26 +517,25 @@ struct SweptCcdBodyQuery {
 fn solve_swept_ccd(
     ccd_query: Query<Entity, With<SweptCcd>>,
     bodies: Query<SweptCcdBodyQuery>,
-    colliders: Query<(&Collider, &ColliderParent)>,
+    colliders: Query<(&Collider, &ColliderOf)>,
     time: Res<Time>,
-    collisions: Res<Collisions>,
+    contact_graph: Res<ContactGraph>,
     narrow_phase_config: Res<NarrowPhaseConfig>,
     mut diagnostics: ResMut<SolverDiagnostics>,
 ) {
-    let start = bevy::utils::Instant::now();
+    let start = crate::utils::Instant::now();
 
     let delta_secs = time.delta_seconds_adjusted();
+
+    let mut dummy_body = SolverBody::default();
 
     // TODO: Parallelize.
     for entity in &ccd_query {
         // Get the CCD body.
         let Ok(SweptCcdBodyQueryItem {
-            pos: pos1,
-            translation: Some(mut translation1),
-            rot: mut rot1,
-            prev_rot: Some(prev_rot),
-            lin_vel: Some(lin_vel1),
-            ang_vel: Some(ang_vel1),
+            solver_body: Some(mut solver_body1),
+            pos: &prev_pos1,
+            rot: &prev_rot1,
             ccd: Some(ccd1),
             collider: collider1,
             com: com1,
@@ -552,58 +550,60 @@ fn solve_swept_ccd(
             continue;
         };
 
+        let lin_vel1 = solver_body1.linear_velocity;
+        let ang_vel1 = solver_body1.angular_velocity;
+
         // The smallest time of impact found. Starts at the largest value,
         // how long a body moves during a single frame due to position integration.
         let (mut min_toi, mut min_toi_entity) = (delta_secs, None);
 
         // Iterate through colliders intersecting the AABB of the CCD body.
-        let intersecting_entities = collisions.entities_colliding_with(entity);
-        for (collider2, collider_parent) in colliders.iter_many(intersecting_entities) {
-            debug_assert_ne!(
-                entity,
-                collider_parent.get(),
-                "collider AABB cannot intersect itself"
-            );
+        let intersecting_entities = contact_graph.entities_colliding_with(entity);
+        for (collider2, &ColliderOf { body: entity2 }) in colliders.iter_many(intersecting_entities)
+        {
+            debug_assert_ne!(entity, entity2, "collider AABB cannot intersect itself");
 
             // Get the body associated with the collider.
             // Safety: `AabbIntersections` should never contain the entity of a collider
-            //         with the same parent as the first body, and the entities
-            //         are also ensured to be different above.
-            if let Ok(body2) = unsafe { bodies.get_unchecked(collider_parent.get()) } {
+            //         attached to the first body, and the entities are also ensured to be different above.
+            if let Ok(body2) = unsafe { bodies.get_unchecked(entity2) } {
                 if !ccd1.include_dynamic && body2.rb.is_dynamic() {
                     continue;
                 }
 
-                let lin_vel2 = body2.lin_vel.copied().unwrap_or_default().0;
-                let ang_vel2 = body2.ang_vel.copied().unwrap_or_default().0;
+                // Get the solver body associated with the second body.
+                let solver_body2 = body2
+                    .solver_body
+                    .map_or(&dummy_body, |body| body.into_inner());
+
+                let prev_pos2 = *body2.pos;
+                let prev_rot2 = *body2.rot;
+                let lin_vel2 = solver_body2.linear_velocity;
+                let ang_vel2 = solver_body2.angular_velocity;
 
                 #[cfg(feature = "2d")]
-                let ang_vel_below_threshold =
-                    (ang_vel1.0 - ang_vel2).abs() < ccd1.angular_threshold;
+                let ang_vel_below_threshold = (ang_vel1 - ang_vel2).abs() < ccd1.angular_threshold;
                 #[cfg(feature = "3d")]
                 let ang_vel_below_threshold =
-                    (ang_vel1.0 - ang_vel2).length_squared() < ccd1.angular_threshold.powi(2);
+                    (ang_vel1 - ang_vel2).length_squared() < ccd1.angular_threshold.powi(2);
 
                 // If both the relative linear and relative angular velocity
                 // are below the defined thresholds, skip this body.
                 if ang_vel_below_threshold
-                    && (lin_vel1.0 - lin_vel2).length_squared() < ccd1.linear_threshold.powi(2)
+                    && (lin_vel1 - lin_vel2).length_squared() < ccd1.linear_threshold.powi(2)
                 {
                     continue;
                 }
 
-                let iso1 = make_isometry(pos1.0, prev_rot.0);
-                let iso2 = make_isometry(
-                    body2.pos.0,
-                    body2.prev_rot.as_ref().map_or(*body2.rot, |rot| rot.0),
-                );
+                let iso1 = make_isometry(prev_pos1, prev_rot1);
+                let iso2 = make_isometry(prev_pos2, prev_rot2);
 
                 // TODO: Support child colliders
                 let motion1 = NonlinearRigidMotion::new(
                     iso1,
                     com1.0.into(),
-                    lin_vel1.0.into(),
-                    ang_vel1.0.into(),
+                    lin_vel1.into(),
+                    ang_vel1.into(),
                 );
                 let motion2 = NonlinearRigidMotion::new(
                     iso2,
@@ -630,51 +630,49 @@ fn solve_swept_ccd(
                     narrow_phase_config.default_speculative_margin,
                 ) {
                     min_toi = toi;
-                    min_toi_entity = Some(collider_parent.get());
+                    min_toi_entity = Some(entity2);
                 }
             }
         }
 
         // Advance the bodies from the previous poses to the first time of impact.
-        if let Some(Ok(mut body2)) =
+        if let Some(Ok(body2)) =
             min_toi_entity.map(|entity| unsafe { bodies.get_unchecked(entity) })
         {
-            let collider_lin_vel = body2.lin_vel.copied().unwrap_or_default().0;
-            let collider_ang_vel = body2.ang_vel.copied().unwrap_or_default().0;
+            // Get the solver body for the entity that was hit.
+            let solver_body2 = body2
+                .solver_body
+                .map_or(&mut dummy_body, |body| body.into_inner());
+
+            let lin_vel2 = solver_body2.linear_velocity;
+            let ang_vel2 = solver_body2.angular_velocity;
 
             // Overshoot slightly to make sure the bodies advance and don't get stuck.
             let min_toi = min_toi * 1.0001;
 
-            translation1.0 = min_toi * lin_vel1.0;
+            solver_body1.delta_position = min_toi * lin_vel1;
 
             // TODO: Abstract the integration logic to reuse it here
             #[cfg(feature = "2d")]
             {
-                *rot1 = prev_rot.0 * Rotation::radians(ang_vel1.0 * min_toi);
+                solver_body1.delta_rotation = Rotation::radians(ang_vel1 * min_toi);
             }
             #[cfg(feature = "3d")]
             {
-                let delta_rot = Quaternion::from_scaled_axis(ang_vel1.0 * min_toi);
-                rot1.0 = delta_rot * prev_rot.0 .0;
-                *rot1 = rot1.fast_renormalize();
+                let delta_rot = Quaternion::from_scaled_axis(ang_vel1 * min_toi);
+                solver_body1.delta_rotation.0 = delta_rot * solver_body1.delta_rotation.0;
             }
 
-            if let Some(mut collider_translation) = body2.translation {
-                collider_translation.0 = min_toi * collider_lin_vel;
-            }
-            if let Some(ref collider_prev_rot) = body2.prev_rot {
-                #[cfg(feature = "2d")]
-                {
-                    *body2.rot =
-                        collider_prev_rot.0 * Rotation::radians(collider_ang_vel * min_toi);
-                }
-                #[cfg(feature = "3d")]
-                {
-                    let delta_rot = Quaternion::from_scaled_axis(collider_ang_vel * min_toi);
+            solver_body2.delta_position = min_toi * lin_vel2;
 
-                    body2.rot.0 = delta_rot * collider_prev_rot.0 .0;
-                    *body2.rot = body2.rot.fast_renormalize();
-                }
+            #[cfg(feature = "2d")]
+            {
+                solver_body2.delta_rotation = Rotation::radians(ang_vel2 * min_toi);
+            }
+            #[cfg(feature = "3d")]
+            {
+                let delta_rot = Quaternion::from_scaled_axis(ang_vel2 * min_toi);
+                solver_body2.delta_rotation.0 = delta_rot * solver_body2.delta_rotation.0;
             }
         }
     }

@@ -27,7 +27,7 @@
 //! This can be useful when full control over mass properties is desired.
 //!
 //! [rigid bodies]: crate::dynamics::rigid_body::RigidBody
-//! [colliders]: crate::dynamics::collider::Collider
+//! [colliders]: crate::collision::collider::Collider
 //! [mass]: components::Mass
 //! [angular inertia]: components::AngularInertia
 //! [center of mass]: components::CenterOfMass
@@ -360,7 +360,7 @@ pub type MassPropertyChanged = Or<(
 /// Queues mass property recomputation for rigid bodies when their [`Mass`], [`AngularInertia`],
 /// or [`CenterOfMass`] components are changed.
 ///
-/// Entities with a [`ColliderParent`] are excluded, as they are handled by
+/// Colliders attached to rigid bodies are excluded, as they are handled by
 /// [`queue_mass_recomputation_on_collider_mass_change`].
 fn queue_mass_recomputation_on_mass_change(
     mut commands: Commands,
@@ -368,7 +368,7 @@ fn queue_mass_recomputation_on_mass_change(
         Entity,
         (
             WithComputedMassProperty,
-            Without<ColliderParent>,
+            Without<ColliderOf>,
             MassPropertyChanged,
         ),
     >,
@@ -383,7 +383,7 @@ fn queue_mass_recomputation_on_mass_change(
 fn queue_mass_recomputation_on_collider_mass_change(
     mut commands: Commands,
     mut query: Query<
-        &ColliderParent,
+        &ColliderOf,
         Or<(
             Changed<ColliderMassProperties>,
             Changed<ColliderTransform>,
@@ -391,8 +391,8 @@ fn queue_mass_recomputation_on_collider_mass_change(
         )>,
     >,
 ) {
-    for collider_parent in &mut query {
-        if let Some(mut entity_commands) = commands.get_entity(collider_parent.get()) {
+    for &ColliderOf { body } in &mut query {
+        if let Ok(mut entity_commands) = commands.get_entity(body) {
             entity_commands.insert(RecomputeMassProperties);
         }
     }
@@ -468,12 +468,7 @@ mod tests {
 
     fn create_app() -> App {
         let mut app = App::new();
-        app.add_plugins((
-            MinimalPlugins,
-            PhysicsPlugins::default(),
-            TransformPlugin,
-            HierarchyPlugin,
-        ));
+        app.add_plugins((MinimalPlugins, PhysicsPlugins::default(), TransformPlugin));
         app
     }
 
@@ -737,9 +732,10 @@ mod tests {
         let child_collider = Collider::circle(2.0);
         let child_collider_mass_props = child_collider.mass_properties(1.0);
 
-        app.world_mut()
-            .entity_mut(body_entity)
-            .with_child((child_collider, ColliderDensity(1.0)));
+        let child_entity = app
+            .world_mut()
+            .spawn((ChildOf(body_entity), child_collider, ColliderDensity(1.0)))
+            .id();
 
         app.world_mut().run_schedule(FixedPostUpdate);
 
@@ -757,9 +753,7 @@ mod tests {
         assert_eq!(*center_of_mass, ComputedCenterOfMass::default());
 
         // Remove the child collider
-        app.world_mut()
-            .entity_mut(body_entity)
-            .despawn_descendants();
+        app.world_mut().entity_mut(child_entity).despawn();
 
         app.world_mut().run_schedule(FixedPostUpdate);
 
@@ -843,8 +837,12 @@ mod tests {
 
         let child_entity = app
             .world_mut()
-            .spawn((Collider::circle(1.0), Mass(5.0), Transform::default()))
-            .set_parent(body_entity)
+            .spawn((
+                ChildOf(body_entity),
+                Collider::circle(1.0),
+                Mass(5.0),
+                Transform::default(),
+            ))
             .id();
 
         app.world_mut().run_schedule(FixedPostUpdate);
