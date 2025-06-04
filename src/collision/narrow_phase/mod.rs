@@ -108,7 +108,12 @@ where
         #[cfg(feature = "parallel")]
         app.init_resource::<NarrowPhaseThreadLocals>();
 
-        app.register_type::<(NarrowPhaseConfig, DefaultFriction, DefaultRestitution)>();
+        app.register_type::<(
+            NarrowPhaseConfig,
+            DefaultFriction,
+            DefaultRestitution,
+            CollisionEventsEnabled,
+        )>();
 
         app.add_event::<CollisionStarted>()
             .add_event::<CollisionEnded>();
@@ -275,7 +280,7 @@ fn update_narrow_phase<C: AnyCollider, H: CollisionHooks + 'static>(
 
 #[derive(SystemParam)]
 struct TriggerCollisionEventsContext<'w, 's> {
-    query: Query<'w, 's, Option<&'static ColliderOf>, With<CollisionEventsEnabled>>,
+    query: Query<'w, 's, (Option<&'static ColliderOf>, Has<CollisionEventsEnabled>)>,
     started: EventReader<'w, 's, CollisionStarted>,
     ended: EventReader<'w, 's, CollisionEnded>,
 }
@@ -295,26 +300,36 @@ fn trigger_collision_events(
     // Collect `OnCollisionStart` and `OnCollisionEnd` events
     // for entities that have events enabled.
     for event in state.started.read() {
-        if let Ok(collider_of) = state.query.get(event.0) {
+        let Ok([(collider_of1, events_enabled1), (collider_of2, events_enabled2)]) =
+            state.query.get_many([event.0, event.1])
+        else {
+            continue;
+        };
+        if events_enabled1 {
             let collider = event.1;
-            let body = collider_of.map(|c| c.body);
+            let body = collider_of2.map(|c| c.body);
             started_pairs.push((event.0, OnCollisionStart { collider, body }));
         }
-        if let Ok(collider_of) = state.query.get(event.1) {
+        if events_enabled2 {
             let collider = event.0;
-            let body = collider_of.map(|c| c.body);
+            let body = collider_of1.map(|c| c.body);
             started_pairs.push((event.1, OnCollisionStart { collider, body }));
         }
     }
     for event in state.ended.read() {
-        if let Ok(collider_of) = state.query.get(event.0) {
+        let Ok([(collider_of1, events_enabled1), (collider_of2, events_enabled2)]) =
+            state.query.get_many([event.0, event.1])
+        else {
+            continue;
+        };
+        if events_enabled1 {
             let collider = event.1;
-            let body = collider_of.map(|c| c.body);
+            let body = collider_of2.map(|c| c.body);
             ended_pairs.push((event.0, OnCollisionEnd { collider, body }));
         }
-        if let Ok(collider_of) = state.query.get(event.1) {
+        if events_enabled2 {
             let collider = event.0;
-            let body = collider_of.map(|c| c.body);
+            let body = collider_of1.map(|c| c.body);
             ended_pairs.push((event.1, OnCollisionEnd { collider, body }));
         }
     }

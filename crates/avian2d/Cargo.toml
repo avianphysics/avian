@@ -97,7 +97,6 @@ obvhs = { git = "https://github.com/DGriffin91/obvhs", branch = "insertion_remov
 
 [dev-dependencies]
 examples_common_2d = { path = "../examples_common_2d" }
-benches_common_2d = { path = "../benches_common_2d" }
 bevy_math = { version = "0.16", features = ["approx"] }
 bevy_heavy = { version = "0.2", features = ["approx"] }
 glam = { version = "0.29", features = ["bytemuck"] }
