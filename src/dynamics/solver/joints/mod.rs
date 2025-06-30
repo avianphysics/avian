@@ -165,7 +165,7 @@ impl DistanceLimit {
         // Equation 25
         if distance < self.min {
             // Separation distance lower limit
-            (-separation / distance, (distance - self.min))
+            (separation / distance, (self.min - distance))
         } else if distance > self.max {
             // Separation distance upper limit
             (-separation / distance, (distance - self.max))

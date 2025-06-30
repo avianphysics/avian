@@ -3,7 +3,11 @@
 #![allow(clippy::unnecessary_cast)]
 
 use crate::prelude::*;
-use bevy::{math::DQuat, prelude::*};
+use bevy::{
+    ecs::{component::HookContext, world::DeferredWorld},
+    math::DQuat,
+    prelude::*,
+};
 use derive_more::From;
 
 #[cfg(feature = "2d")]
@@ -44,6 +48,11 @@ use crate::math::Matrix;
 pub struct Position(pub Vector);
 
 impl Position {
+    /// A placeholder position. This is an invalid position and should *not*
+    /// be used to an actually position entities in the world, but can be used
+    /// to indicate that a position has not yet been initialized.
+    pub const PLACEHOLDER: Self = Self(Vector::MAX);
+
     /// Creates a [`Position`] component with the given global `position`.
     pub fn new(position: Vector) -> Self {
         Self(position)
@@ -181,6 +190,14 @@ impl Default for Rotation {
 
 #[cfg(feature = "2d")]
 impl Rotation {
+    /// A placeholder rotation. This is an invalid rotation and should *not*
+    /// be used to an actually rotate entities in the world, but can be used
+    /// to indicate that a rotation has not yet been initialized.
+    pub const PLACEHOLDER: Self = Self {
+        cos: Scalar::MAX,
+        sin: Scalar::MAX,
+    };
+
     /// No rotation.
     pub const IDENTITY: Self = Self { cos: 1.0, sin: 0.0 };
 
@@ -717,6 +734,16 @@ pub struct Rotation(pub Quaternion);
 
 #[cfg(feature = "3d")]
 impl Rotation {
+    /// A placeholder rotation. This is an invalid rotation and should *not*
+    /// be used to an actually rotate entities in the world, but can be used
+    /// to indicate that a rotation has not yet been initialized.
+    pub const PLACEHOLDER: Self = Self(Quaternion::from_xyzw(
+        Scalar::MAX,
+        Scalar::MAX,
+        Scalar::MAX,
+        Scalar::MAX,
+    ));
+
     /// No rotation.
     pub const IDENTITY: Self = Self(Quaternion::IDENTITY);
 
@@ -1011,5 +1038,163 @@ impl From<DQuat> for Rotation {
             quat.z as Scalar,
             quat.w as Scalar,
         ))
+    }
+}
+
+pub(crate) fn init_physics_transform(world: &mut DeferredWorld, ctx: &HookContext) {
+    let entity_ref = world.entity(ctx.entity);
+
+    // Get the global `Position` and `Rotation`.
+    let (mut position, is_pos_placeholder) = entity_ref
+        .get::<Position>()
+        .map_or((default(), true), |p| (*p, *p == Position::PLACEHOLDER));
+    let (mut rotation, is_rot_placeholder) = entity_ref
+        .get::<Rotation>()
+        .map_or((default(), true), |r| (*r, *r == Rotation::PLACEHOLDER));
+
+    if is_pos_placeholder {
+        position.0 = Vector::ZERO;
+    }
+    if is_rot_placeholder {
+        rotation = Rotation::IDENTITY;
+    }
+
+    // If either `Position` or `Rotation` was set manually, we want to set `Transform` to match later.
+    let is_not_placeholder = !is_pos_placeholder || !is_rot_placeholder;
+
+    let prepare_config = world
+        .get_resource::<PrepareConfig>()
+        .cloned()
+        .unwrap_or_default();
+
+    let mut parent_global_transform = GlobalTransform::default();
+
+    // Compute the global transform by traversing up the hierarchy.
+    let mut curr_parent = world.get::<ChildOf>(ctx.entity);
+    while let Some(parent) = curr_parent {
+        if let Some(parent_transform) = world.get::<Transform>(parent.0) {
+            parent_global_transform = *parent_transform * parent_global_transform;
+        }
+        curr_parent = world.get::<ChildOf>(parent.0);
+    }
+
+    // If either `Position` or `Rotation` was not a placeholder,
+    // we need to update the `Transform` to match the current values.
+    if is_not_placeholder && prepare_config.position_to_transform {
+        // Get the parent's global transform if it exists.
+        if parent_global_transform != GlobalTransform::default() {
+            #[cfg(feature = "2d")]
+            let Some(transform) = world.get::<Transform>(ctx.entity).copied() else {
+                return;
+            };
+
+            // The new local transform of the child body, computed from the its global transform
+            // and its parents global transform.
+            #[cfg(feature = "2d")]
+            let new_transform =
+                {
+                    let (parent_translation, parent_scale) = (
+                        parent_global_transform.translation(),
+                        parent_global_transform.scale(),
+                    );
+                    GlobalTransform::from(
+                        Transform::from_translation(position.f32().extend(
+                            parent_translation.z + transform.translation.z * parent_scale.z,
+                        ))
+                        .with_rotation(Quaternion::from(rotation).f32()),
+                    )
+                    .reparented_to(&parent_global_transform)
+                };
+            #[cfg(feature = "3d")]
+            let new_transform = GlobalTransform::from(
+                Transform::from_translation(position.f32()).with_rotation(rotation.f32()),
+            )
+            .reparented_to(&parent_global_transform);
+
+            // Update the `Transform` of the entity with the new local transform.
+            if let Some(mut transform) = world.get_mut::<Transform>(ctx.entity) {
+                *transform = new_transform;
+            }
+        } else if let Some(mut transform) = world.get_mut::<Transform>(ctx.entity) {
+            // If the entity has no parent, we can set the transform directly.
+            #[cfg(feature = "2d")]
+            {
+                if !is_pos_placeholder {
+                    transform.translation = position.f32().extend(transform.translation.z);
+                }
+                if !is_rot_placeholder {
+                    transform.rotation = Quaternion::from(rotation).f32();
+                }
+            }
+            #[cfg(feature = "3d")]
+            {
+                if !is_pos_placeholder {
+                    transform.translation = position.f32();
+                }
+                if !is_rot_placeholder {
+                    transform.rotation = rotation.f32();
+                }
+            }
+        }
+    }
+
+    if !prepare_config.transform_to_position {
+        if is_pos_placeholder {
+            if let Some(mut position) = world.get_mut::<Position>(ctx.entity) {
+                position.0 = Vector::ZERO;
+            }
+        }
+        if is_rot_placeholder {
+            if let Some(mut rotation) = world.get_mut::<Rotation>(ctx.entity) {
+                *rotation = Rotation::IDENTITY;
+            }
+        }
+    } else if is_pos_placeholder || is_rot_placeholder {
+        // If either `Position` or `Rotation` is a placeholder, we need to compute the global transform
+        // from the hierarchy and set the `Position` and/or `Rotation` to the computed values.
+
+        if let Some(transform) = world.get::<Transform>(ctx.entity) {
+            let global_transform = parent_global_transform * GlobalTransform::from(*transform);
+
+            // Set the computed `position` and `rotation` based on the global transform.
+            let (_, global_rotation, global_translation) =
+                global_transform.to_scale_rotation_translation();
+            #[cfg(feature = "2d")]
+            {
+                position.0 = global_translation.truncate().adjust_precision();
+                rotation = Rotation::from(global_rotation.adjust_precision());
+            }
+            #[cfg(feature = "3d")]
+            {
+                position.0 = global_translation.adjust_precision();
+                rotation.0 = global_rotation.adjust_precision();
+            }
+        } else {
+            // No transform was set. Set the computed `position` and `rotation` to default values.
+            if is_pos_placeholder {
+                position.0 = Vector::ZERO;
+            }
+            if is_rot_placeholder {
+                rotation = Rotation::IDENTITY;
+            }
+        }
+
+        // Now we update the actual component values based on the computed global transform.
+        let mut entity_mut = world.entity_mut(ctx.entity);
+
+        // Set the position unless it was already set.
+        if let Some(mut pos) = entity_mut
+            .get_mut::<Position>()
+            .filter(|pos| **pos == Position::PLACEHOLDER)
+        {
+            *pos = position;
+        }
+        // Set the rotation to the global transform unless it was already set.
+        if let Some(mut rot) = entity_mut
+            .get_mut::<Rotation>()
+            .filter(|rot| **rot == Rotation::PLACEHOLDER)
+        {
+            *rot = rotation;
+        }
     }
 }

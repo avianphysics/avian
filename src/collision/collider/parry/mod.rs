@@ -17,7 +17,10 @@ use bevy::render::mesh::{Indices, VertexAttributeValues};
 use bevy::{log, prelude::*};
 use contact_query::UnsupportedShape;
 use itertools::Either;
-use parry::shape::{RoundShape, SharedShape, TypedShape};
+use parry::{
+    math::Point,
+    shape::{RoundShape, SharedShape, TypedShape, Voxels},
+};
 
 impl<T: IntoCollider<Collider>> From<T> for Collider {
     fn from(value: T) -> Self {
@@ -215,6 +218,9 @@ impl From<TrimeshFlags> for parry::shape::TriMeshFlags {
         Self::from_bits(value.bits().into()).unwrap()
     }
 }
+
+/// An error indicating an inconsistency when building a triangle mesh collider.
+pub type TrimeshBuilderError = parry::shape::TriMeshBuilderError;
 
 /// A collider used for detecting collisions and generating contacts.
 ///
@@ -533,6 +539,11 @@ impl Collider {
     /// Returns the raw unscaled shape of the collider.
     pub fn shape(&self) -> &SharedShape {
         &self.shape
+    }
+
+    /// Returns a mutable reference to the raw unscaled shape of the collider.
+    pub fn shape_mut(&mut self) -> &mut SharedShape {
+        &mut self.shape
     }
 
     /// Returns the shape of the collider with the scale from its `GlobalTransform` applied.
@@ -860,29 +871,84 @@ impl Collider {
 
     /// Creates a collider with a triangle mesh shape defined by its vertex and index buffers.
     ///
-    /// Note that the resulting collider will be hollow and have no interior. This makes it more prone to tunneling and other collision issues.
+    /// Note that the resulting collider will be hollow and have no interior.
+    /// This makes it more prone to tunneling and other collision issues.
     ///
     /// The [`CollisionMargin`] component can be used to add thickness to the shape if needed.
     /// For thin shapes like triangle meshes, it can help improve collision stability and performance.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the given vertex and index buffers do not contain any triangles,
+    /// there are duplicate vertices, or if at least two adjacent triangles have opposite orientations.
     pub fn trimesh(vertices: Vec<Vector>, indices: Vec<[u32; 3]>) -> Self {
+        Self::try_trimesh(vertices, indices)
+            .unwrap_or_else(|error| panic!("Trimesh creation failed: {error:?}"))
+    }
+
+    /// Tries to create a collider with a triangle mesh shape defined by its vertex and index buffers.
+    ///
+    /// Note that the resulting collider will be hollow and have no interior.
+    /// This makes it more prone to tunneling and other collision issues.
+    ///
+    /// The [`CollisionMargin`] component can be used to add thickness to the shape if needed.
+    /// For thin shapes like triangle meshes, it can help improve collision stability and performance.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`TrimeshBuilderError`] if the given vertex and index buffers do not contain any triangles,
+    /// there are duplicate vertices, or if at least two adjacent triangles have opposite orientations.
+    pub fn try_trimesh(
+        vertices: Vec<Vector>,
+        indices: Vec<[u32; 3]>,
+    ) -> Result<Self, TrimeshBuilderError> {
         let vertices = vertices.into_iter().map(|v| v.into()).collect();
-        SharedShape::trimesh(vertices, indices).into()
+        SharedShape::trimesh(vertices, indices).map(|trimesh| trimesh.into())
     }
 
     /// Creates a collider with a triangle mesh shape defined by its vertex and index buffers
     /// and flags controlling the preprocessing.
     ///
-    /// Note that the resulting collider will be hollow and have no interior. This makes it more prone to tunneling and other collision issues.
+    /// Note that the resulting collider will be hollow and have no interior.
+    /// This makes it more prone to tunneling and other collision issues.
     ///
     /// The [`CollisionMargin`] component can be used to add thickness to the shape if needed.
     /// For thin shapes like triangle meshes, it can help improve collision stability and performance.
+    ///
+    /// # Panics
+    ///
+    /// Panics if after preprocessing the given vertex and index buffers do not contain any triangles,
+    /// there are duplicate vertices, or if at least two adjacent triangles have opposite orientations.
     pub fn trimesh_with_config(
         vertices: Vec<Vector>,
         indices: Vec<[u32; 3]>,
         flags: TrimeshFlags,
     ) -> Self {
+        Self::try_trimesh_with_config(vertices, indices, flags)
+            .unwrap_or_else(|error| panic!("Trimesh creation failed: {error:?}"))
+    }
+
+    /// Tries to create a collider with a triangle mesh shape defined by its vertex and index buffers
+    /// and flags controlling the preprocessing.
+    ///
+    /// Note that the resulting collider will be hollow and have no interior.
+    /// This makes it more prone to tunneling and other collision issues.
+    ///
+    /// The [`CollisionMargin`] component can be used to add thickness to the shape if needed.
+    /// For thin shapes like triangle meshes, it can help improve collision stability and performance.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`TrimeshBuilderError`] if after preprocessing the given vertex and index buffers do not contain any triangles,
+    /// there are duplicate vertices, or if at least two adjacent triangles have opposite orientations.
+    pub fn try_trimesh_with_config(
+        vertices: Vec<Vector>,
+        indices: Vec<[u32; 3]>,
+        flags: TrimeshFlags,
+    ) -> Result<Self, TrimeshBuilderError> {
         let vertices = vertices.into_iter().map(|v| v.into()).collect();
-        SharedShape::trimesh_with_flags(vertices, indices, flags.into()).into()
+        SharedShape::trimesh_with_flags(vertices, indices, flags.into())
+            .map(|trimesh| trimesh.into())
     }
 
     /// Creates a collider shape with a compound shape obtained from the decomposition of a given polyline
@@ -954,6 +1020,132 @@ impl Collider {
         SharedShape::convex_polyline(points).map(Into::into)
     }
 
+    /// Creates a collider shape made of voxels.
+    ///
+    /// Each voxel has the size `voxel_size` and grid coordinate given by `grid_coordinates`.
+    pub fn voxels(voxel_size: Vector, grid_coordinates: &[IVector]) -> Self {
+        let shape = Voxels::new(
+            voxel_size.into(),
+            &Self::ivec_array_from_point_int_array(grid_coordinates),
+        );
+        SharedShape::new(shape).into()
+    }
+
+    /// Creates a collider shape made of voxels.
+    ///
+    /// Each voxel has the size `voxel_size` and contains at least one point from `points`.
+    pub fn voxels_from_points(voxel_size: Vector, points: &[Vector]) -> Self {
+        SharedShape::voxels_from_points(
+            voxel_size.into(),
+            &Self::vec_array_from_point_float_array(points),
+        )
+        .into()
+    }
+
+    /// Creates a voxel collider obtained from the decomposition of the given polyline into voxelized convex parts.
+    #[cfg(feature = "2d")]
+    pub fn voxelized_polyline(
+        vertices: &[Vector],
+        indices: &[[u32; 2]],
+        voxel_size: Scalar,
+        fill_mode: FillMode,
+    ) -> Self {
+        let vertices = Self::vec_array_from_point_float_array(vertices);
+        SharedShape::voxelized_mesh(&vertices, indices, voxel_size, fill_mode.into()).into()
+    }
+
+    /// Creates a voxel collider obtained from the decomposition of the given trimesh into voxelized convex parts.
+    #[cfg(feature = "3d")]
+    pub fn voxelized_trimesh(
+        vertices: &[Vector],
+        indices: &[[u32; 3]],
+        voxel_size: Scalar,
+        fill_mode: FillMode,
+    ) -> Self {
+        let vertices = Self::vec_array_from_point_float_array(vertices);
+        SharedShape::voxelized_mesh(&vertices, indices, voxel_size, fill_mode.into()).into()
+    }
+
+    /// Creates a voxel collider obtained from the decomposition of the given `Mesh` into voxelized convex parts.
+    ///
+    /// This method is only available if the `collider-from-mesh` feature is enabled.
+    #[cfg(feature = "collider-from-mesh")]
+    pub fn voxelized_trimesh_from_mesh(
+        mesh: &Mesh,
+        voxel_size: Scalar,
+        fill_mode: FillMode,
+    ) -> Option<Self> {
+        extract_mesh_vertices_indices(mesh).map(|(vertices, indices)| {
+            SharedShape::voxelized_mesh(&vertices, &indices, voxel_size, fill_mode.into()).into()
+        })
+    }
+
+    #[cfg_attr(
+        feature = "2d",
+        doc = "Creates a collider with a compound shape obtained from the decomposition of the given polyline into voxelized convex parts."
+    )]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "Creates a collider with a compound shape obtained from the decomposition of the given trimesh into voxelized convex parts."
+    )]
+    pub fn voxelized_convex_decomposition(
+        vertices: &[Vector],
+        indices: &[[u32; DIM]],
+    ) -> Vec<Self> {
+        Self::voxelized_convex_decomposition_with_config(
+            vertices,
+            indices,
+            &VhacdParameters::default(),
+        )
+    }
+
+    #[cfg_attr(
+        feature = "2d",
+        doc = "Creates a collider with a compound shape obtained from the decomposition of the given polyline into voxelized convex parts."
+    )]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "Creates a collider with a compound shape obtained from the decomposition of the given trimesh into voxelized convex parts."
+    )]
+    pub fn voxelized_convex_decomposition_with_config(
+        vertices: &[Vector],
+        indices: &[[u32; DIM]],
+        parameters: &VhacdParameters,
+    ) -> Vec<Self> {
+        SharedShape::voxelized_convex_decomposition_with_params(
+            &Self::vec_array_from_point_float_array(vertices),
+            indices,
+            &parameters.clone().into(),
+        )
+        .into_iter()
+        .map(|c| c.into())
+        .collect()
+    }
+
+    fn ivec_array_from_point_int_array(points: &[IVector]) -> Vec<Point<i32>> {
+        points
+            .iter()
+            .map(|p| {
+                #[cfg(feature = "2d")]
+                return Point::new(p.x, p.y);
+                #[cfg(feature = "3d")]
+                return Point::new(p.x, p.y, p.z);
+            })
+            .collect::<Vec<_>>()
+    }
+
+    fn vec_array_from_point_float_array(points: &[Vector]) -> Vec<Point<Scalar>> {
+        points
+            .iter()
+            .map(|p| {
+                #[cfg(feature = "2d")]
+                return Point::new(p.x, p.y);
+                #[cfg(feature = "3d")]
+                return Point::new(p.x, p.y, p.z);
+            })
+            .collect::<Vec<_>>()
+    }
+
     /// Creates a collider with a heightfield shape.
     ///
     /// A 2D heightfield is a segment along the `X` axis, subdivided at regular intervals.
@@ -992,7 +1184,8 @@ impl Collider {
 
     /// Creates a collider with a triangle mesh shape from a `Mesh`.
     ///
-    /// Note that the resulting collider will be hollow and have no interior. This makes it more prone to tunneling and other collision issues.
+    /// Note that the resulting collider will be hollow and have no interior.
+    /// This makes it more prone to tunneling and other collision issues.
     ///
     /// The [`CollisionMargin`] component can be used to add thickness to the shape if needed.
     /// For thin shapes like triangle meshes, it can help improve collision stability and performance.
@@ -1013,20 +1206,22 @@ impl Collider {
     /// ```
     #[cfg(feature = "collider-from-mesh")]
     pub fn trimesh_from_mesh(mesh: &Mesh) -> Option<Self> {
-        extract_mesh_vertices_indices(mesh).map(|(vertices, indices)| {
+        extract_mesh_vertices_indices(mesh).and_then(|(vertices, indices)| {
             SharedShape::trimesh_with_flags(
                 vertices,
                 indices,
                 TrimeshFlags::MERGE_DUPLICATE_VERTICES.into(),
             )
-            .into()
+            .map(|trimesh| trimesh.into())
+            .ok()
         })
     }
 
     /// Creates a collider with a triangle mesh shape from a `Mesh` using the given [`TrimeshFlags`]
     /// for controlling the preprocessing.
     ///
-    /// Note that the resulting collider will be hollow and have no interior. This makes it more prone to tunneling and other collision issues.
+    /// Note that the resulting collider will be hollow and have no interior.
+    /// This makes it more prone to tunneling and other collision issues.
     ///
     /// The [`CollisionMargin`] component can be used to add thickness to the shape if needed.
     /// For thin shapes like triangle meshes, it can help improve collision stability and performance.
@@ -1047,8 +1242,10 @@ impl Collider {
     /// ```
     #[cfg(feature = "collider-from-mesh")]
     pub fn trimesh_from_mesh_with_config(mesh: &Mesh, flags: TrimeshFlags) -> Option<Self> {
-        extract_mesh_vertices_indices(mesh).map(|(vertices, indices)| {
-            SharedShape::trimesh_with_flags(vertices, indices, flags.into()).into()
+        extract_mesh_vertices_indices(mesh).and_then(|(vertices, indices)| {
+            SharedShape::trimesh_with_flags(vertices, indices, flags.into())
+                .map(|trimesh| trimesh.into())
+                .ok()
         })
     }
 
@@ -1250,6 +1447,28 @@ impl Collider {
             ColliderConstructor::ConvexHull { points } => Self::convex_hull(points),
             #[cfg(feature = "2d")]
             ColliderConstructor::ConvexPolyline { points } => Self::convex_polyline(points),
+            ColliderConstructor::Voxels {
+                voxel_size,
+                grid_coordinates,
+            } => Some(Self::voxels(voxel_size, &grid_coordinates)),
+            #[cfg(feature = "2d")]
+            ColliderConstructor::VoxelizedPolyline {
+                vertices,
+                indices,
+                voxel_size,
+                fill_mode,
+            } => Some(Self::voxelized_polyline(
+                &vertices, &indices, voxel_size, fill_mode,
+            )),
+            #[cfg(feature = "3d")]
+            ColliderConstructor::VoxelizedTrimesh {
+                vertices,
+                indices,
+                voxel_size,
+                fill_mode,
+            } => Some(Self::voxelized_trimesh(
+                &vertices, &indices, voxel_size, fill_mode,
+            )),
             #[cfg(feature = "2d")]
             ColliderConstructor::Heightfield { heights, scale } => {
                 Some(Self::heightfield(heights, scale))
@@ -1274,6 +1493,27 @@ impl Collider {
             }
             #[cfg(feature = "collider-from-mesh")]
             ColliderConstructor::ConvexHullFromMesh => Self::convex_hull_from_mesh(mesh?),
+            #[cfg(feature = "collider-from-mesh")]
+            ColliderConstructor::VoxelizedTrimeshFromMesh {
+                voxel_size,
+                fill_mode,
+            } => Self::voxelized_trimesh_from_mesh(mesh?, voxel_size, fill_mode),
+            ColliderConstructor::Compound(compound_constructors) => {
+                let shapes: Vec<_> =
+                    ColliderConstructor::flatten_compound_constructors(compound_constructors)
+                        .into_iter()
+                        .filter_map(|(position, rotation, collider_constructor)| {
+                            Self::try_from_constructor(
+                                collider_constructor,
+                                #[cfg(feature = "collider-from-mesh")]
+                                mesh,
+                            )
+                            .map(|collider| (position, rotation, collider))
+                        })
+                        .collect();
+
+                (!shapes.is_empty()).then(|| Self::compound(shapes))
+            }
         }
     }
 }
@@ -1368,6 +1608,7 @@ fn scale_shape(
             }
             Some(scaled) => Ok(SharedShape::new(scaled)),
         },
+        TypedShape::Voxels(v) => Ok(SharedShape::new(v.clone().scaled(&scale.into()))),
         TypedShape::HeightField(h) => Ok(SharedShape::new(h.clone().scaled(&scale.into()))),
         #[cfg(feature = "2d")]
         TypedShape::ConvexPolygon(cp) => match cp.clone().scaled(&scale.into()) {
@@ -1518,5 +1759,102 @@ fn scale_shape(
             }
             Err(parry::query::Unsupported)
         }
+    }
+}
+
+#[cfg(all(test, feature = "3d"))]
+mod tests {
+    use super::*;
+    use approx::assert_relative_eq;
+
+    #[test]
+    fn test_flatten_compound_constructors() {
+        let input = vec![
+            (
+                Position(Vector::new(10.0, 0.0, 0.0)),
+                Rotation::default(),
+                ColliderConstructor::Sphere { radius: 1.0 },
+            ),
+            (
+                Position(Vector::new(5.0, 0.0, 0.0)),
+                Rotation::from(Quaternion::from_rotation_z(PI / 2.0)),
+                ColliderConstructor::Compound(vec![
+                    (
+                        Position(Vector::new(2.0, 0.0, 0.0)),
+                        Rotation::from(Quaternion::from_rotation_y(PI)),
+                        ColliderConstructor::Compound(vec![(
+                            Position(Vector::new(1.0, 0.0, 0.0)),
+                            Rotation::default(),
+                            ColliderConstructor::Sphere { radius: 0.5 },
+                        )]),
+                    ),
+                    (
+                        Position(Vector::new(0.0, 3.0, 0.0)),
+                        Rotation::default(),
+                        ColliderConstructor::Sphere { radius: 0.25 },
+                    ),
+                ]),
+            ),
+        ];
+
+        let flattened = ColliderConstructor::flatten_compound_constructors(input);
+        assert_eq!(flattened.len(), 3);
+
+        let unchanged_simple_sphere = &flattened[0];
+        let flattened_grandchild = &flattened[1];
+        let flattened_sibling = &flattened[2];
+
+        // Top level colliders should remain unchanged
+        assert_eq!(
+            unchanged_simple_sphere.0,
+            Position(Vector::new(10.0, 0.0, 0.0))
+        );
+        assert_eq!(unchanged_simple_sphere.1, Rotation::default());
+
+        // Grandchild local position: (1, 0, 0)
+        // 1. Apply parent's 180 Y rotation -> (-1, 0, 0)
+        // 2. Add parent's position (2, 0, 0) -> (1, 0, 0)
+        // 3. Apply grandparent's 90 Z rotation -> (0, 1, 0)
+        // 4. Add grandparent's position (5, 0, 0) -> (5, 1, 0)
+        let expected_grandchild_world_pos = Vector::new(5.0, 1.0, 0.0);
+        let actual_grandchild_world_pos = flattened_grandchild.0 .0;
+
+        assert_relative_eq!(
+            actual_grandchild_world_pos.x,
+            expected_grandchild_world_pos.x,
+            epsilon = 1e-6
+        );
+        assert_relative_eq!(
+            actual_grandchild_world_pos.y,
+            expected_grandchild_world_pos.y,
+            epsilon = 1e-6
+        );
+        assert_relative_eq!(
+            actual_grandchild_world_pos.z,
+            expected_grandchild_world_pos.z,
+            epsilon = 1e-6
+        );
+
+        // Sibling local position: (0, 3, 0)
+        // 1. Apply parent's 90 Z rotation -> (-3, 0, 0)
+        // 2. Add parent's position (5, 0, 0) -> (2, 0, 0)
+        let expected_sibling_world_pos = Vector::new(2.0, 0.0, 0.0);
+        let actual_sibling_world_pos = flattened_sibling.0 .0;
+
+        assert_relative_eq!(
+            actual_sibling_world_pos.x,
+            expected_sibling_world_pos.x,
+            epsilon = 1e-6
+        );
+        assert_relative_eq!(
+            actual_sibling_world_pos.y,
+            expected_sibling_world_pos.y,
+            epsilon = 1e-6
+        );
+        assert_relative_eq!(
+            actual_sibling_world_pos.z,
+            expected_sibling_world_pos.z,
+            epsilon = 1e-6
+        );
     }
 }

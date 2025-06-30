@@ -118,7 +118,7 @@ impl Shape for EllipseColliderShape {
         parry::shape::ShapeType::Custom
     }
 
-    fn as_typed_shape(&self) -> parry::shape::TypedShape {
+    fn as_typed_shape(&self) -> parry::shape::TypedShape<'_> {
         parry::shape::TypedShape::Custom(self)
     }
 
@@ -400,7 +400,7 @@ impl Shape for RegularPolygonColliderShape {
         parry::shape::ShapeType::Custom
     }
 
-    fn as_typed_shape(&self) -> parry::shape::TypedShape {
+    fn as_typed_shape(&self) -> parry::shape::TypedShape<'_> {
         parry::shape::TypedShape::Custom(self)
     }
 

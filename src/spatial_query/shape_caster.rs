@@ -558,7 +558,7 @@ impl ShapeHits {
     }
 
     /// Returns an iterator over the hits in the order of distance.
-    pub fn iter(&self) -> core::slice::Iter<ShapeHitData> {
+    pub fn iter(&self) -> core::slice::Iter<'_, ShapeHitData> {
         self.as_slice().iter()
     }
 }

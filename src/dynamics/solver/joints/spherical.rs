@@ -97,7 +97,8 @@ impl XpbdConstraint<2> for SphericalJoint {
             rot1_mat * (self.point_constraint.local_anchor1 - body1.center_of_mass.0);
         self.point_constraint.pre_step.world_r2 =
             rot2_mat * (self.point_constraint.local_anchor2 - body2.center_of_mass.0);
-        self.point_constraint.pre_step.center_difference = body2.position.0 - body1.position.0;
+        self.point_constraint.pre_step.center_difference = (body2.position.0 - body1.position.0)
+            + (body2.rotation * body2.center_of_mass.0 - body1.rotation * body1.center_of_mass.0);
 
         // Prepare the base swing and twist axes.
         self.pre_step.swing_axis1 = rot1_mat * self.swing_axis;

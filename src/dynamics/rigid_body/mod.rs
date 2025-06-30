@@ -19,8 +19,11 @@ pub use world_query::*;
 pub(crate) use forces::FloatZero;
 pub(crate) use forces::Torque;
 
-use crate::prelude::*;
-use bevy::prelude::*;
+use crate::{position::init_physics_transform, prelude::*};
+use bevy::{
+    ecs::{component::HookContext, world::DeferredWorld},
+    prelude::*,
+};
 use derive_more::From;
 
 /// A non-deformable body used for the simulation of most physics objects.
@@ -263,6 +266,8 @@ use derive_more::From;
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, Component, Default, PartialEq)]
 #[require(
+    Position::PLACEHOLDER,
+    Rotation::PLACEHOLDER,
     LinearVelocity,
     AngularVelocity,
     // TODO: Make these force components optional.
@@ -277,6 +282,7 @@ use derive_more::From;
     PreSolveDeltaPosition,
     PreSolveDeltaRotation,
 )]
+#[component(on_add = RigidBody::on_add)]
 #[cfg_attr(feature = "3d", require(GlobalAngularInertia))]
 pub enum RigidBody {
     /// Dynamic bodies are bodies that are affected by forces, velocity and collisions.
@@ -314,6 +320,11 @@ impl RigidBody {
     /// Checks if the rigid body is kinematic.
     pub fn is_kinematic(&self) -> bool {
         *self == Self::Kinematic
+    }
+
+    fn on_add(mut world: DeferredWorld, ctx: HookContext) {
+        // Initialize the global physics transform for the rigid body.
+        init_physics_transform(&mut world, &ctx);
     }
 }
 

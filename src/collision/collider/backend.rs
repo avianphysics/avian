@@ -6,7 +6,10 @@ use core::marker::PhantomData;
 
 #[cfg(feature = "collider-from-mesh")]
 use crate::collision::collider::cache::ColliderCache;
-use crate::{prelude::*, prepare::PrepareSet, sync::SyncConfig};
+use crate::{
+    collision::broad_phase::BroadPhaseSet, position::init_physics_transform, prelude::*,
+    prepare::PrepareSet, sync::SyncConfig,
+};
 #[cfg(all(feature = "bevy_scene", feature = "default-collider"))]
 use bevy::scene::SceneInstance;
 use bevy::{
@@ -88,11 +91,17 @@ impl<C: ScalableCollider> Default for ColliderBackendPlugin<C> {
 impl<C: ScalableCollider> Plugin for ColliderBackendPlugin<C> {
     fn build(&self, app: &mut App) {
         // Register required components for the collider type.
+        let _ = app.try_register_required_components_with::<C, Position>(|| Position::PLACEHOLDER);
+        let _ = app.try_register_required_components_with::<C, Rotation>(|| Rotation::PLACEHOLDER);
         let _ = app.try_register_required_components::<C, ColliderMarker>();
         let _ = app.try_register_required_components::<C, ColliderAabb>();
         let _ = app.try_register_required_components::<C, CollisionLayers>();
         let _ = app.try_register_required_components::<C, ColliderDensity>();
         let _ = app.try_register_required_components::<C, ColliderMassProperties>();
+
+        // Make sure the necessary resources are initialized.
+        app.init_resource::<NarrowPhaseConfig>();
+        app.init_resource::<PhysicsLengthUnit>();
 
         // Register the one-shot system that is run for all removed colliders.
         if !app.world().contains_resource::<ColliderRemovalSystem>() {
@@ -104,40 +113,14 @@ impl<C: ScalableCollider> Plugin for ColliderBackendPlugin<C> {
 
         // Initialize missing components for colliders.
         hooks.on_add(|mut world, ctx| {
-            let existing_global_transform = world
+            // Initialize the global physics transform for the collider.
+            init_physics_transform(&mut world, &ctx);
+
+            let scale = world
                 .entity(ctx.entity)
                 .get::<GlobalTransform>()
-                .copied()
+                .map(|gt| gt.scale())
                 .unwrap_or_default();
-            let global_transform = if existing_global_transform != GlobalTransform::IDENTITY {
-                // This collider was built deferred, probably via `ColliderConstructor`.
-                existing_global_transform
-            } else {
-                // This collider *may* have been `spawn`ed directly on a new entity.
-                // As such, its global transform is not yet available.
-                // You may notice that this will fail if the hierarchy's scale was updated in this
-                // frame. Remember that `GlobalTransform` is not updated in between fixed updates.
-                // But this is fine, as `update_collider_scale` will be updated in the next fixed update anyway.
-                // The reason why we care about initializing this scale here is for those users that opted out of
-                // `update_collider_scale` in order to do their own interpolation, which implies that they won't touch
-                // the `Transform` component before the collider is initialized, which in turn means that it will
-                // always be initialized with the correct `GlobalTransform`.
-                let parent_global_transform = world
-                    .entity(ctx.entity)
-                    .get::<ChildOf>()
-                    .and_then(|&ChildOf(parent)| {
-                        world.entity(parent).get::<GlobalTransform>().copied()
-                    })
-                    .unwrap_or_default();
-                let transform = world
-                    .entity(ctx.entity)
-                    .get::<Transform>()
-                    .copied()
-                    .unwrap_or_default();
-                parent_global_transform * transform
-            };
-
-            let scale = global_transform.compute_transform().scale;
             #[cfg(feature = "2d")]
             let scale = scale.xy();
 
@@ -241,16 +224,11 @@ impl<C: ScalableCollider> Plugin for ColliderBackendPlugin<C> {
         app.add_systems(
             self.schedule,
             (
-                init_transforms::<C>
-                    .in_set(PrepareSet::InitTransforms)
-                    .after(init_transforms::<RigidBody>),
-                (
-                    update_collider_scale::<C>.in_set(PrepareSet::Finalize),
-                    update_collider_mass_properties::<C>
-                        .in_set(MassPropertySystems::UpdateColliderMassProperties),
-                )
-                    .chain(),
-            ),
+                update_collider_scale::<C>.in_set(PrepareSet::Finalize),
+                update_collider_mass_properties::<C>
+                    .in_set(MassPropertySystems::UpdateColliderMassProperties),
+            )
+                .chain(),
         );
 
         #[cfg(feature = "default-collider")]

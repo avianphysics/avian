@@ -76,7 +76,7 @@
 //!
 //! Speculative collisions are an efficient and generally robust approach
 //! to Continuous Collision Detection. They are enabled for all bodies by default,
-//! provided that the default naximum speculative margin is greater than zero.
+//! provided that the default maximum speculative margin is greater than zero.
 //!
 //! However, speculative collisions aren't entirely without issues,
 //! and there are some cases where large speculative margins can cause undesired behavior.

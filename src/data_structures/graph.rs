@@ -436,7 +436,7 @@ impl<N, E> UnGraph<N, E> {
     /// Produces an empty iterator if the node doesn't exist.
     ///
     /// The iterator element type is `NodeIndex`.
-    pub fn neighbors(&self, a: NodeIndex) -> Neighbors<E> {
+    pub fn neighbors(&self, a: NodeIndex) -> Neighbors<'_, E> {
         Neighbors {
             skip_start: a,
             edges: &self.edges,
@@ -452,7 +452,7 @@ impl<N, E> UnGraph<N, E> {
     /// Produces an empty iterator if the node doesn't exist.
     ///
     /// The iterator element type is `EdgeReference<E>`.
-    pub fn edges(&self, a: NodeIndex) -> Edges<E> {
+    pub fn edges(&self, a: NodeIndex) -> Edges<'_, E> {
         Edges {
             skip_start: a,
             edges: &self.edges,
@@ -469,7 +469,7 @@ impl<N, E> UnGraph<N, E> {
     /// Produces an empty iterator if the node doesn't exist.
     ///
     /// The iterator element type is `EdgeReference<E>`.
-    pub fn edges_mut(&mut self, a: NodeIndex) -> EdgesMut<N, E> {
+    pub fn edges_mut(&mut self, a: NodeIndex) -> EdgesMut<'_, N, E> {
         let incoming_edge = self.first_edge(a, EdgeDirection::Incoming);
         let outgoing_edge = self.first_edge(a, EdgeDirection::Outgoing);
 
@@ -518,7 +518,7 @@ impl<N, E> UnGraph<N, E> {
     }
 
     /// Returns an iterator yielding immutable access to edge weights for edges from or to `a`.
-    pub fn edge_weights(&self, a: NodeIndex) -> EdgeWeights<E> {
+    pub fn edge_weights(&self, a: NodeIndex) -> EdgeWeights<'_, E> {
         EdgeWeights {
             skip_start: a,
             edges: &self.edges,
@@ -531,7 +531,7 @@ impl<N, E> UnGraph<N, E> {
     }
 
     /// Returns an iterator yielding mutable access to edge weights for edges from or to `a`.
-    pub fn edge_weights_mut(&mut self, a: NodeIndex) -> EdgeWeightsMut<N, E> {
+    pub fn edge_weights_mut(&mut self, a: NodeIndex) -> EdgeWeightsMut<'_, N, E> {
         let incoming_edge = self.first_edge(a, EdgeDirection::Incoming);
         let outgoing_edge = self.first_edge(a, EdgeDirection::Outgoing);
 
@@ -546,7 +546,7 @@ impl<N, E> UnGraph<N, E> {
     ///
     /// The order in which weights are yielded matches the order of their
     /// edge indices.
-    pub fn all_edge_weights(&self) -> AllEdgeWeights<E> {
+    pub fn all_edge_weights(&self) -> AllEdgeWeights<'_, E> {
         AllEdgeWeights {
             edges: self.edges.iter(),
         }
@@ -556,7 +556,7 @@ impl<N, E> UnGraph<N, E> {
     ///
     /// The order in which weights are yielded matches the order of their
     /// edge indices.
-    pub fn all_edge_weights_mut(&mut self) -> AllEdgeWeightsMut<E> {
+    pub fn all_edge_weights_mut(&mut self) -> AllEdgeWeightsMut<'_, E> {
         AllEdgeWeightsMut {
             edges: self.edges.iter_mut(),
         }

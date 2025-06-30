@@ -267,9 +267,9 @@ fn build_diagnostic_texts(cmd: &mut RelatedSpawnerCommands<ChildOf>) {
 
 /// An extension trait for building physics diagnostics UI.
 trait CommandsExt {
-    fn diagnostic_group(&mut self, name: &str) -> EntityCommands;
+    fn diagnostic_group(&mut self, name: &str) -> EntityCommands<'_>;
 
-    fn diagnostic_row(&mut self) -> EntityCommands;
+    fn diagnostic_row(&mut self) -> EntityCommands<'_>;
 
     fn counter_text(&mut self, text: &str, diagnostic_path: &'static DiagnosticPath);
 
@@ -292,7 +292,7 @@ trait CommandsExt {
 }
 
 impl CommandsExt for RelatedSpawnerCommands<'_, ChildOf> {
-    fn diagnostic_group(&mut self, name: &str) -> EntityCommands {
+    fn diagnostic_group(&mut self, name: &str) -> EntityCommands<'_> {
         self.spawn((
             DiagnosticGroup,
             Name::new(name.to_string()),
@@ -305,7 +305,7 @@ impl CommandsExt for RelatedSpawnerCommands<'_, ChildOf> {
         ))
     }
 
-    fn diagnostic_row(&mut self) -> EntityCommands {
+    fn diagnostic_row(&mut self) -> EntityCommands<'_> {
         self.spawn((
             DiagnosticRow,
             Node {

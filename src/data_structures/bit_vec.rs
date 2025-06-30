@@ -108,7 +108,7 @@ impl BitVec {
 
     /// Returns an iterator over the blocks of the [`BitVec`].
     #[inline]
-    pub fn blocks(&self) -> Blocks {
+    pub fn blocks(&self) -> Blocks<'_> {
         Blocks {
             iter: self.blocks.iter(),
         }

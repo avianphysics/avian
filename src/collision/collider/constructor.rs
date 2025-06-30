@@ -1,5 +1,8 @@
+use core::iter::once;
+
 use crate::prelude::*;
 use bevy::{platform::collections::HashMap, prelude::*};
+use itertools::Either;
 
 /// A component that will automatically generate [`Collider`]s on its descendants at runtime.
 /// The type of the generated collider can be specified using [`ColliderConstructor`].
@@ -280,6 +283,7 @@ pub struct ColliderConstructorHierarchyConfig {
 #[cfg_attr(feature = "collider-from-mesh", derive(Default))]
 #[cfg_attr(feature = "collider-from-mesh", reflect(Default))]
 #[reflect(Debug, Component, PartialEq)]
+#[reflect(no_field_bounds)]
 #[non_exhaustive]
 #[allow(missing_docs)]
 pub enum ColliderConstructor {
@@ -394,6 +398,27 @@ pub enum ColliderConstructor {
     /// Constructs a collider with [`Collider::convex_polyline`].
     #[cfg(feature = "2d")]
     ConvexPolyline { points: Vec<Vector> },
+    /// Constructs a collider with [`Collider::voxels`].
+    Voxels {
+        voxel_size: Vector,
+        grid_coordinates: Vec<IVector>,
+    },
+    /// Constructs a collider with [`Collider::voxelized_polyline`].
+    #[cfg(feature = "2d")]
+    VoxelizedPolyline {
+        vertices: Vec<Vector>,
+        indices: Vec<[u32; 2]>,
+        voxel_size: Scalar,
+        fill_mode: FillMode,
+    },
+    /// Constructs a collider with [`Collider::voxelized_trimesh`].
+    #[cfg(feature = "3d")]
+    VoxelizedTrimesh {
+        vertices: Vec<Vector>,
+        indices: Vec<[u32; 3]>,
+        voxel_size: Scalar,
+        fill_mode: FillMode,
+    },
     /// Constructs a collider with [`Collider::heightfield`].
     #[cfg(feature = "2d")]
     Heightfield { heights: Vec<Scalar>, scale: Vector },
@@ -427,6 +452,14 @@ pub enum ColliderConstructor {
     /// Constructs a collider with [`Collider::convex_hull_from_mesh`].
     #[cfg(feature = "collider-from-mesh")]
     ConvexHullFromMesh,
+    /// Constructs a collider with [`Collider::voxelized_trimesh_from_mesh`].
+    #[cfg(feature = "collider-from-mesh")]
+    VoxelizedTrimeshFromMesh {
+        voxel_size: Scalar,
+        fill_mode: FillMode,
+    },
+    /// Constructs a collider with [`Collider::compound`].
+    Compound(Vec<(Position, Rotation, ColliderConstructor)>),
 }
 
 impl ColliderConstructor {
@@ -440,7 +473,44 @@ impl ColliderConstructor {
                 | Self::ConvexDecompositionFromMesh
                 | Self::ConvexDecompositionFromMeshWithConfig(_)
                 | Self::ConvexHullFromMesh
+                | Self::VoxelizedTrimeshFromMesh { .. }
         )
+    }
+
+    /// Construct a [`ColliderConstructor::Compound`] from arbitrary [`Position`] and [`Rotation`] representations.
+    pub fn compound<P, R>(shapes: Vec<(P, R, ColliderConstructor)>) -> Self
+    where
+        P: Into<Position>,
+        R: Into<Rotation>,
+    {
+        Self::Compound(
+            shapes
+                .into_iter()
+                .map(|(pos, rot, constructor)| (pos.into(), rot.into(), constructor))
+                .collect(),
+        )
+    }
+
+    pub(crate) fn flatten_compound_constructors(
+        constructors: Vec<(Position, Rotation, ColliderConstructor)>,
+    ) -> Vec<(Position, Rotation, ColliderConstructor)> {
+        constructors
+            .into_iter()
+            .flat_map(|(pos, rot, constructor)| match constructor {
+                ColliderConstructor::Compound(nested) => {
+                    Either::Left(Self::flatten_compound_constructors(nested).into_iter().map(
+                        move |(nested_pos, nested_rot, nested_constructor)| {
+                            (
+                                Position(pos.0 + rot * nested_pos.0),
+                                rot * nested_rot,
+                                nested_constructor,
+                            )
+                        },
+                    ))
+                }
+                other => Either::Right(once((pos, rot, other))),
+            })
+            .collect()
     }
 }
 

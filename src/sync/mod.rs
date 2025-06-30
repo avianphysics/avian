@@ -60,6 +60,11 @@ impl Plugin for SyncPlugin {
         app.init_resource::<SyncConfig>()
             .register_type::<SyncConfig>();
 
+        if app.world().resource::<SyncConfig>().transform_to_position {
+            app.register_required_components::<Position, PreviousGlobalTransform>();
+            app.register_required_components::<Rotation, PreviousGlobalTransform>();
+        }
+
         app.configure_sets(
             self.schedule,
             (
@@ -86,7 +91,6 @@ impl Plugin for SyncPlugin {
                 mark_dirty_trees,
                 propagate_parent_transforms,
                 sync_simple_transforms,
-                init_previous_global_transform,
                 transform_to_position,
                 // Update `PreviousGlobalTransform` for the physics step's `GlobalTransform` change detection
                 update_previous_global_transforms,
@@ -186,18 +190,6 @@ pub enum SyncSet {
 #[derive(Component, Reflect, Clone, Copy, Debug, Default, Deref, DerefMut, PartialEq)]
 #[reflect(Component)]
 pub struct PreviousGlobalTransform(pub GlobalTransform);
-
-#[allow(clippy::type_complexity)]
-pub(crate) fn init_previous_global_transform(
-    mut commands: Commands,
-    query: Query<(Entity, &GlobalTransform), Or<(Added<Position>, Added<Rotation>)>>,
-) {
-    for (entity, transform) in &query {
-        commands
-            .entity(entity)
-            .try_insert(PreviousGlobalTransform(*transform));
-    }
-}
 
 /// Copies `GlobalTransform` changes to [`Position`] and [`Rotation`].
 /// This allows users to use transforms for moving and positioning bodies and colliders.

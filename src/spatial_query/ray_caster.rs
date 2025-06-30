@@ -418,7 +418,7 @@ impl RayHits {
     /// Returns an iterator over the hits in arbitrary order.
     ///
     /// If you want to get them sorted by distance, use `iter_sorted`.
-    pub fn iter(&self) -> core::slice::Iter<RayHitData> {
+    pub fn iter(&self) -> core::slice::Iter<'_, RayHitData> {
         self.as_slice().iter()
     }
 

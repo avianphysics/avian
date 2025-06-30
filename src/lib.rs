@@ -524,7 +524,7 @@ pub mod prelude {
         dynamics::{self, ccd::SpeculativeMargin, prelude::*},
         interpolation::*,
         position::{Position, Rotation},
-        prepare::{init_transforms, PrepareConfig, PreparePlugin},
+        prepare::{PrepareConfig, PreparePlugin},
         schedule::*,
         spatial_query::{self, *},
         sync::SyncPlugin,

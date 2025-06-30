@@ -97,7 +97,8 @@ impl XpbdConstraint<2> for CenterDistanceConstraint {
 
         // Prepare the base center difference.
         // The solver will compute the updated version based on the position deltas of the bodies.
-        self.pre_step.center_difference = body2.position.0 - body1.position.0;
+        self.pre_step.center_difference = (body2.position.0 - body1.position.0)
+            + (body2.rotation * body2.center_of_mass.0 - body1.rotation * body1.center_of_mass.0);
 
         // Prepare the relative dominance.
         self.relative_dominance = body1.dominance() - body2.dominance();

@@ -41,6 +41,33 @@ impl<C: AnyCollider> Plugin for ColliderTreePlugin<C> {
             optimize_trees.in_set(BroadPhaseSet::UpdateStructures),
         );
 
+        // Initialize `ColliderAabb` for colliders.
+        app.add_observer(
+            |trigger: Trigger<OnAdd, C>,
+             mut query: Query<(
+                &C,
+                &Position,
+                &Rotation,
+                Option<&CollisionMargin>,
+                &mut ColliderAabb,
+            )>,
+             narrow_phase_config: Res<NarrowPhaseConfig>,
+             length_unit: Res<PhysicsLengthUnit>,
+             collider_context: StaticSystemParam<C::Context>| {
+                let contact_tolerance = length_unit.0 * narrow_phase_config.contact_tolerance;
+                let aabb_context = AabbContext::new(trigger.target(), &*collider_context);
+
+                if let Ok((collider, pos, rot, collision_margin, mut aabb)) =
+                    query.get_mut(trigger.target())
+                {
+                    let collision_margin = collision_margin.map_or(0.0, |m| m.0);
+                    *aabb = collider
+                        .aabb_with_context(pos.0, *rot, aabb_context)
+                        .grow(Vector::splat(contact_tolerance + collision_margin));
+                }
+            },
+        );
+
         app.add_observer(
             |trigger: Trigger<OnAdd, EnlargedAabb>,
              mut collider_query: Query<(

@@ -430,7 +430,7 @@ pub struct Sensor;
 
 /// The Axis-Aligned Bounding Box of a [collider](Collider) in world space.
 ///
-/// Note that the AABB will be [`ColliderAabb::INVALID`] until the first physics update.
+/// This is updated automatically.
 #[derive(Reflect, Clone, Copy, Component, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
