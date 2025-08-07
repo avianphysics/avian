@@ -1,6 +1,6 @@
 //! Components, traits, and plugins related to collider functionality.
 
-use crate::prelude::*;
+use crate::{physics_transform::RotationValue, prelude::*};
 use bevy::{
     ecs::{
         component::Mutable,
@@ -8,6 +8,7 @@ use bevy::{
         system::{ReadOnlySystemParam, SystemParam, SystemParamItem},
     },
     prelude::*,
+    reflect::GetTypeRegistration,
 };
 use derive_more::From;
 
@@ -55,14 +56,14 @@ pub trait IntoCollider<C: AnyCollider> {
 
 /// Context necessary to calculate [`ColliderAabb`]s for an [`AnyCollider`]
 #[derive(Deref)]
-pub struct AabbContext<'a, 'w, 's, T: ReadOnlySystemParam> {
+pub struct SingleContext<'a, 'w, 's, T: ReadOnlySystemParam> {
     /// The entity for which the aabb is being calculated
     pub entity: Entity,
     #[deref]
     item: &'a SystemParamItem<'w, 's, T>,
 }
 
-impl<T: ReadOnlySystemParam> Clone for AabbContext<'_, '_, '_, T> {
+impl<T: ReadOnlySystemParam> Clone for SingleContext<'_, '_, '_, T> {
     fn clone(&self) -> Self {
         Self {
             entity: self.entity,
@@ -71,14 +72,14 @@ impl<T: ReadOnlySystemParam> Clone for AabbContext<'_, '_, '_, T> {
     }
 }
 
-impl<'a, 'w, 's, T: ReadOnlySystemParam> AabbContext<'a, 'w, 's, T> {
+impl<'a, 'w, 's, T: ReadOnlySystemParam> SingleContext<'a, 'w, 's, T> {
     /// Construct an [`AabbContext`]
     pub fn new(entity: Entity, item: &'a <T as SystemParam>::Item<'w, 's>) -> Self {
         Self { entity, item }
     }
 }
 
-impl AabbContext<'_, '_, '_, ()> {
+impl SingleContext<'_, '_, '_, ()> {
     fn fake() -> Self {
         Self {
             entity: Entity::PLACEHOLDER,
@@ -89,7 +90,7 @@ impl AabbContext<'_, '_, '_, ()> {
 
 /// Context necessary to calculate [`ContactManifold`]s for a set of [`AnyCollider`]
 #[derive(Deref)]
-pub struct ContactManifoldContext<'a, 'w, 's, T: ReadOnlySystemParam> {
+pub struct PairContext<'a, 'w, 's, T: ReadOnlySystemParam> {
     /// The first collider entity involved in the contact.
     pub entity1: Entity,
     /// The second collider entity involved in the contact.
@@ -98,7 +99,7 @@ pub struct ContactManifoldContext<'a, 'w, 's, T: ReadOnlySystemParam> {
     item: &'a SystemParamItem<'w, 's, T>,
 }
 
-impl<'a, 'w, 's, T: ReadOnlySystemParam> ContactManifoldContext<'a, 'w, 's, T> {
+impl<'a, 'w, 's, T: ReadOnlySystemParam> PairContext<'a, 'w, 's, T> {
     /// Construct a [`ContactManifoldContext`]
     pub fn new(
         entity1: Entity,
@@ -113,7 +114,7 @@ impl<'a, 'w, 's, T: ReadOnlySystemParam> ContactManifoldContext<'a, 'w, 's, T> {
     }
 }
 
-impl ContactManifoldContext<'_, '_, '_, ()> {
+impl PairContext<'_, '_, '_, ()> {
     fn fake() -> Self {
         Self {
             entity1: Entity::PLACEHOLDER,
@@ -215,7 +216,7 @@ pub trait AnyCollider: Component<Mutability = Mutable> + ComputeMassProperties {
         &self,
         position: Vector,
         rotation: impl Into<Rotation>,
-        context: AabbContext<Self::Context>,
+        context: SingleContext<Self::Context>,
     ) -> ColliderAabb;
 
     /// Computes the swept [Axis-Aligned Bounding Box](ColliderAabb) of the collider.
@@ -233,7 +234,7 @@ pub trait AnyCollider: Component<Mutability = Mutable> + ComputeMassProperties {
         start_rotation: impl Into<Rotation>,
         end_position: Vector,
         end_rotation: impl Into<Rotation>,
-        context: AabbContext<Self::Context>,
+        context: SingleContext<Self::Context>,
     ) -> ColliderAabb {
         self.aabb_with_context(start_position, start_rotation, context.clone())
             .merged(self.aabb_with_context(end_position, end_rotation, context))
@@ -254,7 +255,7 @@ pub trait AnyCollider: Component<Mutability = Mutable> + ComputeMassProperties {
         rotation2: impl Into<Rotation>,
         prediction_distance: Scalar,
         manifolds: &mut Vec<ContactManifold>,
-        context: ContactManifoldContext<Self::Context>,
+        context: PairContext<Self::Context>,
     );
 }
 
@@ -266,7 +267,7 @@ pub trait SimpleCollider: AnyCollider<Context = ()> {
     ///
     /// See [`AnyCollider::aabb_with_context`] for collider types with non-empty [`AnyCollider::Context`]
     fn aabb(&self, position: Vector, rotation: impl Into<Rotation>) -> ColliderAabb {
-        self.aabb_with_context(position, rotation, AabbContext::fake())
+        self.aabb_with_context(position, rotation, SingleContext::fake())
     }
 
     /// Computes the swept [Axis-Aligned Bounding Box](ColliderAabb) of the collider.
@@ -286,7 +287,7 @@ pub trait SimpleCollider: AnyCollider<Context = ()> {
             start_rotation,
             end_position,
             end_rotation,
-            AabbContext::fake(),
+            SingleContext::fake(),
         )
     }
 
@@ -314,7 +315,7 @@ pub trait SimpleCollider: AnyCollider<Context = ()> {
             rotation2,
             prediction_distance,
             manifolds,
-            ContactManifoldContext::fake(),
+            PairContext::fake(),
         )
     }
 }
@@ -339,6 +340,122 @@ pub trait ScalableCollider: AnyCollider {
     fn scale_by(&mut self, factor: Vector, detail: u32) {
         self.set_scale(factor * self.scale(), detail)
     }
+}
+
+// TODO: Figure out if we can use BoundedShape for AnyCollider
+
+/// A trait to provide the AABB of the shape
+pub trait BoundedShape<Context: for<'w, 's> ReadOnlySystemParam<Item<'w, 's>: Send + Sync>> {
+    /// Get the AABB for the shape
+    fn shape_aabb(
+        &self,
+        position: Vector,
+        rotation: RotationValue,
+        context: &SystemParamItem<Context>,
+    ) -> ColliderAabb;
+}
+
+#[cfg(feature = "2d")]
+impl<
+    T: bevy_math::bounding::Bounded2d,
+    C: for<'w, 's> ReadOnlySystemParam<Item<'w, 's>: Send + Sync>,
+> BoundedShape<C> for T
+{
+    fn shape_aabb(&self, position: Vec2, rotation: f32, _: &SystemParamItem<C>) -> ColliderAabb {
+        let aabb = self.aabb_2d(Isometry2d::new(position, Rot2::radians(rotation)));
+        ColliderAabb {
+            min: aabb.min.into(),
+            max: aabb.max.into(),
+        }
+    }
+}
+
+#[cfg(feature = "3d")]
+impl<
+    T: bevy_math::bounding::Bounded3d,
+    C: for<'w, 's> ReadOnlySystemParam<Item<'w, 's>: Send + Sync>,
+> BoundedShape<C> for T
+{
+    fn shape_aabb(&self, position: Vec3, rotation: Quat, _: &SystemParamItem<C>) -> ColliderAabb {
+        let aabb = self.aabb_3d(Isometry3d::new(position, rotation));
+        ColliderAabb {
+            min: aabb.min.into(),
+            max: aabb.max.into(),
+        }
+    }
+}
+
+/// Like [`ShapeCastHit`], but without the [`Entity`], should only be used by the [`QueryCollider`] trait
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct QueryShapeCastHit {
+    /// How far the shape travelled before the initial hit.
+    pub distance: Scalar,
+
+    /// The hit point in world space.
+    ///
+    /// If the shapes are penetrating, this will be the midpoint between the closest points
+    /// on the surfaces of the two shapes.
+    pub point: Vector,
+
+    /// The outward surface normal on the hit shape at the hit point in world space.
+    pub normal: Vector,
+}
+
+/// A trait to implement [`SpatialQuery`] support for an [`AnyCollider`]
+pub trait QueryCollider: AnyCollider + core::fmt::Debug + TypePath + GetTypeRegistration {
+    // TODO: Experiment with removing these Self::Contexts here
+
+    /// The shape used for shape casting against this collider type
+    type CastShape: BoundedShape<Self::Context> + Default + Sync + Send;
+    /// The shape used for shape intersections with this collider type
+    type Shape: BoundedShape<Self::Context> + Sync + Send;
+
+    /// Get the distance at which the ray hits the collider, [`f32::INFINITY`] if no hit.
+    fn ray_hit(
+        &self,
+        ray: obvhs::ray::Ray,
+        solid: bool,
+        context: SingleContext<Self::Context>,
+    ) -> f32;
+    // TODO: Should we combine ray_normal and ray_hit?
+    /// Get the normal for the hit at the provided point.
+    fn ray_normal(
+        &self,
+        point: Vector,
+        direction: Dir,
+        solid: bool,
+        context: SingleContext<Self::Context>,
+    ) -> Vector;
+
+    /// Get the shape cast hit against the collider, if any
+    fn shape_cast(
+        &self,
+        shape: &Self::CastShape,
+        shape_rotation: Rotation,
+        local_origin: Vector,
+        local_dir: Dir,
+        range: (f32, f32),
+        context: SingleContext<Self::Context>,
+    ) -> Option<QueryShapeCastHit>;
+
+    /// Check if the provided shape intersects with this collider
+    fn shape_intersection(
+        &self,
+        shape: &Self::Shape,
+        shape_rotation: Rotation,
+        local_origin: Vector,
+        context: SingleContext<Self::Context>,
+    ) -> bool;
+
+    /// Get the closest point on the collider to the provided point
+    fn closest_point(
+        &self,
+        point: Vector,
+        solid: bool,
+        context: SingleContext<Self::Context>,
+    ) -> Vector;
+    /// Check if the collider touches the provided point
+    fn contains_point(&self, point: Vector, context: SingleContext<Self::Context>) -> bool;
 }
 
 /// A marker component that indicates that a [collider](Collider) is disabled
@@ -509,7 +626,7 @@ impl ColliderAabb {
             min: self.min - amount,
             max: self.max + amount,
         };
-        debug_assert!(b.min.cmple(b.max).all());
+        debug_assert!(b == Self::INVALID || b.min.cmple(b.max).all());
         b
     }
 
@@ -520,7 +637,7 @@ impl ColliderAabb {
             min: self.min + amount,
             max: self.max - amount,
         };
-        debug_assert!(b.min.cmple(b.max).all());
+        debug_assert!(b == Self::INVALID || b.min.cmple(b.max).all());
         b
     }
 

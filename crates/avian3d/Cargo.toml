@@ -34,6 +34,7 @@ parallel = [
     "bevy/multi_threaded",
     "parry3d?/parallel",
     "parry3d-f64?/parallel",
+    "obvhs/parallel",
 ]
 enhanced-determinism = [
     "dep:libm",
@@ -94,6 +95,7 @@ bevy_heavy = { version = "0.3" }
 bevy_transform_interpolation = { version = "0.3" }
 libm = { version = "0.2", optional = true }
 approx = "0.5"
+obvhs = "0.2"
 parry3d = { version = "0.25", optional = true }
 parry3d-f64 = { version = "0.25", optional = true }
 nalgebra = { version = "0.34", features = ["convert-glam030"], optional = true }

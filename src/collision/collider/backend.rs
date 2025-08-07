@@ -19,6 +19,8 @@ use bevy::{
 };
 use mass_properties::{MassPropertySystems, components::RecomputeMassProperties};
 
+use super::SingleContext;
+
 /// A plugin for handling generic collider backend logic.
 ///
 /// - Initializes colliders, handles [`ColliderConstructor`] and [`ColliderConstructorHierarchy`].
@@ -197,7 +199,7 @@ impl<C: ScalableCollider> Plugin for ColliderBackendPlugin<C> {
              length_unit: Res<PhysicsLengthUnit>,
              collider_context: StaticSystemParam<C::Context>| {
                 let contact_tolerance = length_unit.0 * narrow_phase_config.contact_tolerance;
-                let aabb_context = AabbContext::new(trigger.entity, &*collider_context);
+                let aabb_context = SingleContext::new(trigger.entity, &*collider_context);
 
                 if let Ok((collider, pos, rot, collision_margin, mut aabb)) =
                     query.get_mut(trigger.entity)
@@ -558,7 +560,7 @@ fn update_aabb<C: AnyCollider>(
             speculative_margin.map_or(default_speculative_margin, |margin| margin.0)
         };
 
-        let context = AabbContext::new(entity, &*collider_context);
+        let context = SingleContext::new(entity, &*collider_context);
 
         if speculative_margin <= 0.0 {
             *aabb = collider

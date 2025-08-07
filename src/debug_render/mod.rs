@@ -421,7 +421,7 @@ fn debug_render_raycasts(
     any(feature = "parry-f32", feature = "parry-f64")
 ))]
 fn debug_render_shapecasts(
-    query: Query<(&ShapeCaster, &ShapeHits)>,
+    query: Query<(&ShapeCaster<Collider>, &ShapeHits)>,
     mut gizmos: Gizmos<PhysicsGizmos>,
     store: Res<GizmoConfigStore>,
     length_unit: Res<PhysicsLengthUnit>,

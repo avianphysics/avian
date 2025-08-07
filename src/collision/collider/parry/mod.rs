@@ -21,6 +21,8 @@ use parry::{
     shape::{RoundShape, SharedShape, TypedShape, Voxels},
 };
 
+use super::{BoundedShape, PairContext, QueryCollider, QueryShapeCastHit, SingleContext};
+
 impl<T: IntoCollider<Collider>> From<T> for Collider {
     fn from(value: T) -> Self {
         value.collider()
@@ -355,7 +357,8 @@ pub type TrimeshBuilderError = parry::shape::TriMeshBuilderError;
 /// or [`Collider::shape_scaled()`] methods.
 ///
 /// `Collider` is currently not `Reflect`. If you need to reflect it, you can use [`ColliderConstructor`] as a workaround.
-#[derive(Clone, Component, Debug)]
+#[derive(Clone, Component, Debug, Reflect)]
+#[reflect(from_reflect = false)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[require(
     ColliderMarker,
@@ -366,11 +369,13 @@ pub type TrimeshBuilderError = parry::shape::TriMeshBuilderError;
 )]
 pub struct Collider {
     /// The raw unscaled collider shape.
+    #[reflect(ignore)]
     shape: SharedShape,
     /// The scaled version of the collider shape.
     ///
     /// If the scale is `Vector::ONE`, this will be `None` and `unscaled_shape`
     /// will be used instead.
+    #[reflect(ignore)]
     scaled_shape: SharedShape,
     /// The global scale used for the collider shape.
     scale: Vector,
@@ -406,7 +411,7 @@ impl AnyCollider for Collider {
         &self,
         position: Vector,
         rotation: impl Into<Rotation>,
-        _: AabbContext<Self::Context>,
+        _: SingleContext<Self::Context>,
     ) -> ColliderAabb {
         let aabb = self
             .shape_scaled()
@@ -426,7 +431,7 @@ impl AnyCollider for Collider {
         rotation2: impl Into<Rotation>,
         prediction_distance: Scalar,
         manifolds: &mut Vec<ContactManifold>,
-        _: ContactManifoldContext<Self::Context>,
+        _: PairContext<Self::Context>,
     ) {
         contact_query::contact_manifolds(
             self,
@@ -438,6 +443,68 @@ impl AnyCollider for Collider {
             prediction_distance,
             manifolds,
         )
+    }
+}
+
+impl BoundedShape<()> for Collider {
+    fn shape_aabb(&self, position: Vector, rotation: RotationValue, _: &()) -> ColliderAabb {
+        self.aabb(position, rotation)
+    }
+}
+
+impl QueryCollider for Collider {
+    // TODO: Both of these should probably be SharedShape instead of Collider which has a scaled vs unscaled shape
+    type CastShape = Self;
+    type Shape = Self;
+
+    fn ray_hit(&self, ray: obvhs::ray::Ray, solid: bool, _: SingleContext<()>) -> f32 {
+        _ = (ray, solid);
+        todo!()
+    }
+
+    fn ray_normal(
+        &self,
+        point: Vector,
+        direction: Dir,
+        solid: bool,
+        _: SingleContext<()>,
+    ) -> Vector {
+        _ = (point, direction, solid);
+        todo!()
+    }
+
+    fn shape_cast(
+        &self,
+        shape: &Self,
+        shape_rotation: Rotation,
+        local_origin: Vector,
+        local_dir: Dir,
+        range: (f32, f32),
+        _: SingleContext<()>,
+    ) -> Option<QueryShapeCastHit> {
+        _ = (shape, shape_rotation, local_origin, local_dir, range);
+        todo!()
+    }
+
+    fn shape_intersection(
+        &self,
+        shape: &Self,
+        shape_rotation: Rotation,
+        local_origin: Vector,
+        _: SingleContext<()>,
+    ) -> bool {
+        _ = (shape, shape_rotation, local_origin);
+        todo!()
+    }
+
+    fn closest_point(&self, point: Vector, solid: bool, _: SingleContext<()>) -> Vector {
+        _ = (point, solid);
+        todo!()
+    }
+
+    fn contains_point(&self, point: Vector, _: SingleContext<()>) -> bool {
+        _ = point;
+        todo!()
     }
 }
 

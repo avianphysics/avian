@@ -33,6 +33,7 @@ parallel = [
     "bevy/multi_threaded",
     "parry2d?/parallel",
     "parry2d-f64?/parallel",
+    "obvhs/parallel",
 ]
 enhanced-determinism = [
     "dep:libm",
@@ -92,6 +93,7 @@ bevy_heavy = { version = "0.3" }
 bevy_transform_interpolation = { version = "0.3" }
 libm = { version = "0.2", optional = true }
 approx = "0.5"
+obvhs = "0.2"
 parry2d = { version = "0.25", optional = true }
 parry2d-f64 = { version = "0.25", optional = true }
 nalgebra = { version = "0.34", features = ["convert-glam030"], optional = true }
@@ -117,6 +119,7 @@ glam = { version = "0.30", features = ["bytemuck"] }
 bytemuck = "1.19"
 criterion = { version = "0.5", features = ["html_reports"] }
 bevy_mod_debugdump = { version = "0.14" }
+rand = "0.9"
 
 [lints]
 workspace = true

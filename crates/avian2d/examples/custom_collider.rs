@@ -61,7 +61,7 @@ impl AnyCollider for CircleCollider {
         &self,
         position: Vector,
         _: impl Into<Rotation>,
-        _: AabbContext<Self::Context>,
+        _: SingleContext<Self::Context>,
     ) -> ColliderAabb {
         ColliderAabb::new(position, Vector::splat(self.radius))
     }
@@ -77,7 +77,7 @@ impl AnyCollider for CircleCollider {
         _rotation2: impl Into<Rotation>,
         prediction_distance: Scalar,
         manifolds: &mut Vec<ContactManifold>,
-        _: ContactManifoldContext<Self::Context>,
+        _: PairContext<Self::Context>,
     ) {
         // Clear the previous manifolds.
         manifolds.clear();

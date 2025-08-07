@@ -1,5 +1,13 @@
-use crate::prelude::*;
-use bevy::{ecs::system::SystemParam, prelude::*};
+use crate::{
+    collision::collider::{BoundedShape, QueryCollider, SingleContext},
+    physics_transform::RotationValue,
+    prelude::*,
+};
+use bevy::{
+    ecs::system::{StaticSystemParam, SystemParam},
+    prelude::*,
+};
+use spatial_query::bvh_ext::RayExt;
 
 /// A system parameter for performing [spatial queries](spatial_query).
 ///
@@ -56,24 +64,16 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 /// }
 /// ```
 #[derive(SystemParam)]
-pub struct SpatialQuery<'w, 's> {
-    pub(crate) colliders: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static Position,
-            &'static Rotation,
-            &'static Collider,
-            &'static CollisionLayers,
-        ),
-        Without<ColliderDisabled>,
-    >,
+pub struct SpatialQuery<'w, 's, C: QueryCollider> {
+    /// The query to access colliders
+    pub colliders: Query<'w, 's, (&'static Position, &'static Rotation, &'static C)>,
     /// The [`SpatialQueryPipeline`].
-    pub query_pipeline: ResMut<'w, SpatialQueryPipeline>,
+    pub query_pipeline: Res<'w, SpatialQueryPipeline>,
+    /// The context necessary to use the collider
+    pub context: StaticSystemParam<'w, 's, <C as AnyCollider>::Context>,
 }
 
-impl SpatialQuery<'_, '_> {
+impl<C: QueryCollider> SpatialQuery<'_, '_, C> {
     /// Updates the colliders in the pipeline. This is done automatically once per physics frame in
     /// [`PhysicsStepSystems::SpatialQuery`], but if you modify colliders or their positions before that, you can
     /// call this to make sure the data is up to date when performing spatial queries using [`SpatialQuery`].
@@ -132,12 +132,40 @@ impl SpatialQuery<'_, '_> {
         max_distance: Scalar,
         solid: bool,
         filter: &SpatialQueryFilter,
-    ) -> Option<RayHitData> {
+    ) -> Option<RayCastHit> {
         self.query_pipeline
-            .cast_ray(origin, direction, max_distance, solid, filter)
+            .cast_ray(origin, direction, max_distance, filter, |entity, ray| {
+                let Ok((pos, rot, collider)) = self.colliders.get(entity) else {
+                    return f32::INFINITY;
+                };
+                C::ray_hit(
+                    &collider,
+                    ray.transformed(*pos, *rot),
+                    solid,
+                    SingleContext::new(entity, &*self.context),
+                )
+            })
+            .map(|(entity, distance)| {
+                let Ok((pos, rot, collider)) = self.colliders.get(entity) else {
+                    unreachable!(); // Checked previously
+                };
+                let rot_inv = rot.inverse();
+                let normal = C::ray_normal(
+                    &collider,
+                    rot_inv * ((origin + direction * distance) - **pos),
+                    rot_inv * direction,
+                    solid,
+                    SingleContext::new(entity, &*self.context),
+                );
+                RayCastHit {
+                    entity,
+                    distance,
+                    normal: rot * normal,
+                }
+            })
     }
 
-    /// Casts a [ray](spatial_query#raycasting) and computes the closest [hit](RayHitData) with a collider.
+    /// Casts a [ray](spatial_query#raycasting) and computes the closest [hit](RayCastHit) with a collider.
     /// If there are no hits, `None` is returned.
     ///
     /// # Arguments
@@ -199,18 +227,43 @@ impl SpatialQuery<'_, '_> {
         solid: bool,
         filter: &SpatialQueryFilter,
         predicate: &dyn Fn(Entity) -> bool,
-    ) -> Option<RayHitData> {
-        self.query_pipeline.cast_ray_predicate(
-            origin,
-            direction,
-            max_distance,
-            solid,
-            filter,
-            predicate,
-        )
+    ) -> Option<RayCastHit> {
+        self.query_pipeline
+            .cast_ray(origin, direction, max_distance, filter, |entity, ray| {
+                if !predicate(entity) {
+                    return f32::INFINITY;
+                }
+                let Ok((pos, rot, collider)) = self.colliders.get(entity) else {
+                    return f32::INFINITY;
+                };
+                C::ray_hit(
+                    &collider,
+                    ray.transformed(*pos, *rot),
+                    solid,
+                    SingleContext::new(entity, &*self.context),
+                )
+            })
+            .map(|(entity, distance)| {
+                let Ok((pos, rot, collider)) = self.colliders.get(entity) else {
+                    unreachable!(); // Checked previously
+                };
+                let rot_inv = rot.inverse();
+                let normal = C::ray_normal(
+                    &collider,
+                    rot_inv * ((origin + direction * distance) - **pos),
+                    rot_inv * direction,
+                    solid,
+                    SingleContext::new(entity, &*self.context),
+                );
+                RayCastHit {
+                    entity,
+                    distance,
+                    normal: rot * normal,
+                }
+            })
     }
 
-    /// Casts a [ray](spatial_query#raycasting) and computes all [hits](RayHitData) until `max_hits` is reached.
+    /// Casts a [ray](spatial_query#raycasting) and computes all [hits](RayCastHit) until `max_hits` is reached.
     ///
     /// Note that the order of the results is not guaranteed, and if there are more hits than `max_hits`,
     /// some hits will be missed.
@@ -268,12 +321,43 @@ impl SpatialQuery<'_, '_> {
         max_hits: u32,
         solid: bool,
         filter: &SpatialQueryFilter,
-    ) -> Vec<RayHitData> {
+    ) -> Vec<RayCastHit> {
+        let mut hits = Vec::with_capacity(max_hits.min(64) as usize);
+
         self.query_pipeline
-            .ray_hits(origin, direction, max_distance, max_hits, solid, filter)
+            .ray_hits(origin, direction, max_distance, filter, |entity, ray| {
+                let Ok((pos, rot, collider)) = self.colliders.get(entity) else {
+                    return true;
+                };
+                let context = SingleContext::<C::Context>::new(entity, &*self.context);
+                let distance = C::ray_hit(
+                    &collider,
+                    ray.transformed(*pos, *rot),
+                    solid,
+                    context.clone(),
+                );
+                if distance > ray.tmax {
+                    return true;
+                }
+                let rot_inv = rot.inverse();
+                let normal = C::ray_normal(
+                    &collider,
+                    rot_inv * ((origin + direction * distance) - **pos),
+                    rot_inv * direction,
+                    solid,
+                    context,
+                );
+                hits.push(RayCastHit {
+                    entity,
+                    distance,
+                    normal: rot * normal,
+                });
+                hits.len() < max_hits as usize
+            });
+        hits
     }
 
-    /// Casts a [ray](spatial_query#raycasting) and computes all [hits](RayHitData), calling the given `callback`
+    /// Casts a [ray](spatial_query#raycasting) and computes all [hits](RayCastHit), calling the given `callback`
     /// for each hit. The raycast stops when `callback` returns false or all hits have been found.
     ///
     /// Note that the order of the results is not guaranteed.
@@ -334,16 +418,38 @@ impl SpatialQuery<'_, '_> {
         max_distance: Scalar,
         solid: bool,
         filter: &SpatialQueryFilter,
-        callback: impl FnMut(RayHitData) -> bool,
+        callback: &mut dyn FnMut(RayCastHit) -> bool,
     ) {
-        self.query_pipeline.ray_hits_callback(
-            origin,
-            direction,
-            max_distance,
-            solid,
-            filter,
-            callback,
-        )
+        self.query_pipeline
+            .ray_hits(origin, direction, max_distance, filter, |entity, ray| {
+                let Ok((pos, rot, collider)) = self.colliders.get(entity) else {
+                    return true;
+                };
+                let context = SingleContext::<C::Context>::new(entity, &*self.context);
+                let distance = C::ray_hit(
+                    &collider,
+                    ray.transformed(*pos, *rot),
+                    solid,
+                    context.clone(),
+                );
+                if distance > ray.tmax {
+                    return true;
+                }
+                let rot_inv = rot.inverse();
+                let normal = C::ray_normal(
+                    &collider,
+                    rot_inv * ((origin + direction * distance) - **pos),
+                    rot_inv * direction,
+                    solid,
+                    context,
+                );
+                let hit = RayCastHit {
+                    entity,
+                    distance,
+                    normal: rot * normal,
+                };
+                callback(hit)
+            });
     }
 
     /// Casts a [shape](spatial_query#shapecasting) with a given rotation and computes the closest [hit](ShapeHitData)
@@ -397,15 +503,36 @@ impl SpatialQuery<'_, '_> {
     #[allow(clippy::too_many_arguments)]
     pub fn cast_shape(
         &self,
-        shape: &Collider,
+        shape: &C::CastShape, // impl Into<> without mega bloat
         origin: Vector,
         shape_rotation: RotationValue,
         direction: Dir,
         config: &ShapeCastConfig,
         filter: &SpatialQueryFilter,
-    ) -> Option<ShapeHitData> {
+    ) -> Option<ShapeCastHit> {
+        let aabb = shape.shape_aabb(Vector::ZERO, shape_rotation, &*self.context);
+
         self.query_pipeline
-            .cast_shape(shape, origin, shape_rotation, direction, config, filter)
+            .cast_aabb(aabb, origin, direction, config, filter, |entity, ray| {
+                let Ok((pos, rot, collider)) = self.colliders.get(entity) else {
+                    return None;
+                };
+                let rot_inv = rot.inverse();
+                C::shape_cast(
+                    &collider,
+                    shape,
+                    rot_inv * Rotation::from(shape_rotation),
+                    rot_inv * (origin - **pos),
+                    rot_inv * direction,
+                    (ray.tmin, ray.tmax),
+                    SingleContext::new(entity, &*self.context),
+                )
+                .map(|mut hit| {
+                    hit.point = **pos + rot * hit.point;
+                    hit.normal = rot * hit.normal;
+                    hit
+                })
+            })
     }
 
     /// Casts a [shape](spatial_query#shapecasting) with a given rotation and computes the closest [hit](ShapeHitData)
@@ -467,23 +594,40 @@ impl SpatialQuery<'_, '_> {
     /// - [`SpatialQuery::ray_hits_callback`]
     pub fn cast_shape_predicate(
         &self,
-        shape: &Collider,
+        shape: &C::CastShape,
         origin: Vector,
         shape_rotation: RotationValue,
         direction: Dir,
         config: &ShapeCastConfig,
         filter: &SpatialQueryFilter,
         predicate: &dyn Fn(Entity) -> bool,
-    ) -> Option<ShapeHitData> {
-        self.query_pipeline.cast_shape_predicate(
-            shape,
-            origin,
-            shape_rotation,
-            direction,
-            config,
-            filter,
-            predicate,
-        )
+    ) -> Option<ShapeCastHit> {
+        let aabb = shape.shape_aabb(Vector::ZERO, shape_rotation, &*self.context);
+
+        self.query_pipeline
+            .cast_aabb(aabb, origin, direction, config, filter, |entity, ray| {
+                if !predicate(entity) {
+                    return None;
+                }
+                let Ok((pos, rot, collider)) = self.colliders.get(entity) else {
+                    return None;
+                };
+                let rot_inv = rot.inverse();
+                C::shape_cast(
+                    &collider,
+                    shape,
+                    rot_inv * Rotation::from(shape_rotation),
+                    rot_inv * (origin - **pos),
+                    rot_inv * direction,
+                    (ray.tmin, ray.tmax),
+                    SingleContext::new(entity, &*self.context),
+                )
+                .map(|mut hit| {
+                    hit.point = **pos + rot * hit.point;
+                    hit.normal = rot * hit.normal;
+                    hit
+                })
+            })
     }
 
     /// Casts a [shape](spatial_query#shapecasting) with a given rotation and computes computes all [hits](ShapeHitData)
@@ -539,23 +683,47 @@ impl SpatialQuery<'_, '_> {
     #[allow(clippy::too_many_arguments)]
     pub fn shape_hits(
         &self,
-        shape: &Collider,
+        shape: &C::CastShape,
         origin: Vector,
         shape_rotation: RotationValue,
         direction: Dir,
         max_hits: u32,
         config: &ShapeCastConfig,
         filter: &SpatialQueryFilter,
-    ) -> Vec<ShapeHitData> {
-        self.query_pipeline.shape_hits(
-            shape,
-            origin,
-            shape_rotation,
-            direction,
-            max_hits,
-            config,
-            filter,
-        )
+    ) -> Vec<ShapeCastHit> {
+        let mut hits = Vec::with_capacity(max_hits.min(64) as usize);
+        let aabb = shape.shape_aabb(Vector::ZERO, shape_rotation, &*self.context);
+
+        self.query_pipeline
+            .shape_hits(aabb, origin, direction, config, filter, |entity, ray| {
+                let Ok((pos, rot, collider)) = self.colliders.get(entity) else {
+                    return true;
+                };
+
+                let rot_inv = rot.inverse();
+                let hit = C::shape_cast(
+                    &collider,
+                    shape,
+                    rot_inv * Rotation::from(shape_rotation),
+                    rot_inv * (origin - **pos),
+                    rot_inv * direction,
+                    (ray.tmin, ray.tmax),
+                    SingleContext::new(entity, &*self.context),
+                );
+
+                if let Some(hit) = hit {
+                    hits.push(ShapeCastHit {
+                        entity,
+                        distance: hit.distance,
+                        point: **pos + rot * hit.point,
+                        normal: rot * hit.normal,
+                    });
+                }
+
+                true
+            });
+
+        hits
     }
 
     /// Casts a [shape](spatial_query#shapecasting) with a given rotation and computes computes all [hits](ShapeHitData)
@@ -615,23 +783,44 @@ impl SpatialQuery<'_, '_> {
     #[allow(clippy::too_many_arguments)]
     pub fn shape_hits_callback(
         &self,
-        shape: &Collider,
+        shape: &C::CastShape,
         origin: Vector,
         shape_rotation: RotationValue,
         direction: Dir,
         config: &ShapeCastConfig,
         filter: &SpatialQueryFilter,
-        callback: impl FnMut(ShapeHitData) -> bool,
+        callback: &mut dyn FnMut(ShapeCastHit) -> bool,
     ) {
-        self.query_pipeline.shape_hits_callback(
-            shape,
-            origin,
-            shape_rotation,
-            direction,
-            config,
-            filter,
-            callback,
-        )
+        let aabb = shape.shape_aabb(Vector::ZERO, shape_rotation, &*self.context);
+
+        self.query_pipeline
+            .shape_hits(aabb, origin, direction, config, filter, |entity, ray| {
+                let Ok((pos, rot, collider)) = self.colliders.get(entity) else {
+                    return true;
+                };
+
+                let rot_inv = rot.inverse();
+                let hit = C::shape_cast(
+                    &collider,
+                    shape,
+                    rot_inv * Rotation::from(shape_rotation),
+                    rot_inv * (origin - **pos),
+                    rot_inv * direction,
+                    (ray.tmin, ray.tmax),
+                    SingleContext::new(entity, &*self.context),
+                );
+
+                if let Some(hit) = hit {
+                    return callback(ShapeCastHit {
+                        entity,
+                        distance: hit.distance,
+                        point: **pos + rot * hit.point,
+                        normal: rot * hit.normal,
+                    });
+                }
+
+                true
+            });
     }
 
     /// Finds the [projection](spatial_query#point-projection) of a given point on the closest [collider](Collider).
@@ -675,7 +864,21 @@ impl SpatialQuery<'_, '_> {
         solid: bool,
         filter: &SpatialQueryFilter,
     ) -> Option<PointProjection> {
-        self.query_pipeline.project_point(point, solid, filter)
+        self.query_pipeline
+            .project_point(point, filter, |entity, _| {
+                let Ok((pos, rot, collider)) = self.colliders.get(entity) else {
+                    return f32::INFINITY;
+                };
+
+                let hit = C::closest_point(
+                    &collider,
+                    rot.inverse() * (point - **pos),
+                    solid,
+                    SingleContext::new(entity, &*self.context),
+                );
+
+                point.distance(hit)
+            })
     }
 
     /// Finds the [projection](spatial_query#point-projection) of a given point on the closest [collider](Collider).
@@ -729,7 +932,24 @@ impl SpatialQuery<'_, '_> {
         predicate: &dyn Fn(Entity) -> bool,
     ) -> Option<PointProjection> {
         self.query_pipeline
-            .project_point_predicate(point, solid, filter, predicate)
+            .project_point(point, filter, |entity, _| {
+                if !predicate(entity) {
+                    return f32::INFINITY;
+                }
+
+                let Ok((pos, rot, collider)) = self.colliders.get(entity) else {
+                    return f32::INFINITY;
+                };
+
+                let hit = C::closest_point(
+                    &collider,
+                    rot.inverse() * (point - **pos),
+                    solid,
+                    SingleContext::new(entity, &*self.context),
+                );
+
+                point.distance(hit)
+            })
     }
 
     /// An [intersection test](spatial_query#intersection-tests) that finds all entities with a [collider](Collider)
@@ -764,7 +984,27 @@ impl SpatialQuery<'_, '_> {
     ///
     /// - [`SpatialQuery::point_intersections_callback`]
     pub fn point_intersections(&self, point: Vector, filter: &SpatialQueryFilter) -> Vec<Entity> {
-        self.query_pipeline.point_intersections(point, filter)
+        let mut hits = Vec::with_capacity(10);
+
+        self.query_pipeline
+            .point_intersections(point, filter, |entity, _| {
+                let Ok((pos, rot, collider)) = self.colliders.get(entity) else {
+                    return (false, true);
+                };
+
+                if C::contains_point(
+                    &collider,
+                    rot.inverse() * (point - **pos),
+                    SingleContext::new(entity, &*self.context),
+                ) {
+                    hits.push(entity);
+                    return (true, true);
+                }
+
+                (false, true)
+            });
+
+        hits
     }
 
     /// An [intersection test](spatial_query#intersection-tests) that finds all entities with a [collider](Collider)
@@ -812,10 +1052,24 @@ impl SpatialQuery<'_, '_> {
         &self,
         point: Vector,
         filter: &SpatialQueryFilter,
-        callback: impl FnMut(Entity) -> bool,
+        callback: &mut dyn FnMut(Entity) -> bool,
     ) {
         self.query_pipeline
-            .point_intersections_callback(point, filter, callback)
+            .point_intersections(point, filter, |entity, _| {
+                let Ok((pos, rot, collider)) = self.colliders.get(entity) else {
+                    return (false, true);
+                };
+
+                if C::contains_point(
+                    &collider,
+                    rot.inverse() * (point - **pos),
+                    SingleContext::new(entity, &*self.context),
+                ) {
+                    return (true, callback(entity));
+                }
+
+                (false, true)
+            });
     }
 
     /// An [intersection test](spatial_query#intersection-tests) that finds all entities with a [`ColliderAabb`]
@@ -844,8 +1098,19 @@ impl SpatialQuery<'_, '_> {
     /// # Related Methods
     ///
     /// - [`SpatialQuery::aabb_intersections_with_aabb_callback`]
-    pub fn aabb_intersections_with_aabb(&self, aabb: ColliderAabb) -> Vec<Entity> {
-        self.query_pipeline.aabb_intersections_with_aabb(aabb)
+    pub fn aabb_intersections_with_aabb(
+        &self,
+        aabb: ColliderAabb,
+        filter: &SpatialQueryFilter,
+    ) -> Vec<Entity> {
+        let mut hits = Vec::with_capacity(10);
+        self.query_pipeline
+            .aabb_intersections_with_aabb(aabb, filter, |entity| {
+                hits.push(entity);
+                true
+            });
+
+        hits
     }
 
     /// An [intersection test](spatial_query#intersection-tests) that finds all entities with a [`ColliderAabb`]
@@ -885,10 +1150,11 @@ impl SpatialQuery<'_, '_> {
     pub fn aabb_intersections_with_aabb_callback(
         &self,
         aabb: ColliderAabb,
-        callback: impl FnMut(Entity) -> bool,
+        filter: &SpatialQueryFilter,
+        callback: &mut dyn FnMut(Entity) -> bool,
     ) {
         self.query_pipeline
-            .aabb_intersections_with_aabb_callback(aabb, callback)
+            .aabb_intersections_with_aabb(aabb, filter, |entity| callback(entity))
     }
 
     /// An [intersection test](spatial_query#intersection-tests) that finds all entities with a [`Collider`]
@@ -919,8 +1185,8 @@ impl SpatialQuery<'_, '_> {
     ///         &SpatialQueryFilter::default(),  // Query filter
     ///     );
     ///
-    ///     for entity in intersections.iter() {
-    ///         println!("Entity: {}", entity);
+    ///     for hit in intersections.iter() {
+    ///         println!("Entity: {}", hit.entity);
     ///     }
     /// }
     /// ```
@@ -930,13 +1196,32 @@ impl SpatialQuery<'_, '_> {
     /// - [`SpatialQuery::shape_intersections_callback`]
     pub fn shape_intersections(
         &self,
-        shape: &Collider,
+        shape: &C::Shape,
         shape_position: Vector,
         shape_rotation: RotationValue,
         filter: &SpatialQueryFilter,
     ) -> Vec<Entity> {
+        let aabb = shape.shape_aabb(shape_position, shape_rotation, &*self.context);
+        let mut hits = Vec::with_capacity(10);
         self.query_pipeline
-            .shape_intersections(shape, shape_position, shape_rotation, filter)
+            .aabb_intersections_with_aabb(aabb, filter, |entity| {
+                let Ok((position, rotation, collider)) = self.colliders.get(entity) else {
+                    return true;
+                };
+                let hit = C::shape_intersection(
+                    collider,
+                    shape,
+                    rotation.inverse() * Rotation::from(shape_rotation),
+                    shape_position - **position,
+                    SingleContext::new(entity, &*self.context),
+                );
+                if hit {
+                    hits.push(entity);
+                }
+                true
+            });
+
+        hits
     }
 
     /// An [intersection test](spatial_query#intersection-tests) that finds all entities with a [`Collider`]
@@ -969,8 +1254,8 @@ impl SpatialQuery<'_, '_> {
     ///         Vec3::ZERO,                      // Shape position
     ///         Quat::default(),                 // Shape rotation
     ///         &SpatialQueryFilter::default(),  // Query filter
-    ///         |entity| {                       // Callback function
-    ///             intersections.push(entity);
+    ///         |hit| {                       // Callback function
+    ///             intersections.push(hit.entity);
     ///             true
     ///         },
     ///     );
@@ -986,18 +1271,29 @@ impl SpatialQuery<'_, '_> {
     /// - [`SpatialQuery::shape_intersections`]
     pub fn shape_intersections_callback(
         &self,
-        shape: &Collider,
+        shape: &C::Shape,
         shape_position: Vector,
         shape_rotation: RotationValue,
         filter: &SpatialQueryFilter,
-        callback: impl FnMut(Entity) -> bool,
+        callback: &mut dyn FnMut(Entity) -> bool,
     ) {
-        self.query_pipeline.shape_intersections_callback(
-            shape,
-            shape_position,
-            shape_rotation,
-            filter,
-            callback,
-        )
+        let aabb = shape.shape_aabb(shape_position, shape_rotation, &*self.context);
+        self.query_pipeline
+            .aabb_intersections_with_aabb(aabb, filter, |entity| {
+                let Ok((position, rotation, collider)) = self.colliders.get(entity) else {
+                    return true;
+                };
+                let hit = C::shape_intersection(
+                    collider,
+                    shape,
+                    rotation.inverse() * Rotation::from(shape_rotation),
+                    shape_position - **position,
+                    SingleContext::new(entity, &*self.context),
+                );
+                if hit {
+                    return callback(entity);
+                }
+                true
+            });
     }
 }

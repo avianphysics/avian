@@ -633,6 +633,19 @@ impl core::ops::Mul<Vector3> for Rotation {
 }
 
 #[cfg(feature = "2d")]
+impl core::ops::Mul<Vec3A> for Rotation {
+    type Output = Vec3A;
+
+    fn mul(self, rhs: Vec3A) -> Self::Output {
+        Vec3A::new(
+            rhs.x * self.cos - rhs.y * self.sin,
+            rhs.x * self.sin + rhs.y * self.cos,
+            rhs.z,
+        )
+    }
+}
+
+#[cfg(feature = "2d")]
 impl core::ops::Mul<&Vector3> for Rotation {
     type Output = Vector3;
 
@@ -827,8 +840,17 @@ impl core::ops::Mul<Vector> for Rotation {
 }
 
 #[cfg(feature = "3d")]
+impl core::ops::Mul<Vec3A> for Rotation {
+    type Output = Vec3A;
+
+    fn mul(self, vector: Vec3A) -> Self::Output {
+        self.0 * vector
+    }
+}
+
+#[cfg(feature = "3d")]
 impl core::ops::Mul for Rotation {
-    type Output = Rotation;
+    type Output = Self;
 
     fn mul(self, rhs: Self) -> Self::Output {
         Self(self.0 * rhs.0)
