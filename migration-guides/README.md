@@ -5,9 +5,8 @@
 Hi! Did someone add `M-Migration-Guide` to your PR? If so, you're in the right place.
 Let's talk about how this process works.
 
-When we make breaking changes to Avian, we need to communicate them to users so their libraries and applications can be moved to the new Avian version.
-To do this, we write and ship a [migration guide](https://bevy.org/learn/migration-guides/introduction/) for every major Avian version.
-To avoid a crunch at the end of the cycle as we *write* all of these,
+When we make breaking changes to Avian, we need to communicate them to users so that their libraries and applications can be moved to the new Avian version.
+To do this, we write and ship a migration guide for every major Avian version. In order to avoid crunch at the end of the cycle as we write all of these,
 Avian asks authors (and reviewers) to write a draft migration guide as part of the pull requests that make breaking changes.
 
 ## Where to put your migration guides
