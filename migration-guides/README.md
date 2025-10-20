@@ -2,7 +2,7 @@
 
 *Adapted from [Bevy's migration guide process](https://github.com/bevyengine/bevy/blob/c392d28d30f34b7d2b69b806136b9643379f9284/release-content/migration_guides.md)*
 
-Hi! Did someone add `C-Breaking-Change` to your PR? If so, you're in the right place.
+Hi! Did someone add `M-Migration-Guide` to your PR? If so, you're in the right place.
 Let's talk about how this process works.
 
 When we make breaking changes to Avian, we need to communicate them to users so their libraries and applications can be moved to the new Avian version.
