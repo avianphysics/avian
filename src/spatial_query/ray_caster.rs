@@ -262,13 +262,17 @@ impl RayCaster {
         hits.clear();
 
         if self.max_hits == 1 {
-            query_pipeline.cast_ray(
+            let first_hit = query_pipeline.cast_ray(
                 self.global_origin(),
                 self.global_direction(),
                 self.max_distance,
                 self.solid,
                 &self.query_filter,
             );
+
+            if let Some(hit) = first_hit {
+                hits.push(hit);
+            }
         } else {
             let ray = parry::query::Ray::new(
                 self.global_origin().into(),
