@@ -108,47 +108,53 @@ impl<C: ScalableCollider> Plugin for ColliderBackendPlugin<C> {
         let hooks = app.world_mut().register_component_hooks::<C>();
 
         // Initialize missing components for colliders.
-        hooks.on_add(|mut world, ctx| {
-            // Initialize the global physics transform for the collider.
-            init_physics_transform(&mut world, &ctx);
+        hooks
+            .on_add(|mut world, ctx| {
+                // Initialize the global physics transform for the collider.
+                // Avoid doing this twice for rigid bodies added at the same time.
+                // TODO: The special case for rigid bodies is a bit of a hack here.
+                if !world.entity(ctx.entity).contains::<RigidBody>() {
+                    init_physics_transform(&mut world, &ctx);
+                }
+            })
+            .on_insert(|mut world, ctx| {
+                let scale = world
+                    .entity(ctx.entity)
+                    .get::<GlobalTransform>()
+                    .map(|gt| gt.scale())
+                    .unwrap_or_default();
+                #[cfg(feature = "2d")]
+                let scale = scale.xy();
 
-            let scale = world
-                .entity(ctx.entity)
-                .get::<GlobalTransform>()
-                .map(|gt| gt.scale())
-                .unwrap_or_default();
-            #[cfg(feature = "2d")]
-            let scale = scale.xy();
+                let mut entity_mut = world.entity_mut(ctx.entity);
 
-            let mut entity_mut = world.entity_mut(ctx.entity);
+                // Make sure the collider is initialized with the correct scale.
+                // This overwrites the scale set by the constructor, but that one is
+                // meant to be only changed after initialization.
+                entity_mut
+                    .get_mut::<C>()
+                    .unwrap()
+                    .set_scale(scale.adjust_precision(), 10);
 
-            // Make sure the collider is initialized with the correct scale.
-            // This overwrites the scale set by the constructor, but that one is
-            // meant to be only changed after initialization.
-            entity_mut
-                .get_mut::<C>()
-                .unwrap()
-                .set_scale(scale.adjust_precision(), 10);
+                let collider = entity_mut.get::<C>().unwrap();
 
-            let collider = entity_mut.get::<C>().unwrap();
+                let density = entity_mut
+                    .get::<ColliderDensity>()
+                    .copied()
+                    .unwrap_or_default();
 
-            let density = entity_mut
-                .get::<ColliderDensity>()
-                .copied()
-                .unwrap_or_default();
+                let mass_properties = if entity_mut.get::<Sensor>().is_some() {
+                    MassProperties::ZERO
+                } else {
+                    collider.mass_properties(density.0)
+                };
 
-            let mass_properties = if entity_mut.get::<Sensor>().is_some() {
-                MassProperties::ZERO
-            } else {
-                collider.mass_properties(density.0)
-            };
-
-            if let Some(mut collider_mass_properties) =
-                entity_mut.get_mut::<ColliderMassProperties>()
-            {
-                *collider_mass_properties = ColliderMassProperties::from(mass_properties);
-            }
-        });
+                if let Some(mut collider_mass_properties) =
+                    entity_mut.get_mut::<ColliderMassProperties>()
+                {
+                    *collider_mass_properties = ColliderMassProperties::from(mass_properties);
+                }
+            });
 
         // Register a component hook that removes `ColliderMarker` components
         // and updates rigid bodies when their collider is removed.
