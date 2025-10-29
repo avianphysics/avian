@@ -118,11 +118,9 @@ use derive_more::From;
 ///
 /// Avian does not have a built-in character controller, so if you need one,
 /// you will need to implement it yourself or use a third party option.
-/// You can take a look at the [`basic_dynamic_character`] and [`basic_kinematic_character`]
-/// examples for a simple implementation.
+/// You can take a look at the [3D Examples] for implementations of basic kinematic and dynamic character controllers.
 ///
-/// [`basic_dynamic_character`]: https://github.com/avianphysics/avian/blob/42fb8b21c756a7f4dd91071597dc251245ddaa8f/crates/avian3d/examples/basic_dynamic_character.rs
-/// [`basic_kinematic_character`]: https://github.com/avianphysics/avian/blob/42fb8b21c756a7f4dd91071597dc251245ddaa8f/crates/avian3d/examples/basic_kinematic_character.rs
+/// [3D Examples]: https://github.com/avianphysics/avian/tree/081d2de15f526ada89bf642e3c3277c2c7784488/crates/avian3d/examples
 ///
 /// # Mass Properties
 ///
