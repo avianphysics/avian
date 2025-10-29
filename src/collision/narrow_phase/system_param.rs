@@ -712,7 +712,7 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                 );
 
                 // Transform and prune contact data.
-                contacts.manifolds.iter_mut().for_each(|manifold| {
+                contacts.manifolds.retain_mut(|manifold| {
                     // Set the initial surface properties.
                     manifold.friction = friction;
                     manifold.restitution = restitution;
@@ -761,6 +761,8 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     if manifold.points.len() > 4 {
                         manifold.prune_points();
                     }
+
+                    !manifold.points.is_empty()
                 });
 
                 // Check if the colliders are now touching.
