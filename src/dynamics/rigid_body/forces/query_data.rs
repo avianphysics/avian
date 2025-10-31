@@ -245,7 +245,7 @@ pub trait RigidBodyForces: RigidBodyForcesInternal {
     #[inline]
     fn apply_torque(&mut self, torque: AngularVector) {
         if torque != AngularVector::ZERO && self.try_wake_up() {
-            let acceleration = self.global_inverse_angular_inertia() * torque;
+            let acceleration = self.effective_inverse_angular_inertia() * torque;
             self.integration_data_mut()
                 .apply_angular_acceleration(acceleration);
         }
@@ -337,9 +337,7 @@ pub trait RigidBodyForces: RigidBodyForcesInternal {
     #[inline]
     fn apply_angular_impulse(&mut self, impulse: AngularVector) {
         if impulse != AngularVector::ZERO && self.try_wake_up() {
-            let effective_inverse_angular_inertia = self
-                .locked_axes()
-                .apply_to_angular_inertia(self.global_inverse_angular_inertia());
+            let effective_inverse_angular_inertia = self.effective_inverse_angular_inertia();
             let delta_vel = effective_inverse_angular_inertia * impulse;
             *self.angular_velocity_mut() += delta_vel;
         }
@@ -356,9 +354,7 @@ pub trait RigidBodyForces: RigidBodyForcesInternal {
     fn apply_local_angular_impulse(&mut self, impulse: AngularVector) {
         if impulse != AngularVector::ZERO && self.try_wake_up() {
             let world_impulse = self.rot() * impulse;
-            let effective_inverse_angular_inertia = self
-                .locked_axes()
-                .apply_to_angular_inertia(self.global_inverse_angular_inertia());
+            let effective_inverse_angular_inertia = self.effective_inverse_angular_inertia();
             let delta_vel = effective_inverse_angular_inertia * world_impulse;
             *self.angular_velocity_mut() += delta_vel;
         }
@@ -579,7 +575,7 @@ trait RigidBodyForcesInternal {
     fn inverse_mass(&self) -> Scalar;
     #[cfg(feature = "3d")]
     fn inverse_angular_inertia(&self) -> SymmetricTensor;
-    fn global_inverse_angular_inertia(&self) -> SymmetricTensor;
+    fn effective_inverse_angular_inertia(&self) -> SymmetricTensor;
     fn global_center_of_mass(&self) -> Vector;
     fn locked_axes(&self) -> LockedAxes;
     fn integration_data(&self) -> &VelocityIntegrationData;
@@ -624,7 +620,7 @@ impl RigidBodyForcesInternal for ForcesItem<'_, '_> {
         self.angular_inertia.inverse()
     }
     #[inline]
-    fn global_inverse_angular_inertia(&self) -> SymmetricTensor {
+    fn effective_inverse_angular_inertia(&self) -> SymmetricTensor {
         #[cfg(feature = "2d")]
         let global_angular_inertia = *self.angular_inertia;
         #[cfg(feature = "3d")]
@@ -702,8 +698,8 @@ impl RigidBodyForcesInternal for NonWakingForcesItem<'_, '_> {
         self.0.inverse_angular_inertia()
     }
     #[inline]
-    fn global_inverse_angular_inertia(&self) -> SymmetricTensor {
-        self.0.global_inverse_angular_inertia()
+    fn effective_inverse_angular_inertia(&self) -> SymmetricTensor {
+        self.0.effective_inverse_angular_inertia()
     }
     #[inline]
     fn global_center_of_mass(&self) -> Vector {
