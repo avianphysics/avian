@@ -733,7 +733,8 @@ impl PhysicsIslands {
         Some(island)
     }
 
-    /// Removes a joint from the island manager. Returns a reference to the island that the joint was removed from.
+    /// Removes a joint from the island manager. Returns a reference to the island
+    /// that the joint was removed from, if the island still exists.
     ///
     /// This will unlink the joint from the island and update the island's joint list.
     /// The [`PhysicsIsland::constraints_removed`] counter is incremented.
@@ -751,7 +752,7 @@ impl PhysicsIslands {
         body_islands: &mut Query<&mut BodyIslandNode, Or<(With<Disabled>, Without<Disabled>)>>,
         contact_graph: &ContactGraph,
         joint_graph: &mut JointGraph,
-    ) -> &PhysicsIsland {
+    ) -> Option<&PhysicsIsland> {
         let joint = joint_graph.get_mut_by_id(joint_id).unwrap();
 
         debug_assert!(joint.island.island_id != IslandId::PLACEHOLDER);
@@ -774,12 +775,7 @@ impl PhysicsIslands {
             next_island.prev = joint_island.prev;
         }
 
-        let island = self
-            .islands
-            .get_mut(joint_island.island_id.0 as usize)
-            .unwrap_or_else(|| {
-                panic!("Island {} does not exist", joint_island.island_id);
-            });
+        let island = self.islands.get_mut(joint_island.island_id.0 as usize)?;
 
         if island.head_joint == Some(joint_id) {
             // The joint is the head of the island.
@@ -805,7 +801,7 @@ impl PhysicsIslands {
             );
         }
 
-        island
+        Some(island)
     }
 
     /// Merges the [`PhysicsIsland`]s associated with the given bodies. Returns the ID of the resulting island.

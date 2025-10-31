@@ -175,14 +175,14 @@ fn remove_joint_from_graph<E: EntityEvent, B: Bundle>(
     };
 
     // Remove the joint from the island.
-    if let Some(islands) = &mut islands {
-        let island = islands.remove_joint(
+    if let Some(islands) = &mut islands
+        && let Some(island) = islands.remove_joint(
             joint.id,
             &mut body_islands,
             &contact_graph,
             &mut joint_graph,
-        );
-
+        )
+    {
         // Wake up the island if it was sleeping.
         if island.is_sleeping {
             commands.queue(WakeIslands(vec![island.id]));
@@ -314,14 +314,14 @@ fn on_change_joint_entities<T: Component + EntityConstraint<2>>(
 
         if body1 != old_edge.body1 || body2 != old_edge.body2 {
             // Remove the joint from the island.
-            if let Some(islands) = &mut islands {
-                let island = islands.remove_joint(
+            if let Some(islands) = &mut islands
+                && let Some(island) = islands.remove_joint(
                     old_edge.id,
                     &mut body_islands,
                     &contact_graph,
                     &mut joint_graph,
-                );
-
+                )
+            {
                 // Wake up the island if it was sleeping.
                 if island.is_sleeping {
                     islands_to_wake.push(island.id);
