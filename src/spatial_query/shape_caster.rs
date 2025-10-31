@@ -338,13 +338,6 @@ impl<C: QueryCollider> ShapeCaster<C> {
     ) {
         hits.clear();
 
-        let shape_cast_options = ShapeCastOptions {
-            max_time_of_impact: self.max_distance,
-            target_distance: self.target_distance,
-            stop_at_penetration: !self.ignore_origin_penetration,
-            compute_impact_geometry_on_penetration: self.compute_contact_on_penetration,
-        };
-
         let shape_rotation: Rotation;
         #[cfg(feature = "2d")]
         {

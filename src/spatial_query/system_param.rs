@@ -78,7 +78,7 @@ impl<C: QueryCollider> SpatialQuery<'_, '_, C> {
     /// [`PhysicsStepSystems::SpatialQuery`], but if you modify colliders or their positions before that, you can
     /// call this to make sure the data is up to date when performing spatial queries using [`SpatialQuery`].
     pub fn update_pipeline(&mut self) {
-        self.query_pipeline.update(self.colliders.iter());
+        todo!();
     }
 
     /// Casts a [ray](spatial_query#raycasting) and computes the closest [hit](RayHitData) with a collider.
