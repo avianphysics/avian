@@ -150,42 +150,39 @@
 //!
 //! To specify which colliders should be considered in the query, use a [spatial query filter](`SpatialQueryFilter`).
 
-#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
+mod bvh_ext;
+
 mod pipeline;
 mod query_filter;
 mod ray_caster;
-#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 mod shape_caster;
-#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 mod system_param;
 
 mod diagnostics;
+use std::marker::PhantomData;
+
 pub use diagnostics::SpatialQueryDiagnostics;
 
-#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 pub use pipeline::*;
 pub use query_filter::*;
 pub use ray_caster::*;
-#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 pub use shape_caster::*;
-#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 pub use system_param::*;
 
-use crate::prelude::*;
+use crate::{collision::collider::QueryCollider, prelude::*};
 use bevy::prelude::*;
 
-/// Initializes the [`SpatialQueryPipeline`] resource and handles component-based [spatial queries](spatial_query)
-/// like [raycasting](spatial_query#raycasting) and [shapecasting](spatial_query#shapecasting) with
-/// [`RayCaster`] and [`ShapeCaster`].
-pub struct SpatialQueryPlugin;
+pub use obvhs;
 
-impl Plugin for SpatialQueryPlugin {
+#[derive(SystemSet, Clone, Copy, PartialEq, Eq, Hash, Debug)]
+struct UpdatePipeline;
+
+struct UniversalSpatialQueryPlugin;
+
+impl Plugin for UniversalSpatialQueryPlugin {
     fn build(&self, app: &mut App) {
-        #[cfg(all(
-            feature = "default-collider",
-            any(feature = "parry-f32", feature = "parry-f64")
-        ))]
         app.init_resource::<SpatialQueryPipeline>();
+        app.allow_ambiguous_resource::<SpatialQueryDiagnostics>();
 
         let physics_schedule = app
             .get_schedule_mut(PhysicsSchedule)
@@ -193,22 +190,49 @@ impl Plugin for SpatialQueryPlugin {
 
         physics_schedule.add_systems(
             (
-                update_ray_caster_positions,
-                #[cfg(all(
-                    feature = "default-collider",
-                    any(feature = "parry-f32", feature = "parry-f64")
-                ))]
-                (
-                    update_shape_caster_positions,
-                    update_spatial_query_pipeline,
-                    raycast,
-                    shapecast,
-                )
-                    .chain(),
+                update_ray_caster_positions.before(UpdatePipeline),
+                update_spatial_query_pipeline.in_set(UpdatePipeline),
             )
                 .chain()
                 .in_set(PhysicsStepSystems::SpatialQuery),
         );
+    }
+}
+
+/// Initializes the [`SpatialQueryPipeline`] resource and handles component-based [spatial queries](spatial_query)
+/// like [raycasting](spatial_query#raycasting) and [shapecasting](spatial_query#shapecasting) with
+/// [`RayCaster`] and [`ShapeCaster`].
+pub struct SpatialQueryPlugin<C: QueryCollider> {
+    phantom: PhantomData<C>,
+}
+
+impl<C: QueryCollider> Default for SpatialQueryPlugin<C> {
+    fn default() -> Self {
+        Self {
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<C: QueryCollider> Plugin for SpatialQueryPlugin<C> {
+    fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<UniversalSpatialQueryPlugin>() {
+            app.add_plugins(UniversalSpatialQueryPlugin);
+        }
+
+        let physics_schedule = app
+            .get_schedule_mut(PhysicsSchedule)
+            .expect("add PhysicsSchedule first");
+
+        physics_schedule.add_systems((
+            update_shape_caster_positions::<C>
+                .after(update_ray_caster_positions)
+                .before(UpdatePipeline)
+                .in_set(PhysicsStepSet::SpatialQuery),
+            (raycast::<C>, shapecast::<C>)
+                .after(UpdatePipeline)
+                .in_set(PhysicsStepSet::SpatialQuery),
+        ));
     }
 
     fn finish(&self, app: &mut App) {
@@ -218,19 +242,18 @@ impl Plugin for SpatialQueryPlugin {
 }
 
 /// Updates the [`SpatialQueryPipeline`].
-#[cfg(all(
-    feature = "default-collider",
-    any(feature = "parry-f32", feature = "parry-f64")
-))]
 pub fn update_spatial_query_pipeline(
-    mut spatial_query: SpatialQuery,
-    mut diagnostics: ResMut<SpatialQueryDiagnostics>,
+    mut spatial_query: ResMut<SpatialQueryPipeline>,
+    aabbs: Query<(Entity, Option<&CollisionLayers>, &ColliderAabb)>,
+    diagnostics: Option<ResMut<SpatialQueryDiagnostics>>,
 ) {
     let start = crate::utils::Instant::now();
 
-    spatial_query.update_pipeline();
+    spatial_query.update(aabbs.iter());
 
-    diagnostics.update_pipeline = start.elapsed();
+    if let Some(mut diagnostics) = diagnostics {
+        diagnostics.update_pipeline = start.elapsed();
+    }
 }
 
 type RayCasterPositionQueryComponents = (
@@ -300,19 +323,17 @@ fn update_ray_caster_positions(
     }
 }
 
-#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
-type ShapeCasterPositionQueryComponents = (
-    &'static mut ShapeCaster,
+type ShapeCasterPositionQueryComponents<C> = (
+    &'static mut ShapeCaster<C>,
     Option<&'static Position>,
     Option<&'static Rotation>,
     Option<&'static ChildOf>,
     Option<&'static GlobalTransform>,
 );
 
-#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 #[allow(clippy::type_complexity)]
-fn update_shape_caster_positions(
-    mut shape_casters: Query<ShapeCasterPositionQueryComponents>,
+fn update_shape_caster_positions<C: QueryCollider>(
+    mut shape_casters: Query<ShapeCasterPositionQueryComponents<C>>,
     parents: Query<
         (
             Option<&Position>,
@@ -396,11 +417,10 @@ fn update_shape_caster_positions(
     }
 }
 
-#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
-fn raycast(
+fn raycast<C: QueryCollider>(
     mut rays: Query<(Entity, &mut RayCaster, &mut RayHits)>,
-    spatial_query: SpatialQuery,
-    mut diagnostics: ResMut<SpatialQueryDiagnostics>,
+    spatial_query: SpatialQuery<C>,
+    diagnostics: Option<ResMut<SpatialQueryDiagnostics>>,
 ) {
     let start = crate::utils::Instant::now();
 
@@ -412,14 +432,15 @@ fn raycast(
         }
     }
 
-    diagnostics.update_ray_casters = start.elapsed();
+    if let Some(mut diagnostics) = diagnostics {
+        diagnostics.update_ray_casters = start.elapsed();
+    }
 }
 
-#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
-fn shapecast(
-    mut shape_casters: Query<(Entity, &ShapeCaster, &mut ShapeHits)>,
-    spatial_query: SpatialQuery,
-    mut diagnostics: ResMut<SpatialQueryDiagnostics>,
+fn shapecast<C: QueryCollider>(
+    mut shape_casters: Query<(Entity, &ShapeCaster<C>, &mut ShapeHits)>,
+    spatial_query: SpatialQuery<C>,
+    diagnostics: Option<ResMut<SpatialQueryDiagnostics>>,
 ) {
     let start = crate::utils::Instant::now();
 
@@ -431,5 +452,7 @@ fn shapecast(
         }
     }
 
-    diagnostics.update_shape_casters = start.elapsed();
+    if let Some(mut diagnostics) = diagnostics {
+        diagnostics.update_shape_casters = start.elapsed();
+    }
 }

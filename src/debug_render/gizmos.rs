@@ -56,7 +56,7 @@ pub trait PhysicsGizmoExt {
         origin: Vector,
         direction: Dir,
         max_distance: Scalar,
-        hits: &[RayHitData],
+        hits: &[RayCastHit],
         ray_color: Color,
         point_color: Color,
         normal_color: Color,
@@ -76,7 +76,7 @@ pub trait PhysicsGizmoExt {
         shape_rotation: impl Into<Rotation>,
         direction: Dir,
         max_distance: Scalar,
-        hits: &[ShapeHitData],
+        hits: &[ShapeCastHit],
         ray_color: Color,
         shape_color: Color,
         point_color: Color,
@@ -479,7 +479,7 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
         origin: Vector,
         direction: Dir,
         max_distance: Scalar,
-        hits: &[RayHitData],
+        hits: &[RayCastHit],
         ray_color: Color,
         point_color: Color,
         normal_color: Color,
@@ -531,7 +531,7 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
         shape_rotation: impl Into<Rotation>,
         direction: Dir,
         max_distance: Scalar,
-        hits: &[ShapeHitData],
+        hits: &[ShapeCastHit],
         ray_color: Color,
         shape_color: Color,
         point_color: Color,
@@ -563,14 +563,14 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
         for hit in hits {
             // Draw hit point
             #[cfg(feature = "2d")]
-            self.circle_2d(hit.point1.f32(), 0.1 * length_unit as f32, point_color);
+            self.circle_2d(hit.point.f32(), 0.1 * length_unit as f32, point_color);
             #[cfg(feature = "3d")]
-            self.sphere(hit.point1.f32(), 0.1 * length_unit as f32, point_color);
+            self.sphere(hit.point.f32(), 0.1 * length_unit as f32, point_color);
 
             // Draw hit normal as arrow
             self.draw_arrow(
-                hit.point1,
-                hit.point1 + hit.normal1 * 0.5 * length_unit,
+                hit.point,
+                hit.point + hit.normal * 0.5 * length_unit,
                 0.1 * length_unit,
                 normal_color,
             );

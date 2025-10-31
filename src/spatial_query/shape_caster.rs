@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::{collision::collider::QueryCollider, prelude::*};
 use bevy::{
     ecs::{
         entity::{EntityMapper, MapEntities},
@@ -7,7 +7,6 @@ use bevy::{
     },
     prelude::*,
 };
-use parry::{query::ShapeCastOptions, shape::CompositeShapeRef};
 
 /// A component used for [shapecasting](spatial_query#shapecasting).
 ///
@@ -55,18 +54,19 @@ use parry::{query::ShapeCastOptions, shape::CompositeShapeRef};
 /// }
 /// ```
 #[derive(Component, Clone, Debug, Reflect)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
-#[reflect(Debug, Component)]
-#[component(on_add = on_add_shape_caster)]
+// #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+// #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(Component)]
+#[reflect(from_reflect = false)]
+#[component(on_add = on_add_shape_caster::<C>)]
 #[require(ShapeHits)]
-pub struct ShapeCaster {
+pub struct ShapeCaster<C: QueryCollider> {
     /// Controls if the shape caster is enabled.
     pub enabled: bool,
 
-    /// The shape being cast represented as a [`Collider`].
+    /// The shape being cast represented as a defined for the [`QueryCollider`].
     #[reflect(ignore)]
-    pub shape: Collider,
+    pub shape: C::CastShape,
 
     /// The local origin of the shape relative to the [`Position`] and [`Rotation`]
     /// of the shape caster entity or its parent.
@@ -143,14 +143,11 @@ pub struct ShapeCaster {
     pub query_filter: SpatialQueryFilter,
 }
 
-impl Default for ShapeCaster {
+impl<C: QueryCollider> Default for ShapeCaster<C> {
     fn default() -> Self {
         Self {
             enabled: true,
-            #[cfg(feature = "2d")]
-            shape: Collider::circle(0.0),
-            #[cfg(feature = "3d")]
-            shape: Collider::sphere(0.0),
+            shape: C::CastShape::default(),
             origin: Vector::ZERO,
             global_origin: Vector::ZERO,
             #[cfg(feature = "2d")]
@@ -174,11 +171,11 @@ impl Default for ShapeCaster {
     }
 }
 
-impl ShapeCaster {
+impl<C: QueryCollider> ShapeCaster<C> {
     /// Creates a new [`ShapeCaster`] with a given shape, origin, shape rotation and direction.
     #[cfg(feature = "2d")]
     pub fn new(
-        shape: impl Into<Collider>,
+        shape: impl Into<C::CastShape>,
         origin: Vector,
         shape_rotation: Scalar,
         direction: Dir,
@@ -191,10 +188,11 @@ impl ShapeCaster {
             ..default()
         }
     }
+
     #[cfg(feature = "3d")]
     /// Creates a new [`ShapeCaster`] with a given shape, origin, shape rotation and direction.
     pub fn new(
-        shape: impl Into<Collider>,
+        shape: impl Into<C::CastShape>,
         origin: Vector,
         shape_rotation: Quaternion,
         direction: Dir,
@@ -338,23 +336,7 @@ impl ShapeCaster {
         hits: &mut ShapeHits,
         query_pipeline: &SpatialQueryPipeline,
     ) {
-        // TODO: This clone is here so that the excluded entities in the original `query_filter` aren't modified.
-        //       We could remove this if shapecasting could compute multiple hits without just doing casts in a loop.
-        //       See https://github.com/avianphysics/avian/issues/403.
-        let mut query_filter = self.query_filter.clone();
-
-        if self.ignore_self {
-            query_filter.excluded_entities.insert(caster_entity);
-        }
-
         hits.clear();
-
-        let shape_cast_options = ShapeCastOptions {
-            max_time_of_impact: self.max_distance,
-            target_distance: self.target_distance,
-            stop_at_penetration: !self.ignore_origin_penetration,
-            compute_impact_geometry_on_penetration: self.compute_contact_on_penetration,
-        };
 
         let shape_rotation: Rotation;
         #[cfg(feature = "2d")]
@@ -366,42 +348,19 @@ impl ShapeCaster {
             shape_rotation = Rotation::from(self.global_shape_rotation());
         }
 
-        let shape_isometry = make_isometry(self.global_origin(), shape_rotation);
+        let shape_isometry = (self.global_origin(), shape_rotation);
         let shape_direction = self.global_direction().adjust_precision().into();
 
-        while hits.len() < self.max_hits as usize {
-            let composite = query_pipeline.as_composite_shape_internal(&query_filter);
-            let pipeline_shape = CompositeShapeRef(&composite);
-
-            let hit = pipeline_shape
-                .cast_shape(
-                    query_pipeline.dispatcher.as_ref(),
-                    &shape_isometry,
-                    &shape_direction,
-                    self.shape.shape_scaled().as_ref(),
-                    shape_cast_options,
-                )
-                .map(|(index, hit)| ShapeHitData {
-                    entity: query_pipeline.proxies[index as usize].entity,
-                    distance: hit.time_of_impact,
-                    point1: hit.witness1.into(),
-                    point2: hit.witness2.into(),
-                    normal1: hit.normal1.into(),
-                    normal2: hit.normal2.into(),
-                });
-
-            if let Some(hit) = hit {
-                query_filter.excluded_entities.insert(hit.entity);
-                hits.push(hit);
-            } else {
-                return;
-            }
-        }
+        let _: (_, Vector) = (shape_isometry, shape_direction);
+        let _ = (caster_entity, query_pipeline);
+        // TODO: Collect hits until we hit max_hits or hit everything
+        // TODO: ignore self
+        // query_pipeline.cast_shape()
     }
 }
 
-fn on_add_shape_caster(mut world: DeferredWorld, ctx: HookContext) {
-    let shape_caster = world.get::<ShapeCaster>(ctx.entity).unwrap();
+fn on_add_shape_caster<C: QueryCollider>(mut world: DeferredWorld, ctx: HookContext) {
+    let shape_caster = world.get::<ShapeCaster<C>>(ctx.entity).unwrap();
     let max_hits = if shape_caster.max_hits == u32::MAX {
         10
     } else {
@@ -522,11 +481,11 @@ impl ShapeCastConfig {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Component, Debug, Default, PartialEq)]
-pub struct ShapeHits(pub Vec<ShapeHitData>);
+pub struct ShapeHits(pub Vec<ShapeCastHit>);
 
 impl IntoIterator for ShapeHits {
-    type Item = ShapeHitData;
-    type IntoIter = alloc::vec::IntoIter<ShapeHitData>;
+    type Item = ShapeCastHit;
+    type IntoIter = alloc::vec::IntoIter<ShapeCastHit>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
@@ -534,8 +493,8 @@ impl IntoIterator for ShapeHits {
 }
 
 impl<'a> IntoIterator for &'a ShapeHits {
-    type Item = &'a ShapeHitData;
-    type IntoIter = core::slice::Iter<'a, ShapeHitData>;
+    type Item = &'a ShapeCastHit;
+    type IntoIter = core::slice::Iter<'a, ShapeCastHit>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.iter()
@@ -543,8 +502,8 @@ impl<'a> IntoIterator for &'a ShapeHits {
 }
 
 impl<'a> IntoIterator for &'a mut ShapeHits {
-    type Item = &'a mut ShapeHitData;
-    type IntoIter = core::slice::IterMut<'a, ShapeHitData>;
+    type Item = &'a mut ShapeCastHit;
+    type IntoIter = core::slice::IterMut<'a, ShapeCastHit>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.iter_mut()
@@ -564,7 +523,7 @@ impl MapEntities for ShapeHits {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, PartialEq)]
-pub struct ShapeHitData {
+pub struct ShapeCastHit {
     /// The entity of the collider that was hit by the shape.
     pub entity: Entity,
 
@@ -572,26 +531,45 @@ pub struct ShapeHitData {
     #[doc(alias = "time_of_impact")]
     pub distance: Scalar,
 
-    /// The closest point on the shape that was hit, expressed in world space.
+    /// The hit point in world space.
     ///
-    /// If the shapes are penetrating or the target distance is greater than zero,
-    /// this will be different from `point2`.
-    pub point1: Vector,
+    /// If the shapes are penetrating, this will be the midpoint between the closest points
+    /// on the surfaces of the two shapes.
+    pub point: Vector,
 
-    /// The closest point on the shape that was cast, expressed in world space.
-    ///
-    /// If the shapes are penetrating or the target distance is greater than zero,
-    /// this will be different from `point1`.
-    pub point2: Vector,
-
-    /// The outward surface normal on the hit shape at `point1`, expressed in world space.
-    pub normal1: Vector,
-
-    /// The outward surface normal on the cast shape at `point2`, expressed in world space.
-    pub normal2: Vector,
+    /// The outward surface normal on the hit shape at the hit point in world space.
+    pub normal: Vector,
 }
 
-impl MapEntities for ShapeHitData {
+impl MapEntities for ShapeCastHit {
+    fn map_entities<M: EntityMapper>(&mut self, entity_mapper: &mut M) {
+        self.entity = entity_mapper.get_mapped(self.entity);
+    }
+}
+
+/// Data related to a hit during a [shapecast](spatial_query#shapecasting).
+#[derive(Clone, Copy, Debug, PartialEq, Reflect)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(Debug, PartialEq)]
+pub struct ShapeIntersectionHit {
+    /// The entity of the collider that was hit by the shape.
+    pub entity: Entity,
+
+    /// How much the shapes overlap
+    pub penetration: Scalar,
+
+    /// The hit point in world space.
+    ///
+    /// If the shapes are penetrating, this will be the midpoint between the closest points
+    /// on the surfaces of the two shapes.
+    pub point: Vector,
+
+    /// The outward surface normal on the hit shape at the hit point in world space.
+    pub normal: Vector,
+}
+
+impl MapEntities for ShapeIntersectionHit {
     fn map_entities<M: EntityMapper>(&mut self, entity_mapper: &mut M) {
         self.entity = entity_mapper.get_mapped(self.entity);
     }
