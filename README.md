@@ -111,6 +111,7 @@ fn setup(
         Collider::cylinder(4.0, 0.1),
         Mesh3d(meshes.add(Cylinder::new(4.0, 0.1))),
         MeshMaterial3d(materials.add(Color::WHITE)),
+        Transform::from_xyz(0.0, 0.0, 0.0),
     ));
 
     // Dynamic physics object with a collision shape and initial angular velocity
