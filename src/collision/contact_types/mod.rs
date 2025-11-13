@@ -734,9 +734,9 @@ pub struct SingleContact {
     /// The contact point on the second shape in local space.
     pub local_point2: Vector,
     /// The contact normal expressed in the local space of the first shape.
-    pub local_normal1: Vector,
+    pub local_normal1: Dir,
     /// The contact normal expressed in the local space of the second shape.
-    pub local_normal2: Vector,
+    pub local_normal2: Dir,
     /// Penetration depth.
     pub penetration: Scalar,
 }
@@ -747,8 +747,8 @@ impl SingleContact {
     pub fn new(
         local_point1: Vector,
         local_point2: Vector,
-        local_normal1: Vector,
-        local_normal2: Vector,
+        local_normal1: Dir,
+        local_normal2: Dir,
         penetration: Scalar,
     ) -> Self {
         Self {
@@ -776,13 +776,13 @@ impl SingleContact {
 
     /// Returns the world-space contact normal pointing from the first shape to the second.
     #[inline]
-    pub fn global_normal1(&self, rotation: &Rotation) -> Vector {
+    pub fn global_normal1(&self, rotation: &Rotation) -> Dir {
         rotation * self.local_normal1
     }
 
     /// Returns the world-space contact normal pointing from the second shape to the first.
     #[inline]
-    pub fn global_normal2(&self, rotation: &Rotation) -> Vector {
+    pub fn global_normal2(&self, rotation: &Rotation) -> Dir {
         rotation * self.local_normal2
     }
 

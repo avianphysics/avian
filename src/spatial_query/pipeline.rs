@@ -416,8 +416,8 @@ impl SpatialQueryPipeline {
                 distance: hit.time_of_impact,
                 point1: hit.witness1.into(),
                 point2: hit.witness2.into(),
-                normal1: hit.normal1.into(),
-                normal2: hit.normal2.into(),
+                normal1: Dir::new_unchecked(hit.normal1.into()),
+                normal2: Dir::new_unchecked(hit.normal2.into()),
             })
     }
 
@@ -538,8 +538,8 @@ impl SpatialQueryPipeline {
                     distance: hit.time_of_impact,
                     point1: hit.witness1.into(),
                     point2: hit.witness2.into(),
-                    normal1: hit.normal1.into(),
-                    normal2: hit.normal2.into(),
+                    normal1: Dir::new_unchecked(hit.normal1.into()),
+                    normal2: Dir::new_unchecked(hit.normal2.into()),
                 });
 
             if let Some(hit) = hit {

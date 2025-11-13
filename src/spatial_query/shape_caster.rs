@@ -386,8 +386,8 @@ impl ShapeCaster {
                     distance: hit.time_of_impact,
                     point1: hit.witness1.into(),
                     point2: hit.witness2.into(),
-                    normal1: hit.normal1.into(),
-                    normal2: hit.normal2.into(),
+                    normal1: Dir::new_unchecked(hit.normal1.into()),
+                    normal2: Dir::new_unchecked(hit.normal2.into()),
                 });
 
             if let Some(hit) = hit {
@@ -585,10 +585,10 @@ pub struct ShapeHitData {
     pub point2: Vector,
 
     /// The outward surface normal on the hit shape at `point1`, expressed in world space.
-    pub normal1: Vector,
+    pub normal1: Dir,
 
     /// The outward surface normal on the cast shape at `point2`, expressed in world space.
-    pub normal2: Vector,
+    pub normal2: Dir,
 }
 
 impl MapEntities for ShapeHitData {

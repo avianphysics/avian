@@ -83,28 +83,20 @@ pub fn contact(
         prediction_distance,
     )
     .map(|contact| {
-        if let Some(contact) = contact {
-            // Transform contact data into local space
-            let point1: Vector = rotation1.inverse() * Vector::from(contact.point1);
-            let point2: Vector = rotation2.inverse() * Vector::from(contact.point2);
-            let normal1: Vector = (rotation1.inverse() * Vector::from(contact.normal1)).normalize();
-            let normal2: Vector = (rotation2.inverse() * Vector::from(contact.normal2)).normalize();
+        let contact = contact?;
+        // Transform contact data into local space
+        let point1: Vector = rotation1.inverse() * Vector::from(contact.point1);
+        let point2: Vector = rotation2.inverse() * Vector::from(contact.point2);
+        let normal1 = Dir::new(rotation1.inverse() * Vector::from(contact.normal1)).ok()?;
+        let normal2 = Dir::new(rotation2.inverse() * Vector::from(contact.normal2)).ok()?;
 
-            // Make sure the normals are valid
-            if !normal1.is_normalized() || !normal2.is_normalized() {
-                return None;
-            }
-
-            Some(SingleContact::new(
-                point1,
-                point2,
-                normal1,
-                normal2,
-                -contact.dist,
-            ))
-        } else {
-            None
-        }
+        Some(SingleContact::new(
+            point1,
+            point2,
+            normal1,
+            normal2,
+            -contact.dist,
+        ))
     })
 }
 
@@ -527,10 +519,10 @@ pub struct TimeOfImpact {
     pub point2: Vector,
     /// The outward normal on the first collider, at the time of impact,
     /// expressed in local space.
-    pub normal1: Vector,
+    pub normal1: Dir,
     /// The outward normal on the second collider, at the time of impact,
     /// expressed in local space.
-    pub normal2: Vector,
+    pub normal2: Dir,
     /// The way the time of impact computation was terminated.
     pub status: TimeOfImpactStatus,
 }
@@ -609,8 +601,8 @@ pub fn time_of_impact(
             time_of_impact: toi.time_of_impact,
             point1: toi.witness1.into(),
             point2: toi.witness2.into(),
-            normal1: toi.normal1.into(),
-            normal2: toi.normal2.into(),
+            normal1: Dir::new_unchecked(toi.normal1.into()),
+            normal2: Dir::new_unchecked(toi.normal2.into()),
             status: toi.status,
         })
     })
