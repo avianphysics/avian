@@ -260,7 +260,7 @@ impl ContactPair {
             let impulse = manifold.max_normal_impulse();
             if impulse > magnitude {
                 magnitude = impulse;
-                normal = manifold.normal;
+                normal = manifold.normal.into();
             }
         }
         normal * magnitude
@@ -354,7 +354,7 @@ pub struct ContactManifold {
     /// The unit contact normal in world space, pointing from the first shape to the second.
     ///
     /// The same normal is shared by all `points` in a manifold.
-    pub normal: Vector,
+    pub normal: Dir,
     /// The effective coefficient of dynamic [friction](Friction) used for the contact surface.
     pub friction: Scalar,
     /// The effective coefficient of [restitution](Restitution) used for the contact surface.
@@ -383,7 +383,7 @@ impl ContactManifold {
     ///
     /// `index` represents the index of the manifold in the collision.
     #[inline]
-    pub fn new(points: impl IntoIterator<Item = ContactPoint>, normal: Vector) -> Self {
+    pub fn new(points: impl IntoIterator<Item = ContactPoint>, normal: Dir) -> Self {
         Self {
             #[cfg(feature = "2d")]
             points: arrayvec::ArrayVec::from_iter(points),
@@ -494,7 +494,7 @@ impl ContactManifold {
             .iter()
             .map(|point| {
                 (
-                    point.anchor1.reject_from_normalized(self.normal),
+                    point.anchor1.reject_from_normalized(self.normal.into()),
                     (point.penetration * point.penetration).max(MIN_DISTANCE_SQUARED),
                 )
             })
@@ -536,7 +536,7 @@ impl ContactManifold {
         let mut point4_index = usize::MAX;
         let mut min_value = 0.0;
         let mut max_value = 0.0;
-        let perp = (point2 - point1).cross(self.normal);
+        let perp = (point2 - point1).cross(self.normal.into());
         for (i, point) in projected.iter().enumerate() {
             if i == point1_index || i == point2_index {
                 continue;

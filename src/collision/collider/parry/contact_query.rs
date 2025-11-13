@@ -191,12 +191,9 @@ pub fn contact_manifolds(
             prediction_distance,
         )
     {
-        let normal = rotation1 * Vector::from(contact.normal1);
-
-        // Make sure the normal is valid
-        if !normal.is_normalized() {
+        let Ok(normal) = Dir::new(rotation1 * Vector::from(contact.normal1)) else {
             return;
-        }
+        };
 
         let local_point1: Vector = contact.point1.into();
 
@@ -223,11 +220,8 @@ pub fn contact_manifolds(
         }
 
         let subpos1 = manifold.subshape_pos1.unwrap_or_default();
-        let local_normal: Vector = subpos1
-            .rotation
-            .transform_vector(&manifold.local_n1)
-            .normalize()
-            .into();
+        let local_normal =
+            Dir::new(subpos1.rotation.transform_vector(&manifold.local_n1).into()).ok()?;
         let normal = rotation1 * local_normal;
 
         // Make sure the normal is valid

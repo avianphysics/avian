@@ -206,7 +206,7 @@ impl SpatialQueryPipeline {
             .map(|(index, hit)| RayHitData {
                 entity: self.proxies[index as usize].entity,
                 distance: hit.time_of_impact,
-                normal: hit.normal.into(),
+                normal: Dir::new_unchecked(hit.normal.into()),
             })
     }
 
@@ -301,7 +301,7 @@ impl SpatialQueryPipeline {
                 Some(RayHitData {
                     entity: proxy.entity,
                     distance: hit.time_of_impact,
-                    normal: hit.normal.into(),
+                    normal: Dir::new_unchecked(hit.normal.into()),
                 })
             });
 

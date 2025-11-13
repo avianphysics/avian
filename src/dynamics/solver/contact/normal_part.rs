@@ -42,7 +42,7 @@ impl ContactNormalPart {
         inverse_angular_inertia2: &SymmetricTensor,
         r1: Vector,
         r2: Vector,
-        normal: Vector,
+        normal: Dir,
         warm_start_impulse: Option<NormalImpulse>,
         softness: SoftnessCoefficients,
     ) -> Self {
@@ -94,6 +94,7 @@ impl ContactNormalPart {
         //
         // K = 1/m1 + 1/m2 + dot(r1 x n, I1^-1 * (r1 x n)) + dot(r2 x n, I2^-1 * (r2 x n))
 
+        let normal = normal.into();
         let r1_cross_n = cross(r1, normal);
         let r2_cross_n = cross(r2, normal);
 
@@ -117,13 +118,13 @@ impl ContactNormalPart {
         &mut self,
         separation: Scalar,
         relative_velocity: Vector,
-        normal: Vector,
+        normal: Dir,
         use_bias: bool,
         max_overlap_solve_speed: Scalar,
         delta_secs: Scalar,
     ) -> Scalar {
         // Compute the relative velocity along the normal.
-        let normal_speed = relative_velocity.dot(normal);
+        let normal_speed = relative_velocity.dot(normal.into());
 
         // Compute the incremental normal impulse.
         let mut impulse = if separation > 0.0 {

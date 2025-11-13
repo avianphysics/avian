@@ -90,7 +90,7 @@ pub struct ContactConstraint {
     #[cfg(feature = "3d")]
     pub tangent_velocity: Vector,
     /// The world-space contact normal shared by all points in the contact manifold.
-    pub normal: Vector,
+    pub normal: Dir,
     /// The first world-space tangent direction shared by all points in the contact manifold.
     #[cfg(feature = "3d")]
     pub tangent1: Vector,
@@ -194,7 +194,8 @@ impl ContactConstraint {
                 anchor1,
                 anchor2,
                 normal_speed: point.normal_speed,
-                initial_separation: -point.penetration - (anchor2 - anchor1).dot(manifold.normal),
+                initial_separation: -point.penetration
+                    - (anchor2 - anchor1).dot(manifold.normal.into()),
             };
 
             points.push(point);
@@ -288,7 +289,7 @@ impl ContactConstraint {
 
             // Compute current saparation.
             let delta_separation = delta_translation + (r2 - r1);
-            let separation = delta_separation.dot(self.normal) + point.initial_separation;
+            let separation = delta_separation.dot(self.normal.into()) + point.initial_separation;
 
             // Fixed anchors
             let r1 = point.anchor1;
@@ -381,7 +382,7 @@ impl ContactConstraint {
 
             // Relative velocity at contact point
             let relative_velocity = body2.velocity_at_point(r2) - body1.velocity_at_point(r1);
-            let normal_speed = relative_velocity.dot(self.normal);
+            let normal_speed = relative_velocity.dot(self.normal.into());
 
             // Compute the incremental normal impulse to account for restitution.
             let mut impulse = -point.normal_part.effective_mass
@@ -416,7 +417,7 @@ impl ContactConstraint {
         #[cfg(feature = "3d")]
         {
             // Note: The order is flipped here so that we use `-normal`.
-            [self.tangent1, self.tangent1.cross(self.normal)]
+            [self.tangent1, self.tangent1.cross(self.normal.into())]
         }
     }
 }
@@ -425,7 +426,7 @@ impl ContactConstraint {
 #[allow(unused_variables)]
 #[inline(always)]
 fn compute_tangent_directions(
-    normal: Vector,
+    normal: Dir,
     velocity1: Vector,
     velocity2: Vector,
 ) -> [Vector; DIM - 1] {

@@ -299,7 +299,7 @@ impl RayCaster {
                     Some(RayHitData {
                         entity: proxy.entity,
                         distance: hit.time_of_impact,
-                        normal: hit.normal.into(),
+                        normal: Dir::new_unchecked(hit.normal.into()),
                     })
                 })
                 .take(self.max_hits as usize);
@@ -416,7 +416,7 @@ pub struct RayHitData {
     pub distance: Scalar,
 
     /// The normal at the point of intersection, expressed in world space.
-    pub normal: Vector,
+    pub normal: Dir,
 }
 
 impl MapEntities for RayHitData {

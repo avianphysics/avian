@@ -377,12 +377,12 @@ fn kinematic_controller_collisions(
                     // a collide-and-slide algorithm.
 
                     // Don't apply an impulse if the character is moving away from the surface.
-                    if linear_velocity.dot(normal) > 0.0 {
+                    if linear_velocity.dot(normal.into()) > 0.0 {
                         continue;
                     }
 
                     // Slide along the surface, rejecting the velocity along the contact normal.
-                    let impulse = linear_velocity.reject_from_normalized(normal);
+                    let impulse = linear_velocity.reject_from_normalized(normal.into());
                     linear_velocity.0 = impulse;
                 }
             } else {
@@ -392,7 +392,7 @@ fn kinematic_controller_collisions(
                 // We need to push back the part of the velocity
                 // that would cause penetration within the next frame.
 
-                let normal_speed = linear_velocity.dot(normal);
+                let normal_speed = linear_velocity.dot(normal.into());
 
                 // Don't apply an impulse if the character is moving away from the surface.
                 if normal_speed > 0.0 {

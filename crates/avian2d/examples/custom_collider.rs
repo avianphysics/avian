@@ -92,9 +92,9 @@ impl AnyCollider for CircleCollider {
 
         if distance_squared < (sum_radius + prediction_distance).powi(2) {
             let local_normal1 = if distance_squared != 0.0 {
-                delta_pos.normalize_or_zero()
+                Dir::new(delta_pos).unwrap_or(Dir::X)
             } else {
-                Vector::X
+                Dir::X
             };
             let local_point1 = local_normal1 * self.radius;
             let normal = rotation1 * local_normal1;

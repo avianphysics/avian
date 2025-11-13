@@ -745,7 +745,7 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                         let relative_velocity = relative_linear_velocity
                             + ang_vel2.cross(point.anchor2)
                             - ang_vel1.cross(point.anchor1);
-                        let normal_speed = relative_velocity.dot(normal);
+                        let normal_speed = relative_velocity.dot(normal.into());
                         point.normal_speed = normal_speed;
 
                         // Keep the contact if (1) the separation distance is below the required threshold,
