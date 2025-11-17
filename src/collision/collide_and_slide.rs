@@ -214,6 +214,7 @@ impl<'w> CollideAndSlide<'w> {
             cast_dir,
             &ShapeCastConfig {
                 max_distance: cast_len,
+                // TODO: are these two sensible?
                 ignore_origin_penetration: true,
                 compute_contact_on_penetration: false,
                 ..default()
