@@ -67,6 +67,7 @@
 //! See the documentation of [`CollisionHooks`] for more information and usage examples.
 
 pub mod broad_phase;
+pub mod collide_and_slide;
 pub mod collider;
 pub mod collision_events;
 pub mod contact_types;
