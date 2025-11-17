@@ -182,6 +182,9 @@ impl<'w> CollideAndSlide<'w> {
     }
 
     #[must_use]
+    // TODO: replace by Box2D's method, which accounts for multiple planes:
+    // <https://github.com/erincatto/box2d/blob/3a4f0da8374af61293a03021c9a0b3ebcfe67948/src/mover.c#L57>
+    // See also <https://blog.littlepolygon.com/posts/sliding/>
     pub fn clip_velocity(velocity: Vector, normal: Dir) -> Vector {
         const OVERCLIP: f32 = 1.001;
         let backoff = velocity.dot(normal.into());
