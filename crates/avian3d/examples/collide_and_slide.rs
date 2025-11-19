@@ -51,21 +51,25 @@ fn setup(
         )),
         ColliderConstructorHierarchy::new(ColliderConstructor::TrimeshFromMesh),
         RigidBody::Static,
-    ));
-
-    for i in 0..5 {
-        for j in 0..5 {
-            let position = Vec3::new(i as f32 * 2.0 - 15.0, 0.0, j as f32 * 2.0 - 15.0);
-            let cube = Cuboid::from_length(0.75);
-            commands.spawn((
-                Mesh3d(meshes.add(cube)),
-                MeshMaterial3d(materials.add(StandardMaterial::default())),
-                Collider::from(cube),
-                RigidBody::Dynamic,
-                Transform::from_translation(position),
-            ));
+    )).observe(|
+        _ready: On<ColliderConstructorHierarchyReady>,
+        mut commands: Commands,
+        mut meshes: ResMut<Assets<Mesh>>,
+        mut materials: ResMut<Assets<StandardMaterial>>| {
+        for i in 0..5 {
+            for j in 0..5 {
+                let position = Vec3::new(i as f32 * 2.0 - 15.0, 0.0, j as f32 * 2.0 - 15.0);
+                let cube = Cuboid::from_length(0.75);
+                commands.spawn((
+                    Mesh3d(meshes.add(cube)),
+                    MeshMaterial3d(materials.add(StandardMaterial::default())),
+                    Collider::from(cube),
+                    RigidBody::Dynamic,
+                    Transform::from_translation(position),
+                ));
+            }
         }
-    }
+    });
 
     // Light
     commands.spawn((
