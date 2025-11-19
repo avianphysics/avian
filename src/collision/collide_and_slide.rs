@@ -238,18 +238,18 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                 continue;
             }
             let Ok(Some(contact)) = contact(
-                intersection_collider,
-                *intersection_pos,
-                *intersection_rot,
                 shape,
                 origin,
                 shape_rotation,
+                intersection_collider,
+                *intersection_pos,
+                *intersection_rot,
                 config.skin_width,
             ) else {
                 continue;
             };
             // penetration is positive is penetrating, negative if separated
-            let dist = contact.penetration + config.skin_width;
+            let dist = dbg!(contact.penetration) + config.skin_width;
             intersections.push((contact.global_normal1(intersection_rot), dist));
         }
         if intersections.is_empty() {

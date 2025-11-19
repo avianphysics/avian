@@ -1,6 +1,10 @@
 use avian3d::{math::FRAC_PI_2, prelude::*};
 use bevy::{
-    gltf::GltfLoaderSettings, input::mouse::AccumulatedMouseMotion, pbr::Atmosphere, prelude::*,
+    gltf::GltfLoaderSettings,
+    input::{keyboard::KeyboardInput, mouse::AccumulatedMouseMotion},
+    pbr::Atmosphere,
+    prelude::*,
+    window::{CursorGrabMode, CursorOptions},
 };
 use examples_common_3d::ExampleCommonPlugin;
 
@@ -13,7 +17,7 @@ fn main() {
         ))
         .add_systems(Startup, setup)
         .add_systems(FixedUpdate, move_player)
-        .add_systems(Update, update_camera_transform)
+        .add_systems(Update, (update_camera_transform, capture_cursor, exit_game))
         .run();
 }
 
@@ -133,9 +137,11 @@ fn move_player(
 
 fn update_camera_transform(
     accumulated_mouse_motion: Res<AccumulatedMouseMotion>,
-    player: Single<&Transform, With<Player>>,
+    player: Single<(Entity, &Transform), With<Player>>,
     mut camera: Single<&mut Transform, (With<Camera>, Without<Player>)>,
+    spatial: Res<SpatialQueryPipeline>,
 ) {
+    let (player_entity, player_transform) = player.into_inner();
     let delta = accumulated_mouse_motion.delta;
 
     let delta_yaw = -delta.x * 0.005;
@@ -148,6 +154,26 @@ fn update_camera_transform(
     let pitch = (pitch + delta_pitch).clamp(-PITCH_LIMIT, PITCH_LIMIT);
 
     camera.rotation = Quat::from_euler(EulerRot::YXZ, yaw, pitch, roll);
+    const MAX_DISTANCE: f32 = 15.0;
+    camera.translation = player_transform.translation + camera.back() * MAX_DISTANCE;
+    if let Some(hit) = spatial.cast_ray(
+        player_transform.translation,
+        camera.back(),
+        MAX_DISTANCE,
+        true,
+        &SpatialQueryFilter::from_excluded_entities([player_entity]),
+    ) {
+        camera.translation =
+            player_transform.translation + camera.back() * (hit.distance - 1.0).max(0.0);
+    }
+}
 
-    camera.translation = player.translation - camera.rotation * Vec3::NEG_Z * 15.0;
+fn capture_cursor(mut cursor: Single<&mut CursorOptions>) {
+    cursor.visible = false;
+    cursor.grab_mode = CursorGrabMode::Locked;
+}
+fn exit_game(input: Res<ButtonInput<KeyCode>>, mut app_exit: MessageWriter<AppExit>) {
+    if input.just_pressed(KeyCode::Escape) {
+        app_exit.write(AppExit::Success);
+    }
 }
