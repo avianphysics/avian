@@ -96,7 +96,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
             // non-axial planes
             let mut i = 0;
             while i < planes.len() {
-                if hit.normal1.dot(planes[i].into()) > 0.99 {
+                if hit.normal1.dot(planes[i].into()) > (1.0 - EPSILON) {
                     velocity += hit.normal1 * config.duplicate_plane_nudge;
                     break;
                 }
@@ -260,11 +260,10 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
         for _ in 0..config.depenetration_iterations {
             let mut total_error = 0.0;
             for (normal, dist) in &intersections {
-                let error = (dist + EPSILON - fixup.dot(*normal)).max(0.0);
+                let error = (dist - fixup.dot(*normal)).max(0.0);
                 total_error += error;
                 fixup += error * normal;
             }
-            info!(?total_error);
             if total_error < config.max_depenetration_error {
                 break;
             }
@@ -296,7 +295,7 @@ impl Default for CollideAndSlideConfig {
         Self {
             collide_and_slide_iterations: 4,
             depenetration_iterations: 16,
-            max_depenetration_error: 0.01,
+            max_depenetration_error: 0.0001,
             planes: Vec::new(),
             max_planes: 5,
             duplicate_plane_nudge: 0.05,
