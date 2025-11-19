@@ -1,13 +1,36 @@
-use crate::prelude::*;
+use crate::{collision::collider::contact_query::contact, prelude::*};
 use bevy::{ecs::system::SystemParam, prelude::*};
+use parry::shape::TypedShape;
 
 #[derive(SystemParam)]
-pub struct CollideAndSlide<'w> {
+pub struct CollideAndSlide<'w, 's> {
     query_pipeline: Res<'w, SpatialQueryPipeline>,
+    colliders: Query<
+        'w,
+        's,
+        (
+            &'static Collider,
+            &'static Position,
+            &'static Rotation,
+            Option<&'static CollisionLayers>,
+        ),
+    >,
     time: Res<'w, Time>,
 }
 
-impl<'w> CollideAndSlide<'w> {
+impl<'w, 's> CollideAndSlide<'w, 's> {
+    /// High level overview:
+    /// - push initial velocity as a plane, as if we were standing with our back to a wall
+    ///   - This ensures we never slide back when trying to move forward
+    /// - for each iteration:
+    ///   - Shape cast to first hit
+    ///   - Pull back the distance so were are skin_width away from the plane
+    ///   - Gauss-Seidel out of any penetration
+    ///   - push collided plane
+    ///   - change velocity according to colliding planes
+    ///     - 2 planes: slide along in 3d, abort in 2d
+    ///     - 3 planes: abort
+    /// - perform final depenetration
     pub fn collide_and_slide(
         &self,
         shape: &Collider,
@@ -17,23 +40,8 @@ impl<'w> CollideAndSlide<'w> {
         config: &CollideAndSlideConfig,
         filter: &SpatialQueryFilter,
     ) -> CollideAndSlideResult {
-        let mut end_velocity = Vector::ZERO;
         let mut position = origin;
-
-        if gravity {
-            end_velocity = velocity;
-            end_velocity.y -= ctx.dt * ctx.cfg.gravity;
-            velocity.y = (velocity.y + end_velocity.y) * 0.5;
-            if state.ground_plane
-                && let Some(grounded) = state.grounded
-            {
-                // slide along the ground plane
-                velocity = clip_velocity(velocity, grounded.normal1);
-            }
-        }
-
         let mut time_left = self.time.delta_secs();
-
         let mut planes = config.planes.clone();
 
         // never turn against original velocity
@@ -42,8 +50,7 @@ impl<'w> CollideAndSlide<'w> {
         };
         planes.push(vel_dir);
 
-        let mut bump_count = 0;
-        while bump_count < config.iterations {
+        for _ in 0..config.iterations {
             // calculate position we are trying to move to
             //
             // see if we can make it there
@@ -91,7 +98,6 @@ impl<'w> CollideAndSlide<'w> {
                 i += 1;
             }
             if i < planes.len() {
-                bump_count += 1;
                 continue;
             }
             planes.push(Dir::new_unchecked(hit.shape_hit.normal1));
@@ -107,8 +113,8 @@ impl<'w> CollideAndSlide<'w> {
                 }
 
                 // slide along the plane
+                #[cfg_attr(feature = "2d", expect(unused_mut, reason = "only used in 3D branch"))]
                 let mut current_clip_velocity = Self::clip_velocity(velocity, planes[i].into());
-                let mut end_clip_velocity = Self::clip_velocity(end_velocity, planes[i].into());
 
                 // see if there is a second plane that the new move enters
                 for j in 0..planes.len() {
@@ -132,7 +138,6 @@ impl<'w> CollideAndSlide<'w> {
                         // try clipping the move to the plane
                         current_clip_velocity =
                             Self::clip_velocity(current_clip_velocity, planes[j]);
-                        end_clip_velocity = Self::clip_velocity(end_clip_velocity, planes[j]);
 
                         // see if it goes back into the first clip plane
                         if current_clip_velocity.dot(planes[i].into()) >= 0.0 {
@@ -143,9 +148,6 @@ impl<'w> CollideAndSlide<'w> {
                         let dir = planes[i].cross(planes[j].into());
                         let d = dir.dot(velocity);
                         current_clip_velocity = dir * d;
-
-                        let d = dir.dot(end_velocity);
-                        end_clip_velocity = dir * d;
 
                         // see if there is a third plane the the new move enters
                         for k in 0..planes.len() {
@@ -168,14 +170,8 @@ impl<'w> CollideAndSlide<'w> {
                 }
                 // if we have fixed all interactions, try another move
                 velocity = current_clip_velocity;
-                end_velocity = end_clip_velocity;
                 break;
             }
-
-            bump_count += 1;
-        }
-        if gravity {
-            velocity = end_velocity;
         }
 
         CollideAndSlideResult { position, velocity }
@@ -196,8 +192,64 @@ impl<'w> CollideAndSlide<'w> {
         velocity - normal * backoff
     }
 
+    fn depenetrate(
+        &self,
+        shape: &Collider,
+        shape_rotation: RotationValue,
+        origin: Vector,
+        filter: &SpatialQueryFilter,
+        skin_width: f32,
+    ) -> Vector {
+        const ITERATIONS: usize = 16;
+        const MAX_ERROR: f32 = 0.001;
+
+        let mut intersections = Vec::new();
+        let aabb_intersections = self
+            .query_pipeline
+            .aabb_intersections_with_aabb(shape.aabb(origin, shape_rotation));
+        for intersection_entity in aabb_intersections {
+            let Ok((intersection_collider, intersection_pos, intersection_rot, layers)) =
+                self.colliders.get(intersection_entity)
+            else {
+                continue;
+            };
+            let layers = layers.copied().unwrap_or_default();
+            if !filter.test(intersection_entity, layers) {
+                continue;
+            }
+            let Ok(Some(contact)) = contact(
+                intersection_collider,
+                *intersection_pos,
+                *intersection_rot,
+                shape,
+                origin,
+                shape_rotation,
+                skin_width,
+            ) else {
+                continue;
+            };
+            // penetration is positive is penetrating, negative if separated
+            let dist = contact.penetration + skin_width;
+            intersections.push((contact.global_normal1(intersection_rot), dist));
+        }
+
+        let mut fixup = Vector::ZERO;
+        for _ in 0..ITERATIONS {
+            let mut total_error = 0.0;
+            for (normal, dist) in &intersections {
+                let error = (dist + EPSILON - fixup.dot(*normal)).max(0.0);
+                total_error += error;
+                fixup += error * normal;
+            }
+            if total_error < MAX_ERROR {
+                break;
+            }
+        }
+        origin + fixup
+    }
+
     #[must_use]
-    pub fn sweep_check(
+    fn sweep_check(
         &self,
         shape: &Collider,
         shape_rotation: RotationValue,
@@ -212,21 +264,13 @@ impl<'w> CollideAndSlide<'w> {
             origin,
             shape_rotation,
             cast_dir,
-            &ShapeCastConfig {
-                max_distance: cast_len,
-                // TODO: are these two sensible?
-                ignore_origin_penetration: true,
-                compute_contact_on_penetration: false,
-                ..default()
-            },
+            &ShapeCastConfig::from_max_distance(cast_len),
             filter,
         )?;
 
         let n = hit.normal1;
         let dir: Vector = cast_dir.into();
 
-        // needed to not accidentally explode when `n.dot(-dir)` happens to be very close to zero
-        const EPSILON: f32 = 0.0001;
         let safe_distance = if n.dot(dir).abs() > EPSILON {
             let skin_distance = config.skin_width / n.dot(-dir);
             hit.distance - skin_distance
@@ -244,6 +288,9 @@ impl<'w> CollideAndSlide<'w> {
         })
     }
 }
+
+// needed to not accidentally explode when `n.dot(-dir)` happens to be very close to zero
+const EPSILON: f32 = 0.005;
 
 pub struct SweepCheckConfig {
     pub skin_width: f32,
