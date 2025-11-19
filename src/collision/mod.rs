@@ -80,6 +80,9 @@ pub use diagnostics::CollisionDiagnostics;
 /// Re-exports common types related to collision detection functionality.
 pub mod prelude {
     pub use super::broad_phase::{BroadPhasePlugin, BroadPhaseSystems};
+    pub use super::collide_and_slide::{
+        CollideAndSlide, CollideAndSlideConfig, CollideAndSlideResult,
+    };
     #[cfg(all(feature = "collider-from-mesh", feature = "default-collider"))]
     pub use super::collider::ColliderCachePlugin;
     pub use super::collider::{

@@ -1,6 +1,7 @@
+use std::f32;
+
 use crate::{collision::collider::contact_query::contact, prelude::*};
 use bevy::{ecs::system::SystemParam, prelude::*};
-use parry::shape::TypedShape;
 
 #[derive(SystemParam)]
 pub struct CollideAndSlide<'w, 's> {
@@ -44,23 +45,26 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
         let mut time_left = self.time.delta_secs();
         let mut planes = config.planes.clone();
 
-        // never turn against original velocity
-        let Ok(vel_dir) = Dir::new(velocity) else {
-            return CollideAndSlideResult { position, velocity };
-        };
-        planes.push(vel_dir);
-
-        for _ in 0..config.iterations {
-            // calculate position we are trying to move to
-            //
-            // see if we can make it there
+        for _ in 0..config.collide_and_slide_iterations {
             let sweep = time_left * velocity;
-            let hit = self.sweep_check(
+            let Some((vel_dir, speed)) = Dir::new_and_length(sweep).ok() else {
+                // no more movement to go
+                break;
+            };
+            if speed < EPSILON {
+                break;
+            }
+
+            let depenetration_offset =
+                self.depenetrate(shape, shape_rotation, position, filter, config);
+            position += depenetration_offset;
+
+            let hit = self.query_pipeline.cast_shape(
                 shape,
-                shape_rotation,
                 position,
-                sweep,
-                &config.sweep_check_config,
+                shape_rotation,
+                vel_dir,
+                &ShapeCastConfig::from_max_distance(speed),
                 filter,
             );
             let Some(hit) = hit else {
@@ -68,15 +72,16 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                 position += sweep;
                 break;
             };
-            time_left -= time_left * hit.frac;
-            position = hit.safe_pos;
+            let safe_dist = Self::pull_back(hit, vel_dir, config.skin_width);
+            time_left -= time_left * safe_dist / speed;
+            position += vel_dir * safe_dist;
             if planes.len() >= config.max_planes {
                 return CollideAndSlideResult {
                     position,
                     velocity: Vector::ZERO,
                 };
             }
-            if hit.penetrating {
+            if hit.distance == 0.0 {
                 // entity is completely trapped in another solid
                 // TODO: call on_penetration callback here and let it decide whether to abort
                 return CollideAndSlideResult {
@@ -91,8 +96,8 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
             // non-axial planes
             let mut i = 0;
             while i < planes.len() {
-                if hit.shape_hit.normal1.dot(planes[i].into()) > 0.99 {
-                    velocity += hit.shape_hit.normal1 * config.duplicate_plane_nudge;
+                if hit.normal1.dot(planes[i].into()) > 0.99 {
+                    velocity += hit.normal1 * config.duplicate_plane_nudge;
                     break;
                 }
                 i += 1;
@@ -100,7 +105,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
             if i < planes.len() {
                 continue;
             }
-            planes.push(Dir::new_unchecked(hit.shape_hit.normal1));
+            planes.push(Dir::new_unchecked(hit.normal1));
 
             // modify velocity so it parallels all of the clip planes
 
@@ -174,6 +179,10 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
             }
         }
 
+        let depenetration_offset =
+            self.depenetrate(shape, shape_rotation, position, filter, config);
+        position += depenetration_offset;
+
         CollideAndSlideResult { position, velocity }
     }
 
@@ -182,7 +191,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
     // <https://github.com/erincatto/box2d/blob/3a4f0da8374af61293a03021c9a0b3ebcfe67948/src/mover.c#L57>
     // See also <https://blog.littlepolygon.com/posts/sliding/>
     pub fn clip_velocity(velocity: Vector, normal: Dir) -> Vector {
-        const OVERCLIP: f32 = 1.001;
+        const OVERCLIP: Scalar = 1.001;
         let backoff = velocity.dot(normal.into());
         let backoff = if backoff < 0.0 {
             backoff * OVERCLIP
@@ -192,21 +201,32 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
         velocity - normal * backoff
     }
 
+    #[must_use]
+    fn pull_back(hit: ShapeHitData, dir: Dir, skin_width: Scalar) -> Scalar {
+        let dot = dir.dot(-hit.normal1);
+        if dot.abs() > EPSILON {
+            let skin_distance = skin_width / dot;
+            hit.distance - skin_distance
+        } else {
+            hit.distance
+        }
+    }
+
     fn depenetrate(
         &self,
         shape: &Collider,
         shape_rotation: RotationValue,
         origin: Vector,
         filter: &SpatialQueryFilter,
-        skin_width: f32,
+        config: &CollideAndSlideConfig,
     ) -> Vector {
-        const ITERATIONS: usize = 16;
-        const MAX_ERROR: f32 = 0.001;
-
         let mut intersections = Vec::new();
+        let expanded_aabb = shape
+            .aabb(origin, shape_rotation)
+            .grow(Vector::splat(config.skin_width));
         let aabb_intersections = self
             .query_pipeline
-            .aabb_intersections_with_aabb(shape.aabb(origin, shape_rotation));
+            .aabb_intersections_with_aabb(expanded_aabb);
         for intersection_entity in aabb_intersections {
             let Ok((intersection_collider, intersection_pos, intersection_rot, layers)) =
                 self.colliders.get(intersection_entity)
@@ -224,93 +244,46 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                 shape,
                 origin,
                 shape_rotation,
-                skin_width,
+                config.skin_width,
             ) else {
                 continue;
             };
             // penetration is positive is penetrating, negative if separated
-            let dist = contact.penetration + skin_width;
+            let dist = contact.penetration + config.skin_width;
             intersections.push((contact.global_normal1(intersection_rot), dist));
+        }
+        if intersections.is_empty() {
+            return Vector::ZERO;
         }
 
         let mut fixup = Vector::ZERO;
-        for _ in 0..ITERATIONS {
+        for _ in 0..config.depenetration_iterations {
             let mut total_error = 0.0;
             for (normal, dist) in &intersections {
                 let error = (dist + EPSILON - fixup.dot(*normal)).max(0.0);
                 total_error += error;
                 fixup += error * normal;
             }
-            if total_error < MAX_ERROR {
+            info!(?total_error);
+            if total_error < config.max_depenetration_error {
                 break;
             }
         }
-        origin + fixup
-    }
-
-    #[must_use]
-    fn sweep_check(
-        &self,
-        shape: &Collider,
-        shape_rotation: RotationValue,
-        origin: Vector,
-        velocity: Vector,
-        config: &SweepCheckConfig,
-        filter: &SpatialQueryFilter,
-    ) -> Option<SweepHitData> {
-        let (cast_dir, cast_len) = Dir::new_and_length(velocity).ok()?;
-        let hit = self.query_pipeline.cast_shape(
-            shape,
-            origin,
-            shape_rotation,
-            cast_dir,
-            &ShapeCastConfig::from_max_distance(cast_len),
-            filter,
-        )?;
-
-        let n = hit.normal1;
-        let dir: Vector = cast_dir.into();
-
-        let safe_distance = if n.dot(dir).abs() > EPSILON {
-            let skin_distance = config.skin_width / n.dot(-dir);
-            hit.distance - skin_distance
-        } else {
-            hit.distance
-        };
-
-        Some(SweepHitData {
-            shape_hit: hit,
-            safe_distance,
-            dir: cast_dir,
-            safe_pos: origin + velocity * safe_distance,
-            frac: safe_distance / cast_len,
-            penetrating: hit.distance == 0.0,
-        })
+        fixup
     }
 }
 
-// needed to not accidentally explode when `n.dot(-dir)` happens to be very close to zero
-const EPSILON: f32 = 0.005;
-
-pub struct SweepCheckConfig {
-    pub skin_width: f32,
-}
-
-pub struct SweepHitData {
-    pub shape_hit: ShapeHitData,
-    pub safe_distance: f32,
-    pub dir: Dir,
-    pub safe_pos: Vector,
-    pub frac: f32,
-    pub penetrating: bool,
-}
+// needed to not accidentally explode when `n.dot(dir)` happens to be very close to zero
+const EPSILON: Scalar = 0.005;
 
 pub struct CollideAndSlideConfig {
-    pub iterations: usize,
-    pub sweep_check_config: SweepCheckConfig,
+    pub collide_and_slide_iterations: usize,
+    pub depenetration_iterations: usize,
+    pub max_depenetration_error: Scalar,
+    pub skin_width: Scalar,
     pub planes: Vec<Dir>,
     pub max_planes: usize,
-    pub duplicate_plane_nudge: f32,
+    pub duplicate_plane_nudge: Scalar,
 }
 
 pub struct CollideAndSlideResult {
@@ -321,11 +294,13 @@ pub struct CollideAndSlideResult {
 impl Default for CollideAndSlideConfig {
     fn default() -> Self {
         Self {
-            iterations: 4,
+            collide_and_slide_iterations: 4,
+            depenetration_iterations: 16,
+            max_depenetration_error: 0.01,
             planes: Vec::new(),
             max_planes: 5,
             duplicate_plane_nudge: 0.05,
-            sweep_check_config: SweepCheckConfig { skin_width: 0.001 },
+            skin_width: 0.01,
         }
     }
 }

@@ -110,6 +110,7 @@ disqualified = { version = "1.0" }
 [dev-dependencies]
 examples_common_3d = { path = "../examples_common_3d" }
 bevy = { version = "0.17", default-features = false, features = [
+    "bevy_pbr",
     "bevy_gltf",
     "animation",
     "debug",
@@ -144,6 +145,10 @@ required-features = ["3d", "default-collider"]
 
 [[example]]
 name = "collider_constructors"
+required-features = ["3d", "default-collider", "bevy_scene"]
+
+[[example]]
+name = "collide_and_slide"
 required-features = ["3d", "default-collider", "bevy_scene"]
 
 [[example]]
