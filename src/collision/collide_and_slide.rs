@@ -1,6 +1,9 @@
 use std::f32;
 
-use crate::{collision::collider::contact_query::contact, prelude::*};
+use crate::{
+    collision::collider::contact_query::{contact, contact_manifolds},
+    prelude::*,
+};
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 #[derive(SystemParam)]
@@ -237,7 +240,8 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
             if !filter.test(intersection_entity, layers) {
                 continue;
             }
-            let Ok(Some(contact)) = contact(
+            let mut manifolds = Vec::new();
+            contact_manifolds(
                 shape,
                 origin,
                 shape_rotation,
@@ -245,12 +249,21 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                 *intersection_pos,
                 *intersection_rot,
                 config.skin_width,
-            ) else {
-                continue;
-            };
-            // penetration is positive if penetrating, negative if separated
-            let dist = contact.penetration + config.skin_width;
-            intersections.push((contact.global_normal1(intersection_rot), dist));
+                &mut manifolds,
+            );
+            for manifold in manifolds {
+                let Some(deepest) = manifold.find_deepest_contact() else {
+                    continue;
+                };
+
+                if deepest.penetration <= 0.0 {
+                    continue;
+                }
+
+                // penetration is positive if penetrating, negative if separated
+                let dist = deepest.penetration + config.skin_width;
+                intersections.push((-manifold.normal, dist));
+            }
         }
         if intersections.is_empty() {
             return Vector::ZERO;
