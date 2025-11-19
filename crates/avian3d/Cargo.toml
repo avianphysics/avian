@@ -112,6 +112,7 @@ examples_common_3d = { path = "../examples_common_3d" }
 bevy = { version = "0.17", default-features = false, features = [
     "bevy_pbr",
     "bevy_gltf",
+    "https",
     "animation",
     "debug",
     "reflect_auto_register",

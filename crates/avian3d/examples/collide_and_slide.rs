@@ -1,7 +1,8 @@
 use avian3d::{math::FRAC_PI_2, prelude::*};
 use bevy::{
+    asset::io::web::WebAssetPlugin,
     gltf::GltfLoaderSettings,
-    input::{keyboard::KeyboardInput, mouse::AccumulatedMouseMotion},
+    input::mouse::AccumulatedMouseMotion,
     pbr::Atmosphere,
     prelude::*,
     window::{CursorGrabMode, CursorOptions},
@@ -11,7 +12,9 @@ use examples_common_3d::ExampleCommonPlugin;
 fn main() {
     App::new()
         .add_plugins((
-            DefaultPlugins,
+            DefaultPlugins.set(WebAssetPlugin {
+                silence_startup_warning: true,
+            }),
             ExampleCommonPlugin,
             PhysicsPlugins::default(),
         ))
@@ -41,7 +44,7 @@ fn setup(
     // Scene
     commands.spawn((
         SceneRoot(assets.load_with_settings(
-            "collide_and_slide_level.glb#Scene0",
+            "https://github.com/janhohenheim/avian_asset_files/raw/refs/heads/collide_and_slide/collide_and_slide_level/collide_and_slide_level.glb#Scene0",
             |settings: &mut GltfLoaderSettings| {
                 settings.use_model_forward_direction = Some(true);
             },
@@ -50,9 +53,24 @@ fn setup(
         RigidBody::Static,
     ));
 
+    for i in 0..5 {
+        for j in 0..5 {
+            let position = Vec3::new(i as f32 * 2.0 - 15.0, 0.0, j as f32 * 2.0 - 15.0);
+            let cube = Cuboid::from_length(0.75);
+            commands.spawn((
+                Mesh3d(meshes.add(cube)),
+                MeshMaterial3d(materials.add(StandardMaterial::default())),
+                Collider::from(cube),
+                RigidBody::Dynamic,
+                Transform::from_translation(position),
+            ));
+        }
+    }
+
     // Light
     commands.spawn((
         DirectionalLight {
+            illuminance: 6000.0,
             shadows_enabled: true,
             ..default()
         },
@@ -65,8 +83,8 @@ fn setup(
         Transform::from_xyz(-5.0, 3.5, 5.5).looking_at(Vec3::ZERO, Vec3::Y),
         Atmosphere::EARTH,
         EnvironmentMapLight {
-            diffuse_map: assets.load("voortrekker_interior_1k_diffuse.ktx2"),
-            specular_map: assets.load("voortrekker_interior_1k_specular.ktx2"),
+            diffuse_map: assets.load("https://github.com/janhohenheim/avian_asset_files/raw/refs/heads/collide_and_slide/voortrekker_interior/voortrekker_interior_1k_diffuse.ktx2"),
+            specular_map: assets.load("https://github.com/janhohenheim/avian_asset_files/raw/refs/heads/collide_and_slide/voortrekker_interior/voortrekker_interior_1k_specular.ktx2"),
             intensity: 1500.0,
             ..default()
         },

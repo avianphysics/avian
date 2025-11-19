@@ -248,8 +248,8 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
             ) else {
                 continue;
             };
-            // penetration is positive is penetrating, negative if separated
-            let dist = dbg!(contact.penetration) + config.skin_width;
+            // penetration is positive if penetrating, negative if separated
+            let dist = contact.penetration + config.skin_width;
             intersections.push((contact.global_normal1(intersection_rot), dist));
         }
         if intersections.is_empty() {
