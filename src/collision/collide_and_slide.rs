@@ -28,6 +28,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
     ///     - 2 planes: slide along in 3d, abort in 2d
     ///     - 3 planes: abort
     /// - perform final depenetration
+    #[must_use]
     pub fn collide_and_slide(
         &self,
         shape: &Collider,
@@ -226,6 +227,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
         .max(0.0)
     }
 
+    #[must_use]
     pub fn intersections(
         &self,
         shape: &Collider,
@@ -276,6 +278,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
         intersections
     }
 
+    #[must_use]
     pub fn depenetrate(
         &self,
         shape: &Collider,
