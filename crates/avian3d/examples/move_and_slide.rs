@@ -134,7 +134,7 @@ struct Player {
 
 fn move_player(
     player: Single<(Entity, &mut Transform, &mut Player, &Collider), Without<Camera>>,
-    collide_and_slide: CollideAndSlide,
+    collide_and_slide: MoveAndSlice,
     time: Res<Time>,
     input: Res<ButtonInput<KeyCode>>,
     camera: Single<&Transform, With<Camera>>,
@@ -176,7 +176,7 @@ fn move_player(
     }
 
     player.touched.clear();
-    let CollideAndSlideResult {
+    let MoveAndSliceResult {
         position,
         clipped_velocity,
     } = collide_and_slide.collide_and_slide(
@@ -184,7 +184,7 @@ fn move_player(
         transform.rotation,
         transform.translation,
         wish_velocity,
-        &CollideAndSlideConfig::default(),
+        &MoveAndSliceConfig::default(),
         &SpatialQueryFilter::from_excluded_entities([entity]),
         |hit| {
             if hit.hit.distance == 0.0 {
