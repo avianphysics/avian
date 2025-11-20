@@ -50,7 +50,8 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                 // no more movement to go
                 break;
             };
-            if speed < EPSILON {
+            const MIN_SPEED: f32 = 0.0001;
+            if speed < MIN_SPEED {
                 break;
             }
 
@@ -99,7 +100,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
             // non-axial planes
             let mut i = 0;
             while i < planes.len() {
-                if hit.normal1.dot(planes[i].into()) > (1.0 - EPSILON) {
+                if hit.normal1.dot(planes[i].into()) > (1.0 - DOT_EPSILON) {
                     velocity += hit.normal1 * config.duplicate_plane_nudge;
                     break;
                 }
@@ -213,7 +214,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
     #[must_use]
     fn pull_back(hit: ShapeHitData, dir: Dir, skin_width: Scalar) -> Scalar {
         let dot = dir.dot(-hit.normal1);
-        if dot.abs() > EPSILON {
+        if dot.abs() > DOT_EPSILON {
             let skin_distance = skin_width / dot;
             hit.distance - skin_distance
         } else {
@@ -288,7 +289,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
 }
 
 // needed to not accidentally explode when `n.dot(dir)` happens to be very close to zero
-const EPSILON: Scalar = 0.005;
+const DOT_EPSILON: Scalar = 0.005;
 
 pub struct CollideAndSlideHitData {
     pub hit: ShapeHitData,
