@@ -3,8 +3,8 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 #[derive(SystemParam)]
 pub struct CollideAndSlide<'w, 's> {
-    query_pipeline: Res<'w, SpatialQueryPipeline>,
-    colliders: Query<
+    pub query_pipeline: Res<'w, SpatialQueryPipeline>,
+    pub colliders: Query<
         'w,
         's,
         (
@@ -14,7 +14,7 @@ pub struct CollideAndSlide<'w, 's> {
             Option<&'static CollisionLayers>,
         ),
     >,
-    time: Res<'w, Time>,
+    pub time: Res<'w, Time>,
 }
 
 impl<'w, 's> CollideAndSlide<'w, 's> {
