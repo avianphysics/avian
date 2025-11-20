@@ -2,6 +2,7 @@ use avian3d::{math::FRAC_PI_2, prelude::*};
 use bevy::{
     asset::io::web::WebAssetPlugin,
     color::palettes::tailwind,
+    ecs::entity::EntityHashSet,
     gltf::GltfLoaderSettings,
     input::mouse::AccumulatedMouseMotion,
     pbr::Atmosphere,
@@ -128,7 +129,7 @@ struct DebugText;
 #[derive(Component, Default)]
 struct Player {
     internal_velocity: Vec3,
-    touched: Vec<Entity>,
+    touched: EntityHashSet,
 }
 
 fn move_player(
@@ -195,7 +196,7 @@ fn move_player(
                     tailwind::EMERALD_400,
                 );
             }
-            player.touched.push(hit.hit.entity);
+            player.touched.insert(hit.hit.entity);
             true
         },
     );
