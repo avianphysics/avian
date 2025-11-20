@@ -35,7 +35,7 @@ fn setup(
     let shape = Sphere::new(0.5);
     commands.spawn((
         Mesh3d(meshes.add(shape)),
-        MeshMaterial3d(materials.add(StandardMaterial::default())),
+        MeshMaterial3d(materials.add(Color::from(tailwind::SKY_400.with_alpha(0.6)))),
         Collider::from(shape),
         RigidBody::Kinematic,
         Player::default(),
