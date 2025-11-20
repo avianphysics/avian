@@ -1,13 +1,7 @@
-use avian2d::{
-    math::Vector,
-    prelude::*,
-};
+use avian2d::{math::Vector, prelude::*};
 use bevy::{
-    asset::RenderAssetUsages,
-    color::palettes::tailwind,
-    ecs::entity::EntityHashSet,
-    mesh::PrimitiveTopology,
-    prelude::*,
+    asset::RenderAssetUsages, color::palettes::tailwind, ecs::entity::EntityHashSet,
+    mesh::PrimitiveTopology, prelude::*,
 };
 use examples_common_2d::ExampleCommonPlugin;
 
