@@ -249,15 +249,12 @@ fn exit_game(input: Res<ButtonInput<KeyCode>>, mut app_exit: MessageWriter<AppEx
 
 fn update_debug_text(
     mut text: Single<&mut Text, With<DebugText>>,
-    player: Single<(&Player, &LinearVelocity, &CollidingEntities), With<Player>>,
+    player: Single<(&Player, &CollidingEntities), With<Player>>,
     names: Query<NameOrEntity>,
 ) {
-    let (player, velocity, colliding_entities) = player.into_inner();
+    let (player, colliding_entities) = player.into_inner();
     ***text = format!(
-        "Velocity: [{:.3}, {:.3}, {:.3}]\nMomentum: [{:.3}, {:.3}, {:.3}]\n{} intersections (goal is 0): {:#?}\n{} touched: {:#?}",
-        velocity.x,
-        velocity.y,
-        velocity.z,
+        "velocity: [{:.3}, {:.3}, {:.3}]\n{} intersections (goal is 0): {:#?}\n{} touched: {:#?}",
         player.internal_velocity.x,
         player.internal_velocity.y,
         player.internal_velocity.z,
