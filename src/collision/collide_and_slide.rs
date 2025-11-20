@@ -127,7 +127,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
 
                 // slide along the plane
                 #[cfg_attr(feature = "2d", expect(unused_mut, reason = "only used in 3D branch"))]
-                let mut current_clip_velocity = Self::clip_velocity(velocity, planes[i].into());
+                let mut current_clip_velocity = Self::clip_velocity(velocity, &[planes[i]]);
 
                 // see if there is a second plane that the new move enters
                 for j in 0..planes.len() {
@@ -150,7 +150,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                     {
                         // try clipping the move to the plane
                         current_clip_velocity =
-                            Self::clip_velocity(current_clip_velocity, planes[j]);
+                            Self::clip_velocity(current_clip_velocity, &[planes[j]]);
 
                         // see if it goes back into the first clip plane
                         if current_clip_velocity.dot(planes[i].into()) >= DOT_EPSILON {
@@ -198,18 +198,11 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
     }
 
     #[must_use]
-    // TODO: replace by Box2D's method, which accounts for multiple planes:
-    // <https://github.com/erincatto/box2d/blob/3a4f0da8374af61293a03021c9a0b3ebcfe67948/src/mover.c#L57>
-    // See also <https://blog.littlepolygon.com/posts/sliding/>
-    pub fn clip_velocity(velocity: Vector, normal: Dir) -> Vector {
-        const OVERCLIP: Scalar = 1.001;
-        let backoff = velocity.dot(normal.into());
-        let backoff = if backoff < 0.0 {
-            backoff * OVERCLIP
-        } else {
-            backoff / OVERCLIP
-        };
-        velocity - normal * backoff
+    pub fn clip_velocity(mut velocity: Vector, planes: &[Dir]) -> Vector {
+        for normal in planes {
+            velocity -= velocity.dot((*normal).into()).min(0.0) * *normal;
+        }
+        velocity
     }
 
     #[must_use]
