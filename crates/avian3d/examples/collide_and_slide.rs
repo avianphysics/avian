@@ -145,6 +145,14 @@ fn move_player(
         wish_velocity *= 3.0;
     }
     wish_velocity = camera.rotation * wish_velocity;
+    // preserve momentum
+    wish_velocity += player.internal_velocity;
+    let current_speed = wish_velocity.length();
+    if current_speed > 0.0 {
+        // apply friction
+        wish_velocity = wish_velocity / current_speed
+            * (current_speed - current_speed * 20.0 * time.delta_secs()).max(0.0)
+    }
 
     let CollideAndSlideResult {
         position: new_position,
