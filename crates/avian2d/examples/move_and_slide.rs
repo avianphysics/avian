@@ -1,4 +1,7 @@
-use avian2d::{math::Vector, prelude::*};
+use avian2d::{
+    math::{AdjustPrecision as _, AsF32, Vector},
+    prelude::*,
+};
 use bevy::{
     asset::RenderAssetUsages, color::palettes::tailwind, ecs::entity::EntityHashSet,
     mesh::PrimitiveTopology, prelude::*,
@@ -206,7 +209,7 @@ fn move_player(
     if current_speed > 0.0 {
         // apply friction
         wish_velocity = wish_velocity / current_speed
-            * (current_speed - current_speed * 20.0 * time.delta_secs()).max(0.0)
+            * (current_speed - current_speed * 20.0 * time.delta_secs().adjust_precision()).max(0.0)
     }
 
     player.touched.clear();
@@ -215,8 +218,12 @@ fn move_player(
         clipped_velocity: internal_velocity,
     } = move_and_slide.move_and_slide(
         collider,
-        transform.rotation.to_euler(EulerRot::XYZ).2,
-        transform.translation.xy(),
+        transform
+            .rotation
+            .to_euler(EulerRot::XYZ)
+            .2
+            .adjust_precision(),
+        transform.translation.xy().adjust_precision(),
         wish_velocity,
         &MoveAndSlideConfig::default(),
         &SpatialQueryFilter::from_excluded_entities([entity]),
@@ -229,8 +236,10 @@ fn move_player(
                 );
             } else {
                 gizmos.arrow_2d(
-                    hit.point1,
-                    hit.point1 + hit.normal1 * hit.distance / time.delta_secs(),
+                    hit.point1.f32(),
+                    (hit.point1
+                        + hit.normal1 * hit.distance / time.delta_secs().adjust_precision())
+                    .f32(),
                     tailwind::EMERALD_400,
                 );
             }
@@ -238,7 +247,7 @@ fn move_player(
             true
         },
     );
-    transform.translation = position.extend(0.0);
+    transform.translation = position.extend(0.0).f32();
     player.internal_velocity = internal_velocity;
 }
 

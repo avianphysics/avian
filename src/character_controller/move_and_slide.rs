@@ -1,9 +1,26 @@
+//! Contains [`MoveAndSlide`] and related types. See that struct for more information.
+
 use crate::{collision::collider::contact_query::contact_manifolds, prelude::*};
 use bevy::{ecs::system::SystemParam, prelude::*};
 
+/// A [`SystemParam`] for performing move and slide operations via the [`MoveAndSlide::move_and_slide`] method.
+/// "Move and slide", a.k.a. "collide and slide" or "step slide", is the algorithm at the heart of kinematic character controllers.
+/// In a nutshell, what it does is
+/// This algorithm basically says
+///- Please move in this direction
+///- if you collide with anything, slide along it
+///- make sure you're not intersecting with anything, and report everything you collide with
+///
+/// see the video [Collide and slide - Collision detection algorithm](https://www.youtube.com/watch?v=YR6Q7dUz2uk) for an in-depth explanation.
+///
+/// Also contains various helper methods that are useful for building kinematic character controllers.
 #[derive(SystemParam)]
+#[doc(alias = "CollideAndSlide")]
+#[doc(alias = "StepSlide")]
 pub struct MoveAndSlide<'w, 's> {
+    /// The [`SpatialQueryPipeline`] used to perform spatial queries.
     pub query_pipeline: Res<'w, SpatialQueryPipeline>,
+    /// The [`Query`] used to query colliders.
     pub colliders: Query<
         'w,
         's,
@@ -14,20 +31,11 @@ pub struct MoveAndSlide<'w, 's> {
             Option<&'static CollisionLayers>,
         ),
     >,
+    /// The [`Time`] resource, used primarily to calculate the delta-time.
     pub time: Res<'w, Time>,
 }
 
 impl<'w, 's> MoveAndSlide<'w, 's> {
-    /// High level overview:
-    /// - for each iteration:
-    ///   - Gauss-Seidel out of any penetration
-    ///   - Shape cast to first hit
-    ///   - Pull back the distance so were are `skin_width` away from the plane
-    ///   - push collided plane
-    ///   - change velocity according to colliding planes
-    ///     - 2 planes: slide along in 3d, abort in 2d
-    ///     - 3 planes: abort
-    /// - perform final depenetration
     #[must_use]
     pub fn move_and_slide(
         &self,
@@ -39,18 +47,38 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         filter: &SpatialQueryFilter,
         mut on_hit: impl FnMut(MoveAndSlideHitData) -> bool,
     ) -> MoveAndSlideOutput {
+        // High level overview:
+        // - for each iteration:
+        //   - Gauss-Seidel out of any penetration
+        //   - Shape cast to first hit
+        //   - Pull back the distance so were are `skin_width` away from the plane
+        //   - push collided plane
+        //   - change velocity according to colliding planes
+        //     - 2 planes: slide along in 3d, abort in 2d
+        //     - 3 planes: abort
+        // - perform final depenetration
         let mut position = origin;
         let original_velocity = velocity;
-        let mut time_left = self.time.delta_secs();
+        let mut time_left = {
+            #[cfg(feature = "f32")]
+            {
+                self.time.delta_secs()
+            }
+            #[cfg(feature = "f64")]
+            {
+                self.time.delta_secs_f64()
+            }
+        };
         let mut planes = config.planes.clone();
 
         'outer: for _ in 0..config.move_and_slide_iterations {
             let sweep = time_left * velocity;
-            let Some((vel_dir, distance)) = Dir::new_and_length(sweep).ok() else {
+            let Some((vel_dir, distance)) = Dir::new_and_length(sweep.f32()).ok() else {
                 // no more movement to go
                 break;
             };
-            const MIN_DISTANCE: f32 = 0.0001;
+            let distance = distance.adjust_precision();
+            const MIN_DISTANCE: Scalar = 0.0001;
             if distance < MIN_DISTANCE {
                 break;
             }
@@ -95,13 +123,13 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             }
             time_left -= time_left * (sweep_hit.safe_distance / distance);
 
-            position += vel_dir * sweep_hit.safe_distance;
+            position += vel_dir.adjust_precision() * sweep_hit.safe_distance;
 
             // if this is the same plane we hit before, nudge velocity
             // out along it, which fixes some epsilon issues with
             // non-axial planes
             for plane in planes.iter().copied() {
-                if sweep_hit.normal1.dot(plane.into()) > (1.0 - DOT_EPSILON) {
+                if sweep_hit.normal1.dot(plane.adjust_precision()) > (1.0 - DOT_EPSILON) {
                     velocity += sweep_hit.normal1 * config.duplicate_plane_nudge;
                     continue 'outer;
                 }
@@ -110,13 +138,13 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 velocity = Vector::ZERO;
                 break 'outer;
             }
-            planes.push(Dir::new_unchecked(sweep_hit.normal1));
+            planes.push(Dir::new_unchecked(sweep_hit.normal1.f32()));
 
             // modify velocity so it parallels all of the clip planes
 
             // find a plane that it enters
             for i in 0..planes.len() {
-                let into = velocity.dot(planes[i].into());
+                let into = velocity.dot(planes[i].adjust_precision());
                 if into >= 0.0 {
                     // move doesn't interact with the plane
                     continue;
@@ -138,7 +166,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                     if j == i {
                         continue;
                     }
-                    if current_clip_velocity.dot(planes[j].into()) >= DOT_EPSILON {
+                    if current_clip_velocity.dot(planes[j].adjust_precision()) >= DOT_EPSILON {
                         // move doesn't interact with the plane
                         continue;
                     }
@@ -155,12 +183,14 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                             Self::clip_velocity(current_clip_velocity, &[planes[j]]);
 
                         // see if it goes back into the first clip plane
-                        if current_clip_velocity.dot(planes[i].into()) >= DOT_EPSILON {
+                        if current_clip_velocity.dot(planes[i].adjust_precision()) >= DOT_EPSILON {
                             continue;
                         }
 
                         // slide the original velocity along the crease
-                        let dir = planes[i].cross(planes[j].into());
+                        let dir = planes[i]
+                            .adjust_precision()
+                            .cross(planes[j].adjust_precision());
                         let d = dir.dot(velocity);
                         current_clip_velocity = dir * d;
 
@@ -174,7 +204,9 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                                 continue;
                             }
 
-                            if current_clip_velocity.dot(planes[k].into()) >= DOT_EPSILON {
+                            if current_clip_velocity.dot(planes[k].adjust_precision())
+                                >= DOT_EPSILON
+                            {
                                 // move doesn't interact with the plane
                                 continue;
                             }
@@ -211,7 +243,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     #[must_use]
     pub fn clip_velocity(mut velocity: Vector, planes: &[Dir]) -> Vector {
         for normal in planes {
-            velocity -= velocity.dot((*normal).into()).min(0.0) * *normal;
+            velocity -=
+                velocity.dot((*normal).adjust_precision()).min(0.0) * normal.adjust_precision();
         }
         velocity
     }
@@ -250,7 +283,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
 
     #[must_use]
     fn pull_back(hit: ShapeHitData, dir: Dir, skin_width: Scalar) -> Scalar {
-        let dot = dir.dot(-hit.normal1).max(DOT_EPSILON);
+        let dot = dir.adjust_precision().dot(-hit.normal1).max(DOT_EPSILON);
         let skin_distance = skin_width / dot;
         (hit.distance - skin_distance).max(0.0)
     }
@@ -299,7 +332,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
 
                 // penetration is positive if penetrating, negative if separated
                 let dist = deepest.penetration + skin_width;
-                let normal = Dir::new_unchecked(manifold.normal);
+                let normal = Dir::new_unchecked(manifold.normal.f32());
                 intersections.push((-normal, dist));
             }
         }
@@ -325,7 +358,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         for _ in 0..config.depenetration_iterations {
             let mut total_error = 0.0;
             for (normal, dist) in &intersections {
-                let normal = (*normal).into();
+                let normal = normal.adjust_precision();
                 let error = (dist - fixup.dot(normal)).max(0.0);
                 total_error += error;
                 fixup += error * normal;

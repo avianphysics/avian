@@ -1,3 +1,5 @@
+//! This module contains utilities for implementing character controllers.
+
 pub mod move_and_slide;
 /// Re-exports common types related to character controller functionality.
 pub mod prelude {

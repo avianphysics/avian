@@ -1,4 +1,9 @@
-use avian3d::{math::FRAC_PI_2, prelude::*};
+use std::f32::consts::FRAC_PI_2;
+
+use avian3d::{
+    math::{AdjustPrecision, AsF32 as _},
+    prelude::*,
+};
 use bevy::{
     asset::io::web::WebAssetPlugin,
     color::palettes::tailwind,
@@ -181,9 +186,9 @@ fn move_player(
         clipped_velocity,
     } = move_and_slide.move_and_slide(
         collider,
-        transform.rotation,
-        transform.translation,
-        wish_velocity,
+        transform.rotation.adjust_precision(),
+        transform.translation.adjust_precision(),
+        wish_velocity.adjust_precision(),
         &MoveAndSlideConfig::default(),
         &SpatialQueryFilter::from_excluded_entities([entity]),
         |hit| {
@@ -195,8 +200,10 @@ fn move_player(
                 );
             } else {
                 gizmos.arrow(
-                    hit.point1,
-                    hit.point1 + hit.normal1 * hit.distance / time.delta_secs(),
+                    hit.point1.f32(),
+                    (hit.point1
+                        + hit.normal1 * hit.distance / time.delta_secs().adjust_precision())
+                    .f32(),
                     tailwind::EMERALD_400,
                 );
             }
@@ -204,8 +211,8 @@ fn move_player(
             true
         },
     );
-    transform.translation = position;
-    player.clipped_velocity = clipped_velocity;
+    transform.translation = position.f32();
+    player.clipped_velocity = clipped_velocity.f32();
 }
 
 fn update_camera_transform(
@@ -230,14 +237,14 @@ fn update_camera_transform(
     const MAX_DISTANCE: f32 = 15.0;
     camera.translation = player_transform.translation + camera.back() * MAX_DISTANCE;
     if let Some(hit) = spatial.cast_ray(
-        player_transform.translation,
+        player_transform.translation.adjust_precision(),
         camera.back(),
-        MAX_DISTANCE,
+        MAX_DISTANCE.adjust_precision(),
         true,
         &SpatialQueryFilter::from_excluded_entities([player_entity]),
     ) {
-        camera.translation =
-            player_transform.translation + camera.back() * (hit.distance - 1.0).max(0.0);
+        camera.translation = player_transform.translation
+            + camera.back() * (hit.distance.val_num_f32() - 1.0).max(0.0);
     }
 }
 
