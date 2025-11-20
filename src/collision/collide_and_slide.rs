@@ -39,6 +39,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
         mut on_hit: impl FnMut(CollideAndSlideHitData) -> bool,
     ) -> CollideAndSlideResult {
         let mut position = origin;
+        let original_velocity = velocity;
         let mut time_left = self.time.delta_secs();
         let mut planes = config.planes.clone();
 
@@ -174,6 +175,13 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                 // if we have fixed all interactions, try another move
                 velocity = current_clip_velocity;
                 break;
+            }
+
+            // if original velocity is against the original velocity, stop dead
+            // to avoid tiny occilations in sloping corners
+            if velocity.dot(original_velocity) <= 0.0 {
+                velocity = Vector::ZERO;
+                break 'outer;
             }
         }
 
