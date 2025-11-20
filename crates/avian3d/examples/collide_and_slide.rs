@@ -1,6 +1,7 @@
 use avian3d::{math::FRAC_PI_2, prelude::*};
 use bevy::{
     asset::io::web::WebAssetPlugin,
+    color::palettes::tailwind,
     gltf::GltfLoaderSettings,
     input::mouse::AccumulatedMouseMotion,
     pbr::Atmosphere,
@@ -116,6 +117,7 @@ fn move_player(
     time: Res<Time>,
     input: Res<ButtonInput<KeyCode>>,
     camera: Single<&Transform, (With<Camera>, Without<Player>)>,
+    mut gizmos: Gizmos,
 ) {
     let (entity, mut transform, mut player, mut velocity, collider) = player.into_inner();
     let mut wish_velocity = Vec3::ZERO;
@@ -154,6 +156,18 @@ fn move_player(
         wish_velocity,
         &CollideAndSlideConfig::default(),
         &SpatialQueryFilter::from_excluded_entities([entity]),
+        |hit| {
+            if hit.hit.distance == 0.0 {
+                gizmos.sphere(Isometry3d::IDENTITY, 0.6, tailwind::RED_600);
+            } else {
+                gizmos.arrow(
+                    hit.hit.point1,
+                    hit.hit.point1 + hit.hit.normal1 * hit.hit.distance / time.delta_secs(),
+                    tailwind::EMERALD_400,
+                );
+            }
+            true
+        },
     );
     let physics_velocity = (new_position - transform.translation) / time.delta_secs();
     velocity.0 = physics_velocity;

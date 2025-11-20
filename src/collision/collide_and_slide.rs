@@ -43,6 +43,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
         mut velocity: Vector,
         config: &CollideAndSlideConfig,
         filter: &SpatialQueryFilter,
+        mut on_hit: impl FnMut(CollideAndSlideHitData) -> bool,
     ) -> CollideAndSlideResult {
         let mut position = origin;
         let mut time_left = self.time.delta_secs();
@@ -70,15 +71,18 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                 &ShapeCastConfig::from_max_distance(speed),
                 filter,
             );
-            let Some(hit) = hit else {
+            let Some(mut hit) = hit else {
                 // moved the entire distance
                 position += sweep;
                 break;
             };
-            let safe_dist = Self::pull_back(hit, vel_dir, config.skin_width);
-            time_left -= time_left * safe_dist / speed;
-            position += vel_dir * safe_dist;
-            if planes.len() >= config.max_planes {
+            let safe_distance = Self::pull_back(hit, vel_dir, config.skin_width);
+            if !on_hit(CollideAndSlideHitData {
+                hit,
+                position,
+                velocity,
+                safe_distance,
+            }) {
                 return CollideAndSlideResult {
                     position,
                     velocity: Vector::ZERO,
@@ -86,13 +90,14 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
             }
             if hit.distance == 0.0 {
                 // entity is completely trapped in another solid
-                // TODO: call on_penetration callback here and let it decide whether to abort
                 return CollideAndSlideResult {
                     position,
                     velocity: Vector::ZERO,
                 };
             }
-            // TODO: call on_hit callback here
+            time_left -= time_left * (safe_distance / speed);
+
+            position += vel_dir * safe_distance;
 
             // if this is the same plane we hit before, nudge velocity
             // out along it, which fixes some epsilon issues with
@@ -107,6 +112,12 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
             }
             if i < planes.len() {
                 continue;
+            }
+            if planes.len() >= config.max_planes {
+                return CollideAndSlideResult {
+                    position,
+                    velocity: Vector::ZERO,
+                };
             }
             planes.push(Dir::new_unchecked(hit.normal1));
 
@@ -283,6 +294,13 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
 
 // needed to not accidentally explode when `n.dot(dir)` happens to be very close to zero
 const EPSILON: Scalar = 0.005;
+
+pub struct CollideAndSlideHitData {
+    pub hit: ShapeHitData,
+    pub position: Vector,
+    pub velocity: Vector,
+    pub safe_distance: Scalar,
+}
 
 pub struct CollideAndSlideConfig {
     pub collide_and_slide_iterations: usize,
