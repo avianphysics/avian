@@ -134,7 +134,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                     if j == i {
                         continue;
                     }
-                    if current_clip_velocity.dot(planes[j].into()) >= 0.0 {
+                    if current_clip_velocity.dot(planes[j].into()) >= DOT_EPSILON {
                         // move doesn't interact with the plane
                         continue;
                     }
@@ -153,7 +153,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                             Self::clip_velocity(current_clip_velocity, planes[j]);
 
                         // see if it goes back into the first clip plane
-                        if current_clip_velocity.dot(planes[i].into()) >= 0.0 {
+                        if current_clip_velocity.dot(planes[i].into()) >= DOT_EPSILON {
                             continue;
                         }
 
@@ -168,7 +168,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                                 continue;
                             }
 
-                            if current_clip_velocity.dot(planes[k].into()) >= 0.0 {
+                            if current_clip_velocity.dot(planes[k].into()) >= DOT_EPSILON {
                                 // move doesn't interact with the plane
                                 continue;
                             }
