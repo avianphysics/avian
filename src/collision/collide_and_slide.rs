@@ -94,16 +94,11 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
             // if this is the same plane we hit before, nudge velocity
             // out along it, which fixes some epsilon issues with
             // non-axial planes
-            let mut i = 0;
-            while i < planes.len() {
-                if hit.normal1.dot(planes[i].into()) > (1.0 - DOT_EPSILON) {
+            for plane in &planes {
+                if hit.normal1.dot(plane.into()) > (1.0 - DOT_EPSILON) {
                     velocity += hit.normal1 * config.duplicate_plane_nudge;
-                    break;
+                    continue 'outer;
                 }
-                i += 1;
-            }
-            if i < planes.len() {
-                continue;
             }
             if planes.len() >= config.max_planes {
                 velocity = Vector::ZERO;
