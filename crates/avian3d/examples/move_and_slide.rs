@@ -56,7 +56,7 @@ fn setup(
     // Scene
     commands.spawn((
         SceneRoot(assets.load_with_settings(
-            "https://github.com/janhohenheim/avian_asset_files/raw/refs/heads/move_and_slide/move_and_slide_level/move_and_slide_level.glb#Scene0",
+            "https://github.com/janhohenheim/avian_asset_files/raw/refs/heads/collide_and_slide/move_and_slide_level/move_and_slide_level.glb#Scene0",
             |settings: &mut GltfLoaderSettings| {
                 settings.use_model_forward_direction = Some(true);
             },
@@ -100,8 +100,8 @@ fn setup(
         Transform::from_xyz(-5.0, 3.5, 5.5).looking_at(Vec3::ZERO, Vec3::Y),
         Atmosphere::EARTH,
         EnvironmentMapLight {
-            diffuse_map: assets.load("https://github.com/janhohenheim/avian_asset_files/raw/refs/heads/move_and_slide/voortrekker_interior/voortrekker_interior_1k_diffuse.ktx2"),
-            specular_map: assets.load("https://github.com/janhohenheim/avian_asset_files/raw/refs/heads/move_and_slide/voortrekker_interior/voortrekker_interior_1k_specular.ktx2"),
+            diffuse_map: assets.load("https://github.com/janhohenheim/avian_asset_files/raw/refs/heads/collide_and_slide/voortrekker_interior/voortrekker_interior_1k_diffuse.ktx2"),
+            specular_map: assets.load("https://github.com/janhohenheim/avian_asset_files/raw/refs/heads/collide_and_slide/voortrekker_interior/voortrekker_interior_1k_specular.ktx2"),
             intensity: 1500.0,
             ..default()
         },
@@ -176,7 +176,7 @@ fn move_player(
     }
 
     player.touched.clear();
-    let MoveAndSlideResult {
+    let MoveAndSlideOutput {
         position,
         clipped_velocity,
     } = move_and_slide.move_and_slide(
@@ -187,7 +187,7 @@ fn move_player(
         &MoveAndSlideConfig::default(),
         &SpatialQueryFilter::from_excluded_entities([entity]),
         |hit| {
-            if hit.hit.distance == 0.0 {
+            if hit.intersects {
                 gizmos.sphere(
                     Isometry3d::from_translation(transform.translation),
                     0.6,
@@ -195,12 +195,12 @@ fn move_player(
                 );
             } else {
                 gizmos.arrow(
-                    hit.hit.point1,
-                    hit.hit.point1 + hit.hit.normal1 * hit.hit.distance / time.delta_secs(),
+                    hit.point1,
+                    hit.point1 + hit.normal1 * hit.distance / time.delta_secs(),
                     tailwind::EMERALD_400,
                 );
             }
-            player.touched.insert(hit.hit.entity);
+            player.touched.insert(hit.entity);
             true
         },
     );

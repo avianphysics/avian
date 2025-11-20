@@ -221,7 +221,7 @@ fn move_player(
         &MoveAndSlideConfig::default(),
         &SpatialQueryFilter::from_excluded_entities([entity]),
         |hit| {
-            if hit.shape_hit.distance == 0.0 {
+            if hit.intersects {
                 gizmos.circle_2d(
                     Isometry2d::from_translation(transform.translation.xy()),
                     33.0,
@@ -229,13 +229,12 @@ fn move_player(
                 );
             } else {
                 gizmos.arrow_2d(
-                    hit.shape_hit.point1,
-                    hit.shape_hit.point1
-                        + hit.shape_hit.normal1 * hit.shape_hit.distance / time.delta_secs(),
+                    hit.point1,
+                    hit.point1 + hit.normal1 * hit.distance / time.delta_secs(),
                     tailwind::EMERALD_400,
                 );
             }
-            player.touched.insert(hit.shape_hit.entity);
+            player.touched.insert(hit.entity);
             true
         },
     );

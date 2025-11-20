@@ -74,7 +74,14 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 break;
             };
             if !on_hit(MoveAndSlideHitData {
-                sweep_hit,
+                intersects: sweep_hit.intersects,
+                entity: sweep_hit.entity,
+                point1: sweep_hit.point1,
+                point2: sweep_hit.point2,
+                normal1: sweep_hit.normal1,
+                normal2: sweep_hit.normal2,
+                distance: sweep_hit.distance,
+                safe_distance: sweep_hit.safe_distance,
                 position,
                 velocity,
             }) {
@@ -94,8 +101,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             // out along it, which fixes some epsilon issues with
             // non-axial planes
             for plane in planes.iter().copied() {
-                if sweep_hit.shape_hit.normal1.dot(plane.into()) > (1.0 - DOT_EPSILON) {
-                    velocity += sweep_hit.shape_hit.normal1 * config.duplicate_plane_nudge;
+                if sweep_hit.normal1.dot(plane.into()) > (1.0 - DOT_EPSILON) {
+                    velocity += sweep_hit.normal1 * config.duplicate_plane_nudge;
                     continue 'outer;
                 }
             }
@@ -103,7 +110,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 velocity = Vector::ZERO;
                 break 'outer;
             }
-            planes.push(Dir::new_unchecked(sweep_hit.shape_hit.normal1));
+            planes.push(Dir::new_unchecked(sweep_hit.normal1));
 
             // modify velocity so it parallels all of the clip planes
 
@@ -230,9 +237,14 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         )?;
         let safe_distance = Self::pull_back(shape_hit, direction, skin_width);
         Some(SweepHitData {
-            shape_hit,
             safe_distance,
+            distance,
             intersects: shape_hit.distance == 0.0,
+            entity: shape_hit.entity,
+            point1: shape_hit.point1,
+            point2: shape_hit.point2,
+            normal1: shape_hit.normal1,
+            normal2: shape_hit.normal2,
         })
     }
 
@@ -334,7 +346,32 @@ const DOT_EPSILON: Scalar = 0.005;
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, PartialEq)]
 pub struct MoveAndSlideHitData {
-    pub sweep_hit: SweepHitData,
+    /// The entity of the collider that was hit by the shape.
+    pub entity: Entity,
+
+    /// How far the shape travelled before the initial hit.
+    #[doc(alias = "time_of_impact")]
+    pub distance: Scalar,
+
+    /// The closest point on the shape that was hit, expressed in world space.
+    ///
+    /// If the shapes are penetrating or the target distance is greater than zero,
+    /// this will be different from `point2`.
+    pub point1: Vector,
+
+    /// The closest point on the shape that was cast, expressed in world space.
+    ///
+    /// If the shapes are penetrating or the target distance is greater than zero,
+    /// this will be different from `point1`.
+    pub point2: Vector,
+
+    /// The outward surface normal on the hit shape at `point1`, expressed in world space.
+    pub normal1: Vector,
+
+    /// The outward surface normal on the cast shape at `point2`, expressed in world space.
+    pub normal2: Vector,
+    pub safe_distance: Scalar,
+    pub intersects: bool,
     pub position: Vector,
     pub velocity: Vector,
 }
@@ -344,7 +381,30 @@ pub struct MoveAndSlideHitData {
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, PartialEq)]
 pub struct SweepHitData {
-    pub shape_hit: ShapeHitData,
+    /// The entity of the collider that was hit by the shape.
+    pub entity: Entity,
+
+    /// How far the shape travelled before the initial hit.
+    #[doc(alias = "time_of_impact")]
+    pub distance: Scalar,
+
+    /// The closest point on the shape that was hit, expressed in world space.
+    ///
+    /// If the shapes are penetrating or the target distance is greater than zero,
+    /// this will be different from `point2`.
+    pub point1: Vector,
+
+    /// The closest point on the shape that was cast, expressed in world space.
+    ///
+    /// If the shapes are penetrating or the target distance is greater than zero,
+    /// this will be different from `point1`.
+    pub point2: Vector,
+
+    /// The outward surface normal on the hit shape at `point1`, expressed in world space.
+    pub normal1: Vector,
+
+    /// The outward surface normal on the cast shape at `point2`, expressed in world space.
+    pub normal2: Vector,
     pub safe_distance: Scalar,
     pub intersects: bool,
 }
