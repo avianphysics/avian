@@ -72,6 +72,7 @@ fn setup(
                 let position = Vec3::new(i as f32 * 2.0 - 15.0, 0.0, j as f32 * 2.0 - 15.0);
                 let cube = Cuboid::from_length(0.75);
                 commands.spawn((
+                    Name::new("Cube"),
                     Mesh3d(meshes.add(cube)),
                     MeshMaterial3d(materials.add(StandardMaterial::default())),
                     Collider::from(cube),
@@ -127,26 +128,18 @@ struct DebugText;
 #[derive(Component, Default)]
 struct Player {
     internal_velocity: Vec3,
+    touched: Vec<Entity>,
 }
 
 fn move_player(
-    player: Single<
-        (
-            Entity,
-            &mut Transform,
-            &mut Player,
-            &mut LinearVelocity,
-            &Collider,
-        ),
-        Without<Camera>,
-    >,
+    player: Single<(Entity, &mut Transform, &mut Player, &Collider), Without<Camera>>,
     collide_and_slide: CollideAndSlide,
     time: Res<Time>,
     input: Res<ButtonInput<KeyCode>>,
     camera: Single<&Transform, With<Camera>>,
     mut gizmos: Gizmos,
 ) {
-    let (entity, mut transform, mut player, mut velocity, collider) = player.into_inner();
+    let (entity, mut transform, mut player, collider) = player.into_inner();
     let mut wish_velocity = Vec3::ZERO;
     if input.pressed(KeyCode::KeyW) {
         wish_velocity += Vec3::NEG_Z
@@ -181,6 +174,7 @@ fn move_player(
             * (current_speed - current_speed * 20.0 * time.delta_secs()).max(0.0)
     }
 
+    player.touched.clear();
     let CollideAndSlideResult {
         position,
         internal_velocity,
@@ -201,6 +195,7 @@ fn move_player(
                     tailwind::EMERALD_400,
                 );
             }
+            player.touched.push(hit.hit.entity);
             true
         },
     );
@@ -259,7 +254,7 @@ fn update_debug_text(
 ) {
     let (player, velocity, colliding_entities) = player.into_inner();
     ***text = format!(
-        "Velocity: [{:.3}, {:.3}, {:.3}]\nMomentum: [{:.3}, {:.3}, {:.3}]\n{} Collisions: {:#?}",
+        "Velocity: [{:.3}, {:.3}, {:.3}]\nMomentum: [{:.3}, {:.3}, {:.3}]\n{} intersections (goal is 0): {:#?}\n{} touched: {:#?}",
         velocity.x,
         velocity.y,
         velocity.z,
@@ -269,6 +264,14 @@ fn update_debug_text(
         colliding_entities.len(),
         names
             .iter_many(colliding_entities.iter())
+            .map(|name| name
+                .name
+                .map(|n| format!("{} ({})", name.entity, n))
+                .unwrap_or_else(|| format!("{}", name.entity)))
+            .collect::<Vec<_>>(),
+        player.touched.len(),
+        names
+            .iter_many(player.touched.iter())
             .map(|name| name
                 .name
                 .map(|n| format!("{} ({})", name.entity, n))
