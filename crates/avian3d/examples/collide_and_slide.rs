@@ -108,7 +108,7 @@ struct Player {
 fn move_player(
     player: Single<(
         Entity,
-        &mut Transform,
+        &Transform,
         &mut Player,
         &mut LinearVelocity,
         &Collider,
@@ -116,10 +116,10 @@ fn move_player(
     collide_and_slide: CollideAndSlide,
     time: Res<Time>,
     input: Res<ButtonInput<KeyCode>>,
-    camera: Single<&Transform, (With<Camera>, Without<Player>)>,
+    camera: Single<&Transform, With<Camera>>,
     mut gizmos: Gizmos,
 ) {
-    let (entity, mut transform, mut player, mut velocity, collider) = player.into_inner();
+    let (entity, transform, mut player, mut velocity, collider) = player.into_inner();
     let mut wish_velocity = Vec3::ZERO;
     if input.pressed(KeyCode::KeyW) {
         wish_velocity += Vec3::NEG_Z

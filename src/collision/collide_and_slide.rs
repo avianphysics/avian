@@ -1,9 +1,4 @@
-use std::f32;
-
-use crate::{
-    collision::collider::contact_query::{contact, contact_manifolds},
-    prelude::*,
-};
+use crate::{collision::collider::contact_query::contact_manifolds, prelude::*};
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 #[derive(SystemParam)]
