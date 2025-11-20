@@ -176,7 +176,7 @@ struct Player {
 
 fn move_player(
     player: Single<(Entity, &mut Transform, &mut Player, &Collider), Without<Camera>>,
-    collide_and_slide: MoveAndSlide,
+    move_and_slide: MoveAndSlide,
     time: Res<Time>,
     input: Res<ButtonInput<KeyCode>>,
     mut gizmos: Gizmos,
@@ -213,7 +213,7 @@ fn move_player(
     let MoveAndSlideOutput {
         position,
         clipped_velocity: internal_velocity,
-    } = collide_and_slide.move_and_slide(
+    } = move_and_slide.move_and_slide(
         collider,
         transform.rotation.to_euler(EulerRot::XYZ).2,
         transform.translation.xy(),

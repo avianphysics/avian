@@ -44,7 +44,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         let mut time_left = self.time.delta_secs();
         let mut planes = config.planes.clone();
 
-        'outer: for _ in 0..config.collide_and_slide_iterations {
+        'outer: for _ in 0..config.move_and_slide_iterations {
             let sweep = time_left * velocity;
             let Some((vel_dir, distance)) = Dir::new_and_length(sweep).ok() else {
                 // no more movement to go
@@ -354,7 +354,7 @@ pub struct SweepHitData {
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, PartialEq)]
 pub struct MoveAndSlideConfig {
-    pub collide_and_slide_iterations: usize,
+    pub move_and_slide_iterations: usize,
     pub depenetration_iterations: usize,
     pub max_depenetration_error: Scalar,
     pub skin_width: Scalar,
@@ -375,7 +375,7 @@ pub struct MoveAndSlideOutput {
 impl Default for MoveAndSlideConfig {
     fn default() -> Self {
         Self {
-            collide_and_slide_iterations: 4,
+            move_and_slide_iterations: 4,
             depenetration_iterations: 16,
             max_depenetration_error: {
                 #[cfg(feature = "3d")]

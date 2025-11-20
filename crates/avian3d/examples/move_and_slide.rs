@@ -56,7 +56,7 @@ fn setup(
     // Scene
     commands.spawn((
         SceneRoot(assets.load_with_settings(
-            "https://github.com/janhohenheim/avian_asset_files/raw/refs/heads/collide_and_slide/collide_and_slide_level/collide_and_slide_level.glb#Scene0",
+            "https://github.com/janhohenheim/avian_asset_files/raw/refs/heads/move_and_slide/move_and_slide_level/move_and_slide_level.glb#Scene0",
             |settings: &mut GltfLoaderSettings| {
                 settings.use_model_forward_direction = Some(true);
             },
@@ -100,8 +100,8 @@ fn setup(
         Transform::from_xyz(-5.0, 3.5, 5.5).looking_at(Vec3::ZERO, Vec3::Y),
         Atmosphere::EARTH,
         EnvironmentMapLight {
-            diffuse_map: assets.load("https://github.com/janhohenheim/avian_asset_files/raw/refs/heads/collide_and_slide/voortrekker_interior/voortrekker_interior_1k_diffuse.ktx2"),
-            specular_map: assets.load("https://github.com/janhohenheim/avian_asset_files/raw/refs/heads/collide_and_slide/voortrekker_interior/voortrekker_interior_1k_specular.ktx2"),
+            diffuse_map: assets.load("https://github.com/janhohenheim/avian_asset_files/raw/refs/heads/move_and_slide/voortrekker_interior/voortrekker_interior_1k_diffuse.ktx2"),
+            specular_map: assets.load("https://github.com/janhohenheim/avian_asset_files/raw/refs/heads/move_and_slide/voortrekker_interior/voortrekker_interior_1k_specular.ktx2"),
             intensity: 1500.0,
             ..default()
         },
@@ -134,7 +134,7 @@ struct Player {
 
 fn move_player(
     player: Single<(Entity, &mut Transform, &mut Player, &Collider), Without<Camera>>,
-    collide_and_slide: MoveAndSlide,
+    move_and_slide: MoveAndSlide,
     time: Res<Time>,
     input: Res<ButtonInput<KeyCode>>,
     camera: Single<&Transform, With<Camera>>,
@@ -179,7 +179,7 @@ fn move_player(
     let MoveAndSlideResult {
         position,
         clipped_velocity,
-    } = collide_and_slide.collide_and_slide(
+    } = move_and_slide.move_and_slide(
         collider,
         transform.rotation,
         transform.translation,
