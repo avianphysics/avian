@@ -212,7 +212,7 @@ fn move_player(
     player.touched.clear();
     let CollideAndSlideResult {
         position,
-        internal_velocity,
+        clipped_velocity: internal_velocity,
     } = collide_and_slide.collide_and_slide(
         collider,
         transform.rotation.to_euler(EulerRot::XYZ).2,

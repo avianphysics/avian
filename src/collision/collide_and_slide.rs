@@ -202,7 +202,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
 
         CollideAndSlideResult {
             position,
-            internal_velocity: velocity,
+            clipped_velocity: velocity,
         }
     }
 
@@ -314,7 +314,7 @@ pub struct CollideAndSlideConfig {
 
 pub struct CollideAndSlideResult {
     pub position: Vector,
-    pub internal_velocity: Vector,
+    pub clipped_velocity: Vector,
 }
 
 impl Default for CollideAndSlideConfig {
