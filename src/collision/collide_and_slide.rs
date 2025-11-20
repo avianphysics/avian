@@ -19,12 +19,10 @@ pub struct CollideAndSlide<'w, 's> {
 
 impl<'w, 's> CollideAndSlide<'w, 's> {
     /// High level overview:
-    /// - push initial velocity as a plane, as if we were standing with our back to a wall
-    ///   - This ensures we never slide back when trying to move forward
     /// - for each iteration:
+    ///   - Gauss-Seidel out of any penetration
     ///   - Shape cast to first hit
     ///   - Pull back the distance so were are skin_width away from the plane
-    ///   - Gauss-Seidel out of any penetration
     ///   - push collided plane
     ///   - change velocity according to colliding planes
     ///     - 2 planes: slide along in 3d, abort in 2d
@@ -67,7 +65,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                 &ShapeCastConfig::from_max_distance(speed),
                 filter,
             );
-            let Some(mut hit) = hit else {
+            let Some(hit) = hit else {
                 // moved the entire distance
                 position += sweep;
                 break;
