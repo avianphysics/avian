@@ -46,12 +46,12 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
 
         'outer: for _ in 0..config.collide_and_slide_iterations {
             let sweep = time_left * velocity;
-            let Some((vel_dir, speed)) = Dir::new_and_length(sweep).ok() else {
+            let Some((vel_dir, distance)) = Dir::new_and_length(sweep).ok() else {
                 // no more movement to go
                 break;
             };
-            const MIN_SPEED: f32 = 0.0001;
-            if speed < MIN_SPEED {
+            const MIN_DISTANCE: f32 = 0.0001;
+            if distance < MIN_DISTANCE {
                 break;
             }
 
@@ -64,7 +64,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                 position,
                 shape_rotation,
                 vel_dir,
-                &ShapeCastConfig::from_max_distance(speed),
+                &ShapeCastConfig::from_max_distance(distance),
                 filter,
             );
             let Some(hit) = hit else {
@@ -87,7 +87,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                 velocity = Vector::ZERO;
                 break 'outer;
             }
-            time_left -= time_left * (safe_distance / speed);
+            time_left -= time_left * (safe_distance / distance);
 
             position += vel_dir * safe_distance;
 
