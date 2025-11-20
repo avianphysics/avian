@@ -59,44 +59,43 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 self.depenetrate(shape, shape_rotation, position, filter, config);
             position += depenetration_offset;
 
-            let hit = self.query_pipeline.cast_shape(
+            let hit = self.sweep(
                 shape,
                 position,
                 shape_rotation,
                 vel_dir,
-                &ShapeCastConfig::from_max_distance(distance),
+                distance,
+                config.skin_width,
                 filter,
             );
-            let Some(hit) = hit else {
+            let Some(sweep_hit) = hit else {
                 // moved the entire distance
                 position += sweep;
                 break;
             };
-            let safe_distance = Self::pull_back(hit, vel_dir, config.skin_width);
             if !on_hit(MoveAndSlideHitData {
-                hit,
+                sweep_hit,
                 position,
                 velocity,
-                safe_distance,
             }) {
                 velocity = Vector::ZERO;
                 break 'outer;
             }
-            if hit.distance == 0.0 {
+            if sweep_hit.intersects {
                 // entity is completely trapped in another solid
                 velocity = Vector::ZERO;
                 break 'outer;
             }
-            time_left -= time_left * (safe_distance / distance);
+            time_left -= time_left * (sweep_hit.safe_distance / distance);
 
-            position += vel_dir * safe_distance;
+            position += vel_dir * sweep_hit.safe_distance;
 
             // if this is the same plane we hit before, nudge velocity
             // out along it, which fixes some epsilon issues with
             // non-axial planes
             for plane in planes.iter().copied() {
-                if hit.normal1.dot(plane.into()) > (1.0 - DOT_EPSILON) {
-                    velocity += hit.normal1 * config.duplicate_plane_nudge;
+                if sweep_hit.shape_hit.normal1.dot(plane.into()) > (1.0 - DOT_EPSILON) {
+                    velocity += sweep_hit.shape_hit.normal1 * config.duplicate_plane_nudge;
                     continue 'outer;
                 }
             }
@@ -104,7 +103,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 velocity = Vector::ZERO;
                 break 'outer;
             }
-            planes.push(Dir::new_unchecked(hit.normal1));
+            planes.push(Dir::new_unchecked(sweep_hit.shape_hit.normal1));
 
             // modify velocity so it parallels all of the clip planes
 
@@ -211,7 +210,34 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     }
 
     #[must_use]
-    pub fn pull_back(hit: ShapeHitData, dir: Dir, skin_width: Scalar) -> Scalar {
+    pub fn sweep(
+        &self,
+        shape: &Collider,
+        origin: Vector,
+        shape_rotation: RotationValue,
+        direction: Dir,
+        distance: Scalar,
+        skin_width: Scalar,
+        filter: &SpatialQueryFilter,
+    ) -> Option<SweepHitData> {
+        let shape_hit = self.query_pipeline.cast_shape(
+            shape,
+            origin,
+            shape_rotation,
+            direction,
+            &ShapeCastConfig::from_max_distance(distance),
+            filter,
+        )?;
+        let safe_distance = Self::pull_back(shape_hit, direction, skin_width);
+        Some(SweepHitData {
+            shape_hit,
+            safe_distance,
+            intersects: shape_hit.distance == 0.0,
+        })
+    }
+
+    #[must_use]
+    fn pull_back(hit: ShapeHitData, dir: Dir, skin_width: Scalar) -> Scalar {
         let dot = dir.dot(-hit.normal1).max(DOT_EPSILON);
         let skin_distance = skin_width / dot;
         (hit.distance - skin_distance).max(0.0)
@@ -303,15 +329,24 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
 // needed to not accidentally explode when `n.dot(dir)` happens to be very close to zero
 const DOT_EPSILON: Scalar = 0.005;
 
-#[derive(Clone, Debug, PartialEq, Reflect)]
+#[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, PartialEq)]
 pub struct MoveAndSlideHitData {
-    pub hit: ShapeHitData,
+    pub sweep_hit: SweepHitData,
     pub position: Vector,
     pub velocity: Vector,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Reflect)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(Debug, PartialEq)]
+pub struct SweepHitData {
+    pub shape_hit: ShapeHitData,
     pub safe_distance: Scalar,
+    pub intersects: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Reflect)]
@@ -328,7 +363,7 @@ pub struct MoveAndSlideConfig {
     pub duplicate_plane_nudge: Scalar,
 }
 
-#[derive(Clone, Debug, PartialEq, Reflect)]
+#[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, PartialEq)]
