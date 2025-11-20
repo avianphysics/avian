@@ -1,4 +1,4 @@
-use std::f32::consts::FRAC_PI_2;
+use core::f32::consts::FRAC_PI_2;
 
 use avian3d::{
     math::{AdjustPrecision, AsF32 as _},

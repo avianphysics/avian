@@ -128,7 +128,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             // if this is the same plane we hit before, nudge velocity
             // out along it, which fixes some epsilon issues with
             // non-axial planes
-            for plane in planes.iter().copied() {
+            for plane in planes.iter() {
                 if sweep_hit.normal1.dot(plane.adjust_precision()) > (1.0 - DOT_EPSILON) {
                     velocity += sweep_hit.normal1 * config.duplicate_plane_nudge;
                     continue 'outer;
