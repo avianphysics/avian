@@ -71,7 +71,6 @@ pub mod collider;
 pub mod collision_events;
 pub mod contact_types;
 pub mod hooks;
-pub mod move_and_slide;
 pub mod narrow_phase;
 
 mod diagnostics;
@@ -108,7 +107,6 @@ pub mod prelude {
         ContactPoint,
     };
     pub use super::hooks::{ActiveCollisionHooks, CollisionHooks};
-    pub use super::move_and_slide::{MoveAndSlide, MoveAndSlideConfig, MoveAndSlideOutput};
     #[expect(deprecated)]
     pub use super::narrow_phase::{
         NarrowPhaseConfig, NarrowPhasePlugin, NarrowPhaseSet, NarrowPhaseSystems,
