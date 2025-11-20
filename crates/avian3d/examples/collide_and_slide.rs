@@ -126,24 +126,27 @@ struct DebugText;
 
 #[derive(Component, Default)]
 struct Player {
-    momentum: Vec3,
+    internal_velocity: Vec3,
 }
 
 fn move_player(
-    player: Single<(
-        Entity,
-        &Transform,
-        &mut Player,
-        &mut LinearVelocity,
-        &Collider,
-    )>,
+    player: Single<
+        (
+            Entity,
+            &mut Transform,
+            &mut Player,
+            &mut LinearVelocity,
+            &Collider,
+        ),
+        Without<Camera>,
+    >,
     collide_and_slide: CollideAndSlide,
     time: Res<Time>,
     input: Res<ButtonInput<KeyCode>>,
     camera: Single<&Transform, With<Camera>>,
     mut gizmos: Gizmos,
 ) {
-    let (entity, transform, mut player, mut velocity, collider) = player.into_inner();
+    let (entity, mut transform, mut player, mut velocity, collider) = player.into_inner();
     let mut wish_velocity = Vec3::ZERO;
     if input.pressed(KeyCode::KeyW) {
         wish_velocity += Vec3::NEG_Z
@@ -170,7 +173,7 @@ fn move_player(
     }
     wish_velocity = camera.rotation * wish_velocity;
     // preserve momentum
-    wish_velocity += player.momentum;
+    wish_velocity += player.internal_velocity;
     let current_speed = wish_velocity.length();
     if current_speed > 0.0 {
         // apply friction
@@ -179,8 +182,8 @@ fn move_player(
     }
 
     let CollideAndSlideResult {
-        linear_velocity,
-        momentum,
+        position,
+        internal_velocity,
     } = collide_and_slide.collide_and_slide(
         collider,
         transform.rotation,
@@ -201,8 +204,8 @@ fn move_player(
             true
         },
     );
-    velocity.0 = linear_velocity;
-    player.momentum = momentum;
+    transform.translation = position;
+    player.internal_velocity = internal_velocity;
 }
 
 fn update_camera_transform(
@@ -260,9 +263,9 @@ fn update_debug_text(
         velocity.x,
         velocity.y,
         velocity.z,
-        player.momentum.x,
-        player.momentum.y,
-        player.momentum.z,
+        player.internal_velocity.x,
+        player.internal_velocity.y,
+        player.internal_velocity.z,
         colliding_entities.len(),
         names
             .iter_many(colliding_entities.iter())
