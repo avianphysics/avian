@@ -215,7 +215,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
     }
 
     #[must_use]
-    fn pull_back(hit: ShapeHitData, dir: Dir, skin_width: Scalar) -> Scalar {
+    pub fn pull_back(hit: ShapeHitData, dir: Dir, skin_width: Scalar) -> Scalar {
         let dot = dir.dot(-hit.normal1);
         if dot > DOT_EPSILON {
             let skin_distance = skin_width / dot;
@@ -226,18 +226,18 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
         .max(0.0)
     }
 
-    fn depenetrate(
+    pub fn intersections(
         &self,
         shape: &Collider,
         shape_rotation: RotationValue,
         origin: Vector,
         filter: &SpatialQueryFilter,
-        config: &CollideAndSlideConfig,
-    ) -> Vector {
+        skin_width: Scalar,
+    ) -> Vec<(Dir, Scalar)> {
         let mut intersections = Vec::new();
         let expanded_aabb = shape
             .aabb(origin, shape_rotation)
-            .grow(Vector::splat(config.skin_width));
+            .grow(Vector::splat(skin_width));
         let aabb_intersections = self
             .query_pipeline
             .aabb_intersections_with_aabb(expanded_aabb);
@@ -259,7 +259,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                 intersection_collider,
                 *intersection_pos,
                 *intersection_rot,
-                config.skin_width,
+                skin_width,
                 &mut manifolds,
             );
             for manifold in manifolds {
@@ -268,10 +268,24 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                 };
 
                 // penetration is positive if penetrating, negative if separated
-                let dist = deepest.penetration + config.skin_width;
-                intersections.push((-manifold.normal, dist));
+                let dist = deepest.penetration + skin_width;
+                let normal = Dir::new_unchecked(manifold.normal);
+                intersections.push((-normal, dist));
             }
         }
+        intersections
+    }
+
+    pub fn depenetrate(
+        &self,
+        shape: &Collider,
+        shape_rotation: RotationValue,
+        origin: Vector,
+        filter: &SpatialQueryFilter,
+        config: &CollideAndSlideConfig,
+    ) -> Vector {
+        let intersections =
+            self.intersections(shape, shape_rotation, origin, filter, config.skin_width);
         if intersections.is_empty() {
             return Vector::ZERO;
         }
@@ -280,7 +294,8 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
         for _ in 0..config.depenetration_iterations {
             let mut total_error = 0.0;
             for (normal, dist) in &intersections {
-                let error = (dist - fixup.dot(*normal)).max(0.0);
+                let normal = (*normal).into();
+                let error = (dist - fixup.dot(normal)).max(0.0);
                 total_error += error;
                 fixup += error * normal;
             }
