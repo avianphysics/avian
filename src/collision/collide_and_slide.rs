@@ -179,7 +179,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
 
             // if original velocity is against the original velocity, stop dead
             // to avoid tiny occilations in sloping corners
-            if velocity.dot(original_velocity) <= 0.0 {
+            if velocity.dot(original_velocity) <= -DOT_EPSILON {
                 velocity = Vector::ZERO;
                 break 'outer;
             }
