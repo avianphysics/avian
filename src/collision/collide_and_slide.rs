@@ -42,7 +42,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
         let mut time_left = self.time.delta_secs();
         let mut planes = config.planes.clone();
 
-        for _ in 0..config.collide_and_slide_iterations {
+        'outer: for _ in 0..config.collide_and_slide_iterations {
             let sweep = time_left * velocity;
             let Some((vel_dir, speed)) = Dir::new_and_length(sweep).ok() else {
                 // no more movement to go
@@ -77,17 +77,13 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                 velocity,
                 safe_distance,
             }) {
-                return CollideAndSlideResult {
-                    position,
-                    internal_velocity: Vector::ZERO,
-                };
+                velocity = Vector::ZERO;
+                break 'outer;
             }
             if hit.distance == 0.0 {
                 // entity is completely trapped in another solid
-                return CollideAndSlideResult {
-                    position,
-                    internal_velocity: Vector::ZERO,
-                };
+                velocity = Vector::ZERO;
+                break 'outer;
             }
             time_left -= time_left * (safe_distance / speed);
 
@@ -108,10 +104,8 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                 continue;
             }
             if planes.len() >= config.max_planes {
-                return CollideAndSlideResult {
-                    position,
-                    internal_velocity: Vector::ZERO,
-                };
+                velocity = Vector::ZERO;
+                break 'outer;
             }
             planes.push(Dir::new_unchecked(hit.normal1));
 
@@ -141,10 +135,8 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                     #[cfg(feature = "2d")]
                     {
                         // stop dead at a double plane interaction
-                        return CollideAndSlideResult {
-                            position,
-                            internal_velocity: Vector::ZERO,
-                        };
+                        velocity = Vector::ZERO;
+                        break 'outer;
                     }
                     #[cfg(feature = "3d")]
                     {
@@ -174,10 +166,8 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                             }
 
                             // stop dead at a triple plane interaction
-                            return CollideAndSlideResult {
-                                position,
-                                internal_velocity: Vector::ZERO,
-                            };
+                            velocity = Vector::ZERO;
+                            break 'outer;
                         }
                     }
                 }
