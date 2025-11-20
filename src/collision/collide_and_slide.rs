@@ -256,10 +256,6 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                     continue;
                 };
 
-                if deepest.penetration <= 0.0 {
-                    continue;
-                }
-
                 // penetration is positive if penetrating, negative if separated
                 let dist = deepest.penetration + config.skin_width;
                 intersections.push((-manifold.normal, dist));

@@ -137,6 +137,7 @@ fn move_player(
     if input.pressed(KeyCode::ControlLeft) || input.pressed(KeyCode::KeyQ) {
         wish_velocity += Vec3::NEG_Y
     }
+    wish_velocity = wish_velocity.normalize_or_zero();
     wish_velocity *= 7.0;
     wish_velocity = camera.rotation * wish_velocity;
 
