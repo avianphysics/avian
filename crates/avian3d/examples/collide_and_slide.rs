@@ -139,6 +139,9 @@ fn move_player(
     }
     wish_velocity = wish_velocity.normalize_or_zero();
     wish_velocity *= 7.0;
+    if input.pressed(KeyCode::ShiftLeft) {
+        wish_velocity *= 2.0;
+    }
     wish_velocity = camera.rotation * wish_velocity;
 
     let CollideAndSlideResult {
