@@ -2,7 +2,7 @@ use crate::{collision::collider::contact_query::contact_manifolds, prelude::*};
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 #[derive(SystemParam)]
-pub struct CollideAndSlide<'w, 's> {
+pub struct MoveAndSlide<'w, 's> {
     pub query_pipeline: Res<'w, SpatialQueryPipeline>,
     pub colliders: Query<
         'w,
@@ -17,7 +17,7 @@ pub struct CollideAndSlide<'w, 's> {
     pub time: Res<'w, Time>,
 }
 
-impl<'w, 's> CollideAndSlide<'w, 's> {
+impl<'w, 's> MoveAndSlide<'w, 's> {
     /// High level overview:
     /// - for each iteration:
     ///   - Gauss-Seidel out of any penetration
@@ -29,16 +29,16 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
     ///     - 3 planes: abort
     /// - perform final depenetration
     #[must_use]
-    pub fn collide_and_slide(
+    pub fn move_and_slide(
         &self,
         shape: &Collider,
         shape_rotation: RotationValue,
         origin: Vector,
         mut velocity: Vector,
-        config: &CollideAndSlideConfig,
+        config: &MoveAndSlideConfig,
         filter: &SpatialQueryFilter,
-        mut on_hit: impl FnMut(CollideAndSlideHitData) -> bool,
-    ) -> CollideAndSlideResult {
+        mut on_hit: impl FnMut(MoveAndSlideHitData) -> bool,
+    ) -> MoveAndSlideOutput {
         let mut position = origin;
         let original_velocity = velocity;
         let mut time_left = self.time.delta_secs();
@@ -73,7 +73,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                 break;
             };
             let safe_distance = Self::pull_back(hit, vel_dir, config.skin_width);
-            if !on_hit(CollideAndSlideHitData {
+            if !on_hit(MoveAndSlideHitData {
                 hit,
                 position,
                 velocity,
@@ -196,7 +196,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
             self.depenetrate(shape, shape_rotation, position, filter, config);
         position += depenetration_offset;
 
-        CollideAndSlideResult {
+        MoveAndSlideOutput {
             position,
             clipped_velocity: velocity,
         }
@@ -275,7 +275,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
         shape_rotation: RotationValue,
         origin: Vector,
         filter: &SpatialQueryFilter,
-        config: &CollideAndSlideConfig,
+        config: &MoveAndSlideConfig,
     ) -> Vector {
         let intersections =
             self.intersections(shape, shape_rotation, origin, filter, config.skin_width);
@@ -307,7 +307,7 @@ const DOT_EPSILON: Scalar = 0.005;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, PartialEq)]
-pub struct CollideAndSlideHitData {
+pub struct MoveAndSlideHitData {
     pub hit: ShapeHitData,
     pub position: Vector,
     pub velocity: Vector,
@@ -318,7 +318,7 @@ pub struct CollideAndSlideHitData {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, PartialEq)]
-pub struct CollideAndSlideConfig {
+pub struct MoveAndSlideConfig {
     pub collide_and_slide_iterations: usize,
     pub depenetration_iterations: usize,
     pub max_depenetration_error: Scalar,
@@ -332,12 +332,12 @@ pub struct CollideAndSlideConfig {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, PartialEq)]
-pub struct CollideAndSlideResult {
+pub struct MoveAndSlideOutput {
     pub position: Vector,
     pub clipped_velocity: Vector,
 }
 
-impl Default for CollideAndSlideConfig {
+impl Default for MoveAndSlideConfig {
     fn default() -> Self {
         Self {
             collide_and_slide_iterations: 4,

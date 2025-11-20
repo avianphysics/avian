@@ -149,7 +149,7 @@ name = "collider_constructors"
 required-features = ["3d", "default-collider", "bevy_scene"]
 
 [[example]]
-name = "collide_and_slide"
+name = "move_and_slide"
 required-features = ["3d", "default-collider", "bevy_scene"]
 
 [[example]]

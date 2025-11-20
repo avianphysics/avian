@@ -67,11 +67,11 @@
 //! See the documentation of [`CollisionHooks`] for more information and usage examples.
 
 pub mod broad_phase;
-pub mod collide_and_slide;
 pub mod collider;
 pub mod collision_events;
 pub mod contact_types;
 pub mod hooks;
+pub mod move_and_slide;
 pub mod narrow_phase;
 
 mod diagnostics;
@@ -80,9 +80,6 @@ pub use diagnostics::CollisionDiagnostics;
 /// Re-exports common types related to collision detection functionality.
 pub mod prelude {
     pub use super::broad_phase::{BroadPhasePlugin, BroadPhaseSystems};
-    pub use super::collide_and_slide::{
-        CollideAndSlide, CollideAndSlideConfig, CollideAndSlideResult,
-    };
     #[cfg(all(feature = "collider-from-mesh", feature = "default-collider"))]
     pub use super::collider::ColliderCachePlugin;
     pub use super::collider::{
@@ -111,6 +108,7 @@ pub mod prelude {
         ContactPoint,
     };
     pub use super::hooks::{ActiveCollisionHooks, CollisionHooks};
+    pub use super::move_and_slide::{MoveAndSlide, MoveAndSlideConfig, MoveAndSlideOutput};
     #[expect(deprecated)]
     pub use super::narrow_phase::{
         NarrowPhaseConfig, NarrowPhasePlugin, NarrowPhaseSet, NarrowPhaseSystems,
