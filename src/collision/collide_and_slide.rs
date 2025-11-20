@@ -320,8 +320,8 @@ impl Default for CollideAndSlideConfig {
             max_depenetration_error: 0.0001,
             planes: Vec::new(),
             max_planes: 5,
-            duplicate_plane_nudge: 0.05,
-            skin_width: 0.01,
+            duplicate_plane_nudge: 0.001,
+            skin_width: 0.001,
         }
     }
 }
