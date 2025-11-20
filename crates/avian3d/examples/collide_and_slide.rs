@@ -142,7 +142,7 @@ fn move_player(
     wish_velocity = wish_velocity.normalize_or_zero();
     wish_velocity *= 7.0;
     if input.pressed(KeyCode::ShiftLeft) {
-        wish_velocity *= 2.0;
+        wish_velocity *= 3.0;
     }
     wish_velocity = camera.rotation * wish_velocity;
 
@@ -172,7 +172,6 @@ fn move_player(
     let physics_velocity = (new_position - transform.translation) / time.delta_secs();
     velocity.0 = physics_velocity;
     player.internal_velocity = new_internal_velocity;
-    transform.translation = new_position;
 }
 
 fn update_camera_transform(
