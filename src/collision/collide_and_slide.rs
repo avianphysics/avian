@@ -22,7 +22,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
     /// - for each iteration:
     ///   - Gauss-Seidel out of any penetration
     ///   - Shape cast to first hit
-    ///   - Pull back the distance so were are skin_width away from the plane
+    ///   - Pull back the distance so were are `skin_width` away from the plane
     ///   - push collided plane
     ///   - change velocity according to colliding planes
     ///     - 2 planes: slide along in 3d, abort in 2d
@@ -125,6 +125,13 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                 let mut current_clip_velocity = Self::clip_velocity(velocity, &[planes[i]]);
 
                 // see if there is a second plane that the new move enters
+                #[cfg_attr(
+                    feature = "2d",
+                    expect(
+                        clippy::needless_range_loop,
+                        reason = "This variant is cleaner in this case"
+                    )
+                )]
                 for j in 0..planes.len() {
                     if j == i {
                         continue;
@@ -156,6 +163,10 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                         current_clip_velocity = dir * d;
 
                         // see if there is a third plane the the new move enters
+                        #[expect(
+                            clippy::needless_range_loop,
+                            reason = "This variant is cleaner in this case"
+                        )]
                         for k in 0..planes.len() {
                             if k == i || k == j {
                                 continue;

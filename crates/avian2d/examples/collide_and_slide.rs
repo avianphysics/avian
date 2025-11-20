@@ -1,16 +1,13 @@
 use avian2d::{
-    math::{FRAC_PI_2, Vector},
+    math::Vector,
     prelude::*,
 };
 use bevy::{
     asset::RenderAssetUsages,
     color::palettes::tailwind,
     ecs::entity::EntityHashSet,
-    input::mouse::AccumulatedMouseMotion,
     mesh::PrimitiveTopology,
-    pbr::Atmosphere,
     prelude::*,
-    window::{CursorGrabMode, CursorOptions},
 };
 use examples_common_2d::ExampleCommonPlugin;
 
@@ -160,7 +157,7 @@ fn setup(
     ));
 
     // Camera
-    commands.spawn(Camera2d::default());
+    commands.spawn(Camera2d);
 
     // Debug test
     commands.spawn((
