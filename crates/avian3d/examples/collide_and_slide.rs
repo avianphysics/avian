@@ -188,7 +188,11 @@ fn move_player(
         &SpatialQueryFilter::from_excluded_entities([entity]),
         |hit| {
             if hit.hit.distance == 0.0 {
-                gizmos.sphere(Isometry3d::IDENTITY, 0.6, tailwind::RED_600);
+                gizmos.sphere(
+                    Isometry3d::from_translation(transform.translation),
+                    0.6,
+                    tailwind::RED_600,
+                );
             } else {
                 gizmos.arrow(
                     hit.hit.point1,

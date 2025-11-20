@@ -311,11 +311,38 @@ impl Default for CollideAndSlideConfig {
         Self {
             collide_and_slide_iterations: 4,
             depenetration_iterations: 16,
-            max_depenetration_error: 0.0001,
+            max_depenetration_error: {
+                #[cfg(feature = "3d")]
+                {
+                    0.0001
+                }
+                #[cfg(feature = "2d")]
+                {
+                    0.01
+                }
+            },
             planes: Vec::new(),
             max_planes: 5,
-            duplicate_plane_nudge: 0.001,
-            skin_width: 0.002,
+            duplicate_plane_nudge: {
+                #[cfg(feature = "3d")]
+                {
+                    0.001
+                }
+                #[cfg(feature = "2d")]
+                {
+                    0.1
+                }
+            },
+            skin_width: {
+                #[cfg(feature = "3d")]
+                {
+                    0.002
+                }
+                #[cfg(feature = "2d")]
+                {
+                    0.2
+                }
+            },
         }
     }
 }
