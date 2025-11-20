@@ -94,7 +94,7 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
             // if this is the same plane we hit before, nudge velocity
             // out along it, which fixes some epsilon issues with
             // non-axial planes
-            for plane in &planes {
+            for plane in planes.iter().copied() {
                 if hit.normal1.dot(plane.into()) > (1.0 - DOT_EPSILON) {
                     velocity += hit.normal1 * config.duplicate_plane_nudge;
                     continue 'outer;
