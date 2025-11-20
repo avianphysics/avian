@@ -108,7 +108,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 point2: sweep_hit.point2,
                 normal1: sweep_hit.normal1,
                 normal2: sweep_hit.normal2,
-                distance: sweep_hit.distance,
+                collision_distance: sweep_hit.collision_distance,
                 safe_distance: sweep_hit.safe_distance,
                 position,
                 velocity,
@@ -271,7 +271,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         let safe_distance = Self::pull_back(shape_hit, direction, skin_width);
         Some(SweepHitData {
             safe_distance,
-            distance,
+            collision_distance: distance,
             intersects: shape_hit.distance == 0.0,
             entity: shape_hit.entity,
             point1: shape_hit.point1,
@@ -383,8 +383,9 @@ pub struct MoveAndSlideHitData {
     pub entity: Entity,
 
     /// How far the shape travelled before the initial hit.
+    /// To move the shape, use [`Self::safe_distance`] instead.
     #[doc(alias = "time_of_impact")]
-    pub distance: Scalar,
+    pub collision_distance: Scalar,
 
     /// The closest point on the shape that was hit, expressed in world space.
     ///
@@ -404,8 +405,11 @@ pub struct MoveAndSlideHitData {
     /// The outward surface normal on the cast shape at `point2`, expressed in world space.
     pub normal2: Vector,
     pub safe_distance: Scalar,
+    /// Whether the current move and slide iteration started off with the collider intersecting another collider.
     pub intersects: bool,
+    /// The position of the collider at the point of the move and slide iteration.
     pub position: Vector,
+    /// The velocity of the collider at the point of the move and slide iteration.
     pub velocity: Vector,
 }
 
@@ -418,8 +422,9 @@ pub struct SweepHitData {
     pub entity: Entity,
 
     /// How far the shape travelled before the initial hit.
+    /// To move the shape, use [`Self::safe_distance`] instead.
     #[doc(alias = "time_of_impact")]
-    pub distance: Scalar,
+    pub collision_distance: Scalar,
 
     /// The closest point on the shape that was hit, expressed in world space.
     ///
@@ -439,6 +444,7 @@ pub struct SweepHitData {
     /// The outward surface normal on the cast shape at `point2`, expressed in world space.
     pub normal2: Vector,
     pub safe_distance: Scalar,
+    /// Whether the current move and slide iteration started off with the collider intersecting another collider.
     pub intersects: bool,
 }
 
@@ -450,6 +456,12 @@ pub struct MoveAndSlideConfig {
     pub move_and_slide_iterations: usize,
     pub depenetration_iterations: usize,
     pub max_depenetration_error: Scalar,
+    /// A minimal distance to always keep between the collider and any other colliders.
+    /// This is here to ensure that the collider never intersects anything, even when numeric errors accumulate.
+    /// Set this to a very small value.
+    ///
+    /// Increase the value if you notice your character getting stuck in geometry.
+    /// Decrease it when you notice jittering, especially around V-shaped walls.
     pub skin_width: Scalar,
     pub planes: Vec<Dir>,
     pub max_planes: usize,
@@ -461,6 +473,7 @@ pub struct MoveAndSlideConfig {
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, PartialEq)]
 pub struct MoveAndSlideOutput {
+    /// The final position of the collider after move and slide. Set your [`Transform::translation`] to this value.
     pub position: Vector,
     pub clipped_velocity: Vector,
 }

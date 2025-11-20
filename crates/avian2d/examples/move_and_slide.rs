@@ -238,7 +238,8 @@ fn move_player(
                 gizmos.arrow_2d(
                     hit.point1.f32(),
                     (hit.point1
-                        + hit.normal1 * hit.distance / time.delta_secs().adjust_precision())
+                        + hit.normal1 * hit.collision_distance
+                            / time.delta_secs().adjust_precision())
                     .f32(),
                     tailwind::EMERALD_400,
                 );
