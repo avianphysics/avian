@@ -206,12 +206,13 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
     #[must_use]
     fn pull_back(hit: ShapeHitData, dir: Dir, skin_width: Scalar) -> Scalar {
         let dot = dir.dot(-hit.normal1);
-        if dot.abs() > DOT_EPSILON {
+        if dot > DOT_EPSILON {
             let skin_distance = skin_width / dot;
             hit.distance - skin_distance
         } else {
             hit.distance
         }
+        .max(0.0)
     }
 
     fn depenetrate(
@@ -314,7 +315,7 @@ impl Default for CollideAndSlideConfig {
             planes: Vec::new(),
             max_planes: 5,
             duplicate_plane_nudge: 0.001,
-            skin_width: 0.001,
+            skin_width: 0.002,
         }
     }
 }
