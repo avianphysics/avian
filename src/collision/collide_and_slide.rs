@@ -310,6 +310,10 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
 // needed to not accidentally explode when `n.dot(dir)` happens to be very close to zero
 const DOT_EPSILON: Scalar = 0.005;
 
+#[derive(Clone, Debug, PartialEq, Reflect)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(Debug, PartialEq)]
 pub struct CollideAndSlideHitData {
     pub hit: ShapeHitData,
     pub position: Vector,
@@ -317,6 +321,10 @@ pub struct CollideAndSlideHitData {
     pub safe_distance: Scalar,
 }
 
+#[derive(Clone, Debug, PartialEq, Reflect)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(Debug, PartialEq)]
 pub struct CollideAndSlideConfig {
     pub collide_and_slide_iterations: usize,
     pub depenetration_iterations: usize,
@@ -327,6 +335,10 @@ pub struct CollideAndSlideConfig {
     pub duplicate_plane_nudge: Scalar,
 }
 
+#[derive(Clone, Debug, PartialEq, Reflect)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(Debug, PartialEq)]
 pub struct CollideAndSlideResult {
     pub position: Vector,
     pub clipped_velocity: Vector,
