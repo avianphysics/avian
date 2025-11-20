@@ -78,15 +78,15 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                 safe_distance,
             }) {
                 return CollideAndSlideResult {
-                    position,
-                    velocity: Vector::ZERO,
+                    linear_velocity: (position - origin) / self.time.delta_secs(),
+                    momentum: Vector::ZERO,
                 };
             }
             if hit.distance == 0.0 {
                 // entity is completely trapped in another solid
                 return CollideAndSlideResult {
-                    position,
-                    velocity: Vector::ZERO,
+                    linear_velocity: (position - origin) / self.time.delta_secs(),
+                    momentum: Vector::ZERO,
                 };
             }
             time_left -= time_left * (safe_distance / speed);
@@ -109,8 +109,8 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
             }
             if planes.len() >= config.max_planes {
                 return CollideAndSlideResult {
-                    position,
-                    velocity: Vector::ZERO,
+                    linear_velocity: (position - origin) / self.time.delta_secs(),
+                    momentum: Vector::ZERO,
                 };
             }
             planes.push(Dir::new_unchecked(hit.normal1));
@@ -142,8 +142,8 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
                     {
                         // stop dead at a double plane interaction
                         return CollideAndSlideResult {
-                            position,
-                            velocity: Vector::ZERO,
+                            linear_velocity: (position - origin) / self.time.delta_secs(),
+                            momentum: Vector::ZERO,
                         };
                     }
                     #[cfg(feature = "3d")]
@@ -175,8 +175,8 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
 
                             // stop dead at a triple plane interaction
                             return CollideAndSlideResult {
-                                position,
-                                velocity: Vector::ZERO,
+                                linear_velocity: (position - origin) / self.time.delta_secs(),
+                                momentum: Vector::ZERO,
                             };
                         }
                     }
@@ -191,7 +191,10 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
             self.depenetrate(shape, shape_rotation, position, filter, config);
         position += depenetration_offset;
 
-        CollideAndSlideResult { position, velocity }
+        CollideAndSlideResult {
+            linear_velocity: (position - origin) / self.time.delta_secs(),
+            momentum: velocity,
+        }
     }
 
     #[must_use]
@@ -307,8 +310,8 @@ pub struct CollideAndSlideConfig {
 }
 
 pub struct CollideAndSlideResult {
-    pub position: Vector,
-    pub velocity: Vector,
+    pub linear_velocity: Vector,
+    pub momentum: Vector,
 }
 
 impl Default for CollideAndSlideConfig {

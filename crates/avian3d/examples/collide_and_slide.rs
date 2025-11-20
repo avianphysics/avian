@@ -102,7 +102,7 @@ fn setup(
 
 #[derive(Component, Default)]
 struct Player {
-    internal_velocity: Vec3,
+    momentum: Vec3,
 }
 
 fn move_player(
@@ -146,7 +146,7 @@ fn move_player(
     }
     wish_velocity = camera.rotation * wish_velocity;
     // preserve momentum
-    wish_velocity += player.internal_velocity;
+    wish_velocity += player.momentum;
     let current_speed = wish_velocity.length();
     if current_speed > 0.0 {
         // apply friction
@@ -155,8 +155,8 @@ fn move_player(
     }
 
     let CollideAndSlideResult {
-        position: new_position,
-        velocity: new_internal_velocity,
+        linear_velocity,
+        momentum,
     } = collide_and_slide.collide_and_slide(
         collider,
         transform.rotation,
@@ -177,9 +177,8 @@ fn move_player(
             true
         },
     );
-    let physics_velocity = (new_position - transform.translation) / time.delta_secs();
-    velocity.0 = physics_velocity;
-    player.internal_velocity = new_internal_velocity;
+    velocity.0 = linear_velocity;
+    player.momentum = momentum;
 }
 
 fn update_camera_transform(
