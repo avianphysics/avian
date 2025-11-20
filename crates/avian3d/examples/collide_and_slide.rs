@@ -21,7 +21,15 @@ fn main() {
         ))
         .add_systems(Startup, setup)
         .add_systems(FixedUpdate, move_player)
-        .add_systems(Update, (update_camera_transform, capture_cursor, exit_game))
+        .add_systems(
+            Update,
+            (
+                update_camera_transform,
+                capture_cursor,
+                exit_game,
+                update_debug_text,
+            ),
+        )
         .run();
 }
 
@@ -40,6 +48,8 @@ fn setup(
         RigidBody::Kinematic,
         Player::default(),
         TransformInterpolation,
+        // Not needed for collide-and-slide to work, but we add it for debug printing
+        CollidingEntities::default(),
     ));
 
     // Scene
@@ -98,7 +108,21 @@ fn setup(
             ..default()
         }),
     ));
+
+    // Debug test
+    commands.spawn((
+        DebugText,
+        Node {
+            width: percent(100.0),
+            height: percent(100.0),
+            ..default()
+        },
+        Text::default(),
+    ));
 }
+
+#[derive(Component)]
+struct DebugText;
 
 #[derive(Component, Default)]
 struct Player {
@@ -218,8 +242,34 @@ fn capture_cursor(mut cursor: Single<&mut CursorOptions>) {
     cursor.visible = false;
     cursor.grab_mode = CursorGrabMode::Locked;
 }
+
 fn exit_game(input: Res<ButtonInput<KeyCode>>, mut app_exit: MessageWriter<AppExit>) {
     if input.just_pressed(KeyCode::Escape) {
         app_exit.write(AppExit::Success);
     }
+}
+
+fn update_debug_text(
+    mut text: Single<&mut Text, With<DebugText>>,
+    player: Single<(&Player, &LinearVelocity, &CollidingEntities), With<Player>>,
+    names: Query<NameOrEntity>,
+) {
+    let (player, velocity, colliding_entities) = player.into_inner();
+    ***text = format!(
+        "Velocity: [{:.3}, {:.3}, {:.3}]\nMomentum: [{:.3}, {:.3}, {:.3}]\n{} Collisions: {:#?}",
+        velocity.x,
+        velocity.y,
+        velocity.z,
+        player.momentum.x,
+        player.momentum.y,
+        player.momentum.z,
+        colliding_entities.len(),
+        names
+            .iter_many(colliding_entities.iter())
+            .map(|name| name
+                .name
+                .map(|n| format!("{} ({})", name.entity, n))
+                .unwrap_or_else(|| format!("{}", name.entity)))
+            .collect::<Vec<_>>()
+    );
 }
