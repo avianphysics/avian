@@ -217,14 +217,9 @@ impl<'w, 's> CollideAndSlide<'w, 's> {
 
     #[must_use]
     pub fn pull_back(hit: ShapeHitData, dir: Dir, skin_width: Scalar) -> Scalar {
-        let dot = dir.dot(-hit.normal1);
-        if dot > DOT_EPSILON {
-            let skin_distance = skin_width / dot;
-            hit.distance - skin_distance
-        } else {
-            hit.distance
-        }
-        .max(0.0)
+        let dot = dir.dot(-hit.normal1).max(DOT_EPSILON);
+        let skin_distance = skin_width / dot;
+        (hit.distance - skin_distance).max(0.0)
     }
 
     #[must_use]
