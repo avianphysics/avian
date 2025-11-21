@@ -132,7 +132,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 point2: sweep_hit.point2,
                 normal1: sweep_hit.normal1,
                 normal2: sweep_hit.normal2,
-                raw_collision_distance: sweep_hit.raw_collision_distance,
+                collision_distance: sweep_hit.collision_distance,
                 distance: sweep_hit.distance,
                 position,
                 velocity,
@@ -331,7 +331,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         };
         Some(MoveHitData {
             distance: safe_distance,
-            raw_collision_distance: distance,
+            collision_distance: distance,
             entity: shape_hit.entity,
             point1: shape_hit.point1,
             point2: shape_hit.point2,
@@ -517,17 +517,17 @@ pub struct MoveAndSlideHitData {
     /// The velocity of the collider at the point of the move and slide iteration.
     pub velocity: Vector,
 
-    /// The real distance to the next collision.
+    /// The raw distance to the next collision, not respecting skin width.
     /// To move the shape, use [`Self::distance`] instead.
     #[doc(alias = "time_of_impact")]
-    pub raw_collision_distance: Scalar,
+    pub collision_distance: Scalar,
 }
 
 impl MoveAndSlideHitData {
     /// Whether the collider started off already intersecting another collider when it was cast.
     /// Note that this will be `false` if the collider was closer than `skin_width`, but not physically intersecting.
     pub fn intersects(&self) -> bool {
-        self.raw_collision_distance == 0.0
+        self.collision_distance == 0.0
     }
 }
 
@@ -567,17 +567,17 @@ pub struct MoveHitData {
     /// The outward surface normal on the cast shape at `point2`, expressed in world space.
     pub normal2: Vector,
 
-    /// The real distance to the next collision.
+    /// The raw distance to the next collision, not respecting skin width.
     /// To move the shape, use [`Self::distance`] instead.
     #[doc(alias = "time_of_impact")]
-    pub raw_collision_distance: Scalar,
+    pub collision_distance: Scalar,
 }
 
 impl MoveHitData {
     /// Whether the collider started off already intersecting another collider when it was cast.
     /// Note that this will be `false` if the collider was closer than `skin_width`, but not physically intersecting.
     pub fn intersects(self) -> bool {
-        self.raw_collision_distance == 0.0
+        self.collision_distance == 0.0
     }
 }
 
