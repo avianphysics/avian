@@ -169,7 +169,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 true
             },
         );
-        let depenetration_offset = self.depenetrate(&config.into(), &intersections);
+        let depenetration_offset = Self::depenetrate(&config.into(), &intersections);
         position += depenetration_offset;
 
         // Main move and slide loop.
@@ -252,11 +252,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             );
 
             // Depenetrate based on intersections found.
-            let depenetration_offset = self.depenetrate(&config.into(), &intersections);
+            let depenetration_offset = Self::depenetrate(&config.into(), &intersections);
             position += depenetration_offset;
 
             // Modify velocity so that it parallels all of the clip planes.
-            velocity = self.project_velocity(velocity, &planes);
+            velocity = Self::project_velocity(velocity, &planes);
 
             // If the original velocity is against the original velocity, stop dead
             // to avoid tiny occilations in sloping corners.
@@ -279,7 +279,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 true
             },
         );
-        let depenetration_offset = self.depenetrate(&config.into(), &intersections);
+        let depenetration_offset = Self::depenetrate(&config.into(), &intersections);
         position += depenetration_offset;
 
         MoveAndSlideOutput {
@@ -528,11 +528,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///
     /// See also [`MoveAndSlide::cast_move`] for a typical usage scenario.
     #[must_use]
-    pub fn depenetrate(
-        &self,
-        config: &DepenetrationConfig,
-        intersections: &[(Dir, Scalar)],
-    ) -> Vector {
+    pub fn depenetrate(config: &DepenetrationConfig, intersections: &[(Dir, Scalar)]) -> Vector {
         if intersections.is_empty() {
             return Vector::ZERO;
         }
@@ -556,7 +552,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// Projects input velocity `v` onto the convex cone defined by the provided contact `normals`.
     ///
     /// Returns the projected velocity.
-    pub fn project_velocity(&self, v: Vector, normals: &[Dir]) -> Vector {
+    pub fn project_velocity(v: Vector, normals: &[Dir]) -> Vector {
         // Case 1: Check if v is inside the cone
         if normals.iter().all(|&n| v.dot(*n) >= -DOT_EPSILON) {
             return v;
@@ -591,10 +587,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         {
             let n = normals.len();
             for i in 0..n {
-                for j in (i + 1)..n {
                     let ni = *normals[i];
-                    let nj = *normals[j];
-
+                for nj in normals.iter().take(n).skip(i + 1).map(|&x| *x) {
                     // Compute edge direction e = ni x nj
                     let e = ni.cross(nj);
                     let e2 = e.length_squared();
