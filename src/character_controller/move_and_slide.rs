@@ -58,8 +58,41 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///
     /// # Example
     ///
-    /// TODO: use it, set the transform, print the colliding entities
+    /// ```rust
+    /// use bevy::prelude::*;
+    #[cfg_attr(feature = "2d", doc = "use avian2d::prelude::*;")]
+    #[cfg_attr(feature = "3d", doc = "use avian3d::prelude::*;")]
     ///
+    /// #[derive(Component)]
+    /// struct CharacterController {
+    ///     velocity: Vector,
+    /// }
+    ///
+    /// fn perform_move_and_slide(
+    ///     player: Single<(Entity, &Collider, &mut CharacterController, &mut Transform)>,
+    ///     move_and_slide: MoveAndSlide,
+    /// ) {
+    ///     let (entity, collider, mut controller, mut transform) = player.into_inner();
+    ///     let velocity = controller.velocity + Vector::X * 10.0;
+    ///     let filter = SpatialQueryFilter::from_excluded_entities([entity]);
+    ///     let mut collisions = EntityHashSet::new();
+    ///     let out = move_and_slide.move_and_slide(
+    ///         collider,
+    ///         transform.translation,
+    ///         transform.rotation,
+    ///         velocity,
+    ///         &MoveAndSlideConfig::default(),
+    ///         &filter,
+    ///         |hit| {
+    ///             collisions.insert(hit.entity);
+    ///             true
+    ///         },
+    ///     );
+    ///     transform.translation = out.position;
+    ///     controller.velocity = out.velocity;
+    ///     info!("Colliding with entities: {:?}", collisions);
+    /// }
+    /// ```
     #[must_use]
     #[doc(alias = "collide_and_slide")]
     #[doc(alias = "step_slide")]
@@ -306,7 +339,47 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///
     /// # Example
     ///
-    /// TODO: depenetrate, `cast_move`, set transform, clip velocity
+    /// ```rust
+    /// use bevy::prelude::*;
+    #[cfg_attr(feature = "2d", doc = "use avian2d::prelude::*;")]
+    #[cfg_attr(feature = "3d", doc = "use avian3d::prelude::*;")]
+    ///
+    /// #[derive(Component)]
+    /// struct CharacterController {
+    ///     velocity: Vector,
+    /// }
+    ///
+    /// fn perform_cast_move(
+    ///     player: Single<(Entity, &Collider, &mut CharacterController, &mut Transform)>,
+    ///     move_and_slide: MoveAndSlide,
+    /// ) {
+    ///     let (entity, collider, mut controller, mut transform) = player.into_inner();
+    ///     let velocity = controller.velocity;
+    ///     let filter = SpatialQueryFilter::from_excluded_entities([entity]);
+    ///
+    ///     // Note: you probably want to call `MoveAndSlide::depenetrate()` here before calling `cast_move()`
+    ///     // to ensure that the character is not intersecting with any colliders. See that method's documentation for more details.
+    ///
+    ///     let hit = move_and_slide.cast_move(
+    ///         collider,
+    ///         transform.translation,
+    ///         transform.rotation,
+    ///         velocity,
+    ///         MoveAndSlideConfig::default().skin_width,
+    ///         &filter,
+    ///     );
+    ///     if let Some(hit) = hit {
+    ///         // We collided with something on the way. Advance as much as possible
+    ///         transform.translation += velocity.normalize_or_zero() * hit.distance;
+    ///         // Then clip the velocity to make sure it no longer points towards the collision plane
+    ///         controller.velocity =
+    ///             MoveAndSlide::clip_velocity(velocity, &[Dir::new_unchecked(hit.normal1)])
+    ///     } else {
+    ///         // We traveled the full distance without colliding
+    ///         transform.translation += velocity;
+    ///     }
+    /// }
+    /// ```
     #[must_use]
     #[doc(alias = "sweep")]
     pub fn cast_move(
