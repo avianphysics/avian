@@ -214,7 +214,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                         // slide the original velocity along the crease
                         let dir = planes[i]
                             .adjust_precision()
-                            .cross(planes[j].adjust_precision());
+                            .cross(planes[j].adjust_precision())
+                            // no need to check for zero length:
+                            // we would have early-returned if planes[i] and planes[j] were equivalent,
+                            // and we expect them both to be non-zero
+                            .normalize();
                         let d = dir.dot(velocity);
                         current_clip_velocity = dir * d;
 
