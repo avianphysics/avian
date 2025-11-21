@@ -293,22 +293,6 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             }
         }
 
-        // Final depenetration pass.
-        let mut intersections = Vec::new();
-        self.intersections_callback(
-            shape,
-            position,
-            shape_rotation,
-            filter,
-            config.skin_width,
-            |contact_point, normal| {
-                intersections.push((normal, contact_point.penetration + config.skin_width));
-                true
-            },
-        );
-        let depenetration_offset = Self::depenetrate(&config.into(), &intersections);
-        position += depenetration_offset;
-
         MoveAndSlideOutput {
             position,
             clipped_velocity: velocity,
