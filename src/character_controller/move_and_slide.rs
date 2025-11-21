@@ -61,6 +61,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// TODO: use it, set the transform, print the colliding entities
     ///
     #[must_use]
+    #[doc(alias = "collide_and_slide")]
+    #[doc(alias = "step_slide")]
     pub fn move_and_slide(
         &self,
         shape: &Collider,
@@ -302,6 +304,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///
     /// TODO: depenetrate, cast_move, set transform, clip velocity
     #[must_use]
+    #[doc(alias = "sweep")]
     pub fn cast_move(
         &self,
         shape: &Collider,
@@ -588,10 +591,12 @@ pub struct MoveAndSlideConfig {
     /// - Moving the character as far as possible in the desired velocity
     /// - Modifying the velocity to slide along any colliding planes
     pub move_and_slide_iterations: usize,
+
     /// How many iterations to use when performing depenetration.
     /// Depenetration is an iterative process that solves penetrations for all planes bit-by-bit,
     /// until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`] or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`].
     pub depenetration_iterations: usize,
+
     /// The target error to achieve when performing depenetration.
     /// Depenetration is an iterative process that solves penetrations for all planes bit-by-bit,
     /// until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`] or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`].
@@ -630,10 +635,12 @@ pub struct DepenetrationConfig {
     /// Depenetration is an iterative process that solves penetrations for all planes bit-by-bit,
     /// until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`] or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`].
     pub depenetration_iterations: usize,
+
     /// The target error to achieve when performing depenetration.
     /// Depenetration is an iterative process that solves penetrations for all planes bit-by-bit,
     /// until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`] or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`].
     pub max_depenetration_error: Scalar,
+
     /// A minimal distance to always keep between the collider and any other colliders.
     /// This is here to ensure that the collider never intersects anything, even when numeric errors accumulate.
     /// Set this to a very small value.
@@ -689,6 +696,7 @@ impl From<&MoveAndSlideConfig> for DepenetrationConfig {
 pub struct MoveAndSlideOutput {
     /// The final position of the character after move and slide. Set your [`Transform::translation`] to this value.
     pub position: Vector,
+
     /// The final velocity of the character after move and slide. This corresponds to the actual velocity, not the wished velocity.
     /// For example, if the character is trying to move to the right and there's a ramp on its path, this vector will point up the ramp.
     /// It is useful to store this value and apply your wish movement vectors, friction, gravity, etc. on it before handing it to [`MoveAndSlide::move_and_slide`] as the input `velocity`.
