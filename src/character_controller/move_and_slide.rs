@@ -56,10 +56,10 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///   Starting intersections, i.e. those that happen when the collider is already stuck in another collider, will be reported to this callback, but aborted even if the callback returns `true`.
     ///   If you don't have any special handling per collision, you can pass `|_| true`.
     ///
-    /// # Usage
+    /// # Example
     ///
-    /// It is also useful to collect colliding entities in e.g. an [`EntityHashSet`](bevy::ecs::entity::EntityHashSet) to have a collection of colliding entities.
-
+    /// TODO: use it, set the transform, print the colliding entities
+    ///
     #[must_use]
     pub fn move_and_slide(
         &self,
@@ -107,17 +107,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 break;
             }
 
-            let depenetration_offset = self.depenetrate(
-                shape,
-                position,
-                shape_rotation,
-                &DepenetrationConfig {
-                    depenetration_iterations: config.depenetration_iterations,
-                    max_depenetration_error: config.max_depenetration_error,
-                    skin_width: config.skin_width,
-                },
-                filter,
-            );
+            let depenetration_offset =
+                self.depenetrate(shape, position, shape_rotation, &config.into(), filter);
             position += depenetration_offset;
 
             let hit = self.cast_move(
@@ -261,17 +252,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             }
         }
 
-        let depenetration_offset = self.depenetrate(
-            shape,
-            position,
-            shape_rotation,
-            &DepenetrationConfig {
-                depenetration_iterations: config.depenetration_iterations,
-                max_depenetration_error: config.max_depenetration_error,
-                skin_width: config.skin_width,
-            },
-            filter,
-        );
+        let depenetration_offset =
+            self.depenetrate(shape, position, shape_rotation, &config.into(), filter);
         position += depenetration_offset;
 
         MoveAndSlideOutput {
@@ -282,6 +264,9 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
 
     /// Clips `velocity` so that it does not point into any of the given `planes` as expressed by their normals.
     /// If there are no planes, the velocity is returned unchanged.
+    ///
+    /// Often used after [`MoveAndSlide::cast_move`] to ensure a character moved that way does not try to continue moving into colliding geometry.
+    /// See that method for example usage.
     #[must_use]
     pub fn clip_velocity(mut velocity: Vector, planes: &[Dir]) -> Vector {
         for normal in planes {
@@ -293,6 +278,9 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
 
     /// A [shape cast](spatial_query#shapecasting) optimized for movement. Use this if you want to move a collider with a given velocity and stop so that
     /// it keeps a distance of `skin_width` from the first collider on its path.
+    ///
+    /// This operation is most useful when you ensure that the character is not intersecting any colliders before moving. You can do so by calling [`MoveAndSlide::depenetrate`]
+    /// and adding the resulting offset vector to the character's position before calling this method. See the example below.
     ///
     /// You will often find it useful to afterwards clip the velocity so that it no longer points into the collision plane by using [`Self::clip_velocity`].
     ///
@@ -309,6 +297,10 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///
     /// - `Some(MoveHitData)` if the shape hit a collider on the way, or started off intersecting a collider.
     /// - `None` if the shape is able to move the full distance without hitting a collider.
+    ///
+    /// # Example
+    ///
+    /// TODO: depenetrate, cast_move, set transform, clip velocity
     #[must_use]
     pub fn cast_move(
         &self,
@@ -364,9 +356,9 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// - `filter`: A [`SpatialQueryFilter`] that determines which colliders are taken into account in the query.
     /// - `skin_width`: An extra margin applied to the [`Collider`].
     ///
-    /// # Related Methods
+    /// # Example
     ///
-    /// - [`SpatialQueryPipeline::shape_intersections`]
+    /// TODO: check if the character is allowed to stand up
     #[must_use]
     pub fn intersections(
         &self,
@@ -421,18 +413,25 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// Moves a collider so that it no longer intersects any other collider and keeps a minimum distance of [`MoveAndSlideConfig::skin_width`] to all.
     /// Depenetration is an iterative process that solves penetrations for all planes bit-by-bit,
     /// until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`] or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`].
+    /// If the max iterations were reached before the error was below the threshold, the current best attempt is returned, in which case the collider may still be intersecting with other colliders.
     ///
     /// # Arguments
     /// - `shape`: The shape being cast represented as a [`Collider`].
     /// - `shape_position`: Where the shape that needs to be moved is located.
     /// - `shape_rotation`: The rotation of the shape to be moved.
+    /// - `config`: A [`DepenetrationConfig`] that determines the behavior of the depenetration. [`DepenetrationConfig::default()`] should be a good start for most cases.
     /// - `filter`: A [`SpatialQueryFilter`] that determines which colliders are taken into account in the query. It is highly recommended to exclude the entity holding the collider itself,
     ///   otherwise the character will collide with itself.
-    /// - `skin_width`: A [`ShapeCastConfig`] that determines the behavior of the cast.
     ///
     /// # Returns
     ///
-    /// A displacement vector that can be added to the `shape_position` to resolve the intersections.
+    /// A displacement vector that can be added to the `shape_position` to resolve the intersections, or the best attempt if the max iterations were reached before a solution was found.
+    ///
+    /// # Example
+    ///
+    /// TODO: use
+    ///
+    /// See also [`MoveAndSlide::cast_move`] for a typical usage scenario.
     #[must_use]
     pub fn depenetrate(
         &self,
@@ -644,6 +643,44 @@ pub struct DepenetrationConfig {
     pub skin_width: Scalar,
 }
 
+impl Default for DepenetrationConfig {
+    fn default() -> Self {
+        Self {
+            depenetration_iterations: 16,
+            max_depenetration_error: {
+                #[cfg(feature = "3d")]
+                {
+                    0.0001
+                }
+                #[cfg(feature = "2d")]
+                {
+                    0.01
+                }
+            },
+            skin_width: {
+                #[cfg(feature = "3d")]
+                {
+                    0.002
+                }
+                #[cfg(feature = "2d")]
+                {
+                    0.2
+                }
+            },
+        }
+    }
+}
+
+impl From<&MoveAndSlideConfig> for DepenetrationConfig {
+    fn from(config: &MoveAndSlideConfig) -> Self {
+        Self {
+            depenetration_iterations: config.depenetration_iterations,
+            max_depenetration_error: config.max_depenetration_error,
+            skin_width: config.skin_width,
+        }
+    }
+}
+
 /// Output from a [`MoveAndSlide::move_and_slide`].
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
@@ -663,19 +700,11 @@ pub struct MoveAndSlideOutput {
 
 impl Default for MoveAndSlideConfig {
     fn default() -> Self {
+        let default_depen_cfg = DepenetrationConfig::default();
         Self {
             move_and_slide_iterations: 4,
-            depenetration_iterations: 16,
-            max_depenetration_error: {
-                #[cfg(feature = "3d")]
-                {
-                    0.0001
-                }
-                #[cfg(feature = "2d")]
-                {
-                    0.01
-                }
-            },
+            depenetration_iterations: default_depen_cfg.depenetration_iterations,
+            max_depenetration_error: default_depen_cfg.max_depenetration_error,
             planes: Vec::new(),
             max_planes: 5,
             duplicate_plane_nudge: {
@@ -688,16 +717,7 @@ impl Default for MoveAndSlideConfig {
                     0.1
                 }
             },
-            skin_width: {
-                #[cfg(feature = "3d")]
-                {
-                    0.002
-                }
-                #[cfg(feature = "2d")]
-                {
-                    0.2
-                }
-            },
+            skin_width: default_depen_cfg.skin_width,
         }
     }
 }
