@@ -1,18 +1,45 @@
-//! Contains [`MoveAndSlide`] and related types. See that struct for more information.
+//! Contains the *move and slide* algorithm and utilities for kinematic character controllers.
+//!
+//! See the documentation of [`MoveAndSlide`] for more information.
 
 use crate::{collision::collider::contact_query::contact_manifolds, prelude::*};
 use bevy::{ecs::system::SystemParam, prelude::*};
 
-/// A [`SystemParam`] for performing move and slide operations via the [`MoveAndSlide::move_and_slide`] method.
-/// "Move and slide", a.k.a. "collide and slide" or "step slide", is the algorithm at the heart of kinematic character controllers.
-/// This algorithm basically says
-///- Please move in this direction
-///- if you collide with anything, slide along it
-///- make sure you're not intersecting with anything, and report everything you collide with
+/// A [`SystemParam`] for the *move and slide* algorithm, also known as *collide and slide* or *step slide*.
 ///
-/// See the video [Collide and slide - Collision detection algorithm](https://www.youtube.com/watch?v=YR6Q7dUz2uk) for an in-depth explanation.
+/// Move and slide is the core movement and collision algorithm used by most kinematic character controllers.
+/// It attempts to move a shape along a desired velocity vector, while sliding along any colliders it hits on the way.
 ///
-/// Also contains various helper methods that are useful for building kinematic character controllers.
+/// # Algorithm
+///
+/// At a high level, the algorithm works as follows:
+///
+/// 1. Sweep the shape along the desired velocity vector.
+/// 2. If no collision is detected, move the full distance.
+/// 3. If a collision is detected:
+///    - Move up to the point of collision.
+///    - Project the remaining velocity onto the contact surfaces to obtain a new sliding velocity.
+/// 4. Repeat with the new sliding velocity.
+///
+/// The algorithm also includes depenetration passes before and after movement to ensure the shape is not intersecting any colliders.
+///
+/// # Configuration
+///
+/// [`MoveAndSlideConfig`] allows configuring various aspects of the algorithm.
+/// See its documentation for more information.
+///
+/// Additionally, [`move_and_slide`](MoveAndSlide::move_and_slide) can be given a callback that is called
+/// for each contact surface that is detected during movement. This allows for custom handling of collisions,
+/// such as triggering events, or modifying movement based on specific colliders.
+///
+/// # Resources
+///
+/// Some useful resources for learning more about the move and slide algorithm include:
+///
+/// - [*Collide And Slide - \*Actually Decent\* Character Collision From Scratch*](https://youtu.be/YR6Q7dUz2uk) by [Poke Dev](https://www.youtube.com/@poke_gamedev) (video)
+/// - [`PM_SlideMove`](https://github.com/id-Software/Quake-III-Arena/blob/dbe4ddb10315479fc00086f08e25d968b4b43c49/code/game/bg_slidemove.c#L45) in Quake III Arena (source code)
+///
+/// Note that while the high-level concepts are similar across different implementations, details may vary.
 #[derive(SystemParam)]
 #[doc(alias = "CollideAndSlide")]
 #[doc(alias = "StepSlide")]
@@ -587,7 +614,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         {
             let n = normals.len();
             for i in 0..n {
-                    let ni = *normals[i];
+                let ni = *normals[i];
                 for nj in normals.iter().take(n).skip(i + 1).map(|&x| *x) {
                     // Compute edge direction e = ni x nj
                     let e = ni.cross(nj);
