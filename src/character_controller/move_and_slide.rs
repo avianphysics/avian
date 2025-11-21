@@ -172,6 +172,9 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 // Depenetration still uses just the normal skin width.
                 config.skin_width * 1.1,
                 |contact_point, normal| {
+                    if planes.len() >= config.max_planes {
+                        return false;
+                    }
                     if !on_hit(MoveAndSlideHitData {
                         intersects: false,
                         entity: sweep_hit.entity,
