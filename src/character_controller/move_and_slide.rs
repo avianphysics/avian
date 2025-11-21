@@ -60,8 +60,15 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///
     /// ```rust
     /// use bevy::prelude::*;
-    #[cfg_attr(feature = "2d", doc = "use avian2d::prelude::*;")]
-    #[cfg_attr(feature = "3d", doc = "use avian3d::prelude::*;")]
+    /// use std::collections::HashSet;
+    #[cfg_attr(
+        feature = "2d",
+        doc = "use avian2d::{prelude::*, math::{Vector, AdjustPrecision as _, AsF32 as _}};"
+    )]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "use avian3d::{prelude::*, math::{Vector, AdjustPrecision as _, AsF32 as _}};"
+    )]
     ///
     /// #[derive(Component)]
     /// struct CharacterController {
@@ -75,11 +82,22 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///     let (entity, collider, mut controller, mut transform) = player.into_inner();
     ///     let velocity = controller.velocity + Vector::X * 10.0;
     ///     let filter = SpatialQueryFilter::from_excluded_entities([entity]);
-    ///     let mut collisions = EntityHashSet::new();
+    ///     let mut collisions = HashSet::new();
     ///     let out = move_and_slide.move_and_slide(
     ///         collider,
-    ///         transform.translation,
-    ///         transform.rotation,
+    #[cfg_attr(
+        feature = "2d",
+        doc = "         transform.translation.xy().adjust_precision(),"
+    )]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "         transform.translation.adjust_precision(),"
+    )]
+    #[cfg_attr(
+        feature = "2d",
+        doc = "         transform.rotation.to_euler(EulerRot::XYZ).2.adjust_precision(),"
+    )]
+    #[cfg_attr(feature = "3d", doc = "         transform.rotation,")]
     ///         velocity,
     ///         &MoveAndSlideConfig::default(),
     ///         &filter,
@@ -88,8 +106,15 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///             true
     ///         },
     ///     );
-    ///     transform.translation = out.position;
-    ///     controller.velocity = out.velocity;
+    #[cfg_attr(
+        feature = "2d",
+        doc = "     transform.translation = out.position.f32().extend(0.0);"
+    )]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "     transform.translation = out.position.f32();"
+    )]
+    ///     controller.velocity = out.clipped_velocity;
     ///     info!("Colliding with entities: {:?}", collisions);
     /// }
     /// ```
@@ -303,8 +328,14 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///
     /// ```rust
     /// use bevy::prelude::*;
-    #[cfg_attr(feature = "2d", doc = "use avian2d::prelude::*;")]
-    #[cfg_attr(feature = "3d", doc = "use avian3d::prelude::*;")]
+    #[cfg_attr(
+        feature = "2d",
+        doc = "use avian2d::{prelude::*, math::{Vector, Dir, AdjustPrecision as _, AsF32 as _}};"
+    )]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "use avian3d::{prelude::*, math::{Vector, Dir, AdjustPrecision as _, AsF32 as _}};"
+    )]
     ///
     /// #[derive(Component)]
     /// struct CharacterController {
@@ -324,21 +355,46 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///
     ///     let hit = move_and_slide.cast_move(
     ///         collider,
-    ///         transform.translation,
-    ///         transform.rotation,
+    #[cfg_attr(
+        feature = "2d",
+        doc = "         transform.translation.xy().adjust_precision(),"
+    )]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "         transform.translation.adjust_precision(),"
+    )]
+    #[cfg_attr(
+        feature = "2d",
+        doc = "         transform.rotation.to_euler(EulerRot::XYZ).2.adjust_precision(),"
+    )]
+    #[cfg_attr(feature = "3d", doc = "         transform.rotation,")]
     ///         velocity,
     ///         MoveAndSlideConfig::default().skin_width,
     ///         &filter,
     ///     );
     ///     if let Some(hit) = hit {
     ///         // We collided with something on the way. Advance as much as possible
-    ///         transform.translation += velocity.normalize_or_zero() * hit.distance;
+    #[cfg_attr(
+        feature = "2d",
+        doc = "         transform.translation += (velocity.normalize_or_zero() * hit.distance).extend(0.0).f32();"
+    )]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "         transform.translation += (velocity.normalize_or_zero() * hit.distance).f32();"
+    )]
     ///         // Then clip the velocity to make sure it no longer points towards the collision plane
     ///         controller.velocity =
-    ///             MoveAndSlide::clip_velocity(velocity, &[Dir::new_unchecked(hit.normal1)])
+    ///             MoveAndSlide::clip_velocity(velocity, &[Dir::new_unchecked(hit.normal1.f32())])
     ///     } else {
     ///         // We traveled the full distance without colliding
-    ///         transform.translation += velocity;
+    #[cfg_attr(
+        feature = "2d",
+        doc = "         transform.translation += velocity.extend(0.0).f32();"
+    )]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "         transform.translation += velocity.f32();"
+    )]
     ///     }
     /// }
     /// ```
