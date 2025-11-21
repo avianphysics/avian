@@ -502,6 +502,10 @@ pub extern crate parry3d as parry;
 #[cfg(all(feature = "3d", feature = "parry-f64"))]
 pub extern crate parry3d_f64 as parry;
 
+#[cfg(all(
+    feature = "default-collider",
+    any(feature = "parry-f32", feature = "parry-f64")
+))]
 pub mod character_controller;
 pub mod collision;
 #[cfg(feature = "debug-plugin")]
@@ -538,7 +542,6 @@ pub mod prelude {
     #[expect(deprecated)]
     pub use crate::{
         PhysicsPlugins,
-        character_controller::prelude::*,
         collision::prelude::*,
         dynamics::{self, ccd::SpeculativeMargin, prelude::*},
         interpolation::*,
@@ -549,6 +552,12 @@ pub mod prelude {
         },
         spatial_query::{self, *},
     };
+
+    #[cfg(all(
+        feature = "default-collider",
+        any(feature = "parry-f32", feature = "parry-f64")
+    ))]
+    pub use crate::character_controller::prelude::*;
     pub(crate) use crate::{
         diagnostics::AppDiagnosticsExt,
         math::*,

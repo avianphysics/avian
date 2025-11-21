@@ -5,13 +5,12 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 /// A [`SystemParam`] for performing move and slide operations via the [`MoveAndSlide::move_and_slide`] method.
 /// "Move and slide", a.k.a. "collide and slide" or "step slide", is the algorithm at the heart of kinematic character controllers.
-/// In a nutshell, what it does is
 /// This algorithm basically says
 ///- Please move in this direction
 ///- if you collide with anything, slide along it
 ///- make sure you're not intersecting with anything, and report everything you collide with
 ///
-/// see the video [Collide and slide - Collision detection algorithm](https://www.youtube.com/watch?v=YR6Q7dUz2uk) for an in-depth explanation.
+/// See the video [Collide and slide - Collision detection algorithm](https://www.youtube.com/watch?v=YR6Q7dUz2uk) for an in-depth explanation.
 ///
 /// Also contains various helper methods that are useful for building kinematic character controllers.
 #[derive(SystemParam)]
@@ -36,12 +35,39 @@ pub struct MoveAndSlide<'w, 's> {
 }
 
 impl<'w, 's> MoveAndSlide<'w, 's> {
+    /// Performs the move and slide operation.
+    /// This algorithm basically says
+    ///- Please move in this direction
+    ///- if you collide with anything, slide along it
+    ///- make sure you're not intersecting with anything, and report everything you collide with
+    ///
+    /// See the video [Collide and slide - Collision detection algorithm](https://www.youtube.com/watch?v=YR6Q7dUz2uk) for an in-depth explanation.
+    ///
+    /// # Arguments
+    ///
+    /// - `shape`: The shape being cast represented as a [`Collider`].
+    /// - `shape_position`: Where the shape is cast from.
+    /// - `shape_rotation`: The rotation of the shape being cast.
+    /// - `velocity`: The direction and magnitude of the movement. If this is [`Vector::ZERO`], no movement is performed, but the collider is still depenetrated.
+    /// - `config`: A [`MoveAndSlideConfig`] that determines the behavior of the move and slide. [`MoveAndSlideConfig::default()`] should be a good start for most cases.
+    /// - `filter`: A [`SpatialQueryFilter`] that determines which colliders are taken into account in the query. It is highly recommended to exclude the entity holding the collider itself,
+    ///   otherwise the character will collide with itself.
+    /// - `on_hit`: A callback that is called when a collider is hit as part of the move and slide iterations. Returning `false` will abort the move and slide operation.\
+    ///   Starting intersections, i.e. those that happen when the collider is already stuck in another collider, will be reported to this callback, but aborted even if the callback returns `true`.
+    ///   If you don't have any special handling per collision, you can pass `|_| true`.
+    ///
+    /// # Example
+    ///
+    /// TODO: use it, set the transform, print the colliding entities
+    ///
     #[must_use]
+    #[doc(alias = "collide_and_slide")]
+    #[doc(alias = "step_slide")]
     pub fn move_and_slide(
         &self,
         shape: &Collider,
+        shape_position: Vector,
         shape_rotation: RotationValue,
-        origin: Vector,
         mut velocity: Vector,
         config: &MoveAndSlideConfig,
         filter: &SpatialQueryFilter,
@@ -58,7 +84,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         //     - Depenetrate based on overlap with contact planes
         //     - Clip velocity to be parallel to contact planes
         // - Final depenetration pass
-        let mut position = origin;
+        let mut position = shape_position;
         let original_velocity = velocity;
         let mut time_left = {
             #[cfg(feature = "f32")]
@@ -75,8 +101,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         let mut intersections = Vec::new();
         self.intersections_callback(
             shape,
-            shape_rotation,
             position,
+            shape_rotation,
             filter,
             config.skin_width,
             |contact_point, normal| {
@@ -85,7 +111,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 true
             },
         );
-        let depenetration_offset = self.depenetrate(config, &intersections);
+        let depenetration_offset = self.depenetrate(&config.into(), &intersections);
         position += depenetration_offset;
 
         // Main move and slide loop.
@@ -107,12 +133,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 break;
             }
 
-            let hit = self.sweep(
+            let hit = self.cast_move(
                 shape,
                 position,
                 shape_rotation,
-                vel_dir,
-                distance,
+                sweep,
                 config.skin_width,
                 filter,
             );
@@ -121,15 +146,15 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 position += sweep;
                 break;
             };
-            if sweep_hit.intersects {
+            if sweep_hit.intersects() {
                 // entity is completely trapped in another solid
                 velocity = Vector::ZERO;
                 break 'outer;
             }
 
             // Move up to the hit point.
-            time_left -= time_left * (sweep_hit.safe_distance / distance);
-            position += vel_dir.adjust_precision() * sweep_hit.safe_distance;
+            time_left -= time_left * (sweep_hit.distance / distance);
+            position += vel_dir.adjust_precision() * sweep_hit.distance;
 
             // User-defined clipping planes.
             let mut planes = config.planes.clone();
@@ -140,8 +165,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             // Collect contact planes.
             self.intersections_callback(
                 shape,
-                shape_rotation,
                 position,
+                shape_rotation,
                 filter,
                 // Use a slightly larger skin width to ensure we catch all contacts for velocity clipping.
                 // Depenetration still uses just the normal skin width.
@@ -153,7 +178,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                         point: contact_point.point,
                         normal,
                         collision_distance: sweep_hit.collision_distance,
-                        safe_distance: sweep_hit.safe_distance,
+                        distance: sweep_hit.distance,
                         position,
                         velocity,
                     }) {
@@ -166,11 +191,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             );
 
             // Depenetrate based on intersections found.
-            let depenetration_offset = self.depenetrate(config, &intersections);
+            let depenetration_offset = self.depenetrate(&config.into(), &intersections);
             position += depenetration_offset;
 
             // Modify velocity so that it parallels all of the clip planes.
-            velocity = project_velocity(velocity, &planes);
+            velocity = self.project_velocity(velocity, &planes);
 
             // If the original velocity is against the original velocity, stop dead
             // to avoid tiny occilations in sloping corners.
@@ -184,8 +209,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         let mut intersections = Vec::new();
         self.intersections_callback(
             shape,
-            shape_rotation,
             position,
+            shape_rotation,
             filter,
             config.skin_width,
             |contact_point, normal| {
@@ -193,7 +218,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 true
             },
         );
-        let depenetration_offset = self.depenetrate(config, &intersections);
+        let depenetration_offset = self.depenetrate(&config.into(), &intersections);
         position += depenetration_offset;
 
         MoveAndSlideOutput {
@@ -202,6 +227,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         }
     }
 
+    /// Clips `velocity` so that it does not point into any of the given `planes` as expressed by their normals.
+    /// If there are no planes, the velocity is returned unchanged.
+    ///
+    /// Often used after [`MoveAndSlide::cast_move`] to ensure a character moved that way does not try to continue moving into colliding geometry.
+    /// See that method for example usage.
     #[must_use]
     pub fn clip_velocity(mut velocity: Vector, planes: &[Dir]) -> Vector {
         for normal in planes {
@@ -211,30 +241,60 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         velocity
     }
 
+    /// A [shape cast](spatial_query#shapecasting) optimized for movement. Use this if you want to move a collider with a given velocity and stop so that
+    /// it keeps a distance of `skin_width` from the first collider on its path.
+    ///
+    /// This operation is most useful when you ensure that the character is not intersecting any colliders before moving. You can do so by calling [`MoveAndSlide::depenetrate`]
+    /// and adding the resulting offset vector to the character's position before calling this method. See the example below.
+    ///
+    /// You will often find it useful to afterwards clip the velocity so that it no longer points into the collision plane by using [`Self::clip_velocity`].
+    ///
+    /// # Arguments
+    /// - `shape`: The shape being cast represented as a [`Collider`].
+    /// - `shape_position`: Where the shape is cast from.
+    /// - `shape_rotation`: The rotation of the shape being cast.
+    /// - `velocity`: The direction and magnitude of the movement. If this is [`Vector::ZERO`], this method can still return `Some(MoveHitData)` if the shape started off intersecting a collider.
+    /// - `skin_width`: A [`ShapeCastConfig`] that determines the behavior of the cast.
+    /// - `filter`: A [`SpatialQueryFilter`] that determines which colliders are taken into account in the query. It is highly recommended to exclude the entity holding the collider itself,
+    ///   otherwise the character will collide with itself.
+    ///
+    /// # Returns
+    ///
+    /// - `Some(MoveHitData)` if the shape hit a collider on the way, or started off intersecting a collider.
+    /// - `None` if the shape is able to move the full distance without hitting a collider.
+    ///
+    /// # Example
+    ///
+    /// TODO: depenetrate, `cast_move`, set transform, clip velocity
     #[must_use]
-    pub fn sweep(
+    #[doc(alias = "sweep")]
+    pub fn cast_move(
         &self,
         shape: &Collider,
-        origin: Vector,
+        shape_position: Vector,
         shape_rotation: RotationValue,
-        direction: Dir,
-        distance: Scalar,
+        velocity: Vector,
         skin_width: Scalar,
         filter: &SpatialQueryFilter,
-    ) -> Option<SweepHitData> {
+    ) -> Option<MoveHitData> {
+        let (direction, distance) = Dir::new_and_length(velocity.f32()).unwrap_or((Dir::X, 0.0));
+        let distance = distance.adjust_precision();
         let shape_hit = self.query_pipeline.cast_shape(
             shape,
-            origin,
+            shape_position,
             shape_rotation,
             direction,
             &ShapeCastConfig::from_max_distance(distance),
             filter,
         )?;
-        let safe_distance = Self::pull_back(shape_hit, direction, skin_width);
-        Some(SweepHitData {
-            safe_distance,
+        let safe_distance = if distance == 0.0 {
+            0.0
+        } else {
+            Self::pull_back(shape_hit, direction, skin_width)
+        };
+        Some(MoveHitData {
+            distance: safe_distance,
             collision_distance: distance,
-            intersects: shape_hit.distance == 0.0,
             entity: shape_hit.entity,
             point1: shape_hit.point1,
             point2: shape_hit.point2,
@@ -243,6 +303,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         })
     }
 
+    /// Returns a [`ShapeHitData::distance`] that is reduced such that the hit distance is at least `skin_width`.
+    /// The result will never be negative, so if the hit is already closer than `skin_width`, the returned distance will be zero.
     #[must_use]
     fn pull_back(hit: ShapeHitData, dir: Dir, skin_width: Scalar) -> Scalar {
         let dot = dir.adjust_precision().dot(-hit.normal1).max(DOT_EPSILON);
@@ -250,19 +312,32 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         (hit.distance - skin_distance).max(0.0)
     }
 
-    /// Calls the provided callback for the deepest contact point of each contact manifold found
-    /// between the provided shape and all colliders in the scene that pass the provided filter.
+    /// An [intersection test](spatial_query#intersection-tests) that calls a callback for each [`Collider`] found
+    /// that is closer to the given `shape` with a given position and rotation than `prediction_distance`.
+    ///
+    /// # Arguments
+    ///
+    /// - `shape`: The shape that intersections are tested against represented as a [`Collider`].
+    /// - `shape_position`: The position of the shape.
+    /// - `shape_rotation`: The rotation of the shape.
+    /// - `filter`: A [`SpatialQueryFilter`] that determines which colliders are taken into account in the query.
+    /// - `prediction_distance`: An extra margin applied to the [`Collider`].
+    /// - `callback`: A callback that is called for each intersection found. The callback receives the deepest contact point and the contact normal.
+    ///
+    /// # Example
+    ///
+    /// TODO: check if the character is allowed to stand up
     pub fn intersections_callback(
         &self,
         shape: &Collider,
+        shape_position: Vector,
         shape_rotation: RotationValue,
-        origin: Vector,
         filter: &SpatialQueryFilter,
         prediction_distance: Scalar,
         mut callback: impl FnMut(&ContactPoint, Dir) -> bool,
     ) {
         let expanded_aabb = shape
-            .aabb(origin, shape_rotation)
+            .aabb(shape_position, shape_rotation)
             .grow(Vector::splat(prediction_distance));
         let aabb_intersections = self
             .query_pipeline
@@ -280,7 +355,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             let mut manifolds = Vec::new();
             contact_manifolds(
                 shape,
-                origin,
+                shape_position,
                 shape_rotation,
                 intersection_collider,
                 *intersection_pos,
@@ -299,10 +374,31 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         }
     }
 
+    /// Moves a collider so that it no longer intersects any other collider and keeps a minimum distance of [`DepenetrationConfig::skin_width`] to all.
+    /// The intersections should be provided as a list of contact plane normals and penetration distances, which can be obtained via [`MoveAndSlide::intersections_callback`].
+    ///
+    /// Depenetration is an iterative process that solves penetrations for all planes bit-by-bit, until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`]
+    /// or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`]. If the max iterations were reached before the error was below the threshold,
+    /// the current best attempt is returned, in which case the collider may still be intersecting with other colliders.
+    ///
+    /// # Arguments
+    ///
+    /// - `config`: A [`DepenetrationConfig`] that determines the behavior of the depenetration. [`DepenetrationConfig::default()`] should be a good start for most cases.
+    ///
+    /// # Returns
+    ///
+    /// A displacement vector that can be added to the `shape_position` to resolve the intersections,
+    /// or the best attempt if the max iterations were reached before a solution was found.
+    ///
+    /// # Example
+    ///
+    /// TODO: use
+    ///
+    /// See also [`MoveAndSlide::cast_move`] for a typical usage scenario.
     #[must_use]
     pub fn depenetrate(
         &self,
-        config: &MoveAndSlideConfig,
+        config: &DepenetrationConfig,
         intersections: &[(Dir, Scalar)],
     ) -> Vector {
         if intersections.is_empty() {
@@ -324,11 +420,84 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         }
         fixup
     }
+
+    /// Projects input velocity `v` onto the convex cone defined by the provided contact `normals`.
+    ///
+    /// Returns the projected velocity.
+    pub fn project_velocity(&self, v: Vector, normals: &[Dir]) -> Vector {
+        // Case 1: Check if v is inside the cone
+        if normals.iter().all(|&n| v.dot(*n) >= -DOT_EPSILON) {
+            return v;
+        }
+
+        // Best candidate so far
+        let mut best_u = Vector::ZERO;
+        let mut best_d2 = f32::INFINITY;
+
+        // Helper to test halfspace validity
+        let is_valid = |u: Vector| normals.iter().all(|&n| u.dot(*n) >= -DOT_EPSILON);
+
+        // Case 2a: Face projections (single-plane active set)
+        for &n in normals {
+            let vd = v.dot(*n);
+            if vd < 0.0 {
+                // Only meaningful if v violates this plane
+                let u = v - vd * n; // Project onto the plane
+
+                // Check if better than previous best and valid
+                let d2 = (v - u).length_squared();
+                if d2 < best_d2 && is_valid(u) {
+                    best_d2 = d2;
+                    best_u = u;
+                }
+            }
+        }
+
+        // Case 2b: Edge projections (two-plane active set)
+        // TODO: Can we optimize this from O(n^3) to O(n^2)?
+        #[cfg(feature = "3d")]
+        {
+            let n = normals.len();
+            for i in 0..n {
+                for j in (i + 1)..n {
+                    let ni = *normals[i];
+                    let nj = *normals[j];
+
+                    // Compute edge direction e = ni x nj
+                    let e = ni.cross(nj);
+                    let e2 = e.length_squared();
+                    if e2 < DOT_EPSILON {
+                        // Nearly parallel edge
+                        continue;
+                    }
+
+                    // Project v onto the line spanned by e:
+                    // u = ((v·e) / |e|²) e
+                    let u = e * (v.dot(e) / e2);
+
+                    // Check if better than previous best and valid
+                    let d2 = (v - u).length_squared();
+                    if d2 < best_d2 && is_valid(u) {
+                        best_d2 = d2;
+                        best_u = u;
+                    }
+                }
+            }
+        }
+
+        // Case 3: If no candidate is found, the projection is at the apex (the origin)
+        if best_d2.is_infinite() {
+            Vector::ZERO
+        } else {
+            best_u
+        }
+    }
 }
 
-// needed to not accidentally explode when `n.dot(dir)` happens to be very close to zero
+/// Needed to not accidentally explode when `n.dot(dir)` happens to be very close to zero.
 const DOT_EPSILON: Scalar = 0.005;
 
+/// Data related to a hit during a [`MoveAndSlide::move_and_slide`].
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
@@ -337,19 +506,19 @@ pub struct MoveAndSlideHitData {
     /// The entity of the collider that was hit by the shape.
     pub entity: Entity,
 
-    /// How far the shape travelled before the initial hit.
-    /// To move the shape, use [`Self::safe_distance`] instead.
-    #[doc(alias = "time_of_impact")]
-    pub collision_distance: Scalar,
+    /// The maximum distance that is safe to move in the given direction so that the collider still keeps a distance of `skin_width` to the other colliders.
+    /// Is 0.0 when
+    /// - The collider started off intersecting another collider.
+    /// - The collider is moving toward another collider that is already closer than `skin_width`.
+    ///
+    /// If you want to know the real distance to the next collision, use [`Self::raw_collision_distance`].
+    pub distance: Scalar,
 
     /// The hit point point on the shape that was hit, expressed in world space.
     pub point: Vector,
 
     /// The outward surface normal on the hit shape at `point`, expressed in world space.
     pub normal: Dir,
-
-    /// A safe distance to move the shape without intersecting the hit collider.
-    pub safe_distance: Scalar,
 
     /// Whether the current move and slide iteration started off with the collider intersecting another collider.
     pub intersects: bool,
@@ -359,20 +528,38 @@ pub struct MoveAndSlideHitData {
 
     /// The velocity of the collider at the point of the move and slide iteration.
     pub velocity: Vector,
+
+    /// The raw distance to the next collision, not respecting skin width.
+    /// To move the shape, use [`Self::distance`] instead.
+    #[doc(alias = "time_of_impact")]
+    pub collision_distance: Scalar,
 }
 
+impl MoveAndSlideHitData {
+    /// Whether the collider started off already intersecting another collider when it was cast.
+    /// Note that this will be `false` if the collider was closer than `skin_width`, but not physically intersecting.
+    pub fn intersects(&self) -> bool {
+        self.collision_distance == 0.0
+    }
+}
+
+/// Data related to a hit during a [`MoveAndSlide::cast_move`].
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, PartialEq)]
-pub struct SweepHitData {
+pub struct MoveHitData {
     /// The entity of the collider that was hit by the shape.
     pub entity: Entity,
 
-    /// How far the shape travelled before the initial hit.
-    /// To move the shape, use [`Self::safe_distance`] instead.
+    /// The maximum distance that is safe to move in the given direction so that the collider still keeps a distance of `skin_width` to the other colliders.
+    /// Is 0.0 when
+    /// - The collider started off intersecting another collider.
+    /// - The collider is moving toward another collider that is already closer than `skin_width`.
+    ///
+    /// If you want to know the real distance to the next collision, use [`Self::raw_collision_distance`].
     #[doc(alias = "time_of_impact")]
-    pub collision_distance: Scalar,
+    pub distance: Scalar,
 
     /// The closest point on the shape that was hit, expressed in world space.
     ///
@@ -392,21 +579,42 @@ pub struct SweepHitData {
     /// The outward surface normal on the cast shape at `point2`, expressed in world space.
     pub normal2: Vector,
 
-    /// A safe distance to move the shape without intersecting the hit collider.
-    pub safe_distance: Scalar,
-
-    /// Whether the current move and slide iteration started off with the collider intersecting another collider.
-    pub intersects: bool,
+    /// The raw distance to the next collision, not respecting skin width.
+    /// To move the shape, use [`Self::distance`] instead.
+    #[doc(alias = "time_of_impact")]
+    pub collision_distance: Scalar,
 }
 
+impl MoveHitData {
+    /// Whether the collider started off already intersecting another collider when it was cast.
+    /// Note that this will be `false` if the collider was closer than `skin_width`, but not physically intersecting.
+    pub fn intersects(self) -> bool {
+        self.collision_distance == 0.0
+    }
+}
+
+/// Configuration for a [`MoveAndSlide::move_and_slide`].
 #[derive(Clone, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, PartialEq)]
 pub struct MoveAndSlideConfig {
+    /// How many iterations to use when moving the character. A single iteration consists of
+    /// - Performing depenetration
+    /// - Moving the character as far as possible in the desired velocity
+    /// - Modifying the velocity to slide along any colliding planes
     pub move_and_slide_iterations: usize,
+
+    /// How many iterations to use when performing depenetration.
+    /// Depenetration is an iterative process that solves penetrations for all planes bit-by-bit,
+    /// until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`] or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`].
     pub depenetration_iterations: usize,
+
+    /// The target error to achieve when performing depenetration.
+    /// Depenetration is an iterative process that solves penetrations for all planes bit-by-bit,
+    /// until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`] or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`].
     pub max_depenetration_error: Scalar,
+
     /// A minimal distance to always keep between the collider and any other colliders.
     /// This is here to ensure that the collider never intersects anything, even when numeric errors accumulate.
     /// Set this to a very small value.
@@ -414,25 +622,50 @@ pub struct MoveAndSlideConfig {
     /// Increase the value if you notice your character getting stuck in geometry.
     /// Decrease it when you notice jittering, especially around V-shaped walls.
     pub skin_width: Scalar,
+
+    /// The initial planes to consider for a move-and-slide operation. This will be expanded during the algorithm with
+    /// the colliding planes, but you can also initialize it with some planes you want to make sure the algorithm will never move against.
+    ///
+    /// A good use-case for this is adding the ground plane when a character controller is standing or walking on the ground.
     pub planes: Vec<Dir>,
+
+    /// The maximum number of planes to solve while performing move-and-slide. If the collided planes exceed this number, the move is aborted and the velocity is set to zero.
+    /// Realistically, this will probably never be reached, unless you have very exotic geometry and very high velocity.
     pub max_planes: usize,
+
+    /// A small nudge to apply to the character when colliding with a plane for a second time. This is done to not get caught in a loop of repeated collisions.
+    /// Reduce this value if you notice jittering.
     pub duplicate_plane_nudge: Scalar,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Reflect)]
+/// Configuration for a [`MoveAndSlide::depenetrate`].
+#[derive(Clone, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, PartialEq)]
-pub struct MoveAndSlideOutput {
-    /// The final position of the collider after move and slide. Set your [`Transform::translation`] to this value.
-    pub position: Vector,
-    pub clipped_velocity: Vector,
+pub struct DepenetrationConfig {
+    /// How many iterations to use when performing depenetration.
+    /// Depenetration is an iterative process that solves penetrations for all planes bit-by-bit,
+    /// until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`] or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`].
+    pub depenetration_iterations: usize,
+
+    /// The target error to achieve when performing depenetration.
+    /// Depenetration is an iterative process that solves penetrations for all planes bit-by-bit,
+    /// until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`] or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`].
+    pub max_depenetration_error: Scalar,
+
+    /// A minimal distance to always keep between the collider and any other colliders.
+    /// This is here to ensure that the collider never intersects anything, even when numeric errors accumulate.
+    /// Set this to a very small value.
+    ///
+    /// Increase the value if you notice your character getting stuck in geometry.
+    /// Decrease it when you notice jittering, especially around V-shaped walls.
+    pub skin_width: Scalar,
 }
 
-impl Default for MoveAndSlideConfig {
+impl Default for DepenetrationConfig {
     fn default() -> Self {
         Self {
-            move_and_slide_iterations: 4,
             depenetration_iterations: 16,
             max_depenetration_error: {
                 #[cfg(feature = "3d")]
@@ -442,18 +675,6 @@ impl Default for MoveAndSlideConfig {
                 #[cfg(feature = "2d")]
                 {
                     0.01
-                }
-            },
-            planes: Vec::new(),
-            max_planes: 5,
-            duplicate_plane_nudge: {
-                #[cfg(feature = "3d")]
-                {
-                    0.001
-                }
-                #[cfg(feature = "2d")]
-                {
-                    0.1
                 }
             },
             skin_width: {
@@ -470,76 +691,54 @@ impl Default for MoveAndSlideConfig {
     }
 }
 
-/// Projects input velocity `v` onto the convex cone defined by the provided contact `normals`.
-///
-/// Returns the projected velocity.
-pub fn project_velocity(v: Vector, normals: &[Dir]) -> Vector {
-    const EPS: f32 = 1e-3;
-
-    // Case 1: Check if v is inside the cone
-    if normals.iter().all(|&n| v.dot(*n) >= -EPS) {
-        return v;
-    }
-
-    // Best candidate so far
-    let mut best_u = Vector::ZERO;
-    let mut best_d2 = f32::INFINITY;
-
-    // Helper to test halfspace validity
-    let is_valid = |u: Vector| normals.iter().all(|&n| u.dot(*n) >= -EPS);
-
-    // Case 2a: Face projections (single-plane active set)
-    for &n in normals {
-        let vd = v.dot(*n);
-        if vd < 0.0 {
-            // Only meaningful if v violates this plane
-            let u = v - vd * n; // Project onto the plane
-
-            // Check if better than previous best and valid
-            let d2 = (v - u).length_squared();
-            if d2 < best_d2 && is_valid(u) {
-                best_d2 = d2;
-                best_u = u;
-            }
+impl From<&MoveAndSlideConfig> for DepenetrationConfig {
+    fn from(config: &MoveAndSlideConfig) -> Self {
+        Self {
+            depenetration_iterations: config.depenetration_iterations,
+            max_depenetration_error: config.max_depenetration_error,
+            skin_width: config.skin_width,
         }
     }
+}
 
-    // Case 2b: Edge projections (two-plane active set)
-    // TODO: Can we optimize this from O(n^3) to O(n^2)?
-    #[cfg(feature = "3d")]
-    {
-        let n = normals.len();
-        for i in 0..n {
-            for j in (i + 1)..n {
-                let ni = *normals[i];
-                let nj = *normals[j];
+/// Output from a [`MoveAndSlide::move_and_slide`].
+#[derive(Clone, Copy, Debug, PartialEq, Reflect)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(Debug, PartialEq)]
+pub struct MoveAndSlideOutput {
+    /// The final position of the character after move and slide. Set your [`Transform::translation`] to this value.
+    pub position: Vector,
 
-                // Compute edge direction e = ni x nj
-                let e = ni.cross(nj);
-                let e2 = e.length_squared();
-                if e2 < EPS {
-                    // Nearly parallel edge
-                    continue;
+    /// The final velocity of the character after move and slide. This corresponds to the actual velocity, not the wished velocity.
+    /// For example, if the character is trying to move to the right and there's a ramp on its path, this vector will point up the ramp.
+    /// It is useful to store this value and apply your wish movement vectors, friction, gravity, etc. on it before handing it to [`MoveAndSlide::move_and_slide`] as the input `velocity`.
+    /// You can also ignore this value if you don't wish to preserve momentum.
+    ///
+    /// Do *not* set [`LinearVelocity`] to this value, as that would apply the movement twice and cause intersections. Instead, set [`Transform::translation`] to [`MoveAndSlideOutput::position`].
+    pub clipped_velocity: Vector,
+}
+
+impl Default for MoveAndSlideConfig {
+    fn default() -> Self {
+        let default_depen_cfg = DepenetrationConfig::default();
+        Self {
+            move_and_slide_iterations: 4,
+            depenetration_iterations: default_depen_cfg.depenetration_iterations,
+            max_depenetration_error: default_depen_cfg.max_depenetration_error,
+            planes: Vec::new(),
+            max_planes: 5,
+            duplicate_plane_nudge: {
+                #[cfg(feature = "3d")]
+                {
+                    0.001
                 }
-
-                // Project v onto the line spanned by e:
-                // u = ((v·e) / |e|²) e
-                let u = e * (v.dot(e) / e2);
-
-                // Check if better than previous best and valid
-                let d2 = (v - u).length_squared();
-                if d2 < best_d2 && is_valid(u) {
-                    best_d2 = d2;
-                    best_u = u;
+                #[cfg(feature = "2d")]
+                {
+                    0.1
                 }
-            }
+            },
+            skin_width: default_depen_cfg.skin_width,
         }
-    }
-
-    // Case 3: If no candidate is found, the projection is at the apex (the origin)
-    if best_d2.is_infinite() {
-        Vector::ZERO
-    } else {
-        best_u
     }
 }

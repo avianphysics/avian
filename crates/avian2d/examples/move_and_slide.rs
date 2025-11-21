@@ -218,17 +218,17 @@ fn move_player(
         clipped_velocity: internal_velocity,
     } = move_and_slide.move_and_slide(
         collider,
+        transform.translation.xy().adjust_precision(),
         transform
             .rotation
             .to_euler(EulerRot::XYZ)
             .2
             .adjust_precision(),
-        transform.translation.xy().adjust_precision(),
         wish_velocity,
         &MoveAndSlideConfig::default(),
         &SpatialQueryFilter::from_excluded_entities([entity]),
         |hit| {
-            if hit.intersects {
+            if hit.intersects() {
                 gizmos.circle_2d(
                     Isometry2d::from_translation(transform.translation.xy()),
                     33.0,
