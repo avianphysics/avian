@@ -567,7 +567,7 @@ pub struct MoveAndSlideHitData {
     /// - The collider started off intersecting another collider.
     /// - The collider is moving toward another collider that is already closer than `skin_width`.
     ///
-    /// If you want to know the real distance to the next collision, use [`Self::raw_collision_distance`].
+    /// If you want to know the real distance to the next collision, use [`Self::collision_distance`].
     pub distance: Scalar,
 
     /// The closest point on the shape that was hit, expressed in world space.
@@ -622,7 +622,7 @@ pub struct MoveHitData {
     /// - The collider started off intersecting another collider.
     /// - The collider is moving toward another collider that is already closer than `skin_width`.
     ///
-    /// If you want to know the real distance to the next collision, use [`Self::raw_collision_distance`].
+    /// If you want to know the real distance to the next collision, use [`Self::collision_distance`].
     #[doc(alias = "time_of_impact")]
     pub distance: Scalar,
 
