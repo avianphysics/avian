@@ -469,10 +469,10 @@ impl Default for MoveAndSlideConfig {
     }
 }
 
-const EPS: f32 = 1e-6;
-
 /// Projects input velocity `v` so it satisfies n_i · v' >= 0 for all contact normals n_i.
 pub fn project_velocity(v: Vector, normals: &[Dir]) -> Vector {
+    const EPS: f32 = 1e-3;
+
     // Case 1: Check if v is inside the cone
     if normals.iter().all(|&n| v.dot(*n) >= -EPS) {
         return v;
@@ -501,7 +501,6 @@ pub fn project_velocity(v: Vector, normals: &[Dir]) -> Vector {
         }
     }
 
-    // TODO: Does 2D still need something like this?
     // Case 2b: Edge projections (two-plane active set)
     // TODO: Can we optimize this from O(n^3) to O(n^2)?
     #[cfg(feature = "3d")]
