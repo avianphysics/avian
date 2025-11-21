@@ -302,7 +302,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///
     /// # Example
     ///
-    /// TODO: depenetrate, cast_move, set transform, clip velocity
+    /// TODO: depenetrate, `cast_move`, set transform, clip velocity
     #[must_use]
     #[doc(alias = "sweep")]
     pub fn cast_move(
@@ -314,7 +314,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         skin_width: Scalar,
         filter: &SpatialQueryFilter,
     ) -> Option<MoveHitData> {
-        let (direction, distance) = Dir::new_and_length(velocity).unwrap_or((Dir::X, 0.0));
+        let (direction, distance) = Dir::new_and_length(velocity.f32()).unwrap_or((Dir::X, 0.0));
+        let distance = distance.adjust_precision();
         let shape_hit = self.query_pipeline.cast_shape(
             shape,
             shape_position,
