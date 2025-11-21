@@ -48,15 +48,16 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         mut on_hit: impl FnMut(MoveAndSlideHitData) -> bool,
     ) -> MoveAndSlideOutput {
         // High level overview:
-        // - for each iteration:
-        //   - Gauss-Seidel out of any penetration
-        //   - Shape cast to first hit
-        //   - Pull back the distance so were are `skin_width` away from the plane
-        //   - push collided plane
-        //   - change velocity according to colliding planes
-        //     - 2 planes: slide along in 3d, abort in 2d
-        //     - 3 planes: abort
-        // - perform final depenetration
+        // - Initial Gauss-Seidel depenetration pass
+        // - For each iteration, until movement is done or max iterations reached:
+        //   - Sweep shape along velocity vector
+        //   - If no hit, move full distance and finish
+        //   - If hit:
+        //     - Move up to hit point
+        //     - Collect contact planes
+        //     - Depenetrate based on overlap with contact planes
+        //     - Clip velocity to be parallel to contact planes
+        // - Final depenetration pass
         let mut position = origin;
         let original_velocity = velocity;
         let mut time_left = {
@@ -91,7 +92,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         // 1. Sweep the shape along the velocity vector.
         // 2. If we hit something, move up to the hit point.
         // 3. Collect contact planes.
-        // 4. Depenetrate based on penetrating intersections found.
+        // 4. Depenetrate based on intersections.
         // 5. Clip velocity to be parallel to all contact planes.
         // 6. Repeat until we run out of iterations or time.
         'outer: for _ in 0..config.move_and_slide_iterations {
@@ -469,7 +470,9 @@ impl Default for MoveAndSlideConfig {
     }
 }
 
-/// Projects input velocity `v` so it satisfies n_i · v' >= 0 for all contact normals n_i.
+/// Projects input velocity `v` onto the convex cone defined by the provided contact `normals`.
+///
+/// Returns the projected velocity.
 pub fn project_velocity(v: Vector, normals: &[Dir]) -> Vector {
     const EPS: f32 = 1e-3;
 
