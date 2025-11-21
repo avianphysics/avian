@@ -200,9 +200,10 @@ fn move_player(
                 );
             } else {
                 gizmos.arrow(
-                    hit.point1.f32(),
-                    (hit.point1
-                        + hit.normal1 * hit.distance / time.delta_secs().adjust_precision())
+                    hit.point.f32(),
+                    (hit.point
+                        + hit.normal * hit.collision_distance
+                            / time.delta_secs().adjust_precision())
                     .f32(),
                     tailwind::EMERALD_400,
                 );
