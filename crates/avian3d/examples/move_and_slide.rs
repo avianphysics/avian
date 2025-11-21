@@ -186,8 +186,8 @@ fn move_player(
         clipped_velocity,
     } = move_and_slide.move_and_slide(
         collider,
-        transform.rotation.adjust_precision(),
         transform.translation.adjust_precision(),
+        transform.rotation.adjust_precision(),
         wish_velocity.adjust_precision(),
         &MoveAndSlideConfig::default(),
         &SpatialQueryFilter::from_excluded_entities([entity]),

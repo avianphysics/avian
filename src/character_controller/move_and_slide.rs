@@ -5,13 +5,12 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 /// A [`SystemParam`] for performing move and slide operations via the [`MoveAndSlide::move_and_slide`] method.
 /// "Move and slide", a.k.a. "collide and slide" or "step slide", is the algorithm at the heart of kinematic character controllers.
-/// In a nutshell, what it does is
 /// This algorithm basically says
 ///- Please move in this direction
 ///- if you collide with anything, slide along it
 ///- make sure you're not intersecting with anything, and report everything you collide with
 ///
-/// see the video [Collide and slide - Collision detection algorithm](https://www.youtube.com/watch?v=YR6Q7dUz2uk) for an in-depth explanation.
+/// See the video [Collide and slide - Collision detection algorithm](https://www.youtube.com/watch?v=YR6Q7dUz2uk) for an in-depth explanation.
 ///
 /// Also contains various helper methods that are useful for building kinematic character controllers.
 #[derive(SystemParam)]
@@ -36,12 +35,37 @@ pub struct MoveAndSlide<'w, 's> {
 }
 
 impl<'w, 's> MoveAndSlide<'w, 's> {
+    /// Performs the move and slide operation.
+    /// This algorithm basically says
+    ///- Please move in this direction
+    ///- if you collide with anything, slide along it
+    ///- make sure you're not intersecting with anything, and report everything you collide with
+    ///
+    /// See the video [Collide and slide - Collision detection algorithm](https://www.youtube.com/watch?v=YR6Q7dUz2uk) for an in-depth explanation.
+    ///
+    /// # Arguments
+    ///
+    /// - `shape`: The shape being cast represented as a [`Collider`].
+    /// - `origin`: Where the shape is cast from.
+    /// - `shape_rotation`: The rotation of the shape being cast.
+    /// - `velocity`: The direction and magnitude of the movement. If this is [`Vector::ZERO`], no movement is performed, but the collider is still depenetrated.
+    /// - `config`: A [`MoveAndSlideConfig`] that determines the behavior of the move and slide. [`MoveAndSlideConfig::default()`] should be a good start for most cases.
+    /// - `filter`: A [`SpatialQueryFilter`] that determines which colliders are taken into account in the query. It is highly recommended to exclude the entity holding the collider itself,
+    ///   otherwise the character will collide with itself.
+    /// - `on_hit`: A callback that is called when a collider is hit as part of the move and slide iterations. Returning `false` will abort the move and slide operation.\
+    ///   Starting intersections, i.e. those that happen when the collider is already stuck in another collider, will be reported to this callback, but aborted even if the callback returns `true`.
+    ///   If you don't have any special handling per collision, you can pass `|_| true`.
+    ///
+    /// # Usage
+    ///
+    /// It is also useful to collect colliding entities in e.g. an [`EntityHashSet`](bevy::ecs::entity::EntityHashSet) to have a collection of colliding entities.
+
     #[must_use]
     pub fn move_and_slide(
         &self,
         shape: &Collider,
-        shape_rotation: RotationValue,
         origin: Vector,
+        shape_rotation: RotationValue,
         mut velocity: Vector,
         config: &MoveAndSlideConfig,
         filter: &SpatialQueryFilter,
