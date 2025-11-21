@@ -62,13 +62,9 @@ pub struct MoveAndSlide<'w, 's> {
 }
 
 impl<'w, 's> MoveAndSlide<'w, 's> {
-    /// Performs the move and slide operation.
-    /// This algorithm basically says
-    ///- Please move in this direction
-    ///- if you collide with anything, slide along it
-    ///- make sure you're not intersecting with anything, and report everything you collide with
+    /// Moves a shape along a given velocity vector while sliding along any colliders it hits on the way.
     ///
-    /// See the video [Collide and slide - Collision detection algorithm](https://www.youtube.com/watch?v=YR6Q7dUz2uk) for an in-depth explanation.
+    /// See [`MoveAndSlide`] for an overview of the algorithm.
     ///
     /// # Arguments
     ///
@@ -79,7 +75,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// - `config`: A [`MoveAndSlideConfig`] that determines the behavior of the move and slide. [`MoveAndSlideConfig::default()`] should be a good start for most cases.
     /// - `filter`: A [`SpatialQueryFilter`] that determines which colliders are taken into account in the query. It is highly recommended to exclude the entity holding the collider itself,
     ///   otherwise the character will collide with itself.
-    /// - `on_hit`: A callback that is called when a collider is hit as part of the move and slide iterations. Returning `false` will abort the move and slide operation.\
+    /// - `on_hit`: A callback that is called when a collider is hit as part of the move and slide iterations. Returning `false` will abort the move and slide operation.
     ///   Starting intersections, i.e. those that happen when the collider is already stuck in another collider, will be reported to this callback, but aborted even if the callback returns `true`.
     ///   If you don't have any special handling per collision, you can pass `|_| true`.
     ///
@@ -159,16 +155,13 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         mut on_hit: impl FnMut(MoveAndSlideHitData) -> bool,
     ) -> MoveAndSlideOutput {
         // High level overview:
-        // - Initial Gauss-Seidel depenetration pass
-        // - For each iteration, until movement is done or max iterations reached:
-        //   - Sweep shape along velocity vector
-        //   - If no hit, move full distance and finish
-        //   - If hit:
-        //     - Move up to hit point
-        //     - Collect contact planes
-        //     - Depenetrate based on overlap with contact planes
-        //     - Clip velocity to be parallel to contact planes
-        // - Final depenetration pass
+        // 1. Initial Gauss-Seidel depenetration pass
+        // 2. For each iteration, until movement is done or max iterations reached:
+        //    - Sweep the shape along the velocity vector
+        //    - If we hit something, move up to the hit point
+        //    - Collect contact planes
+        //    - Depenetrate based on intersections
+        //    - Clip velocity to be parallel to all contact planes
         let mut position = shape_position;
         let original_velocity = velocity;
         let mut time_left = {
@@ -182,7 +175,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             }
         };
 
-        // Initial depenetration pass.
+        // Initial depenetration pass
         let mut intersections = Vec::new();
         self.intersections_callback(
             shape,
@@ -199,17 +192,17 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         let depenetration_offset = Self::depenetrate(&config.into(), &intersections);
         position += depenetration_offset;
 
-        // Main move and slide loop.
-        // 1. Sweep the shape along the velocity vector.
-        // 2. If we hit something, move up to the hit point.
-        // 3. Collect contact planes.
-        // 4. Depenetrate based on intersections.
-        // 5. Clip velocity to be parallel to all contact planes.
-        // 6. Repeat until we run out of iterations or time.
+        // Main move and slide loop:
+        // 1. Sweep the shape along the velocity vector
+        // 2. If we hit something, move up to the hit point
+        // 3. Collect contact planes
+        // 4. Depenetrate based on intersections
+        // 5. Clip velocity to be parallel to all contact planes
+        // 6. Repeat until we run out of iterations or time
         'outer: for _ in 0..config.move_and_slide_iterations {
             let sweep = time_left * velocity;
             let Some((vel_dir, distance)) = Dir::new_and_length(sweep.f32()).ok() else {
-                // no more movement to go
+                // No movement left
                 break;
             };
             let distance = distance.adjust_precision();
@@ -218,21 +211,22 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 break;
             }
 
-            let hit = self.cast_move(
+            // Sweep the shape along the velocity vector.
+            let Some(sweep_hit) = self.cast_move(
                 shape,
                 position,
                 shape_rotation,
                 sweep,
                 config.skin_width,
                 filter,
-            );
-            let Some(sweep_hit) = hit else {
-                // moved the entire distance
+            ) else {
+                // No collision, move the full distance.
                 position += sweep;
                 break;
             };
+
             if sweep_hit.intersects() {
-                // entity is completely trapped in another solid
+                // The entity is completely trapped in another solid.
                 velocity = Vector::ZERO;
                 break 'outer;
             }
@@ -241,10 +235,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             time_left -= time_left * (sweep_hit.distance / distance);
             position += vel_dir.adjust_precision() * sweep_hit.distance;
 
-            // User-defined clipping planes.
+            // Initialize velocity clipping planes with the user-defined planes.
+            // This often includes a ground plane.
             let mut planes = config.planes.clone();
 
-            // Penetrating contacts.
+            // Store penetrating contacts for depenetration.
             let mut intersections = Vec::new();
 
             // Collect contact planes.
@@ -260,6 +255,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                     if planes.len() >= config.max_planes {
                         return false;
                     }
+
                     if !on_hit(MoveAndSlideHitData {
                         intersects: false,
                         entity: sweep_hit.entity,
@@ -272,17 +268,25 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                     }) {
                         return false;
                     }
+
+                    // Add the contact plane for velocity clipping.
                     planes.push(normal);
-                    intersections.push((normal, contact_point.penetration + config.skin_width));
+
+                    // Store penetrating contacts for depenetration.
+                    let total_penetration = contact_point.penetration + config.skin_width;
+                    if total_penetration > 0.0 {
+                        intersections.push((normal, total_penetration));
+                    }
+
                     true
                 },
             );
 
-            // Depenetrate based on intersections found.
+            // Depenetrate based on intersections.
             let depenetration_offset = Self::depenetrate(&config.into(), &intersections);
             position += depenetration_offset;
 
-            // Modify velocity so that it parallels all of the clip planes.
+            // Clip velocity to be parallel to all contact planes.
             velocity = Self::project_velocity(velocity, &planes);
 
             // If the original velocity is against the original velocity, stop dead
