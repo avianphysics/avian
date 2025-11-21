@@ -69,8 +69,31 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 self.time.delta_secs_f64()
             }
         };
-        let mut planes = config.planes.clone();
 
+        // Initial depenetration pass.
+        let mut intersections = Vec::new();
+        self.intersections_callback(
+            shape,
+            shape_rotation,
+            position,
+            filter,
+            config.skin_width,
+            |contact_point, normal| {
+                // TODO: Should we call on_hit here?
+                intersections.push((normal, contact_point.penetration + config.skin_width));
+                true
+            },
+        );
+        let depenetration_offset = self.depenetrate(config, &intersections);
+        position += depenetration_offset;
+
+        // Main move and slide loop.
+        // 1. Sweep the shape along the velocity vector.
+        // 2. If we hit something, move up to the hit point.
+        // 3. Collect contact planes.
+        // 4. Depenetrate based on penetrating intersections found.
+        // 5. Clip velocity to be parallel to all contact planes.
+        // 6. Repeat until we run out of iterations or time.
         'outer: for _ in 0..config.move_and_slide_iterations {
             let sweep = time_left * velocity;
             let Some((vel_dir, distance)) = Dir::new_and_length(sweep.f32()).ok() else {
@@ -78,14 +101,10 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 break;
             };
             let distance = distance.adjust_precision();
-            const MIN_DISTANCE: Scalar = 0.0001;
+            const MIN_DISTANCE: Scalar = 1e-4;
             if distance < MIN_DISTANCE {
                 break;
             }
-
-            let depenetration_offset =
-                self.depenetrate(shape, shape_rotation, position, filter, config);
-            position += depenetration_offset;
 
             let hit = self.sweep(
                 shape,
@@ -101,137 +120,79 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 position += sweep;
                 break;
             };
-            if !on_hit(MoveAndSlideHitData {
-                intersects: sweep_hit.intersects,
-                entity: sweep_hit.entity,
-                point1: sweep_hit.point1,
-                point2: sweep_hit.point2,
-                normal1: sweep_hit.normal1,
-                normal2: sweep_hit.normal2,
-                collision_distance: sweep_hit.collision_distance,
-                safe_distance: sweep_hit.safe_distance,
-                position,
-                velocity,
-            }) {
-                velocity = Vector::ZERO;
-                break 'outer;
-            }
             if sweep_hit.intersects {
                 // entity is completely trapped in another solid
                 velocity = Vector::ZERO;
                 break 'outer;
             }
-            time_left -= time_left * (sweep_hit.safe_distance / distance);
 
+            // Move up to the hit point.
+            time_left -= time_left * (sweep_hit.safe_distance / distance);
             position += vel_dir.adjust_precision() * sweep_hit.safe_distance;
 
-            // if this is the same plane we hit before, nudge velocity
-            // out along it, which fixes some epsilon issues with
-            // non-axial planes
-            for plane in planes.iter() {
-                if sweep_hit.normal1.dot(plane.adjust_precision()) > (1.0 - DOT_EPSILON) {
-                    velocity += sweep_hit.normal1 * config.duplicate_plane_nudge;
-                    continue 'outer;
-                }
-            }
-            if planes.len() >= config.max_planes {
-                velocity = Vector::ZERO;
-                break 'outer;
-            }
-            planes.push(Dir::new_unchecked(sweep_hit.normal1.f32()));
+            // User-defined clipping planes.
+            let mut planes = config.planes.clone();
 
-            // modify velocity so it parallels all of the clip planes
+            // Penetrating contacts.
+            let mut intersections = Vec::new();
 
-            // find a plane that it enters
-            for i in 0..planes.len() {
-                let into = velocity.dot(planes[i].adjust_precision());
-                if into >= 0.0 {
-                    // move doesn't interact with the plane
-                    continue;
-                }
-
-                // slide along the plane
-                #[cfg_attr(feature = "2d", expect(unused_mut, reason = "only used in 3D branch"))]
-                let mut current_clip_velocity = Self::clip_velocity(velocity, &[planes[i]]);
-
-                // see if there is a second plane that the new move enters
-                #[cfg_attr(
-                    feature = "2d",
-                    expect(
-                        clippy::needless_range_loop,
-                        reason = "This variant is cleaner in this case"
-                    )
-                )]
-                for j in 0..planes.len() {
-                    if j == i {
-                        continue;
+            // Collect contact planes.
+            self.intersections_callback(
+                shape,
+                shape_rotation,
+                position,
+                filter,
+                // Use a slightly larger skin width to ensure we catch all contacts for velocity clipping.
+                // Depenetration still uses just the normal skin width.
+                config.skin_width * 10.1,
+                |contact_point, normal| {
+                    if !on_hit(MoveAndSlideHitData {
+                        intersects: false,
+                        entity: sweep_hit.entity,
+                        point: contact_point.point,
+                        normal,
+                        collision_distance: sweep_hit.collision_distance,
+                        safe_distance: sweep_hit.safe_distance,
+                        position,
+                        velocity,
+                    }) {
+                        return false;
                     }
-                    if current_clip_velocity.dot(planes[j].adjust_precision()) >= DOT_EPSILON {
-                        // move doesn't interact with the plane
-                        continue;
-                    }
-                    #[cfg(feature = "2d")]
-                    {
-                        // stop dead at a double plane interaction
-                        velocity = Vector::ZERO;
-                        break 'outer;
-                    }
-                    #[cfg(feature = "3d")]
-                    {
-                        // try clipping the move to the plane
-                        current_clip_velocity =
-                            Self::clip_velocity(current_clip_velocity, &[planes[j]]);
+                    planes.push(normal);
+                    intersections.push((normal, contact_point.penetration + config.skin_width));
+                    true
+                },
+            );
 
-                        // see if it goes back into the first clip plane
-                        if current_clip_velocity.dot(planes[i].adjust_precision()) >= DOT_EPSILON {
-                            continue;
-                        }
+            // Depenetrate based on intersections found.
+            let depenetration_offset = self.depenetrate(config, &intersections);
+            position += depenetration_offset;
 
-                        // slide the original velocity along the crease
-                        let dir = planes[i]
-                            .adjust_precision()
-                            .cross(planes[j].adjust_precision());
-                        let d = dir.dot(velocity);
-                        current_clip_velocity = dir * d;
+            // Modify velocity so that it parallels all of the clip planes.
+            velocity = project_velocity(velocity, &planes);
 
-                        // see if there is a third plane the the new move enters
-                        #[expect(
-                            clippy::needless_range_loop,
-                            reason = "This variant is cleaner in this case"
-                        )]
-                        for k in 0..planes.len() {
-                            if k == i || k == j {
-                                continue;
-                            }
-
-                            if current_clip_velocity.dot(planes[k].adjust_precision())
-                                >= DOT_EPSILON
-                            {
-                                // move doesn't interact with the plane
-                                continue;
-                            }
-
-                            // stop dead at a triple plane interaction
-                            velocity = Vector::ZERO;
-                            break 'outer;
-                        }
-                    }
-                }
-                // if we have fixed all interactions, try another move
-                velocity = current_clip_velocity;
-                break;
-            }
-
-            // if original velocity is against the original velocity, stop dead
-            // to avoid tiny occilations in sloping corners
+            // If the original velocity is against the original velocity, stop dead
+            // to avoid tiny occilations in sloping corners.
             if velocity.dot(original_velocity) <= -DOT_EPSILON {
                 velocity = Vector::ZERO;
                 break 'outer;
             }
         }
 
-        let depenetration_offset =
-            self.depenetrate(shape, shape_rotation, position, filter, config);
+        // Final depenetration pass.
+        let mut intersections = Vec::new();
+        self.intersections_callback(
+            shape,
+            shape_rotation,
+            position,
+            filter,
+            config.skin_width,
+            |contact_point, normal| {
+                intersections.push((normal, contact_point.penetration + config.skin_width));
+                true
+            },
+        );
+        let depenetration_offset = self.depenetrate(config, &intersections);
         position += depenetration_offset;
 
         MoveAndSlideOutput {
@@ -288,19 +249,20 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         (hit.distance - skin_distance).max(0.0)
     }
 
-    #[must_use]
-    pub fn intersections(
+    /// Calls the provided callback for the deepest contact point of each contact manifold found
+    /// between the provided shape and all colliders in the scene that pass the provided filter.
+    pub fn intersections_callback(
         &self,
         shape: &Collider,
         shape_rotation: RotationValue,
         origin: Vector,
         filter: &SpatialQueryFilter,
-        skin_width: Scalar,
-    ) -> Vec<(Dir, Scalar)> {
-        let mut intersections = Vec::new();
+        prediction_distance: Scalar,
+        mut callback: impl FnMut(&ContactPoint, Dir) -> bool,
+    ) {
         let expanded_aabb = shape
             .aabb(origin, shape_rotation)
-            .grow(Vector::splat(skin_width));
+            .grow(Vector::splat(prediction_distance));
         let aabb_intersections = self
             .query_pipeline
             .aabb_intersections_with_aabb(expanded_aabb);
@@ -322,7 +284,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 intersection_collider,
                 *intersection_pos,
                 *intersection_rot,
-                skin_width,
+                prediction_distance,
                 &mut manifolds,
             );
             for manifold in manifolds {
@@ -330,26 +292,18 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                     continue;
                 };
 
-                // penetration is positive if penetrating, negative if separated
-                let dist = deepest.penetration + skin_width;
-                let normal = Dir::new_unchecked(manifold.normal.f32());
-                intersections.push((-normal, dist));
+                let normal = Dir::new_unchecked(-manifold.normal.f32());
+                callback(deepest, normal);
             }
         }
-        intersections
     }
 
     #[must_use]
     pub fn depenetrate(
         &self,
-        shape: &Collider,
-        shape_rotation: RotationValue,
-        origin: Vector,
-        filter: &SpatialQueryFilter,
         config: &MoveAndSlideConfig,
+        intersections: &[(Dir, Scalar)],
     ) -> Vector {
-        let intersections =
-            self.intersections(shape, shape_rotation, origin, filter, config.skin_width);
         if intersections.is_empty() {
             return Vector::ZERO;
         }
@@ -357,7 +311,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         let mut fixup = Vector::ZERO;
         for _ in 0..config.depenetration_iterations {
             let mut total_error = 0.0;
-            for (normal, dist) in &intersections {
+            for (normal, dist) in intersections {
                 let normal = normal.adjust_precision();
                 let error = (dist - fixup.dot(normal)).max(0.0);
                 total_error += error;
@@ -387,28 +341,21 @@ pub struct MoveAndSlideHitData {
     #[doc(alias = "time_of_impact")]
     pub collision_distance: Scalar,
 
-    /// The closest point on the shape that was hit, expressed in world space.
-    ///
-    /// If the shapes are penetrating or the target distance is greater than zero,
-    /// this will be different from `point2`.
-    pub point1: Vector,
+    /// The hit point point on the shape that was hit, expressed in world space.
+    pub point: Vector,
 
-    /// The closest point on the shape that was cast, expressed in world space.
-    ///
-    /// If the shapes are penetrating or the target distance is greater than zero,
-    /// this will be different from `point1`.
-    pub point2: Vector,
+    /// The outward surface normal on the hit shape at `point`, expressed in world space.
+    pub normal: Dir,
 
-    /// The outward surface normal on the hit shape at `point1`, expressed in world space.
-    pub normal1: Vector,
-
-    /// The outward surface normal on the cast shape at `point2`, expressed in world space.
-    pub normal2: Vector,
+    /// A safe distance to move the shape without intersecting the hit collider.
     pub safe_distance: Scalar,
+
     /// Whether the current move and slide iteration started off with the collider intersecting another collider.
     pub intersects: bool,
+
     /// The position of the collider at the point of the move and slide iteration.
     pub position: Vector,
+
     /// The velocity of the collider at the point of the move and slide iteration.
     pub velocity: Vector,
 }
@@ -443,7 +390,10 @@ pub struct SweepHitData {
 
     /// The outward surface normal on the cast shape at `point2`, expressed in world space.
     pub normal2: Vector,
+
+    /// A safe distance to move the shape without intersecting the hit collider.
     pub safe_distance: Scalar,
+
     /// Whether the current move and slide iteration started off with the collider intersecting another collider.
     pub intersects: bool,
 }
@@ -516,5 +466,78 @@ impl Default for MoveAndSlideConfig {
                 }
             },
         }
+    }
+}
+
+const EPS: f32 = 1e-6;
+
+/// Projects input velocity `v` so it satisfies n_i · v' >= 0 for all contact normals n_i.
+pub fn project_velocity(v: Vector, normals: &[Dir]) -> Vector {
+    // Case 1: Check if v is inside the cone
+    if normals.iter().all(|&n| v.dot(*n) >= -EPS) {
+        return v;
+    }
+
+    // Best candidate so far
+    let mut best_u = Vector::ZERO;
+    let mut best_d2 = f32::INFINITY;
+
+    // Helper to test halfspace validity
+    let is_valid = |u: Vector| normals.iter().all(|&n| u.dot(*n) >= -EPS);
+
+    // Case 2a: Face projections (single-plane active set)
+    for &n in normals {
+        let vd = v.dot(*n);
+        if vd < 0.0 {
+            // Only meaningful if v violates this plane
+            let u = v - vd * n; // Project onto the plane
+
+            // Check if better than previous best and valid
+            let d2 = (v - u).length_squared();
+            if d2 < best_d2 && is_valid(u) {
+                best_d2 = d2;
+                best_u = u;
+            }
+        }
+    }
+
+    // TODO: Does 2D still need something like this?
+    // Case 2b: Edge projections (two-plane active set)
+    // TODO: Can we optimize this from O(n^3) to O(n^2)?
+    #[cfg(feature = "3d")]
+    {
+        let n = normals.len();
+        for i in 0..n {
+            for j in (i + 1)..n {
+                let ni = *normals[i];
+                let nj = *normals[j];
+
+                // Compute edge direction e = ni x nj
+                let e = ni.cross(nj);
+                let e2 = e.length_squared();
+                if e2 < EPS {
+                    // Nearly parallel edge
+                    continue;
+                }
+
+                // Project v onto the line spanned by e:
+                // u = ((v·e) / |e|²) e
+                let u = e * (v.dot(e) / e2);
+
+                // Check if better than previous best and valid
+                let d2 = (v - u).length_squared();
+                if d2 < best_d2 && is_valid(u) {
+                    best_d2 = d2;
+                    best_u = u;
+                }
+            }
+        }
+    }
+
+    // Case 3: If no candidate is found, the projection is at the apex (the origin)
+    if best_d2.is_infinite() {
+        Vector::ZERO
+    } else {
+        best_u
     }
 }
