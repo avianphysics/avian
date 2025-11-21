@@ -144,7 +144,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 filter,
                 // Use a slightly larger skin width to ensure we catch all contacts for velocity clipping.
                 // Depenetration still uses just the normal skin width.
-                config.skin_width * 10.1,
+                config.skin_width * 1.1,
                 |contact_point, normal| {
                     if !on_hit(MoveAndSlideHitData {
                         intersects: false,
