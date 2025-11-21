@@ -192,7 +192,7 @@ fn move_player(
         &MoveAndSlideConfig::default(),
         &SpatialQueryFilter::from_excluded_entities([entity]),
         |hit| {
-            if hit.intersects {
+            if hit.intersects() {
                 gizmos.sphere(
                     Isometry3d::from_translation(transform.translation),
                     0.6,

@@ -46,7 +46,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// # Arguments
     ///
     /// - `shape`: The shape being cast represented as a [`Collider`].
-    /// - `origin`: Where the shape is cast from.
+    /// - `shape_position`: Where the shape is cast from.
     /// - `shape_rotation`: The rotation of the shape being cast.
     /// - `velocity`: The direction and magnitude of the movement. If this is [`Vector::ZERO`], no movement is performed, but the collider is still depenetrated.
     /// - `config`: A [`MoveAndSlideConfig`] that determines the behavior of the move and slide. [`MoveAndSlideConfig::default()`] should be a good start for most cases.
@@ -64,7 +64,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     pub fn move_and_slide(
         &self,
         shape: &Collider,
-        origin: Vector,
+        shape_position: Vector,
         shape_rotation: RotationValue,
         mut velocity: Vector,
         config: &MoveAndSlideConfig,
@@ -81,7 +81,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         //     - 2 planes: slide along in 3d, abort in 2d
         //     - 3 planes: abort
         // - perform final depenetration
-        let mut position = origin;
+        let mut position = shape_position;
         let original_velocity = velocity;
         let mut time_left = {
             #[cfg(feature = "f32")]
@@ -108,15 +108,14 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             }
 
             let depenetration_offset =
-                self.depenetrate(shape, shape_rotation, position, filter, config);
+                self.depenetrate(shape, position, shape_rotation, filter, config);
             position += depenetration_offset;
 
-            let hit = self.sweep(
+            let hit = self.cast_move(
                 shape,
                 position,
                 shape_rotation,
-                vel_dir,
-                distance,
+                sweep,
                 config.skin_width,
                 filter,
             );
@@ -126,28 +125,27 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 break;
             };
             if !on_hit(MoveAndSlideHitData {
-                intersects: sweep_hit.intersects,
                 entity: sweep_hit.entity,
                 point1: sweep_hit.point1,
                 point2: sweep_hit.point2,
                 normal1: sweep_hit.normal1,
                 normal2: sweep_hit.normal2,
-                collision_distance: sweep_hit.collision_distance,
-                safe_distance: sweep_hit.safe_distance,
+                raw_collision_distance: sweep_hit.raw_collision_distance,
+                distance: sweep_hit.distance,
                 position,
                 velocity,
             }) {
                 velocity = Vector::ZERO;
                 break 'outer;
             }
-            if sweep_hit.intersects {
+            if sweep_hit.intersects() {
                 // entity is completely trapped in another solid
                 velocity = Vector::ZERO;
                 break 'outer;
             }
-            time_left -= time_left * (sweep_hit.safe_distance / distance);
+            time_left -= time_left * (sweep_hit.distance / distance);
 
-            position += vel_dir.adjust_precision() * sweep_hit.safe_distance;
+            position += vel_dir.adjust_precision() * sweep_hit.distance;
 
             // if this is the same plane we hit before, nudge velocity
             // out along it, which fixes some epsilon issues with
@@ -255,7 +253,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         }
 
         let depenetration_offset =
-            self.depenetrate(shape, shape_rotation, position, filter, config);
+            self.depenetrate(shape, position, shape_rotation, filter, config);
         position += depenetration_offset;
 
         MoveAndSlideOutput {
@@ -273,30 +271,49 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         velocity
     }
 
+    /// A [shape cast](spatial_query#shapecasting) optimized for movement. Use this if you want to move a collider with a given velocity and stop so that
+    /// it keeps a distance of `skin_width` from the first collider on its path.
+    ///
+    /// You will often find it useful to afterwards clip the velocity so that it no longer points into the collision plane by using [`Self::clip_velocity`].
+    ///
+    /// # Arguments
+    /// - `shape`: The shape being cast represented as a [`Collider`].
+    /// - `shape_position`: Where the shape is cast from.
+    /// - `shape_rotation`: The rotation of the shape being cast.
+    /// - `velocity`: The direction and magnitude of the movement. If this is [`Vector::ZERO`], this method can still return `Some(MoveHitData)` if the shape started off intersecting a collider.
+    /// - `skin_width`: A [`ShapeCastConfig`] that determines the behavior of the cast.
+    /// - `filter`: A [`SpatialQueryFilter`] that determines which colliders are taken into account in the query.
+    ///
+    /// # Returns
+    /// - `Some(MoveHitData)` if the shape hit a collider on the way, or started off intersecting a collider.
+    /// - `None` if the shape is able to move the full distance without hitting a collider.
     #[must_use]
-    pub fn sweep(
+    pub fn cast_move(
         &self,
         shape: &Collider,
-        origin: Vector,
+        shape_position: Vector,
         shape_rotation: RotationValue,
-        direction: Dir,
-        distance: Scalar,
+        velocity: Vector,
         skin_width: Scalar,
         filter: &SpatialQueryFilter,
-    ) -> Option<SweepHitData> {
+    ) -> Option<MoveHitData> {
+        let (direction, distance) = Dir::new_and_length(velocity).unwrap_or((Dir::X, 0.0));
         let shape_hit = self.query_pipeline.cast_shape(
             shape,
-            origin,
+            shape_position,
             shape_rotation,
             direction,
             &ShapeCastConfig::from_max_distance(distance),
             filter,
         )?;
-        let safe_distance = Self::pull_back(shape_hit, direction, skin_width);
-        Some(SweepHitData {
-            safe_distance,
-            collision_distance: distance,
-            intersects: shape_hit.distance == 0.0,
+        let safe_distance = if distance == 0.0 {
+            0.0
+        } else {
+            Self::pull_back(shape_hit, direction, skin_width)
+        };
+        Some(MoveHitData {
+            distance: safe_distance,
+            raw_collision_distance: distance,
             entity: shape_hit.entity,
             point1: shape_hit.point1,
             point2: shape_hit.point2,
@@ -312,18 +329,32 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         (hit.distance - skin_distance).max(0.0)
     }
 
+    /// An [intersection test](spatial_query#intersection-tests) that finds all entities with a [`Collider`]
+    /// that is closer to the given `shape` with a given position and rotation than `skin_width`.
+    ///
+    /// # Arguments
+    ///
+    /// - `shape`: The shape that intersections are tested against represented as a [`Collider`].
+    /// - `shape_position`: The position of the shape.
+    /// - `shape_rotation`: The rotation of the shape.
+    /// - `filter`: A [`SpatialQueryFilter`] that determines which colliders are taken into account in the query.
+    /// - `skin_width`: An extra margin applied to the [`Collider`].
+    ///
+    /// # Related Methods
+    ///
+    /// - [`SpatialQueryPipeline::shape_intersections`]
     #[must_use]
     pub fn intersections(
         &self,
         shape: &Collider,
+        shape_position: Vector,
         shape_rotation: RotationValue,
-        origin: Vector,
         filter: &SpatialQueryFilter,
         skin_width: Scalar,
     ) -> Vec<(Dir, Scalar)> {
         let mut intersections = Vec::new();
         let expanded_aabb = shape
-            .aabb(origin, shape_rotation)
+            .aabb(shape_position, shape_rotation)
             .grow(Vector::splat(skin_width));
         let aabb_intersections = self
             .query_pipeline
@@ -341,7 +372,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             let mut manifolds = Vec::new();
             contact_manifolds(
                 shape,
-                origin,
+                shape_position,
                 shape_rotation,
                 intersection_collider,
                 *intersection_pos,
@@ -367,13 +398,18 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     pub fn depenetrate(
         &self,
         shape: &Collider,
+        shape_position: Vector,
         shape_rotation: RotationValue,
-        origin: Vector,
         filter: &SpatialQueryFilter,
         config: &MoveAndSlideConfig,
     ) -> Vector {
-        let intersections =
-            self.intersections(shape, shape_rotation, origin, filter, config.skin_width);
+        let intersections = self.intersections(
+            shape,
+            shape_position,
+            shape_rotation,
+            filter,
+            config.skin_width,
+        );
         if intersections.is_empty() {
             return Vector::ZERO;
         }
@@ -398,6 +434,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
 // needed to not accidentally explode when `n.dot(dir)` happens to be very close to zero
 const DOT_EPSILON: Scalar = 0.005;
 
+/// Data related to a hit during a [`MoveAndSlide::move_and_slide`].
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
@@ -406,10 +443,13 @@ pub struct MoveAndSlideHitData {
     /// The entity of the collider that was hit by the shape.
     pub entity: Entity,
 
-    /// How far the shape travelled before the initial hit.
-    /// To move the shape, use [`Self::safe_distance`] instead.
-    #[doc(alias = "time_of_impact")]
-    pub collision_distance: Scalar,
+    /// The maximum distance that is safe to move in the given direction so that the collider still keeps a distance of `skin_width` to the other colliders.
+    /// Is 0.0 when
+    /// - The collider started off intersecting another collider.
+    /// - The collider is moving toward another collider that is already closer than `skin_width`.
+    ///
+    /// If you want to know the real distance to the next collision, use [`Self::raw_collision_distance`].
+    pub distance: Scalar,
 
     /// The closest point on the shape that was hit, expressed in world space.
     ///
@@ -428,27 +468,44 @@ pub struct MoveAndSlideHitData {
 
     /// The outward surface normal on the cast shape at `point2`, expressed in world space.
     pub normal2: Vector,
-    pub safe_distance: Scalar,
-    /// Whether the current move and slide iteration started off with the collider intersecting another collider.
-    pub intersects: bool,
+
     /// The position of the collider at the point of the move and slide iteration.
     pub position: Vector,
+
     /// The velocity of the collider at the point of the move and slide iteration.
     pub velocity: Vector,
+
+    /// The real distance to the next collision.
+    /// To move the shape, use [`Self::distance`] instead.
+    #[doc(alias = "time_of_impact")]
+    pub raw_collision_distance: Scalar,
 }
 
+impl MoveAndSlideHitData {
+    /// Whether the collider started off already intersecting another collider when it was cast.
+    /// Note that this will be `false` if the collider was closer than `skin_width`, but not physically intersecting.
+    pub fn intersects(&self) -> bool {
+        self.raw_collision_distance == 0.0
+    }
+}
+
+/// Data related to a hit during a [`MoveAndSlide::cast_move`].
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, PartialEq)]
-pub struct SweepHitData {
+pub struct MoveHitData {
     /// The entity of the collider that was hit by the shape.
     pub entity: Entity,
 
-    /// How far the shape travelled before the initial hit.
-    /// To move the shape, use [`Self::safe_distance`] instead.
+    /// The maximum distance that is safe to move in the given direction so that the collider still keeps a distance of `skin_width` to the other colliders.
+    /// Is 0.0 when
+    /// - The collider started off intersecting another collider.
+    /// - The collider is moving toward another collider that is already closer than `skin_width`.
+    ///
+    /// If you want to know the real distance to the next collision, use [`Self::raw_collision_distance`].
     #[doc(alias = "time_of_impact")]
-    pub collision_distance: Scalar,
+    pub distance: Scalar,
 
     /// The closest point on the shape that was hit, expressed in world space.
     ///
@@ -467,9 +524,19 @@ pub struct SweepHitData {
 
     /// The outward surface normal on the cast shape at `point2`, expressed in world space.
     pub normal2: Vector,
-    pub safe_distance: Scalar,
-    /// Whether the current move and slide iteration started off with the collider intersecting another collider.
-    pub intersects: bool,
+
+    /// The real distance to the next collision.
+    /// To move the shape, use [`Self::distance`] instead.
+    #[doc(alias = "time_of_impact")]
+    pub raw_collision_distance: Scalar,
+}
+
+impl MoveHitData {
+    /// Whether the collider started off already intersecting another collider when it was cast.
+    /// Note that this will be `false` if the collider was closer than `skin_width`, but not physically intersecting.
+    pub fn intersects(self) -> bool {
+        self.raw_collision_distance == 0.0
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Reflect)]
@@ -480,6 +547,7 @@ pub struct MoveAndSlideConfig {
     pub move_and_slide_iterations: usize,
     pub depenetration_iterations: usize,
     pub max_depenetration_error: Scalar,
+
     /// A minimal distance to always keep between the collider and any other colliders.
     /// This is here to ensure that the collider never intersects anything, even when numeric errors accumulate.
     /// Set this to a very small value.
@@ -497,8 +565,14 @@ pub struct MoveAndSlideConfig {
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, PartialEq)]
 pub struct MoveAndSlideOutput {
-    /// The final position of the collider after move and slide. Set your [`Transform::translation`] to this value.
+    /// The final position of the character after move and slide. Set your [`Transform::translation`] to this value.
     pub position: Vector,
+    /// The final velocity of the character after move and slide. This corresponds to the actual velocity, not the wished velocity.
+    /// For example, if the character is trying to move to the right and there's a ramp on its path, this vector will point up the ramp.
+    /// It is useful to store this value and apply your wish movement vectors, friction, gravity, etc. on it before handing it to [`MoveAndSlide::move_and_slide`] as the input `velocity`.
+    /// You can also ignore this value if you don't wish to preserve momentum.
+    ///
+    /// Do *not* set [`LinearVelocity`] to this value, as that would apply the movement twice and cause intersections. Instead, set [`Transform::translation`] to [`MoveAndSlideOutput::position`].
     pub clipped_velocity: Vector,
 }
 

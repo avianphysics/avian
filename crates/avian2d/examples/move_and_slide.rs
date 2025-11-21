@@ -228,7 +228,7 @@ fn move_player(
         &MoveAndSlideConfig::default(),
         &SpatialQueryFilter::from_excluded_entities([entity]),
         |hit| {
-            if hit.intersects {
+            if hit.intersects() {
                 gizmos.circle_2d(
                     Isometry2d::from_translation(transform.translation.xy()),
                     33.0,
@@ -238,7 +238,7 @@ fn move_player(
                 gizmos.arrow_2d(
                     hit.point1.f32(),
                     (hit.point1
-                        + hit.normal1 * hit.collision_distance
+                        + hit.normal1 * hit.raw_collision_distance
                             / time.delta_secs().adjust_precision())
                     .f32(),
                     tailwind::EMERALD_400,
