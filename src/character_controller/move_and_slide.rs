@@ -367,7 +367,10 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         feature = "2d",
         doc = "         transform.rotation.to_euler(EulerRot::XYZ).2.adjust_precision(),"
     )]
-    #[cfg_attr(feature = "3d", doc = "         transform.rotation,")]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "         transform.rotation.adjust_precision(),"
+    )]
     ///         &((&config).into()),
     ///         &filter,
     ///     );
@@ -392,7 +395,10 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         feature = "2d",
         doc = "         transform.rotation.to_euler(EulerRot::XYZ).2.adjust_precision(),"
     )]
-    #[cfg_attr(feature = "3d", doc = "         transform.rotation,")]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "         transform.rotation.adjust_precision(),"
+    )]
     ///         velocity * time.delta_secs().adjust_precision(),
     ///         config.skin_width,
     ///         &filter,
@@ -423,6 +429,10 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///     }
     /// }
     /// ```
+    ///
+    /// # Related methods
+    ///
+    /// - [`SpatialQueryPipeline::cast_shape`]
     #[must_use]
     #[doc(alias = "sweep")]
     pub fn cast_move(
@@ -575,7 +585,12 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///
     /// # Example
     ///
-    /// TODO: check if the character is allowed to stand up
+    /// See [`MoveAndSlide::depenetrate`] for a typical usage scenario.
+    ///
+    /// # Related methods
+    ///
+    /// - [`MoveAndSlide::depenetrate`]
+    /// - [`MoveAndSlide::depenetrate_all`]
     pub fn intersections(
         &self,
         shape: &Collider,
@@ -643,9 +658,64 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///
     /// # Example
     ///
-    /// TODO: use
+    /// ```
+    /// use bevy::prelude::*;
+    #[cfg_attr(
+        feature = "2d",
+        doc = "use avian2d::{prelude::*, math::{AdjustPrecision as _, AsF32 as _}};"
+    )]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "use avian3d::{prelude::*, math::{AdjustPrecision as _, AsF32 as _}};"
+    )]
+    /// fn depenetrate_player_manually(
+    ///     player: Single<(Entity, &Collider, &mut Transform)>,
+    ///     move_and_slide: MoveAndSlide,
+    ///     time: Res<Time>
+    /// ) {
+    ///     let (entity, collider, mut transform) = player.into_inner();
+    ///     let filter = SpatialQueryFilter::from_excluded_entities([entity]);
+    ///     let config = DepenetrationConfig::default();
     ///
-    /// See also [`MoveAndSlide::cast_move`] for a typical usage scenario.
+    ///     let mut intersections = Vec::new();
+    ///     self.intersections(
+    ///         shape,
+    #[cfg_attr(
+        feature = "2d",
+        doc = "         transform.translation.xy().adjust_precision(),"
+    )]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "         transform.translation.adjust_precision(),"
+    )]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "         transform.translation.adjust_precision(),"
+    )]
+    #[cfg_attr(
+        feature = "2d",
+        doc = "         transform.rotation.to_euler(EulerRot::XYZ).2.adjust_precision(),"
+    )]
+    ///         config.skin_width,
+    ///         filter,
+    ///         |contact_point, normal| {
+    ///             intersections.push((normal, contact_point.penetration + config.skin_width));
+    ///             true
+    ///         },
+    ///     );
+    ///     let offset = Self::depenetrate(&config, &intersections);
+    #[cfg_attr(
+        feature = "2d",
+        doc = "     transform.translation += offset.f32().extend(0.0);"
+    )]
+    #[cfg_attr(feature = "3d", doc = "     transform.translation += offset.f32();")]
+    /// }
+    /// ```
+    ///
+    /// # Related methods
+    ///
+    /// - [`MoveAndSlide::intersections`]
+    /// - [`MoveAndSlide::depenetrate_all`]
     #[must_use]
     pub fn depenetrate(config: &DepenetrationConfig, intersections: &[(Dir, Scalar)]) -> Vector {
         if intersections.is_empty() {
