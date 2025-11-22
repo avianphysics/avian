@@ -161,7 +161,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         //    - If we hit something, move up to the hit point
         //    - Collect contact planes
         //    - Depenetrate based on intersections
-        //    - Clip velocity to be parallel to all contact planes
+        //    - Project velocity to be parallel to all contact planes
         let mut position = shape_position;
         let original_velocity = velocity;
         let mut time_left = {
@@ -197,7 +197,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         // 2. If we hit something, move up to the hit point
         // 3. Collect contact planes
         // 4. Depenetrate based on intersections
-        // 5. Clip velocity to be parallel to all contact planes
+        // 5. Project velocity to be parallel to all contact planes
         // 6. Repeat until we run out of iterations or time
         'outer: for _ in 0..config.move_and_slide_iterations {
             let sweep = time_left * velocity;
@@ -286,7 +286,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             let depenetration_offset = Self::depenetrate(&config.into(), &intersections);
             position += depenetration_offset;
 
-            // Clip velocity to be parallel to all contact planes.
+            // Project velocity to be parallel to all contact planes.
             velocity = Self::project_velocity(velocity, &planes);
 
             // If the original velocity is against the original velocity, stop dead
@@ -301,20 +301,6 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             position,
             clipped_velocity: velocity,
         }
-    }
-
-    /// Clips `velocity` so that it does not point into any of the given `planes` as expressed by their normals.
-    /// If there are no planes, the velocity is returned unchanged.
-    ///
-    /// Often used after [`MoveAndSlide::cast_move`] to ensure a character moved that way does not try to continue moving into colliding geometry.
-    /// See that method for example usage.
-    #[must_use]
-    pub fn clip_velocity(mut velocity: Vector, planes: &[Dir]) -> Vector {
-        for normal in planes {
-            velocity -=
-                velocity.dot((*normal).adjust_precision()).min(0.0) * normal.adjust_precision();
-        }
-        velocity
     }
 
     /// A [shape cast](spatial_query#shapecasting) optimized for movement. Use this if you want to move a collider with a given velocity and stop so that
@@ -398,9 +384,9 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         feature = "3d",
         doc = "         transform.translation += (velocity.normalize_or_zero() * hit.distance).f32();"
     )]
-    ///         // Then clip the velocity to make sure it no longer points towards the collision plane
+    ///         // Then project the velocity to make sure it no longer points towards the collision plane
     ///         controller.velocity =
-    ///             MoveAndSlide::clip_velocity(velocity, &[Dir::new_unchecked(hit.normal1.f32())])
+    ///             MoveAndSlide::project_velocity(velocity, &[Dir::new_unchecked(hit.normal1.f32())])
     ///     } else {
     ///         // We traveled the full distance without colliding
     #[cfg_attr(
@@ -566,8 +552,12 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     }
 
     /// Projects input velocity `v` onto the convex cone defined by the provided contact `normals`.
+    /// This ensures that `velocity` does not point into any of the given `planes`, but along them.
     ///
-    /// Returns the projected velocity.
+    /// Returns the projected velocity. If there are no planes, the velocity is returned unchanged.
+    ///
+    /// Often used after [`MoveAndSlide::cast_move`] to ensure a character moved that way does not try to continue moving into colliding geometry.
+    /// See that method for example usage.
     pub fn project_velocity(v: Vector, normals: &[Dir]) -> Vector {
         // Case 1: Check if v is inside the cone
         if normals
