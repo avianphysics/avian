@@ -177,7 +177,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
 
         // Initial depenetration pass
         let mut intersections = Vec::new();
-        self.intersections_callback(
+        self.intersections(
             shape,
             position,
             shape_rotation,
@@ -243,7 +243,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             let mut intersections = Vec::new();
 
             // Collect contact planes.
-            self.intersections_callback(
+            self.intersections(
                 shape,
                 position,
                 shape_rotation,
@@ -474,7 +474,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// # Example
     ///
     /// TODO: check if the character is allowed to stand up
-    pub fn intersections_callback(
+    pub fn intersections(
         &self,
         shape: &Collider,
         shape_position: Vector,
