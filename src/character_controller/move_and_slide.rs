@@ -249,7 +249,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 shape_rotation,
                 // Use a slightly larger skin width to ensure we catch all contacts for velocity clipping.
                 // Depenetration still uses just the normal skin width.
-                config.skin_width * 1.1,
+                config.skin_width * 2.0,
                 filter,
                 |contact_point, normal| {
                     if planes.len() >= config.max_planes {
