@@ -350,10 +350,32 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// ) {
     ///     let (entity, collider, mut controller, mut transform) = player.into_inner();
     ///     let filter = SpatialQueryFilter::from_excluded_entities([entity]);
+    ///     let config = MoveAndSlideConfig::default();
     ///
     ///     // Ensure that the character is not intersecting with any colliders.
-    ///     TODO
-    ///
+    ///     let offset = move_and_slide.depenetrate_all(
+    ///         &collider,
+    #[cfg_attr(
+        feature = "2d",
+        doc = "         transform.translation.xy().adjust_precision(),"
+    )]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "         transform.translation.adjust_precision(),"
+    )]
+    #[cfg_attr(
+        feature = "2d",
+        doc = "         transform.rotation.to_euler(EulerRot::XYZ).2.adjust_precision(),"
+    )]
+    #[cfg_attr(feature = "3d", doc = "         transform.rotation,")]
+    ///         &((&config).into()),
+    ///         &filter,
+    ///     );
+    #[cfg_attr(
+        feature = "2d",
+        doc = "     transform.translation += offset.f32().extend(0.0);"
+    )]
+    #[cfg_attr(feature = "3d", doc = "     transform.translation += offset.f32();")]
     ///     let velocity = controller.velocity;
     ///
     ///     let hit = move_and_slide.cast_move(
@@ -372,7 +394,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     )]
     #[cfg_attr(feature = "3d", doc = "         transform.rotation,")]
     ///         velocity * time.delta_secs().adjust_precision(),
-    ///         MoveAndSlideConfig::default().skin_width,
+    ///         config.skin_width,
     ///         &filter,
     ///     );
     ///     if let Some(hit) = hit {
