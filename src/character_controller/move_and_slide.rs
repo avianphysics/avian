@@ -853,7 +853,6 @@ const DOT_EPSILON: Scalar = 0.005;
 
 /// Data related to a hit during a [`MoveAndSlide::move_and_slide`].
 #[derive(Debug, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct MoveAndSlideHitData<'a> {
     /// The entity of the collider that was hit by the shape.
     pub entity: Entity,
