@@ -312,7 +312,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// This operation is most useful when you ensure that the character is not intersecting any colliders before moving. You can do so by calling [`MoveAndSlide::depenetrate_all`]
     /// and adding the resulting offset vector to the character's position before calling this method. See the example below.
     ///
-    /// You will often find it useful to afterwards clip the velocity so that it no longer points into the collision plane by using [`Self::clip_velocity`].
+    /// You will often find it useful to afterwards clip the velocity so that it no longer points into the collision plane by using [`Self::project_velocity`].
     ///
     /// # Arguments
     /// - `shape`: The shape being cast represented as a [`Collider`].
@@ -647,7 +647,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// Manual version of [`MoveAndSlide::depenetrate_all`].
     ///
     /// Moves a collider so that it no longer intersects any other collider and keeps a minimum distance of [`DepenetrationConfig::skin_width`] to all.
-    /// The intersections should be provided as a list of contact plane normals and penetration distances, which can be obtained via [`MoveAndSlide::intersections_callback`].
+    /// The intersections should be provided as a list of contact plane normals and penetration distances, which can be obtained via [`MoveAndSlide::intersections`].
     ///
     /// Depenetration is an iterative process that solves penetrations for all planes bit-by-bit, until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`]
     /// or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`]. If the max iterations were reached before the error was below the threshold,
