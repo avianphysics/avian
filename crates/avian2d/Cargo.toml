@@ -146,6 +146,10 @@ name = "collision_layers"
 required-features = ["2d", "default-collider"]
 
 [[example]]
+name = "move_and_slide"
+required-features = ["2d", "default-collider"]
+
+[[example]]
 name = "custom_collider"
 required-features = ["2d"]
 

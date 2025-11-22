@@ -52,11 +52,11 @@ pub(crate) type Ray = Ray3d;
 // Note: This is called `Dir` instead of `Direction` because Bevy has a conflicting `Direction` type.
 /// The direction type chosen based on the dimension.
 #[cfg(feature = "2d")]
-pub(crate) type Dir = Dir2;
+pub type Dir = Dir2;
 
 /// The direction type chosen based on the dimension.
 #[cfg(feature = "3d")]
-pub(crate) type Dir = Dir3;
+pub type Dir = Dir3;
 
 /// The vector type for angular values chosen based on the dimension.
 #[cfg(feature = "2d")]

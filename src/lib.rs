@@ -17,7 +17,7 @@
 //! ## Add the Dependency
 //!
 //! First, add `avian2d` or `avian3d` to the dependencies in your `Cargo.toml`:
-//!  
+//!
 //! ```toml
 //! # For 2D applications:
 //! [dependencies]
@@ -502,6 +502,11 @@ pub extern crate parry3d as parry;
 #[cfg(all(feature = "3d", feature = "parry-f64"))]
 pub extern crate parry3d_f64 as parry;
 
+#[cfg(all(
+    feature = "default-collider",
+    any(feature = "parry-f32", feature = "parry-f64")
+))]
+pub mod character_controller;
 pub mod collision;
 #[cfg(feature = "debug-plugin")]
 pub mod debug_render;
@@ -547,6 +552,12 @@ pub mod prelude {
         },
         spatial_query::{self, *},
     };
+
+    #[cfg(all(
+        feature = "default-collider",
+        any(feature = "parry-f32", feature = "parry-f64")
+    ))]
+    pub use crate::character_controller::prelude::*;
     pub(crate) use crate::{
         diagnostics::AppDiagnosticsExt,
         math::*,
