@@ -81,7 +81,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```
     /// use bevy::prelude::*;
     /// use std::collections::HashSet;
     #[cfg_attr(
@@ -327,7 +327,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```
     /// use bevy::prelude::*;
     #[cfg_attr(
         feature = "2d",
@@ -488,7 +488,49 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///
     /// # Example
     ///
-    /// TODO: use
+    /// ```
+    /// use bevy::prelude::*;
+    #[cfg_attr(
+        feature = "2d",
+        doc = "use avian2d::{prelude::*, math::{AdjustPrecision as _, AsF32 as _}};"
+    )]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "use avian3d::{prelude::*, math::{AdjustPrecision as _, AsF32 as _}};"
+    )]
+    /// fn depenetrate_player(
+    ///     player: Single<(Entity, &Collider, &mut Transform)>,
+    ///     move_and_slide: MoveAndSlide,
+    ///     time: Res<Time>
+    /// ) {
+    ///     let (entity, collider, mut transform) = player.into_inner();
+    ///     let filter = SpatialQueryFilter::from_excluded_entities([entity]);
+    ///
+    ///     let offset = move_and_slide.depenetrate_all(
+    ///         &collider,
+    #[cfg_attr(
+        feature = "2d",
+        doc = "         transform.translation.xy().adjust_precision(),"
+    )]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "         transform.translation.adjust_precision(),"
+    )]
+    #[cfg_attr(
+        feature = "2d",
+        doc = "         transform.rotation.to_euler(EulerRot::XYZ).2.adjust_precision(),"
+    )]
+    #[cfg_attr(feature = "3d", doc = "         transform.rotation,")]
+    ///         &DepenetrationConfig::default(),
+    ///         &filter,
+    ///     );
+    #[cfg_attr(
+        feature = "2d",
+        doc = "     transform.translation += offset.f32().extend(0.0);"
+    )]
+    #[cfg_attr(feature = "3d", doc = "     transform.translation += offset.f32();")]
+    /// }
+    /// ```
     ///
     /// See also [`MoveAndSlide::cast_move`] for a typical usage scenario.
     ///
