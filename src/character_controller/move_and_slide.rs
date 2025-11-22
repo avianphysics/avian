@@ -569,20 +569,28 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// Returns the projected velocity.
     pub fn project_velocity(v: Vector, normals: &[Dir]) -> Vector {
         // Case 1: Check if v is inside the cone
-        if normals.iter().all(|&n| v.dot(*n) >= -DOT_EPSILON) {
+        if normals
+            .iter()
+            .all(|n| v.dot(n.adjust_precision()) >= -DOT_EPSILON)
+        {
             return v;
         }
 
         // Best candidate so far
         let mut best_u = Vector::ZERO;
-        let mut best_d2 = f32::INFINITY;
+        let mut best_d2 = Scalar::INFINITY;
 
         // Helper to test halfspace validity
-        let is_valid = |u: Vector| normals.iter().all(|&n| u.dot(*n) >= -DOT_EPSILON);
+        let is_valid = |u: Vector| {
+            normals
+                .iter()
+                .all(|n| u.dot(n.adjust_precision()) >= -DOT_EPSILON)
+        };
 
         // Case 2a: Face projections (single-plane active set)
-        for &n in normals {
-            let vd = v.dot(*n);
+        for n in normals {
+            let n = n.adjust_precision();
+            let vd = v.dot(n);
             if vd < 0.0 {
                 // Only meaningful if v violates this plane
                 let u = v - vd * n; // Project onto the plane
@@ -602,8 +610,13 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         {
             let n = normals.len();
             for i in 0..n {
-                let ni = *normals[i];
-                for nj in normals.iter().take(n).skip(i + 1).map(|&x| *x) {
+                let ni = normals[i].adjust_precision();
+                for nj in normals
+                    .iter()
+                    .take(n)
+                    .skip(i + 1)
+                    .map(|n| n.adjust_precision())
+                {
                     // Compute edge direction e = ni x nj
                     let e = ni.cross(nj);
                     let e2 = e.length_squared();
