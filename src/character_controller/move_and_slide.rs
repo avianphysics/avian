@@ -516,7 +516,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 true
             },
         );
-        Self::depenetrate(&config, &intersections)
+        Self::depenetrate(config, &intersections)
     }
 
     /// An [intersection test](spatial_query#intersection-tests) that calls a callback for each [`Collider`] found
