@@ -181,8 +181,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             shape,
             position,
             shape_rotation,
-            filter,
             config.skin_width,
+            filter,
             |contact_point, normal| {
                 // TODO: Should we call on_hit here?
                 intersections.push((normal, contact_point.penetration + config.skin_width));
@@ -247,10 +247,10 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 shape,
                 position,
                 shape_rotation,
-                filter,
                 // Use a slightly larger skin width to ensure we catch all contacts for velocity clipping.
                 // Depenetration still uses just the normal skin width.
                 config.skin_width * 1.1,
+                filter,
                 |contact_point, normal| {
                     if planes.len() >= config.max_planes {
                         return false;
@@ -479,8 +479,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         shape: &Collider,
         shape_position: Vector,
         shape_rotation: RotationValue,
-        filter: &SpatialQueryFilter,
         prediction_distance: Scalar,
+        filter: &SpatialQueryFilter,
         mut callback: impl FnMut(&ContactPoint, Dir) -> bool,
     ) {
         let expanded_aabb = shape
