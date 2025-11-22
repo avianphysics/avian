@@ -868,7 +868,7 @@ impl Default for MoveAndSlideConfig {
             depenetration_iterations: default_depen_cfg.depenetration_iterations,
             max_depenetration_error: default_depen_cfg.max_depenetration_error,
             planes: Vec::new(),
-            max_planes: 5,
+            max_planes: 10,
             duplicate_plane_nudge: {
                 #[cfg(feature = "3d")]
                 {
