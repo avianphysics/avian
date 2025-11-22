@@ -329,7 +329,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// - `shape`: The shape being cast represented as a [`Collider`].
     /// - `shape_position`: Where the shape is cast from.
     /// - `shape_rotation`: The rotation of the shape being cast.
-    /// - `velocity`: The direction and magnitude of the movement. If this is [`Vector::ZERO`], this method can still return `Some(MoveHitData)` if the shape started off intersecting a collider.
+    /// - `movement`: The direction and magnitude of the movement. If this is [`Vector::ZERO`], this method can still return `Some(MoveHitData)` if the shape started off intersecting a collider.
     /// - `skin_width`: A [`ShapeCastConfig`] that determines the behavior of the cast.
     /// - `filter`: A [`SpatialQueryFilter`] that determines which colliders are taken into account in the query. It is highly recommended to exclude the entity holding the collider itself,
     ///   otherwise the character will collide with itself.
@@ -360,6 +360,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// fn perform_cast_move(
     ///     player: Single<(Entity, &Collider, &mut CharacterController, &mut Transform)>,
     ///     move_and_slide: MoveAndSlide,
+    ///     time: Res<Time>
     /// ) {
     ///     let (entity, collider, mut controller, mut transform) = player.into_inner();
     ///     let velocity = controller.velocity;
@@ -383,7 +384,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         doc = "         transform.rotation.to_euler(EulerRot::XYZ).2.adjust_precision(),"
     )]
     #[cfg_attr(feature = "3d", doc = "         transform.rotation,")]
-    ///         velocity,
+    ///         velocity * time.delta_secs().adjust_precision(),
     ///         MoveAndSlideConfig::default().skin_width,
     ///         &filter,
     ///     );
@@ -420,11 +421,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         shape: &Collider,
         shape_position: Vector,
         shape_rotation: RotationValue,
-        velocity: Vector,
+        movement: Vector,
         skin_width: Scalar,
         filter: &SpatialQueryFilter,
     ) -> Option<MoveHitData> {
-        let (direction, distance) = Dir::new_and_length(velocity.f32()).unwrap_or((Dir::X, 0.0));
+        let (direction, distance) = Dir::new_and_length(movement.f32()).unwrap_or((Dir::X, 0.0));
         let distance = distance.adjust_precision();
         let shape_hit = self.query_pipeline.cast_shape(
             shape,
