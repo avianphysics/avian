@@ -266,7 +266,6 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                     }
 
                     if !on_hit(MoveAndSlideHitData {
-                        intersects: false,
                         entity: sweep_hit.entity,
                         point: contact_point.point,
                         normal,
@@ -874,9 +873,6 @@ pub struct MoveAndSlideHitData {
 
     /// The outward surface normal on the hit shape at `point`, expressed in world space.
     pub normal: Dir,
-
-    /// Whether the current move and slide iteration started off with the collider intersecting another collider.
-    pub intersects: bool,
 
     /// The position of the collider at the point of the move and slide iteration.
     pub position: Vector,
