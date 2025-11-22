@@ -260,7 +260,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 // Depenetration still uses just the normal skin width.
                 config.skin_width * 2.0,
                 filter,
-                |contact_point, normal| {
+                |contact_point, mut normal| {
                     if planes.len() >= config.max_planes {
                         return false;
                     }
@@ -268,11 +268,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                     if !on_hit(MoveAndSlideHitData {
                         entity: sweep_hit.entity,
                         point: contact_point.point,
-                        normal,
+                        normal: &mut normal,
                         collision_distance: sweep_hit.collision_distance,
                         distance: sweep_hit.distance,
-                        position,
-                        velocity,
+                        position: &mut position,
+                        velocity: &mut velocity,
                     }) {
                         return false;
                     }
@@ -852,11 +852,9 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
 const DOT_EPSILON: Scalar = 0.005;
 
 /// Data related to a hit during a [`MoveAndSlide::move_and_slide`].
-#[derive(Clone, Copy, Debug, PartialEq, Reflect)]
+#[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
-#[reflect(Debug, PartialEq)]
-pub struct MoveAndSlideHitData {
+pub struct MoveAndSlideHitData<'a> {
     /// The entity of the collider that was hit by the shape.
     pub entity: Entity,
 
@@ -872,13 +870,13 @@ pub struct MoveAndSlideHitData {
     pub point: Vector,
 
     /// The outward surface normal on the hit shape at `point`, expressed in world space.
-    pub normal: Dir,
+    pub normal: &'a mut Dir,
 
     /// The position of the collider at the point of the move and slide iteration.
-    pub position: Vector,
+    pub position: &'a mut Vector,
 
     /// The velocity of the collider at the point of the move and slide iteration.
-    pub velocity: Vector,
+    pub velocity: &'a mut Vector,
 
     /// The raw distance to the next collision, not respecting skin width.
     /// To move the shape, use [`Self::distance`] instead.
@@ -886,7 +884,7 @@ pub struct MoveAndSlideHitData {
     pub collision_distance: Scalar,
 }
 
-impl MoveAndSlideHitData {
+impl<'a> MoveAndSlideHitData<'a> {
     /// Whether the collider started off already intersecting another collider when it was cast.
     /// Note that this will be `false` if the collider was closer than `skin_width`, but not physically intersecting.
     pub fn intersects(&self) -> bool {
