@@ -787,10 +787,6 @@ pub struct MoveAndSlideConfig {
     /// The maximum number of planes to solve while performing move-and-slide. If the collided planes exceed this number, the move is aborted and the velocity is set to zero.
     /// Realistically, this will probably never be reached, unless you have very exotic geometry and very high velocity.
     pub max_planes: usize,
-
-    /// A small nudge to apply to the character when colliding with a plane for a second time. This is done to not get caught in a loop of repeated collisions.
-    /// Reduce this value if you notice jittering.
-    pub duplicate_plane_nudge: Scalar,
 }
 
 /// Configuration for a [`MoveAndSlide::depenetrate`].
@@ -883,16 +879,6 @@ impl Default for MoveAndSlideConfig {
             max_depenetration_error: default_depen_cfg.max_depenetration_error,
             planes: Vec::new(),
             max_planes: 20,
-            duplicate_plane_nudge: {
-                #[cfg(feature = "3d")]
-                {
-                    0.001
-                }
-                #[cfg(feature = "2d")]
-                {
-                    0.1
-                }
-            },
             skin_width: default_depen_cfg.skin_width,
         }
     }
