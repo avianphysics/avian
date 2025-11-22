@@ -225,6 +225,7 @@ fn move_player(
             .2
             .adjust_precision(),
         wish_velocity,
+        time.delta(),
         &MoveAndSlideConfig::default(),
         &SpatialQueryFilter::from_excluded_entities([entity]),
         |hit| {

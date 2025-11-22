@@ -189,6 +189,7 @@ fn move_player(
         transform.translation.adjust_precision(),
         transform.rotation.adjust_precision(),
         wish_velocity.adjust_precision(),
+        time.delta(),
         &MoveAndSlideConfig::default(),
         &SpatialQueryFilter::from_excluded_entities([entity]),
         |hit| {

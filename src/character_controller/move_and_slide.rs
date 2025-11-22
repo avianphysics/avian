@@ -4,6 +4,7 @@
 
 use crate::{collision::collider::contact_query::contact_manifolds, prelude::*};
 use bevy::{ecs::system::SystemParam, prelude::*};
+use core::time::Duration;
 
 /// A [`SystemParam`] for the *move and slide* algorithm, also known as *collide and slide* or *step slide*.
 ///
@@ -60,8 +61,6 @@ pub struct MoveAndSlide<'w, 's> {
     /// A units-per-meter scaling factor that adjusts some thresholds and tolerances
     /// to the scale of the world for better behavior.
     pub length_unit: Res<'w, PhysicsLengthUnit>,
-    /// The [`Time`] resource, used primarily to calculate the delta-time.
-    pub time: Res<'w, Time>,
 }
 
 impl<'w, 's> MoveAndSlide<'w, 's> {
@@ -74,7 +73,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// - `shape`: The shape being cast represented as a [`Collider`].
     /// - `shape_position`: Where the shape is cast from.
     /// - `shape_rotation`: The rotation of the shape being cast.
-    /// - `velocity`: The direction and magnitude of the movement. If this is [`Vector::ZERO`], no movement is performed, but the collider is still depenetrated.
+    /// - `velocity`: The initial velocity vector along which to move the shape. This will be modified to reflect sliding along surfaces.
+    /// - `delta_time`: The duration over which to move the shape. `velocity * delta_time` gives the total desired movement vector.
     /// - `config`: A [`MoveAndSlideConfig`] that determines the behavior of the move and slide. [`MoveAndSlideConfig::default()`] should be a good start for most cases.
     /// - `filter`: A [`SpatialQueryFilter`] that determines which colliders are taken into account in the query. It is highly recommended to exclude the entity holding the collider itself,
     ///   otherwise the character will collide with itself.
@@ -104,6 +104,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// fn perform_move_and_slide(
     ///     player: Single<(Entity, &Collider, &mut CharacterController, &mut Transform)>,
     ///     move_and_slide: MoveAndSlide,
+    ///     time: Res<Time>
     /// ) {
     ///     let (entity, collider, mut controller, mut transform) = player.into_inner();
     ///     let velocity = controller.velocity + Vector::X * 10.0;
@@ -128,6 +129,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         doc = "         transform.rotation.adjust_precision(),"
     )]
     ///         velocity,
+    ///         time.delta(),
     ///         &MoveAndSlideConfig::default(),
     ///         &filter,
     ///         |hit| {
@@ -156,6 +158,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         shape_position: Vector,
         shape_rotation: RotationValue,
         mut velocity: Vector,
+        delta_time: Duration,
         config: &MoveAndSlideConfig,
         filter: &SpatialQueryFilter,
         mut on_hit: impl FnMut(MoveAndSlideHitData) -> bool,
@@ -173,11 +176,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         let mut time_left = {
             #[cfg(feature = "f32")]
             {
-                self.time.delta_secs()
+                delta_time.as_secs_f32()
             }
             #[cfg(feature = "f64")]
             {
-                self.time.delta_secs_f64()
+                delta_time.as_secs_f64()
             }
         };
 
