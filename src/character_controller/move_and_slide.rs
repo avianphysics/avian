@@ -715,7 +715,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///             true
     ///         },
     ///     );
-    ///     let offset = MoveAndSlide::depenetrate(&config, &intersections);
+    ///     let offset = move_and_slide.depenetrate(&config, &intersections);
     #[cfg_attr(
         feature = "2d",
         doc = "     transform.translation += offset.f32().extend(0.0);"
