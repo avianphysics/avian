@@ -9,7 +9,7 @@ use bevy::{
     color::palettes::tailwind,
     ecs::entity::EntityHashSet,
     gltf::GltfLoaderSettings,
-    input::mouse::AccumulatedMouseMotion,
+    input::{common_conditions::input_just_pressed, mouse::AccumulatedMouseMotion},
     pbr::Atmosphere,
     prelude::*,
     window::{CursorGrabMode, CursorOptions},
@@ -31,8 +31,8 @@ fn main() {
             Update,
             (
                 update_camera_transform,
-                capture_cursor,
-                exit_game,
+                capture_cursor.run_if(input_just_pressed(MouseButton::Left)),
+                release_cursor.run_if(input_just_pressed(KeyCode::Escape)),
                 update_debug_text,
             ),
         )
@@ -254,10 +254,9 @@ fn capture_cursor(mut cursor: Single<&mut CursorOptions>) {
     cursor.grab_mode = CursorGrabMode::Locked;
 }
 
-fn exit_game(input: Res<ButtonInput<KeyCode>>, mut app_exit: MessageWriter<AppExit>) {
-    if input.just_pressed(KeyCode::Escape) {
-        app_exit.write(AppExit::Success);
-    }
+fn release_cursor(mut cursor: Single<&mut CursorOptions>) {
+    cursor.visible = true;
+    cursor.grab_mode = CursorGrabMode::None;
 }
 
 fn update_debug_text(
