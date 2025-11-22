@@ -57,6 +57,9 @@ pub struct MoveAndSlide<'w, 's> {
             Option<&'static CollisionLayers>,
         ),
     >,
+    /// A units-per-meter scaling factor that adjusts some thresholds and tolerances
+    /// to the scale of the world for better behavior.
+    pub length_unit: Res<'w, PhysicsLengthUnit>,
     /// The [`Time`] resource, used primarily to calculate the delta-time.
     pub time: Res<'w, Time>,
 }
@@ -192,7 +195,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 true
             },
         );
-        let depenetration_offset = Self::depenetrate(&config.into(), &intersections);
+        let depenetration_offset = self.depenetrate(&config.into(), &intersections);
         position += depenetration_offset;
 
         // Main move and slide loop:
@@ -286,7 +289,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             );
 
             // Depenetrate based on intersections.
-            let depenetration_offset = Self::depenetrate(&config.into(), &intersections);
+            let depenetration_offset = self.depenetrate(&config.into(), &intersections);
             position += depenetration_offset;
 
             // Project velocity to be parallel to all contact planes.
@@ -574,7 +577,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 true
             },
         );
-        Self::depenetrate(config, &intersections)
+        self.depenetrate(config, &intersections)
     }
 
     /// An [intersection test](spatial_query#intersection-tests) that calls a callback for each [`Collider`] found
@@ -723,7 +726,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// - [`MoveAndSlide::intersections`]
     /// - [`MoveAndSlide::depenetrate_all`]
     #[must_use]
-    pub fn depenetrate(config: &DepenetrationConfig, intersections: &[(Dir, Scalar)]) -> Vector {
+    pub fn depenetrate(
+        &self,
+        config: &DepenetrationConfig,
+        intersections: &[(Dir, Scalar)],
+    ) -> Vector {
         if intersections.is_empty() {
             return Vector::ZERO;
         }
@@ -732,12 +739,15 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         for _ in 0..config.depenetration_iterations {
             let mut total_error = 0.0;
             for (normal, dist) in intersections {
+                if *dist > self.length_unit.0 * config.penetration_rejection_threshold {
+                    continue;
+                }
                 let normal = normal.adjust_precision();
                 let error = (dist - fixup.dot(normal)).max(0.0);
                 total_error += error;
                 fixup += error * normal;
             }
-            if total_error < config.max_depenetration_error {
+            if total_error < self.length_unit.0 * config.max_depenetration_error {
                 break;
             }
         }
@@ -950,12 +960,23 @@ pub struct MoveAndSlideConfig {
     /// How many iterations to use when performing depenetration.
     /// Depenetration is an iterative process that solves penetrations for all planes bit-by-bit,
     /// until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`] or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`].
+    ///
+    /// This is implicitly scaled by the [`PhysicsLengthUnit`].
     pub depenetration_iterations: usize,
 
     /// The target error to achieve when performing depenetration.
     /// Depenetration is an iterative process that solves penetrations for all planes bit-by-bit,
     /// until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`] or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`].
+    ///
+    /// This is implicitly scaled by the [`PhysicsLengthUnit`].
     pub max_depenetration_error: Scalar,
+
+    /// The maximum penetration depth that is allowed for a contact to be resolved during depenetration.
+    ///
+    /// This is used to reject invalid contacts that have an excessively high penetration depth,
+    /// which can lead to clipping through geometry. This may be removed in the future once the
+    /// collision errors in the underlying collision detection system are fixed.
+    pub penetration_rejection_threshold: Scalar,
 
     /// A minimal distance to always keep between the collider and any other colliders.
     /// This is here to ensure that the collider never intersects anything, even when numeric errors accumulate.
@@ -990,7 +1011,18 @@ pub struct DepenetrationConfig {
     /// The target error to achieve when performing depenetration.
     /// Depenetration is an iterative process that solves penetrations for all planes bit-by-bit,
     /// until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`] or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`].
+    ///
+    /// This is implicitly scaled by the [`PhysicsLengthUnit`].
     pub max_depenetration_error: Scalar,
+
+    /// The maximum penetration depth that is allowed for a contact to be resolved during depenetration.
+    ///
+    /// This is used to reject invalid contacts that have an excessively high penetration depth,
+    /// which can lead to clipping through geometry. This may be removed in the future once the
+    /// collision errors in the underlying collision detection system are fixed.
+    ///
+    /// This is implicitly scaled by the [`PhysicsLengthUnit`].
+    pub penetration_rejection_threshold: Scalar,
 
     /// A minimal distance to always keep between the collider and any other colliders.
     /// This is here to ensure that the collider never intersects anything, even when numeric errors accumulate.
@@ -1005,26 +1037,9 @@ impl Default for DepenetrationConfig {
     fn default() -> Self {
         Self {
             depenetration_iterations: 16,
-            max_depenetration_error: {
-                #[cfg(feature = "3d")]
-                {
-                    0.0001
-                }
-                #[cfg(feature = "2d")]
-                {
-                    0.01
-                }
-            },
-            skin_width: {
-                #[cfg(feature = "3d")]
-                {
-                    0.002
-                }
-                #[cfg(feature = "2d")]
-                {
-                    0.2
-                }
-            },
+            max_depenetration_error: 0.0001,
+            penetration_rejection_threshold: 0.5,
+            skin_width: 0.002,
         }
     }
 }
@@ -1034,6 +1049,7 @@ impl From<&MoveAndSlideConfig> for DepenetrationConfig {
         Self {
             depenetration_iterations: config.depenetration_iterations,
             max_depenetration_error: config.max_depenetration_error,
+            penetration_rejection_threshold: config.penetration_rejection_threshold,
             skin_width: config.skin_width,
         }
     }
@@ -1064,9 +1080,10 @@ impl Default for MoveAndSlideConfig {
             move_and_slide_iterations: 4,
             depenetration_iterations: default_depen_cfg.depenetration_iterations,
             max_depenetration_error: default_depen_cfg.max_depenetration_error,
+            penetration_rejection_threshold: default_depen_cfg.penetration_rejection_threshold,
+            skin_width: default_depen_cfg.skin_width,
             planes: Vec::new(),
             max_planes: 20,
-            skin_width: default_depen_cfg.skin_width,
         }
     }
 }
