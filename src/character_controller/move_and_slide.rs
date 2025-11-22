@@ -306,7 +306,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// A [shape cast](spatial_query#shapecasting) optimized for movement. Use this if you want to move a collider with a given velocity and stop so that
     /// it keeps a distance of `skin_width` from the first collider on its path.
     ///
-    /// This operation is most useful when you ensure that the character is not intersecting any colliders before moving. You can do so by calling [`MoveAndSlide::depenetrate`]
+    /// This operation is most useful when you ensure that the character is not intersecting any colliders before moving. You can do so by calling [`MoveAndSlide::depenetrate_all`]
     /// and adding the resulting offset vector to the character's position before calling this method. See the example below.
     ///
     /// You will often find it useful to afterwards clip the velocity so that it no longer points into the collision plane by using [`Self::clip_velocity`].
@@ -349,11 +349,12 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///     time: Res<Time>
     /// ) {
     ///     let (entity, collider, mut controller, mut transform) = player.into_inner();
-    ///     let velocity = controller.velocity;
     ///     let filter = SpatialQueryFilter::from_excluded_entities([entity]);
     ///
-    ///     // Note: you probably want to call `MoveAndSlide::depenetrate()` here before calling `cast_move()`
-    ///     // to ensure that the character is not intersecting with any colliders. See that method's documentation for more details.
+    ///     // Ensure that the character is not intersecting with any colliders.
+    ///     TODO
+    ///
+    ///     let velocity = controller.velocity;
     ///
     ///     let hit = move_and_slide.cast_move(
     ///         collider,
@@ -446,6 +447,56 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         (hit.distance - skin_distance).max(0.0)
     }
 
+    /// Moves a collider so that it no longer intersects any other collider and keeps a minimum distance of [`DepenetrationConfig::skin_width`] to all.
+    ///
+    /// Depenetration is an iterative process that solves penetrations for all planes bit-by-bit, until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`]
+    /// or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`]. If the max iterations were reached before the error was below the threshold,
+    /// the current best attempt is returned, in which case the collider may still be intersecting with other colliders.
+    ///
+    /// This method is equivalent to calling [`Self::depenetrate`] with the results of [`Self::intersections`].
+    ///
+    /// # Arguments
+    ///
+    /// - `shape`: The shape that intersections are tested against represented as a [`Collider`].
+    /// - `shape_position`: The position of the shape.
+    /// - `shape_rotation`: The rotation of the shape.
+    /// - `filter`: A [`SpatialQueryFilter`] that determines which colliders are taken into account in the query.
+    /// - `prediction_distance`: An extra margin applied to the [`Collider`].
+    /// - `callback`: A callback that is called for each intersection found. The callback receives the deepest contact point and the contact normal.
+    ///
+    /// # Example
+    ///
+    /// TODO: use
+    ///
+    /// See also [`MoveAndSlide::cast_move`] for a typical usage scenario.
+    ///
+    /// # Related methods
+    ///
+    /// - [`MoveAndSlide::intersections`]
+    /// - [`MoveAndSlide::depenetrate`]
+    pub fn depenetrate_all(
+        &self,
+        shape: &Collider,
+        shape_position: Vector,
+        shape_rotation: RotationValue,
+        config: &DepenetrationConfig,
+        filter: &SpatialQueryFilter,
+    ) -> Vector {
+        let mut intersections = Vec::new();
+        self.intersections(
+            shape,
+            shape_position,
+            shape_rotation,
+            config.skin_width,
+            filter,
+            |contact_point, normal| {
+                intersections.push((normal, contact_point.penetration + config.skin_width));
+                true
+            },
+        );
+        Self::depenetrate(&config, &intersections)
+    }
+
     /// An [intersection test](spatial_query#intersection-tests) that calls a callback for each [`Collider`] found
     /// that is closer to the given `shape` with a given position and rotation than `prediction_distance`.
     ///
@@ -508,6 +559,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         }
     }
 
+    /// Manual version of [`MoveAndSlide::depenetrate_all`].
+    ///
     /// Moves a collider so that it no longer intersects any other collider and keeps a minimum distance of [`DepenetrationConfig::skin_width`] to all.
     /// The intersections should be provided as a list of contact plane normals and penetration distances, which can be obtained via [`MoveAndSlide::intersections_callback`].
     ///
