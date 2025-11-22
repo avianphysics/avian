@@ -137,7 +137,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         feature = "3d",
         doc = "     transform.translation = out.position.f32();"
     )]
-    ///     controller.velocity = out.clipped_velocity;
+    ///     controller.velocity = out.projected_velocity;
     ///     info!("Colliding with entities: {:?}", collisions);
     /// }
     /// ```
@@ -299,7 +299,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
 
         MoveAndSlideOutput {
             position,
-            clipped_velocity: velocity,
+            projected_velocity: velocity,
         }
     }
 
@@ -855,10 +855,10 @@ pub struct MoveAndSlideOutput {
     /// The final velocity of the character after move and slide. This corresponds to the actual velocity, not the wished velocity.
     /// For example, if the character is trying to move to the right and there's a ramp on its path, this vector will point up the ramp.
     /// It is useful to store this value and apply your wish movement vectors, friction, gravity, etc. on it before handing it to [`MoveAndSlide::move_and_slide`] as the input `velocity`.
-    /// You can also ignore this value if you don't wish to preserve momentum.
+    /// You can also ignore this value if you don't wish to preserve momentum along colliding planes.
     ///
     /// Do *not* set [`LinearVelocity`] to this value, as that would apply the movement twice and cause intersections. Instead, set [`Transform::translation`] to [`MoveAndSlideOutput::position`].
-    pub clipped_velocity: Vector,
+    pub projected_velocity: Vector,
 }
 
 impl Default for MoveAndSlideConfig {

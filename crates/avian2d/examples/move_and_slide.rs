@@ -215,7 +215,7 @@ fn move_player(
     player.touched.clear();
     let MoveAndSlideOutput {
         position,
-        clipped_velocity: internal_velocity,
+        projected_velocity: internal_velocity,
     } = move_and_slide.move_and_slide(
         collider,
         transform.translation.xy().adjust_precision(),

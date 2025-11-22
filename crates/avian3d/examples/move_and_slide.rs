@@ -133,7 +133,7 @@ struct DebugText;
 
 #[derive(Component, Default)]
 struct Player {
-    clipped_velocity: Vec3,
+    projected_velocity: Vec3,
     touched: EntityHashSet,
 }
 
@@ -172,7 +172,7 @@ fn move_player(
     }
     wish_velocity = camera.rotation * wish_velocity;
     // preserve momentum
-    wish_velocity += player.clipped_velocity;
+    wish_velocity += player.projected_velocity;
     let current_speed = wish_velocity.length();
     if current_speed > 0.0 {
         // apply friction
@@ -183,7 +183,7 @@ fn move_player(
     player.touched.clear();
     let MoveAndSlideOutput {
         position,
-        clipped_velocity,
+        projected_velocity,
     } = move_and_slide.move_and_slide(
         collider,
         transform.translation.adjust_precision(),
@@ -213,7 +213,7 @@ fn move_player(
         },
     );
     transform.translation = position.f32();
-    player.clipped_velocity = clipped_velocity.f32();
+    player.projected_velocity = projected_velocity.f32();
 }
 
 fn update_camera_transform(
@@ -268,9 +268,9 @@ fn update_debug_text(
     let (player, colliding_entities) = player.into_inner();
     ***text = format!(
         "velocity: [{:.3}, {:.3}, {:.3}]\n{} intersections (goal is 0): {:#?}\n{} touched: {:#?}",
-        player.clipped_velocity.x,
-        player.clipped_velocity.y,
-        player.clipped_velocity.z,
+        player.projected_velocity.x,
+        player.projected_velocity.y,
+        player.projected_velocity.z,
         colliding_entities.len(),
         names
             .iter_many(colliding_entities.iter())
