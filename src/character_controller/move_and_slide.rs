@@ -748,6 +748,9 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// This ensures that `velocity` does not point into any of the given `planes`, but along them.
     ///
     /// Returns the projected velocity. If there are no planes, the velocity is returned unchanged.
+    /// The returned vector will have some numerical errors. For example, if your vertical velocity was 0.0 before calling
+    /// this method on a ground plane intersection, the returned velocity might point very slightly upwards.
+    /// As such, it is recommended to set invariants such as `velocity.y = 0.0;` again after calling this method.
     ///
     /// Often used after [`MoveAndSlide::cast_move`] to ensure a character moved that way does not try to continue moving into colliding geometry.
     /// See that method for example usage.
