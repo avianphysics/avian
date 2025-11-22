@@ -577,29 +577,30 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         }
 
         // Best candidate so far
-        let mut best_u = Vector::ZERO;
-        let mut best_d2 = Scalar::INFINITY;
+        let mut best_projection = Vector::ZERO;
+        let mut best_distance_sq = Scalar::INFINITY;
 
         // Helper to test halfspace validity
-        let is_valid = |u: Vector| {
+        let is_valid = |projection: Vector| {
             normals
                 .iter()
-                .all(|n| u.dot(n.adjust_precision()) >= -DOT_EPSILON)
+                .all(|n| projection.dot(n.adjust_precision()) >= -DOT_EPSILON)
         };
 
         // Case 2a: Face projections (single-plane active set)
         for n in normals {
             let n = n.adjust_precision();
-            let vd = v.dot(n);
-            if vd < 0.0 {
-                // Only meaningful if v violates this plane
-                let u = v - vd * n; // Project onto the plane
+            let v_dot_n = v.dot(n);
+            if v_dot_n < 0.0 {
+                // Project v onto the plane defined by n:
+                // projection = v - (v·n) n
+                let projection = v - v_dot_n * n;
 
                 // Check if better than previous best and valid
-                let d2 = (v - u).length_squared();
-                if d2 < best_d2 && is_valid(u) {
-                    best_d2 = d2;
-                    best_u = u;
+                let distance_sq = v.distance_squared(projection);
+                if distance_sq < best_distance_sq && is_valid(projection) {
+                    best_distance_sq = distance_sq;
+                    best_projection = projection;
                 }
             }
         }
@@ -619,31 +620,31 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 {
                     // Compute edge direction e = ni x nj
                     let e = ni.cross(nj);
-                    let e2 = e.length_squared();
-                    if e2 < DOT_EPSILON {
+                    let e_length_sq = e.length_squared();
+                    if e_length_sq < DOT_EPSILON {
                         // Nearly parallel edge
                         continue;
                     }
 
                     // Project v onto the line spanned by e:
-                    // u = ((v·e) / |e|²) e
-                    let u = e * (v.dot(e) / e2);
+                    // projection = ((v·e) / |e|²) e
+                    let projection = e * (v.dot(e) / e_length_sq);
 
                     // Check if better than previous best and valid
-                    let d2 = (v - u).length_squared();
-                    if d2 < best_d2 && is_valid(u) {
-                        best_d2 = d2;
-                        best_u = u;
+                    let distance_sq = v.distance_squared(projection);
+                    if distance_sq < best_distance_sq && is_valid(projection) {
+                        best_distance_sq = distance_sq;
+                        best_projection = projection;
                     }
                 }
             }
         }
 
         // Case 3: If no candidate is found, the projection is at the apex (the origin)
-        if best_d2.is_infinite() {
+        if best_distance_sq.is_infinite() {
             Vector::ZERO
         } else {
-            best_u
+            best_projection
         }
     }
 }
