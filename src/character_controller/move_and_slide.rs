@@ -120,7 +120,10 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         feature = "2d",
         doc = "         transform.rotation.to_euler(EulerRot::XYZ).2.adjust_precision(),"
     )]
-    #[cfg_attr(feature = "3d", doc = "         transform.rotation,")]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "         transform.rotation.adjust_precision(),"
+    )]
     ///         velocity,
     ///         &MoveAndSlideConfig::default(),
     ///         &filter,
@@ -354,7 +357,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///
     ///     // Ensure that the character is not intersecting with any colliders.
     ///     let offset = move_and_slide.depenetrate_all(
-    ///         &collider,
+    ///         collider,
     #[cfg_attr(
         feature = "2d",
         doc = "         transform.translation.xy().adjust_precision(),"
@@ -502,11 +505,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// use bevy::prelude::*;
     #[cfg_attr(
         feature = "2d",
-        doc = "use avian2d::{prelude::*, math::{AdjustPrecision as _, AsF32 as _}};"
+        doc = "use avian2d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::{AdjustPrecision as _, AsF32 as _}};"
     )]
     #[cfg_attr(
         feature = "3d",
-        doc = "use avian3d::{prelude::*, math::{AdjustPrecision as _, AsF32 as _}};"
+        doc = "use avian3d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::{AdjustPrecision as _, AsF32 as _}};"
     )]
     /// fn depenetrate_player(
     ///     player: Single<(Entity, &Collider, &mut Transform)>,
@@ -517,7 +520,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///     let filter = SpatialQueryFilter::from_excluded_entities([entity]);
     ///
     ///     let offset = move_and_slide.depenetrate_all(
-    ///         &collider,
+    ///         collider,
     #[cfg_attr(
         feature = "2d",
         doc = "         transform.translation.xy().adjust_precision(),"
@@ -530,7 +533,10 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         feature = "2d",
         doc = "         transform.rotation.to_euler(EulerRot::XYZ).2.adjust_precision(),"
     )]
-    #[cfg_attr(feature = "3d", doc = "         transform.rotation,")]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "         transform.rotation.adjust_precision(),"
+    )]
     ///         &DepenetrationConfig::default(),
     ///         &filter,
     ///     );
@@ -662,11 +668,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// use bevy::prelude::*;
     #[cfg_attr(
         feature = "2d",
-        doc = "use avian2d::{prelude::*, math::{AdjustPrecision as _, AsF32 as _}};"
+        doc = "use avian2d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::{AdjustPrecision as _, AsF32 as _}};"
     )]
     #[cfg_attr(
         feature = "3d",
-        doc = "use avian3d::{prelude::*, math::{AdjustPrecision as _, AsF32 as _}};"
+        doc = "use avian3d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::{AdjustPrecision as _, AsF32 as _}};"
     )]
     /// fn depenetrate_player_manually(
     ///     player: Single<(Entity, &Collider, &mut Transform)>,
@@ -678,8 +684,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///     let config = DepenetrationConfig::default();
     ///
     ///     let mut intersections = Vec::new();
-    ///     self.intersections(
-    ///         shape,
+    ///     move_and_slide.intersections(
+    ///         collider,
     #[cfg_attr(
         feature = "2d",
         doc = "         transform.translation.xy().adjust_precision(),"
@@ -689,21 +695,21 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         doc = "         transform.translation.adjust_precision(),"
     )]
     #[cfg_attr(
-        feature = "3d",
-        doc = "         transform.translation.adjust_precision(),"
-    )]
-    #[cfg_attr(
         feature = "2d",
         doc = "         transform.rotation.to_euler(EulerRot::XYZ).2.adjust_precision(),"
     )]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "         transform.rotation.adjust_precision(),"
+    )]
     ///         config.skin_width,
-    ///         filter,
+    ///         &filter,
     ///         |contact_point, normal| {
     ///             intersections.push((normal, contact_point.penetration + config.skin_width));
     ///             true
     ///         },
     ///     );
-    ///     let offset = Self::depenetrate(&config, &intersections);
+    ///     let offset = MoveAndSlide::depenetrate(&config, &intersections);
     #[cfg_attr(
         feature = "2d",
         doc = "     transform.translation += offset.f32().extend(0.0);"
