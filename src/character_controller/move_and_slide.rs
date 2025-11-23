@@ -448,7 +448,10 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             shape_position,
             shape_rotation,
             direction,
-            &ShapeCastConfig::from_max_distance(distance),
+            &ShapeCastConfig {
+                ignore_origin_penetration: true,
+                ..ShapeCastConfig::from_max_distance(distance)
+            },
             filter,
         )?;
         let safe_distance = if distance == 0.0 {
