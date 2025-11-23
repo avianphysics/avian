@@ -746,13 +746,12 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         config: &DepenetrationConfig,
         intersections: &[(Dir, Scalar)],
     ) -> Vector {
-        if intersections.is_empty() {
-            return Vector::ZERO;
-        }
-
         let mut fixup = Vector::ZERO;
+
+        // Gauss-Seidel style iterative depenetration
         for _ in 0..config.depenetration_iterations {
             let mut total_error = 0.0;
+
             for (normal, dist) in intersections {
                 if *dist > self.length_unit.0 * config.penetration_rejection_threshold {
                     continue;
@@ -762,10 +761,12 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 total_error += error;
                 fixup += error * normal;
             }
+
             if total_error < self.length_unit.0 * config.max_depenetration_error {
                 break;
             }
         }
+
         fixup
     }
 
