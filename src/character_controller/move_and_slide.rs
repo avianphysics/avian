@@ -248,10 +248,12 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                     // Check if this plane is nearly parallel to an existing one.
                     // This can help prune redundant planes for velocity clipping.
                     for existing_normal in planes.iter_mut() {
-                        if normal.dot(**existing_normal) >= config.plane_similarity_dot_threshold {
+                        if normal.dot(**existing_normal) as Scalar
+                            >= config.plane_similarity_dot_threshold
+                        {
                             // Keep the most blocking version of the plane.
-                            let n_dot_v = normal.dot(velocity);
-                            let existing_n_dot_v = existing_normal.dot(velocity);
+                            let n_dot_v = normal.adjust_precision().dot(velocity);
+                            let existing_n_dot_v = existing_normal.adjust_precision().dot(velocity);
                             if n_dot_v < existing_n_dot_v {
                                 *existing_normal = normal;
                             }
@@ -771,7 +773,10 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         // 3. If no valid projection is found, return the apex of the cone (the origin)
 
         // Case 1: Check if v is inside the cone
-        if normals.iter().all(|normal| normal.dot(v) >= -DOT_EPSILON) {
+        if normals
+            .iter()
+            .all(|normal| normal.adjust_precision().dot(v) >= -DOT_EPSILON)
+        {
             return v;
         }
 
