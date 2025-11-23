@@ -176,8 +176,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         //    - Sweep the shape along the velocity vector
         //    - If we hit something, move up to the hit point
         //    - Collect contact planes
-        //    - Depenetrate based on intersections
         //    - Project velocity to slide along contact planes
+        // 3. Final Gauss-Seidel depenetration pass
         let mut position = shape_position;
         let mut time_left = {
             #[cfg(feature = "f32")]
@@ -191,30 +191,17 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         };
 
         // Initial depenetration pass
-        let mut intersections = Vec::new();
-        self.intersections(
-            shape,
-            position,
-            shape_rotation,
-            config.skin_width,
-            filter,
-            |contact_point, normal| {
-                // TODO: Should we call on_hit here?
-                intersections.push((normal, contact_point.penetration + config.skin_width));
-                true
-            },
-        );
-        let depenetration_offset = self.depenetrate(&config.into(), &intersections);
+        let depenetration_offset =
+            self.depenetrate_all(shape, position, shape_rotation, &config.into(), filter);
         position += depenetration_offset;
 
         // Main move and slide loop:
         // 1. Sweep the shape along the velocity vector
         // 2. If we hit something, move up to the hit point
         // 3. Collect contact planes
-        // 4. Depenetrate based on intersections
-        // 5. Project velocity to slide along contact planes
-        // 6. Repeat until we run out of iterations or time
-        'outer: for _ in 0..config.move_and_slide_iterations {
+        // 4. Project velocity to slide along contact planes
+        // 5. Repeat until we run out of iterations or time
+        for _ in 0..config.move_and_slide_iterations {
             let sweep = time_left * velocity;
             let Some((vel_dir, distance)) = Dir::new_and_length(sweep.f32()).ok() else {
                 // No movement left
@@ -240,12 +227,6 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 break;
             };
 
-            if sweep_hit.intersects() {
-                // The entity is completely trapped in another solid.
-                velocity = Vector::ZERO;
-                break 'outer;
-            }
-
             // Move up to the hit point.
             time_left -= time_left * (sweep_hit.distance / distance);
             position += vel_dir.adjust_precision() * sweep_hit.distance;
@@ -253,9 +234,6 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             // Initialize velocity clipping planes with the user-defined planes.
             // This often includes a ground plane.
             let mut planes: Vec<Dir> = config.planes.clone();
-
-            // Store penetrating contacts for depenetration.
-            let mut intersections = Vec::new();
 
             // Collect contact planes.
             self.intersections(
@@ -300,23 +278,18 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                     // Add the contact plane for velocity clipping.
                     planes.push(normal);
 
-                    // Store penetrating contacts for depenetration.
-                    let total_penetration = contact_point.penetration + config.skin_width;
-                    if total_penetration > 0.0 {
-                        intersections.push((normal, total_penetration));
-                    }
-
                     true
                 },
             );
 
-            // Depenetrate based on intersections.
-            let depenetration_offset = self.depenetrate(&config.into(), &intersections);
-            position += depenetration_offset;
-
             // Project velocity to slide along contact planes.
             velocity = Self::project_velocity(velocity, &planes);
         }
+
+        // Final depenetration pass
+        let depenetration_offset =
+            self.depenetrate_all(shape, position, shape_rotation, &config.into(), filter);
+        position += depenetration_offset;
 
         MoveAndSlideOutput {
             position,
