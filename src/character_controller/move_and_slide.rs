@@ -6,6 +6,13 @@ use crate::{collision::collider::contact_query::contact_manifolds, prelude::*};
 use bevy::{ecs::system::SystemParam, prelude::*};
 use core::time::Duration;
 
+/// Needed to improve stability when `n.dot(dir)` happens to be very close to zero.
+const DOT_EPSILON: Scalar = 0.005;
+
+/// Cosine of 5 degrees.
+#[allow(clippy::excessive_precision)]
+pub const COS_5_DEGREES: Scalar = 0.99619469809;
+
 /// A [`SystemParam`] for the *move and slide* algorithm, also known as *collide and slide* or *step slide*.
 ///
 /// Move and slide is the core movement and collision algorithm used by most kinematic character controllers.
@@ -172,7 +179,6 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         //    - Depenetrate based on intersections
         //    - Project velocity to be parallel to all contact planes
         let mut position = shape_position;
-        let original_velocity = velocity;
         let mut time_left = {
             #[cfg(feature = "f32")]
             {
@@ -246,10 +252,19 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
 
             // Initialize velocity clipping planes with the user-defined planes.
             // This often includes a ground plane.
-            let mut planes = config.planes.clone();
+            let mut planes: Vec<Dir> = config.planes.clone();
+
+            // Precompute dot products for efficiency.
+            let mut dots: Vec<Scalar> = planes
+                .iter()
+                .map(|n| velocity.dot(n.adjust_precision()))
+                .collect();
 
             // Store penetrating contacts for depenetration.
             let mut intersections = Vec::new();
+
+            // Track if we have at least one contact that blocks movement.
+            let mut has_blocking_contact = false;
 
             // Collect contact planes.
             self.intersections(
@@ -261,6 +276,29 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 config.skin_width * 2.0,
                 filter,
                 |contact_point, mut normal| {
+                    let n_dot_v = normal.dot(velocity);
+
+                    // Check if this is a blocking contact.
+                    let is_blocking = n_dot_v < -DOT_EPSILON;
+                    if is_blocking {
+                        has_blocking_contact = true;
+                    }
+
+                    // Check if this plane is nearly parallel to an existing one.
+                    // This can help prune redundant planes for velocity clipping.
+                    for (existing_normal, existing_n_dot_v) in
+                        planes.iter_mut().zip(dots.iter_mut())
+                    {
+                        if normal.dot(**existing_normal) >= config.plane_similarity_dot_threshold {
+                            // Keep the most blocking version of the plane.
+                            if n_dot_v < *existing_n_dot_v {
+                                *existing_normal = normal;
+                                *existing_n_dot_v = n_dot_v;
+                            }
+                            return true;
+                        }
+                    }
+
                     if planes.len() >= config.max_planes {
                         return false;
                     }
@@ -279,6 +317,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
 
                     // Add the contact plane for velocity clipping.
                     planes.push(normal);
+                    dots.push(n_dot_v);
 
                     // Store penetrating contacts for depenetration.
                     let total_penetration = contact_point.penetration + config.skin_width;
@@ -295,13 +334,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             position += depenetration_offset;
 
             // Project velocity to be parallel to all contact planes.
-            velocity = Self::project_velocity(velocity, &planes);
-
-            // If the original velocity is against the original velocity, stop dead
-            // to avoid tiny occilations in sloping corners.
-            if velocity.dot(original_velocity) <= -DOT_EPSILON {
-                velocity = Vector::ZERO;
-                break 'outer;
+            if has_blocking_contact {
+                velocity = Self::project_velocity_with_dots::<false>(velocity, &planes, &dots);
             }
         }
 
@@ -756,22 +790,72 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         fixup
     }
 
-    /// Projects input velocity `v` onto the convex cone defined by the provided contact `normals`.
-    /// This ensures that `velocity` does not point into any of the given `planes`, but along them.
+    /// Projects input velocity `v` onto the planes defined by the given `normals`.
+    /// This ensures that `velocity` does not point into any of the planes, but along them.
     ///
-    /// Returns the projected velocity. If there are no planes, the velocity is returned unchanged.
-    /// The returned vector will have some numerical errors. For example, if your vertical velocity was 0.0 before calling
-    /// this method on a ground plane intersection, the returned velocity might point very slightly upwards.
-    /// As such, it is recommended to set invariants such as `velocity.y = 0.0;` again after calling this method.
-    ///
-    /// Often used after [`MoveAndSlide::cast_move`] to ensure a character moved that way does not try to continue moving into colliding geometry.
-    /// See that method for example usage.
+    /// This is often used after [`MoveAndSlide::cast_move`] to ensure a character moved that way
+    /// does not try to continue moving into colliding geometry.
+    #[must_use]
     pub fn project_velocity(v: Vector, normals: &[Dir]) -> Vector {
+        if normals.is_empty() {
+            return v;
+        }
+
+        // Track if v is already inside all halfspaces.
+        let mut all_inside = true;
+
+        // Precompute dot products for all normals.
+        let mut dots = Vec::with_capacity(normals.len());
+        for n in normals {
+            let dot = v.dot(n.adjust_precision());
+            dots.push(dot);
+
+            if dot < -DOT_EPSILON {
+                all_inside = false;
+            }
+        }
+
+        if all_inside {
+            // Case 1: v is already inside the cone
+            v
+        } else {
+            // Case 2: v is outside the cone
+            Self::project_velocity_with_dots::<false>(v, normals, &dots)
+        }
+    }
+
+    /// Projects input velocity `v` onto the planes defined by the given `normals`
+    /// and their precomputed dot products with `v`. This ensures that `velocity`
+    /// does not point into any of the planes, but along them.
+    ///
+    /// If `CHECK_V` is `true`, the function first checks if `v` already satisfies all plane constraints,
+    /// and returns it unchanged if so. If it is known to be blocked by at least one plane,
+    /// passing `false` for `CHECK_V` can save some computation.
+    ///
+    /// This is an optimized variant of [`Self::project_velocity`] for use cases where
+    /// the dot products are already available.
+    #[must_use]
+    pub fn project_velocity_with_dots<const CHECK_V: bool>(
+        v: Vector,
+        normals: &[Dir],
+        dots: &[Scalar],
+    ) -> Vector {
+        if normals.is_empty() {
+            return v;
+        }
+
+        // The halfspaces defined by the contact normals form a polyhedral cone.
+        // We want to find the closest point to v that lies inside this cone.
+        //
+        // There are three cases to consider:
+        // 1. v is already inside the cone -> return v
+        // 2. v is outside the cone
+        //    a. Project v onto each plane and check if the projection is inside the cone
+        //    b. Project v onto each edge (intersection of two planes) and check if the projection is inside the cone
+        // 3. If no valid projection is found, return the apex of the cone (the origin)
+
         // Case 1: Check if v is inside the cone
-        if normals
-            .iter()
-            .all(|n| v.dot(n.adjust_precision()) >= -DOT_EPSILON)
-        {
+        if CHECK_V && dots.iter().all(|&dot| dot >= -DOT_EPSILON) {
             return v;
         }
 
@@ -787,20 +871,22 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         };
 
         // Case 2a: Face projections (single-plane active set)
-        for n in normals {
+        for (n, &n_dot_v) in normals
+            .iter()
+            .zip(dots.iter())
+            .filter(|&(_, &dot)| dot < -DOT_EPSILON)
+        {
             let n = n.adjust_precision();
-            let v_dot_n = v.dot(n);
-            if v_dot_n < 0.0 {
-                // Project v onto the plane defined by n:
-                // projection = v - (v·n) n
-                let projection = v - v_dot_n * n;
 
-                // Check if better than previous best and valid
-                let distance_sq = v.distance_squared(projection);
-                if distance_sq < best_distance_sq && is_valid(projection) {
-                    best_distance_sq = distance_sq;
-                    best_projection = projection;
-                }
+            // Project v onto the plane defined by n:
+            // projection = v - (v · n) n
+            let projection = v - n_dot_v * n;
+
+            // Check if better than previous best and valid
+            let distance_sq = v.distance_squared(projection);
+            if distance_sq < best_distance_sq && is_valid(projection) {
+                best_distance_sq = distance_sq;
+                best_projection = projection;
             }
         }
 
@@ -826,7 +912,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                     }
 
                     // Project v onto the line spanned by e:
-                    // projection = ((v·e) / |e|²) e
+                    // projection = ((v · e) / |e|²) e
                     let projection = e * (v.dot(e) / e_length_sq);
 
                     // Check if better than previous best and valid
@@ -847,9 +933,6 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         }
     }
 }
-
-/// Needed to not accidentally explode when `n.dot(dir)` happens to be very close to zero.
-const DOT_EPSILON: Scalar = 0.005;
 
 /// Data related to a hit during a [`MoveAndSlide::move_and_slide`].
 #[derive(Debug, PartialEq)]
@@ -988,6 +1071,16 @@ pub struct MoveAndSlideConfig {
     /// A good use-case for this is adding the ground plane when a character controller is standing or walking on the ground.
     pub planes: Vec<Dir>,
 
+    /// The dot product threshold to consider two planes as similar when pruning nearly parallel planes.
+    /// The comparison used is `n1.dot(n2) >= plane_similarity_dot_threshold`.
+    ///
+    /// This is used to reduce the number of planes considered during move-and-slide,
+    /// which can help performance for dense geomtry. However, setting this value too high
+    /// can lead to unwanted behavior, as it may discard important planes.
+    ///
+    /// The default value of [`COS_5_DEGREES`] (≈0.996) corresponds to a 5 degree angle between the planes.
+    pub plane_similarity_dot_threshold: Scalar,
+
     /// The maximum number of planes to solve while performing move-and-slide. If the collided planes exceed this number, the move is aborted and the velocity is set to zero.
     /// Realistically, this will probably never be reached, unless you have very exotic geometry and very high velocity.
     pub max_planes: usize,
@@ -1079,6 +1172,7 @@ impl Default for MoveAndSlideConfig {
             penetration_rejection_threshold: default_depen_cfg.penetration_rejection_threshold,
             skin_width: default_depen_cfg.skin_width,
             planes: Vec::new(),
+            plane_similarity_dot_threshold: COS_5_DEGREES,
             max_planes: 20,
         }
     }
