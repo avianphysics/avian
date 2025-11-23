@@ -177,7 +177,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         //    - If we hit something, move up to the hit point
         //    - Collect contact planes
         //    - Depenetrate based on intersections
-        //    - Project velocity to be parallel to all contact planes
+        //    - Project velocity to slide along contact planes
         let mut position = shape_position;
         let mut time_left = {
             #[cfg(feature = "f32")]
@@ -212,7 +212,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         // 2. If we hit something, move up to the hit point
         // 3. Collect contact planes
         // 4. Depenetrate based on intersections
-        // 5. Project velocity to be parallel to all contact planes
+        // 5. Project velocity to slide along contact planes
         // 6. Repeat until we run out of iterations or time
         'outer: for _ in 0..config.move_and_slide_iterations {
             let sweep = time_left * velocity;
@@ -263,9 +263,6 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             // Store penetrating contacts for depenetration.
             let mut intersections = Vec::new();
 
-            // Track if we have at least one contact that blocks movement.
-            let mut has_blocking_contact = false;
-
             // Collect contact planes.
             self.intersections(
                 shape,
@@ -277,12 +274,6 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 filter,
                 |contact_point, mut normal| {
                     let n_dot_v = normal.dot(velocity);
-
-                    // Check if this is a blocking contact.
-                    let is_blocking = n_dot_v < -DOT_EPSILON;
-                    if is_blocking {
-                        has_blocking_contact = true;
-                    }
 
                     // Check if this plane is nearly parallel to an existing one.
                     // This can help prune redundant planes for velocity clipping.
@@ -333,10 +324,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             let depenetration_offset = self.depenetrate(&config.into(), &intersections);
             position += depenetration_offset;
 
-            // Project velocity to be parallel to all contact planes.
-            if has_blocking_contact {
-                velocity = Self::project_velocity_with_dots::<false>(velocity, &planes, &dots);
-            }
+            // Project velocity to slide along contact planes.
+            velocity = Self::project_velocity_with_dots(velocity, &planes, &dots);
         }
 
         MoveAndSlideOutput {
@@ -801,45 +790,23 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             return v;
         }
 
-        // Track if v is already inside all halfspaces.
-        let mut all_inside = true;
-
         // Precompute dot products for all normals.
-        let mut dots = Vec::with_capacity(normals.len());
-        for n in normals {
-            let dot = v.dot(n.adjust_precision());
-            dots.push(dot);
+        let dots = normals
+            .iter()
+            .map(|n| v.dot(n.adjust_precision()))
+            .collect::<Vec<_>>();
 
-            if dot < -DOT_EPSILON {
-                all_inside = false;
-            }
-        }
-
-        if all_inside {
-            // Case 1: v is already inside the cone
-            v
-        } else {
-            // Case 2: v is outside the cone
-            Self::project_velocity_with_dots::<false>(v, normals, &dots)
-        }
+        Self::project_velocity_with_dots(v, normals, &dots)
     }
 
     /// Projects input velocity `v` onto the planes defined by the given `normals`
     /// and their precomputed dot products with `v`. This ensures that `velocity`
     /// does not point into any of the planes, but along them.
     ///
-    /// If `CHECK_V` is `true`, the function first checks if `v` already satisfies all plane constraints,
-    /// and returns it unchanged if so. If it is known to be blocked by at least one plane,
-    /// passing `false` for `CHECK_V` can save some computation.
-    ///
     /// This is an optimized variant of [`Self::project_velocity`] for use cases where
     /// the dot products are already available.
     #[must_use]
-    pub fn project_velocity_with_dots<const CHECK_V: bool>(
-        v: Vector,
-        normals: &[Dir],
-        dots: &[Scalar],
-    ) -> Vector {
+    pub fn project_velocity_with_dots(v: Vector, normals: &[Dir], dots: &[Scalar]) -> Vector {
         if normals.is_empty() {
             return v;
         }
@@ -855,7 +822,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         // 3. If no valid projection is found, return the apex of the cone (the origin)
 
         // Case 1: Check if v is inside the cone
-        if CHECK_V && dots.iter().all(|&dot| dot >= -DOT_EPSILON) {
+        if dots.iter().all(|&dot| dot >= -DOT_EPSILON) {
             return v;
         }
 
