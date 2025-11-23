@@ -287,6 +287,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         }
 
         // Final depenetration pass
+        // TODO: We could get the intersections from the last iteration and avoid re-querying them here.
         let depenetration_offset =
             self.depenetrate_all(shape, position, shape_rotation, &config.into(), filter);
         position += depenetration_offset;
@@ -553,6 +554,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         config: &DepenetrationConfig,
         filter: &SpatialQueryFilter,
     ) -> Vector {
+        if config.depenetration_iterations == 0 {
+            // Depenetration disabled
+            return Vector::ZERO;
+        }
+
         let mut intersections = Vec::new();
         self.intersections(
             shape,
@@ -939,7 +945,6 @@ impl MoveHitData {
 #[reflect(Debug, PartialEq)]
 pub struct MoveAndSlideConfig {
     /// How many iterations to use when moving the character. A single iteration consists of
-    /// - Performing depenetration
     /// - Moving the character as far as possible in the desired velocity
     /// - Modifying the velocity to slide along any colliding planes
     pub move_and_slide_iterations: usize,
@@ -948,7 +953,7 @@ pub struct MoveAndSlideConfig {
     /// Depenetration is an iterative process that solves penetrations for all planes bit-by-bit,
     /// until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`] or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`].
     ///
-    /// This is implicitly scaled by the [`PhysicsLengthUnit`].
+    /// To disable depenetration, set this to `0`.
     pub depenetration_iterations: usize,
 
     /// The target error to achieve when performing depenetration.
@@ -963,6 +968,8 @@ pub struct MoveAndSlideConfig {
     /// This is used to reject invalid contacts that have an excessively high penetration depth,
     /// which can lead to clipping through geometry. This may be removed in the future once the
     /// collision errors in the underlying collision detection system are fixed.
+    ///
+    /// This is implicitly scaled by the [`PhysicsLengthUnit`].
     pub penetration_rejection_threshold: Scalar,
 
     /// A minimal distance to always keep between the collider and any other colliders.
