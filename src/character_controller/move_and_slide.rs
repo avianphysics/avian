@@ -1056,7 +1056,7 @@ impl Default for DepenetrationConfig {
             depenetration_iterations: 16,
             max_depenetration_error: 0.0001,
             penetration_rejection_threshold: 0.5,
-            skin_width: 0.002,
+            skin_width: 0.01,
         }
     }
 }
