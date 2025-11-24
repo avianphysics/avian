@@ -64,7 +64,7 @@ pub struct MoveAndSlide<'w, 's> {
             &'static Rotation,
             Option<&'static CollisionLayers>,
         ),
-        Without<Sensor>,
+        (With<ColliderOf>, Without<Sensor>),
     >,
     /// A units-per-meter scaling factor that adjusts some thresholds and tolerances
     /// to the scale of the world for better behavior.
