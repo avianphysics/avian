@@ -16,7 +16,7 @@ pub const COS_5_DEGREES: Scalar = 0.99619469809;
 /// A [`SystemParam`] for the *move and slide* algorithm, also known as *collide and slide* or *step slide*.
 ///
 /// Move and slide is the core movement and collision algorithm used by most kinematic character controllers.
-/// It attempts to move a shape along a desired velocity vector, while sliding along any colliders it hits on the way.
+/// It attempts to move a shape along a desired velocity vector, sliding along any colliders that are hit on the way.
 ///
 /// # Algorithm
 ///
@@ -27,9 +27,10 @@ pub const COS_5_DEGREES: Scalar = 0.99619469809;
 /// 3. If a collision is detected:
 ///    - Move up to the point of collision.
 ///    - Project the remaining velocity onto the contact surfaces to obtain a new sliding velocity.
-/// 4. Repeat with the new sliding velocity.
+/// 4. Repeat with the new sliding velocity until movement is complete.
 ///
-/// The algorithm also includes depenetration passes before and after movement to ensure the shape is not intersecting any colliders.
+/// The algorithm also includes depenetration passes before and after movement to improve stability
+/// and ensure that the shape does not intersect any colliders.
 ///
 /// # Configuration
 ///
@@ -72,7 +73,7 @@ pub struct MoveAndSlide<'w, 's> {
 }
 
 impl<'w, 's> MoveAndSlide<'w, 's> {
-    /// Moves a shape along a given velocity vector while sliding along any colliders it hits on the way.
+    /// Moves a shape along a given velocity vector, sliding along any colliders that are hit on the way.
     ///
     /// See [`MoveAndSlide`] for an overview of the algorithm.
     ///
