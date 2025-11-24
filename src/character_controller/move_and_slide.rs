@@ -64,6 +64,7 @@ pub struct MoveAndSlide<'w, 's> {
             &'static Rotation,
             Option<&'static CollisionLayers>,
         ),
+        Without<Sensor>,
     >,
     /// A units-per-meter scaling factor that adjusts some thresholds and tolerances
     /// to the scale of the world for better behavior.
@@ -443,7 +444,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ) -> Option<MoveHitData> {
         let (direction, distance) = Dir::new_and_length(movement.f32()).unwrap_or((Dir::X, 0.0));
         let distance = distance.adjust_precision();
-        let shape_hit = self.query_pipeline.cast_shape(
+        let shape_hit = self.query_pipeline.cast_shape_predicate(
             shape,
             shape_position,
             shape_rotation,
@@ -453,6 +454,9 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 ..ShapeCastConfig::from_max_distance(distance)
             },
             filter,
+            // Make sure we don't hit sensors.
+            // TODO: Replace this when spatial queries support excluding sensors directly.
+            &|entity| self.colliders.contains(entity),
         )?;
         let safe_distance = if distance == 0.0 {
             0.0
