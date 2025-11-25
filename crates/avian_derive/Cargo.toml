@@ -1,11 +1,11 @@
 [package]
 name = "avian_derive"
 version = "0.2.2"
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 authors = ["Joona Aalto <jondolf.dev@gmail.com>"]
 description = "Provides derive implementations for Avian Physics"
-repository = "https://github.com/Jondolf/avian"
+repository = "https://github.com/avianphysics/avian"
 readme = "README.md"
 
 [lib]

@@ -110,8 +110,11 @@ pub fn contact(
 
 // TODO: Add a persistent version of this that tries to reuse previous contact manifolds
 // by exploiting spatial and temporal coherence. This is supported by Parry's contact_manifolds,
-// but requires using Parry's ContactManifold type.
+// but requires using Parry's `ContactManifold` type.
 /// Computes all [`ContactManifold`]s between two [`Collider`]s.
+///
+/// The contact points are expressed in world space, relative to the origin
+/// of the first and second shape respectively.
 ///
 /// Returns an empty vector if the colliders are separated by a distance greater than `prediction_distance`
 /// or if the given shapes are invalid.
@@ -184,36 +187,42 @@ pub fn contact_manifolds(
     manifolds.clear();
 
     // Fall back to support map contacts for unsupported (custom) shapes.
-    if result.is_err() {
-        if let (Some(shape1), Some(shape2)) = (
+    if result.is_err()
+        && let (Some(shape1), Some(shape2)) = (
             collider1.shape_scaled().as_support_map(),
             collider2.shape_scaled().as_support_map(),
-        ) {
-            if let Some(contact) = parry::query::contact::contact_support_map_support_map(
-                &isometry12,
-                shape1,
-                shape2,
-                prediction_distance,
-            ) {
-                let normal = rotation1 * Vector::from(contact.normal1);
+        )
+        && let Some(contact) = parry::query::contact::contact_support_map_support_map(
+            &isometry12,
+            shape1,
+            shape2,
+            prediction_distance,
+        )
+    {
+        let normal = rotation1 * Vector::from(contact.normal1);
 
-                // Make sure the normal is valid
-                if !normal.is_normalized() {
-                    return;
-                }
-
-                let points = [ContactPoint::new(
-                    contact.point1.into(),
-                    contact.point2.into(),
-                    -contact.dist,
-                )];
-
-                manifolds.push(ContactManifold::new(points, normal, 0));
-            }
+        // Make sure the normal is valid
+        if !normal.is_normalized() {
+            return;
         }
-    }
 
-    let mut manifold_index = 0;
+        let local_point1: Vector = contact.point1.into();
+
+        // The contact point is the midpoint of the two points in world space.
+        // The anchors are relative to the positions of the colliders.
+        let point1 = rotation1 * local_point1;
+        let anchor1 = point1 + normal * contact.dist * 0.5;
+        let anchor2 = anchor1 + (position1.0 - position2.0);
+        let world_point = position1.0 + anchor1;
+        let points = [ContactPoint::new(
+            anchor1,
+            anchor2,
+            world_point,
+            -contact.dist,
+        )];
+
+        manifolds.push(ContactManifold::new(points, normal));
+    }
 
     manifolds.extend(new_manifolds.iter().filter_map(|manifold| {
         // Skip empty manifolds.
@@ -222,7 +231,6 @@ pub fn contact_manifolds(
         }
 
         let subpos1 = manifold.subshape_pos1.unwrap_or_default();
-        let subpos2 = manifold.subshape_pos2.unwrap_or_default();
         let local_normal: Vector = subpos1
             .rotation
             .transform_vector(&manifold.local_n1)
@@ -236,17 +244,17 @@ pub fn contact_manifolds(
         }
 
         let points = manifold.contacts().iter().map(|contact| {
-            ContactPoint::new(
-                subpos1.transform_point(&contact.local_p1).into(),
-                subpos2.transform_point(&contact.local_p2).into(),
-                -contact.dist,
-            )
-            .with_feature_ids(contact.fid1.into(), contact.fid2.into())
+            // The contact point is the midpoint of the two points in world space.
+            // The anchors are relative to the positions of the colliders.
+            let point1 = rotation1 * Vector::from(subpos1.transform_point(&contact.local_p1));
+            let anchor1 = point1 + normal * contact.dist * 0.5;
+            let anchor2 = anchor1 + (position1.0 - position2.0);
+            let world_point = position1.0 + anchor1;
+            ContactPoint::new(anchor1, anchor2, world_point, -contact.dist)
+                .with_feature_ids(contact.fid1.into(), contact.fid2.into())
         });
 
-        let manifold = ContactManifold::new(points, normal, manifold_index);
-
-        manifold_index += 1;
+        let manifold = ContactManifold::new(points, normal);
 
         Some(manifold)
     }));

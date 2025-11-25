@@ -1,5 +1,5 @@
 use avian2d::{math::Scalar, prelude::*};
-use bevy::{prelude::*, render::camera::ScalingMode};
+use bevy::{camera::ScalingMode, prelude::*};
 use examples_common_2d::ExampleCommonPlugin;
 
 fn main() {

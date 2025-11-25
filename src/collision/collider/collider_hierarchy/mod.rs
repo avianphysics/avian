@@ -8,7 +8,7 @@ pub use plugin::ColliderHierarchyPlugin;
 use crate::prelude::*;
 use bevy::{
     ecs::{
-        component::HookContext,
+        lifecycle::HookContext,
         relationship::{Relationship, RelationshipHookMode, RelationshipSourceCollection},
         system::SystemParam,
         world::DeferredWorld,
@@ -87,7 +87,26 @@ impl Relationship for ColliderOf {
             ..
         }: HookContext,
     ) {
-        // This is largely the same as the default implementation,
+        let collider_ref = world.entity(entity);
+
+        let &ColliderOf { body } = collider_ref.get::<ColliderOf>().unwrap();
+
+        // Get the global transform of the collider and its rigid body.
+        let Some(collider_global_transform) = collider_ref.get::<GlobalTransform>() else {
+            return;
+        };
+        let Some(body_global_transform) = world.get::<GlobalTransform>(body) else {
+            return;
+        };
+
+        // Get the collider's transform relative to the rigid body.
+        let collider_transform = collider_global_transform.reparented_to(body_global_transform);
+
+        // Update the collider transform.
+        *world.get_mut::<ColliderTransform>(entity).unwrap() =
+            ColliderTransform::from(collider_transform);
+
+        // The rest is largely the same as the default implementation,
         // but allows relationships to point to their own entity.
 
         match relationship_hook_mode {
@@ -120,7 +139,9 @@ impl Relationship for ColliderOf {
         } else {
             warn!(
                 "{}Tried to attach collider on entity {collider} to rigid body on entity {body}, but the rigid body does not exist.",
-                caller.map(|location| format!("{location}: ")).unwrap_or_default(),
+                caller
+                    .map(|location| format!("{location}: "))
+                    .unwrap_or_default(),
             );
         }
     }
@@ -146,32 +167,36 @@ impl Relationship for ColliderOf {
             }
         }
         let body = world.entity(entity).get::<Self>().unwrap().get();
-        if let Ok(mut body_mut) = world.get_entity_mut(body) {
-            if let Some(mut relationship_target) = body_mut.get_mut::<Self::RelationshipTarget>() {
-                RelationshipSourceCollection::remove(
-                    relationship_target.collection_mut_risky(),
-                    entity,
+        if let Ok(mut body_mut) = world.get_entity_mut(body)
+            && let Some(mut relationship_target) = body_mut.get_mut::<Self::RelationshipTarget>()
+        {
+            RelationshipSourceCollection::remove(
+                relationship_target.collection_mut_risky(),
+                entity,
+            );
+            if relationship_target.is_empty()
+                && let Ok(mut entity) = world.commands().get_entity(body)
+            {
+                // this "remove" operation must check emptiness because in the event that an identical
+                // relationship is inserted on top, this despawn would result in the removal of that identical
+                // relationship ... not what we want!
+                entity.queue_handled(
+                    |mut entity: EntityWorldMut| {
+                        if entity
+                            .get::<Self::RelationshipTarget>()
+                            .is_some_and(RelationshipTarget::is_empty)
+                        {
+                            entity.remove::<Self::RelationshipTarget>();
+                        }
+                    },
+                    |_, _| {},
                 );
-                if relationship_target.len() == 0 {
-                    if let Ok(mut entity) = world.commands().get_entity(body) {
-                        // this "remove" operation must check emptiness because in the event that an identical
-                        // relationship is inserted on top, this despawn would result in the removal of that identical
-                        // relationship ... not what we want!
-                        entity.queue_handled(
-                            |mut entity: EntityWorldMut| {
-                                if entity
-                                    .get::<Self::RelationshipTarget>()
-                                    .is_some_and(RelationshipTarget::is_empty)
-                                {
-                                    entity.remove::<Self::RelationshipTarget>();
-                                }
-                            },
-                            |_, _| {},
-                        );
-                    }
-                }
             }
         }
+    }
+
+    fn set_risky(&mut self, entity: Entity) {
+        self.body = entity;
     }
 }
 
@@ -190,6 +215,25 @@ impl Relationship for ColliderOf {
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, Component, Default, PartialEq)]
 pub struct RigidBodyColliders(Vec<Entity>);
+
+impl<'a> IntoIterator for &'a RigidBodyColliders {
+    type Item = <Self::IntoIter as Iterator>::Item;
+
+    type IntoIter = core::iter::Copied<core::slice::Iter<'a, Entity>>;
+
+    #[inline(always)]
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
+impl core::ops::Deref for RigidBodyColliders {
+    type Target = [Entity];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 #[derive(SystemParam)]
 pub struct RigidBodyHelper<'w, 's> {

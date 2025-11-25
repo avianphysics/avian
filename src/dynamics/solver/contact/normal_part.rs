@@ -1,5 +1,7 @@
 use crate::{dynamics::solver::softness_parameters::SoftnessCoefficients, prelude::*};
 use bevy::reflect::Reflect;
+#[cfg(feature = "serialize")]
+use bevy::reflect::{ReflectDeserialize, ReflectSerialize};
 
 pub type NormalImpulse = Scalar;
 
@@ -8,9 +10,20 @@ pub type NormalImpulse = Scalar;
 /// The normal part of a [`ContactConstraintPoint`](super::ContactConstraintPoint).
 /// Aims to resolve overlap.
 #[derive(Clone, Debug, PartialEq, Reflect)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(Debug, PartialEq)]
 pub struct ContactNormalPart {
     /// The magnitude of the contact impulse along the contact normal.
     pub impulse: NormalImpulse,
+
+    /// The total normal impulse applied across substeps and restitution.
+    /// The unit is typically N⋅s or kg⋅m/s.
+    ///
+    /// This is used by the solver to identify speculative contacts that did not generate
+    /// an impulse, but is also useful for users to determine how "strong" the contact is.
+    /// This is stored for contact manifolds as [`ContactPoint::normal_impulse`].
+    pub total_impulse: Scalar,
 
     /// The inertial properties of the bodies projected onto the contact normal,
     /// or in other words, the mass "seen" by the constraint along the normal.
@@ -24,19 +37,17 @@ impl ContactNormalPart {
     /// Generates a new [`ContactNormalPart`].
     #[allow(clippy::too_many_arguments)]
     pub fn generate(
-        inv_mass_sum: Scalar,
-        angular_inertia1: impl Into<ComputedAngularInertia>,
-        angular_inertia2: impl Into<ComputedAngularInertia>,
+        effective_inverse_mass_sum: Vector,
+        inverse_angular_inertia1: &SymmetricTensor,
+        inverse_angular_inertia2: &SymmetricTensor,
         r1: Vector,
         r2: Vector,
         normal: Vector,
         warm_start_impulse: Option<NormalImpulse>,
         softness: SoftnessCoefficients,
     ) -> Self {
-        let angular_inertia1: ComputedAngularInertia = angular_inertia1.into();
-        let angular_inertia2: ComputedAngularInertia = angular_inertia2.into();
-        let i1 = angular_inertia1.inverse();
-        let i2 = angular_inertia2.inverse();
+        let i1 = inverse_angular_inertia1;
+        let i2 = inverse_angular_inertia2;
 
         // Derivation for the projected normal mass. This is for 3D, but the 2D version is basically equivalent.
         //
@@ -86,13 +97,15 @@ impl ContactNormalPart {
         let r1_cross_n = cross(r1, normal);
         let r2_cross_n = cross(r2, normal);
 
+        let k_linear = normal.dot(effective_inverse_mass_sum * normal);
         #[cfg(feature = "2d")]
-        let k = inv_mass_sum + i1 * r1_cross_n * r1_cross_n + i2 * r2_cross_n * r2_cross_n;
+        let k = k_linear + i1 * r1_cross_n * r1_cross_n + i2 * r2_cross_n * r2_cross_n;
         #[cfg(feature = "3d")]
-        let k = inv_mass_sum + r1_cross_n.dot(i1 * r1_cross_n) + r2_cross_n.dot(i2 * r2_cross_n);
+        let k = k_linear + r1_cross_n.dot(i1 * r1_cross_n) + r2_cross_n.dot(i2 * r2_cross_n);
 
         Self {
             impulse: warm_start_impulse.unwrap_or_default(),
+            total_impulse: 0.0,
             effective_mass: k.recip_or_zero(),
             softness,
         }
@@ -146,6 +159,7 @@ impl ContactNormalPart {
         let new_impulse = (self.impulse + impulse).max(0.0);
         impulse = new_impulse - self.impulse;
         self.impulse = new_impulse;
+        self.total_impulse += new_impulse;
 
         // Return the clamped incremental normal impulse.
         impulse

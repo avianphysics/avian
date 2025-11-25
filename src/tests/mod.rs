@@ -22,10 +22,11 @@ fn create_app() -> App {
         TransformPlugin,
         PhysicsPlugins::default(),
         bevy::asset::AssetPlugin::default(),
+        #[cfg(all(feature = "collider-from-mesh", feature = "default-collider"))]
+        bevy::mesh::MeshPlugin,
         #[cfg(feature = "bevy_scene")]
         bevy::scene::ScenePlugin,
     ))
-    .init_resource::<Assets<Mesh>>()
     .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f32(
         1.0 / 60.0,
     )));
@@ -142,7 +143,7 @@ fn body_with_velocity_moves() {
 }
 
 #[derive(Component, Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord)]
-#[cfg(feature = "3d")]
+#[cfg(all(feature = "3d", feature = "default-collider"))]
 struct Id(usize);
 
 #[cfg(all(feature = "3d", feature = "default-collider"))]
@@ -195,8 +196,9 @@ fn no_ambiguity_errors() {
             bevy::asset::AssetPlugin::default(),
             #[cfg(feature = "bevy_scene")]
             bevy::scene::ScenePlugin,
+            #[cfg(all(feature = "collider-from-mesh", feature = "default-collider"))]
+            bevy::mesh::MeshPlugin,
         ))
-        .init_resource::<Assets<Mesh>>()
         .edit_schedule(DeterministicSchedule, |s| {
             s.set_build_settings(ScheduleBuildSettings {
                 ambiguity_detection: LogLevel::Error,

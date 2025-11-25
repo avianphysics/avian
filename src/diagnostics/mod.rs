@@ -64,22 +64,29 @@
 //! [`SpatialQueryDiagnostics`]: crate::spatial_query::SpatialQueryDiagnostics
 //! [`PhysicsPickingDiagnostics`]: crate::picking::PhysicsPickingDiagnostics
 
+#[cfg(feature = "bevy_diagnostic")]
 mod entity_counters;
 mod path_macro;
+#[cfg(feature = "bevy_diagnostic")]
 mod total;
 
 #[cfg(feature = "diagnostic_ui")]
 pub mod ui;
-pub use entity_counters::PhysicsEntityDiagnostics;
+#[cfg(feature = "bevy_diagnostic")]
+pub use entity_counters::{PhysicsEntityDiagnostics, PhysicsEntityDiagnosticsPlugin};
 pub(crate) use path_macro::impl_diagnostic_paths;
 #[cfg(feature = "bevy_diagnostic")]
 pub use total::{PhysicsTotalDiagnostics, PhysicsTotalDiagnosticsPlugin};
 
-use crate::{schedule::PhysicsSchedule, PhysicsStepSet};
+use crate::{PhysicsStepSystems, schedule::PhysicsSchedule};
 use bevy::{
-    app::{App, Plugin},
-    diagnostic::{Diagnostic, DiagnosticPath, Diagnostics, RegisterDiagnostic},
-    prelude::{IntoScheduleConfigs, Res, ResMut, Resource, SystemSet},
+    diagnostic::DiagnosticPath,
+    prelude::{App, IntoScheduleConfigs, ResMut, Resource, SystemSet},
+};
+#[cfg(feature = "bevy_diagnostic")]
+use bevy::{
+    diagnostic::{Diagnostic, Diagnostics, RegisterDiagnostic},
+    prelude::{Plugin, Res},
 };
 use core::time::Duration;
 
@@ -103,8 +110,8 @@ impl Plugin for PhysicsDiagnosticsPlugin {
         app.configure_sets(
             PhysicsSchedule,
             (
-                PhysicsDiagnosticsSystems::Reset.before(PhysicsStepSet::First),
-                PhysicsDiagnosticsSystems::WriteDiagnostics.after(PhysicsStepSet::Last),
+                PhysicsDiagnosticsSystems::Reset.before(PhysicsStepSystems::First),
+                PhysicsDiagnosticsSystems::WriteDiagnostics.after(PhysicsStepSystems::Last),
             ),
         );
     }
@@ -171,7 +178,7 @@ impl AppDiagnosticsExt for App {
         // Make sure the system set exists, even if `PhysicsDiagnosticsPlugin` is not added.
         self.configure_sets(
             PhysicsSchedule,
-            PhysicsDiagnosticsSystems::Reset.before(PhysicsStepSet::First),
+            PhysicsDiagnosticsSystems::Reset.before(PhysicsStepSystems::First),
         );
 
         // Add a system to reset the resource, even if `PhysicsDiagnosticsPlugin` is not added.

@@ -5,7 +5,7 @@ use bevy::{
 };
 use core::time::Duration;
 
-use crate::diagnostics::{impl_diagnostic_paths, PhysicsDiagnostics};
+use crate::diagnostics::{PhysicsDiagnostics, impl_diagnostic_paths};
 
 /// Diagnostics for collision detection.
 #[derive(Resource, Debug, Default, Reflect)]

@@ -2,12 +2,14 @@
 
 use crate::prelude::*;
 use bevy::{
-    ecs::{component::HookContext, world::DeferredWorld},
+    ecs::{lifecycle::HookContext, world::DeferredWorld},
     prelude::*,
 };
 #[cfg(feature = "3d")]
 use bevy_heavy::AngularInertiaTensor;
 use derive_more::From;
+#[cfg(feature = "3d")]
+use glam_matrix_extras::{MatConversionError, SymmetricMat3};
 
 mod collider;
 pub use collider::*;
@@ -662,6 +664,50 @@ impl AngularInertia {
         }
     }
 
+    /// Creates a new [`AngularInertiaTensor`] from the given angular inertia [tensor]
+    /// represented as a [`SymmetricMat3`].
+    ///
+    /// The tensor should be [positive-semidefinite], but this is *not* checked.
+    ///
+    /// [tensor]: https://en.wikipedia.org/wiki/Moment_of_inertia#Inertia_tensor
+    /// [positive-semidefinite]: https://en.wikipedia.org/wiki/Definite_matrix
+    #[inline]
+    #[must_use]
+    #[doc(alias = "from_tensor")]
+    pub fn from_symmetric_mat3(mat: SymmetricMat3) -> Self {
+        Self::from_tensor(AngularInertiaTensor::from_symmetric_mat3(mat))
+    }
+
+    /// Tries to create a new [`AngularInertiaTensor`] from the given angular inertia [tensor]
+    /// represented as a [`Mat3`].
+    ///
+    /// The tensor should be [positive-semidefinite], but this is *not* checked.
+    ///
+    /// [tensor]: https://en.wikipedia.org/wiki/Moment_of_inertia#Inertia_tensor
+    /// [positive-semidefinite]: https://en.wikipedia.org/wiki/Definite_matrix
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`MatConversionError`] if the given matrix is not symmetric.
+    #[inline]
+    pub fn try_from_mat3(mat: Mat3) -> Result<Self, MatConversionError> {
+        SymmetricMat3::try_from_mat3(mat).map(Self::from_tensor)
+    }
+
+    /// Creates a new [`AngularInertiaTensor`] from the given angular inertia [tensor]
+    /// represented as a [`Mat3`].
+    ///
+    /// Only the lower left triangle of the matrix is used. No check is performed to ensure
+    /// that the given matrix is truly symmetric or [positive-semidefinite].
+    ///
+    /// [tensor]: https://en.wikipedia.org/wiki/Moment_of_inertia#Inertia_tensor
+    /// [positive-semidefinite]: https://en.wikipedia.org/wiki/Definite_matrix
+    #[inline]
+    #[must_use]
+    pub fn from_mat3_unchecked(mat: Mat3) -> Self {
+        Self::from_tensor(SymmetricMat3::from_mat3_unchecked(mat))
+    }
+
     /// Computes the [`AngularInertia`] of the given shape using the given mass.
     ///
     /// ```
@@ -702,8 +748,17 @@ impl AngularInertia {
 }
 
 #[cfg(feature = "3d")]
-impl From<Mat3> for AngularInertia {
-    fn from(tensor: Mat3) -> Self {
+impl TryFrom<Mat3> for AngularInertia {
+    type Error = MatConversionError;
+
+    fn try_from(mat: Mat3) -> Result<Self, Self::Error> {
+        Self::try_from_mat3(mat)
+    }
+}
+
+#[cfg(feature = "3d")]
+impl From<SymmetricMat3> for AngularInertia {
+    fn from(tensor: SymmetricMat3) -> Self {
         Self::from_tensor(tensor)
     }
 }

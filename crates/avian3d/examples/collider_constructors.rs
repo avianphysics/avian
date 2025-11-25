@@ -41,8 +41,9 @@ fn setup(
         // but is more performant for collision detection.
         ColliderConstructorHierarchy::new(ColliderConstructor::ConvexDecompositionFromMesh)
             // Make the arms heavier to make it easier to stand upright
-            .with_density_for_name("armL_mesh", 3.0)
-            .with_density_for_name("armR_mesh", 3.0),
+            // Note: Bevy uses the format `MeshName.MaterialName` for the `Name` of glTF mesh primitives.
+            .with_density_for_name("armL_mesh.ferris_material", 3.0)
+            .with_density_for_name("armR_mesh.ferris_material", 3.0),
         RigidBody::Dynamic,
     ));
 

@@ -2,13 +2,13 @@
 
 pub mod forces;
 pub mod mass_properties;
+pub mod sleeping;
 
 // Components
 mod locked_axes;
 mod physics_material;
 mod world_query;
 
-pub use forces::{ExternalAngularImpulse, ExternalForce, ExternalImpulse, ExternalTorque};
 pub use locked_axes::LockedAxes;
 pub use physics_material::{
     CoefficientCombine, DefaultFriction, DefaultRestitution, Friction, Restitution,
@@ -17,10 +17,15 @@ pub use world_query::*;
 
 #[cfg(feature = "2d")]
 pub(crate) use forces::FloatZero;
-pub(crate) use forces::Torque;
 
-use crate::prelude::*;
-use bevy::prelude::*;
+use crate::{
+    physics_transform::init_physics_transform,
+    prelude::{forces::AccumulatedLocalAcceleration, *},
+};
+use bevy::{
+    ecs::{lifecycle::HookContext, world::DeferredWorld},
+    prelude::*,
+};
 use derive_more::From;
 
 /// A non-deformable body used for the simulation of most physics objects.
@@ -109,16 +114,13 @@ use derive_more::From;
 /// # fn main() {}
 /// ```
 ///
-/// For applying forces and impulses to dynamic bodies, see the [`ExternalForce`], [`ExternalTorque`],
-/// [`ExternalImpulse`] and [`ExternalAngularImpulse`] components.
+/// For applying forces, impulses, and acceleration to dynamic bodies, see the [`forces`] module.
 ///
 /// Avian does not have a built-in character controller, so if you need one,
 /// you will need to implement it yourself or use a third party option.
-/// You can take a look at the [`basic_dynamic_character`] and [`basic_kinematic_character`]
-/// examples for a simple implementation.
+/// You can take a look at the [3D Examples] for implementations of basic kinematic and dynamic character controllers.
 ///
-/// [`basic_dynamic_character`]: https://github.com/Jondolf/avian/blob/42fb8b21c756a7f4dd91071597dc251245ddaa8f/crates/avian3d/examples/basic_dynamic_character.rs
-/// [`basic_kinematic_character`]: https://github.com/Jondolf/avian/blob/42fb8b21c756a7f4dd91071597dc251245ddaa8f/crates/avian3d/examples/basic_kinematic_character.rs
+/// [3D Examples]: https://github.com/avianphysics/avian/tree/081d2de15f526ada89bf642e3c3277c2c7784488/crates/avian3d/examples
 ///
 /// # Mass Properties
 ///
@@ -263,21 +265,22 @@ use derive_more::From;
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, Component, Default, PartialEq)]
 #[require(
+    // TODO: Only dynamic and kinematic bodies need velocity,
+    //       and only dynamic bodies need mass and angular inertia.
+    Position::PLACEHOLDER,
+    Rotation::PLACEHOLDER,
     LinearVelocity,
     AngularVelocity,
-    // TODO: Make these force components optional.
-    ExternalForce,
-    ExternalTorque,
-    ExternalImpulse,
-    ExternalAngularImpulse,
     ComputedMass,
     ComputedAngularInertia,
     ComputedCenterOfMass,
+    // Required for local forces and acceleration.
+    AccumulatedLocalAcceleration,
     // TODO: We can remove these pre-solve deltas once joints don't use XPBD.
     PreSolveDeltaPosition,
     PreSolveDeltaRotation,
 )]
-#[cfg_attr(feature = "3d", require(GlobalAngularInertia))]
+#[component(immutable, on_add = RigidBody::on_add)]
 pub enum RigidBody {
     /// Dynamic bodies are bodies that are affected by forces, velocity and collisions.
     #[default]
@@ -314,6 +317,11 @@ impl RigidBody {
     /// Checks if the rigid body is kinematic.
     pub fn is_kinematic(&self) -> bool {
         *self == Self::Kinematic
+    }
+
+    fn on_add(mut world: DeferredWorld, ctx: HookContext) {
+        // Initialize the global physics transform for the rigid body.
+        init_physics_transform(&mut world, &ctx);
     }
 }
 
@@ -371,39 +379,6 @@ pub(crate) type RigidBodyActiveFilter = (Without<RigidBodyDisabled>, Without<Sle
 #[reflect(Debug, Component, Default)]
 pub struct RigidBodyDisabled;
 
-/// Indicates that a [rigid body](RigidBody) is not simulated by the physics engine until woken up again.
-/// This is done to improve performance and to help prevent small jitter that is typically present in collisions.
-///
-/// Bodies are marked as sleeping when their linear and angular velocity is below the [`SleepingThreshold`] for a time
-/// indicated by [`DeactivationTime`]. A sleeping body is woken up when an active body interacts with it through
-/// collisions or other constraints, or when gravity changes, or when the body's
-/// position, rotation, velocity, or external forces are modified.
-///
-/// Sleeping can be disabled for specific entities with the [`SleepingDisabled`] component,
-/// or for all entities by setting the [`SleepingThreshold`] to a negative value.
-#[derive(Reflect, Clone, Copy, Component, Debug, Default)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
-#[reflect(Debug, Component, Default)]
-pub struct Sleeping;
-
-/// How long the velocity of the body has been below the [`SleepingThreshold`],
-/// i.e. how long the body has been able to sleep.
-///
-/// See [`Sleeping`] for further information.
-#[derive(Reflect, Clone, Copy, Component, Debug, Default, PartialEq, From)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
-#[reflect(Debug, Component, Default, PartialEq)]
-pub struct TimeSleeping(pub Scalar);
-
-/// Indicates that the body can not be deactivated by the physics engine. See [`Sleeping`] for information about sleeping.
-#[derive(Reflect, Clone, Copy, Component, Debug, Default, PartialEq, Eq, From)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
-#[reflect(Debug, Component, Default, PartialEq)]
-pub struct SleepingDisabled;
-
 /// The linear velocity of a [rigid body](RigidBody), typically in meters per second.
 ///
 /// # Example
@@ -428,7 +403,6 @@ pub struct SleepingDisabled;
 /// # Related Components
 ///
 /// - [`AngularVelocity`]: The angular velocity of a body.
-/// - [`ExternalForce`]: Applies a force to a dynamic body.
 /// - [`LinearDamping`]: Reduces the linear velocity of a body over time, similar to air resistance.
 /// - [`MaxLinearSpeed`]: Clamps the linear velocity of a body.
 #[derive(Reflect, Clone, Copy, Component, Debug, Default, Deref, DerefMut, PartialEq, From)]
@@ -526,7 +500,6 @@ impl Default for MaxAngularSpeed {
 /// # Related Components
 ///
 /// - [`LinearVelocity`]: The linear velocity of a body.
-/// - [`ExternalTorque`]: Applies a torque to a dynamic body.
 /// - [`AngularDamping`]: Reduces the angular velocity of a body over time, similar to air resistance.
 /// - [`MaxAngularSpeed`]: Clamps the angular velocity of a body.
 #[cfg(feature = "2d")]
@@ -560,7 +533,6 @@ pub struct AngularVelocity(pub Scalar);
 /// # Related Components
 ///
 /// - [`LinearVelocity`]: The linear velocity of a body.
-/// - [`ExternalTorque`]: Applies a torque to a dynamic body.
 /// - [`AngularDamping`]: Reduces the angular velocity of a body over time, similar to air resistance.
 /// - [`MaxAngularSpeed`]: Clamps the angular velocity of a body.
 #[cfg(feature = "3d")]

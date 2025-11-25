@@ -44,8 +44,8 @@ fn setup(mut commands: Commands) {
 
     commands.spawn(
         PrismaticJoint::new(anchor, object)
-            .with_local_anchor_1(Vector::X * 50.0)
-            .with_free_axis(Vector::X)
+            .with_local_anchor1(Vector::X * 50.0)
+            .with_slider_axis(Vector::X)
             .with_limits(25.0, 100.0),
     );
 }

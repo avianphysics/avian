@@ -1,13 +1,13 @@
 use crate::prelude::*;
 use bevy::{
     ecs::{
-        component::HookContext,
         entity::{EntityMapper, MapEntities},
+        lifecycle::HookContext,
         world::DeferredWorld,
     },
     prelude::*,
 };
-use parry::query::{details::TOICompositeShapeShapeBestFirstVisitor, ShapeCastOptions};
+use parry::{query::ShapeCastOptions, shape::CompositeShapeRef};
 
 /// A component used for [shapecasting](spatial_query#shapecasting).
 ///
@@ -340,14 +340,21 @@ impl ShapeCaster {
     ) {
         // TODO: This clone is here so that the excluded entities in the original `query_filter` aren't modified.
         //       We could remove this if shapecasting could compute multiple hits without just doing casts in a loop.
-        //       See https://github.com/Jondolf/avian/issues/403.
+        //       See https://github.com/avianphysics/avian/issues/403.
         let mut query_filter = self.query_filter.clone();
 
         if self.ignore_self {
             query_filter.excluded_entities.insert(caster_entity);
         }
 
-        hits.count = 0;
+        hits.clear();
+
+        let shape_cast_options = ShapeCastOptions {
+            max_time_of_impact: self.max_distance,
+            target_distance: self.target_distance,
+            stop_at_penetration: !self.ignore_origin_penetration,
+            compute_impact_geometry_on_penetration: self.compute_contact_on_penetration,
+        };
 
         let shape_rotation: Rotation;
         #[cfg(feature = "2d")]
@@ -362,42 +369,30 @@ impl ShapeCaster {
         let shape_isometry = make_isometry(self.global_origin(), shape_rotation);
         let shape_direction = self.global_direction().adjust_precision().into();
 
-        while hits.count < self.max_hits {
-            let pipeline_shape = query_pipeline.as_composite_shape(&query_filter);
-            let mut visitor = TOICompositeShapeShapeBestFirstVisitor::new(
-                &*query_pipeline.dispatcher,
-                &shape_isometry,
-                &shape_direction,
-                &pipeline_shape,
-                &**self.shape.shape_scaled(),
-                ShapeCastOptions {
-                    max_time_of_impact: self.max_distance,
-                    stop_at_penetration: !self.ignore_origin_penetration,
-                    ..default()
-                },
-            );
+        while hits.len() < self.max_hits as usize {
+            let composite = query_pipeline.as_composite_shape_internal(&query_filter);
+            let pipeline_shape = CompositeShapeRef(&composite);
 
-            if let Some(hit) =
-                query_pipeline
-                    .qbvh
-                    .traverse_best_first(&mut visitor)
-                    .map(|(_, (index, hit))| ShapeHitData {
-                        entity: query_pipeline.proxies[index as usize].entity,
-                        distance: hit.time_of_impact,
-                        point1: hit.witness1.into(),
-                        point2: hit.witness2.into(),
-                        normal1: hit.normal1.into(),
-                        normal2: hit.normal2.into(),
-                    })
-            {
-                if (hits.vector.len() as u32) < hits.count + 1 {
-                    hits.vector.push(hit);
-                } else {
-                    hits.vector[hits.count as usize] = hit;
-                }
+            let hit = pipeline_shape
+                .cast_shape(
+                    query_pipeline.dispatcher.as_ref(),
+                    &shape_isometry,
+                    &shape_direction,
+                    self.shape.shape_scaled().as_ref(),
+                    shape_cast_options,
+                )
+                .map(|(index, hit)| ShapeHitData {
+                    entity: query_pipeline.proxies[index as usize].entity,
+                    distance: hit.time_of_impact,
+                    point1: hit.witness1.into(),
+                    point2: hit.witness2.into(),
+                    normal1: hit.normal1.into(),
+                    normal2: hit.normal2.into(),
+                });
 
-                hits.count += 1;
+            if let Some(hit) = hit {
                 query_filter.excluded_entities.insert(hit.entity);
+                hits.push(hit);
             } else {
                 return;
             }
@@ -414,7 +409,7 @@ fn on_add_shape_caster(mut world: DeferredWorld, ctx: HookContext) {
     };
 
     // Initialize capacity for hits
-    world.get_mut::<ShapeHits>(ctx.entity).unwrap().vector = Vec::with_capacity(max_hits);
+    world.get_mut::<ShapeHits>(ctx.entity).unwrap().0 = Vec::with_capacity(max_hits);
 }
 
 /// Configuration for a shape cast.
@@ -511,61 +506,54 @@ impl ShapeCastConfig {
 /// # Example
 ///
 /// ```
-/// # #[cfg(feature = "2d")]
-/// # use avian2d::prelude::*;
-/// # #[cfg(feature = "3d")]
-/// use avian3d::prelude::*;
+#[cfg_attr(feature = "2d", doc = "use avian2d::prelude::*;")]
+#[cfg_attr(feature = "3d", doc = "use avian3d::prelude::*;")]
 /// use bevy::prelude::*;
 ///
 /// fn print_hits(query: Query<&ShapeHits, With<ShapeCaster>>) {
 ///     for hits in &query {
-///         for hit in hits.iter() {
+///         for hit in hits {
 ///             println!("Hit entity {} with distance {}", hit.entity, hit.distance);
 ///         }
 ///     }
 /// }
 /// ```
-#[derive(Component, Clone, Debug, Default, Reflect, PartialEq)]
+#[derive(Component, Clone, Debug, Default, Deref, DerefMut, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
-#[reflect(Debug, Component, PartialEq)]
-pub struct ShapeHits {
-    pub(crate) vector: Vec<ShapeHitData>,
-    pub(crate) count: u32,
+#[reflect(Component, Debug, Default, PartialEq)]
+pub struct ShapeHits(pub Vec<ShapeHitData>);
+
+impl IntoIterator for ShapeHits {
+    type Item = ShapeHitData;
+    type IntoIter = alloc::vec::IntoIter<ShapeHitData>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
 }
 
-impl ShapeHits {
-    /// Returns a slice over the shapecast hits.
-    pub fn as_slice(&self) -> &[ShapeHitData] {
-        &self.vector[0..self.count as usize]
-    }
+impl<'a> IntoIterator for &'a ShapeHits {
+    type Item = &'a ShapeHitData;
+    type IntoIter = core::slice::Iter<'a, ShapeHitData>;
 
-    /// Returns the number of hits.
-    #[doc(alias = "count")]
-    pub fn len(&self) -> usize {
-        self.count as usize
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
     }
+}
 
-    /// Returns true if the number of hits is 0.
-    pub fn is_empty(&self) -> bool {
-        self.count == 0
-    }
+impl<'a> IntoIterator for &'a mut ShapeHits {
+    type Item = &'a mut ShapeHitData;
+    type IntoIter = core::slice::IterMut<'a, ShapeHitData>;
 
-    /// Clears the hits.
-    pub fn clear(&mut self) {
-        self.vector.clear();
-        self.count = 0;
-    }
-
-    /// Returns an iterator over the hits in the order of distance.
-    pub fn iter(&self) -> core::slice::Iter<ShapeHitData> {
-        self.as_slice().iter()
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter_mut()
     }
 }
 
 impl MapEntities for ShapeHits {
     fn map_entities<M: EntityMapper>(&mut self, entity_mapper: &mut M) {
-        for hit in &mut self.vector {
+        for hit in self {
             hit.map_entities(entity_mapper);
         }
     }

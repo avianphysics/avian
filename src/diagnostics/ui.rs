@@ -3,6 +3,7 @@
 //!
 //! See [`PhysicsDiagnosticsPlugin`] for more information.
 
+use crate::dynamics::solver::constraint_graph::ConstraintGraph;
 use crate::{collision::CollisionDiagnostics, dynamics::solver::SolverDiagnostics};
 use crate::{diagnostics::*, prelude::*};
 use bevy::color::palettes::tailwind::{GREEN_400, RED_400};
@@ -21,18 +22,20 @@ pub struct PhysicsDiagnosticsUiPlugin;
 
 impl Plugin for PhysicsDiagnosticsUiPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<PhysicsDiagnosticsUiSettings>();
-
         app.init_resource::<PhysicsDiagnosticsUiSettings>();
 
         app.add_systems(Startup, setup_diagnostics_ui).add_systems(
             Update,
             (
                 update_diagnostics_ui_visibility,
-                update_counters,
-                update_timers,
-                update_diagnostic_row_visibility,
-                update_diagnostic_group_visibility,
+                (
+                    update_counters,
+                    update_timers,
+                    update_graph_color_text,
+                    update_diagnostic_row_visibility,
+                    update_diagnostic_group_visibility,
+                )
+                    .run_if(diagnostics_are_enabled),
             )
                 .chain(),
         );
@@ -130,6 +133,11 @@ impl AdaptiveTextSettings {
     }
 }
 
+/// A marker component for the graph coloring text.
+#[derive(Component)]
+#[require(TextFont = diagnostic_font())]
+struct GraphColorText;
+
 fn setup_diagnostics_ui(mut commands: Commands, settings: Res<PhysicsDiagnosticsUiSettings>) {
     commands
         .spawn((
@@ -139,6 +147,7 @@ fn setup_diagnostics_ui(mut commands: Commands, settings: Res<PhysicsDiagnostics
                 position_type: PositionType::Absolute,
                 top: Val::Px(5.0),
                 left: Val::Px(5.0),
+                width: Val::Px(270.0),
                 padding: UiRect::all(Val::Px(10.0)),
                 display: if settings.enabled {
                     Display::Flex
@@ -159,6 +168,37 @@ fn build_diagnostic_texts(cmd: &mut RelatedSpawnerCommands<ChildOf>) {
     // Step counter
     cmd.diagnostic_group("Step Counter")
         .with_children(|cmd| cmd.counter_text("Step Number", PhysicsTotalDiagnostics::STEP_NUMBER));
+
+    // Graph colors
+    cmd.spawn((
+        Name::new("Graph Colors".to_string()),
+        Node {
+            display: Display::Flex,
+            flex_direction: FlexDirection::Column,
+            row_gap: Val::Px(1.0),
+            ..default()
+        },
+    ))
+    .with_children(|cmd| {
+        cmd.spawn(Node {
+            display: Display::Flex,
+            justify_content: JustifyContent::SpaceBetween,
+            align_items: AlignItems::Center,
+            column_gap: Val::Px(20.0),
+            ..default()
+        })
+        .with_children(|cmd| {
+            cmd.spawn((PhysicsDiagnosticName, Text::new("Colors")));
+            cmd.spawn((
+                GraphColorText,
+                Node {
+                    flex_wrap: FlexWrap::Wrap,
+                    ..default()
+                },
+                Children::default(),
+            ));
+        });
+    });
 
     cmd.diagnostic_group("Counters").with_children(|cmd| {
         // Dynamic, kinematic, and static body counters
@@ -203,6 +243,8 @@ fn build_diagnostic_texts(cmd: &mut RelatedSpawnerCommands<ChildOf>) {
         ("Narrow Phase", Collision::NARROW_PHASE),
     ];
     let solver_timers = vec![
+        ("Prepare Constraints", Solver::PREPARE_CONSTRAINTS),
+        ("Velocity Increments", Solver::UPDATE_VELOCITY_INCREMENTS),
         ("Integrate Velocities", Solver::INTEGRATE_VELOCITIES),
         ("Warm Start", Solver::WARM_START),
         ("Solve Constraints", Solver::SOLVE_CONSTRAINTS),
@@ -267,9 +309,9 @@ fn build_diagnostic_texts(cmd: &mut RelatedSpawnerCommands<ChildOf>) {
 
 /// An extension trait for building physics diagnostics UI.
 trait CommandsExt {
-    fn diagnostic_group(&mut self, name: &str) -> EntityCommands;
+    fn diagnostic_group(&mut self, name: &str) -> EntityCommands<'_>;
 
-    fn diagnostic_row(&mut self) -> EntityCommands;
+    fn diagnostic_row(&mut self) -> EntityCommands<'_>;
 
     fn counter_text(&mut self, text: &str, diagnostic_path: &'static DiagnosticPath);
 
@@ -292,7 +334,7 @@ trait CommandsExt {
 }
 
 impl CommandsExt for RelatedSpawnerCommands<'_, ChildOf> {
-    fn diagnostic_group(&mut self, name: &str) -> EntityCommands {
+    fn diagnostic_group(&mut self, name: &str) -> EntityCommands<'_> {
         self.spawn((
             DiagnosticGroup,
             Name::new(name.to_string()),
@@ -305,7 +347,7 @@ impl CommandsExt for RelatedSpawnerCommands<'_, ChildOf> {
         ))
     }
 
-    fn diagnostic_row(&mut self) -> EntityCommands {
+    fn diagnostic_row(&mut self) -> EntityCommands<'_> {
         self.spawn((
             DiagnosticRow,
             Node {
@@ -437,6 +479,42 @@ fn update_timers(
     }
 }
 
+fn update_graph_color_text(
+    constraint_graph: Option<Res<ConstraintGraph>>,
+    children: Single<(Entity, &Children), With<GraphColorText>>,
+    mut text_span_query: Query<&mut Text>,
+    mut commands: Commands,
+) {
+    let Some(graph) = constraint_graph else {
+        return;
+    };
+
+    let (entity, children) = children.into_inner();
+    let children = children.iter().collect::<Vec<Entity>>();
+
+    for (i, color) in graph.colors.iter().enumerate() {
+        // Count the number of bodies in the color.
+        let body_count = color.manifold_handles.len();
+
+        // Update or spawn the text spans for the color.
+        if let Some(Ok(mut text_span)) = children
+            .get(i * 2)
+            .map(|&child| text_span_query.get_mut(child))
+        {
+            text_span.0 = body_count.to_string();
+        } else {
+            commands.spawn((
+                Text::new(body_count.to_string()),
+                diagnostic_font(),
+                ChildOf(entity),
+            ));
+            if i < graph.colors.len() - 1 {
+                commands.spawn((Text::new("/"), diagnostic_font(), ChildOf(entity)));
+            }
+        }
+    }
+}
+
 fn update_diagnostics_ui_visibility(
     settings: Res<PhysicsDiagnosticsUiSettings>,
     mut query: Query<&mut Node, With<PhysicsDiagnosticsUiNode>>,
@@ -494,4 +572,9 @@ fn update_diagnostic_group_visibility(
             Display::None
         };
     }
+}
+
+/// A run condition that returns true if the diagnostics UI is enabled.
+fn diagnostics_are_enabled(settings: Res<PhysicsDiagnosticsUiSettings>) -> bool {
+    settings.enabled
 }

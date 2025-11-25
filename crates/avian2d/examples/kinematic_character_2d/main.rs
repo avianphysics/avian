@@ -23,10 +23,7 @@
 mod plugin;
 
 use avian2d::{math::*, prelude::*};
-use bevy::{
-    prelude::*,
-    render::{render_asset::RenderAssetUsages, render_resource::PrimitiveTopology},
-};
+use bevy::{asset::RenderAssetUsages, prelude::*, render::render_resource::PrimitiveTopology};
 use examples_common_2d::ExampleCommonPlugin;
 use plugin::*;
 
@@ -57,7 +54,7 @@ fn setup(
         MeshMaterial2d(materials.add(Color::srgb(0.2, 0.7, 0.9))),
         Transform::from_xyz(0.0, -100.0, 0.0),
         CharacterControllerBundle::new(Collider::capsule(12.5, 20.0), Vector::NEG_Y * 1500.0)
-            .with_movement(1250.0, 0.92, 400.0, (30.0 as Scalar).to_radians()),
+            .with_movement(1250.0, 5.0, 400.0, (30.0 as Scalar).to_radians()),
     ));
 
     // A cube to move around

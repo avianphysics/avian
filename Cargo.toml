@@ -1,5 +1,6 @@
 [workspace]
 members = ["crates/avian2d", "crates/avian3d"]
+exclude = ["benches"]
 resolver = "2"
 
 [workspace.lints.clippy]

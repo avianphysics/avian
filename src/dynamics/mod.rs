@@ -10,7 +10,7 @@
 //! - Acceleration caused by external forces and [`Gravity`].
 //! - Collision response, preventing objects from overlapping each other,
 //!   considering properties such as [`Friction`] and [`Restitution`].
-//! - [Joints](solver::joints) connecting rigid bodies to each other.
+//! - [Joints](joints) connecting rigid bodies to each other.
 //! - Everything else related to the physical behavior and properties of rigid bodies.
 //!
 //! Rigid body dynamics does *not* include:
@@ -21,12 +21,12 @@
 //!
 //! # Plugins
 //!
-//! | Plugin               | Description                                                                                                                           |
-//! | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-//! | [`IntegratorPlugin`] | Handles motion caused by velocity, and applies external forces and gravity.                                                           |
-//! | [`SolverPlugin`]     | Solves constraints (contacts and joints).                                                                                             |
-//! | [`CcdPlugin`]        | Performs sweep-based [Continuous Collision Detection](dynamics::ccd) for bodies with the [`SweptCcd`] component to prevent tunneling. |
-//! | [`SleepingPlugin`]   | Manages sleeping and waking for bodies, automatically deactivating them to save computational resources.                              |
+//! | Plugin                 | Description                                                                                                                                |
+//! | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+//! | [`SolverPlugins`]      | A plugin group for the physics solver's plugins. See the plugin group's documentation for more information.                                |
+//! | [`JointPlugin`]        | A plugin for managing and initializing [joints]. Does *not* include the actual joint solver.                                               |
+//! | [`MassPropertyPlugin`] | Manages mass properties of dynamic [rigid bodies](RigidBody).                                                                              |
+//! | [`ForcePlugin`]        | Manages and applies external forces, torques, and acceleration for rigid bodies. See the [module-level documentation](rigid_body::forces). |
 //!
 //! # Accuracy
 //!
@@ -63,20 +63,32 @@
 
 pub mod ccd;
 pub mod integrator;
+pub mod joints;
 pub mod rigid_body;
-pub mod sleeping;
 pub mod solver;
 
 /// Re-exports common types related to the rigid body dynamics functionality.
 pub mod prelude {
-    pub(crate) use super::rigid_body::mass_properties::{
-        components::GlobalAngularInertia, ComputeMassProperties, MassProperties,
-    };
+    pub(crate) use super::rigid_body::mass_properties::{ComputeMassProperties, MassProperties};
+    #[cfg(feature = "xpbd_joints")]
+    pub use super::solver::xpbd::XpbdSolverPlugin;
+    #[expect(deprecated)]
     pub use super::{
         ccd::{CcdPlugin, SpeculativeMargin, SweepMode, SweptCcd},
         integrator::{Gravity, IntegratorPlugin},
+        joints::{
+            AngleLimit, DistanceJoint, DistanceLimit, FixedJoint, JointAnchor, JointBasis,
+            JointCollisionDisabled, JointDamping, JointDisabled, JointForces, JointFrame,
+            JointPlugin, PrismaticJoint, RevoluteJoint,
+        },
         rigid_body::{
+            forces::{
+                ConstantAngularAcceleration, ConstantForce, ConstantLinearAcceleration,
+                ConstantLocalForce, ConstantLocalLinearAcceleration, ConstantTorque, ForcePlugin,
+                ForceSystems, Forces, RigidBodyForces,
+            },
             mass_properties::{
+                MassPropertiesExt, MassPropertyHelper, MassPropertyPlugin,
                 bevy_heavy::{
                     AngularInertiaTensor, AngularInertiaTensorError, ComputeMassProperties2d,
                     ComputeMassProperties3d, MassProperties2d, MassProperties3d,
@@ -86,17 +98,29 @@ pub mod prelude {
                     ComputedAngularInertia, ComputedCenterOfMass, ComputedMass, Mass,
                     MassPropertiesBundle, NoAutoAngularInertia, NoAutoCenterOfMass, NoAutoMass,
                 },
-                MassPropertiesExt, MassPropertyHelper, MassPropertyPlugin,
+            },
+            sleeping::{
+                DeactivationTime, SleepThreshold, SleepTimer, Sleeping, SleepingDisabled,
+                SleepingThreshold, TimeSleeping, TimeToSleep,
             },
             *,
         },
-        sleeping::{DeactivationTime, SleepingPlugin, SleepingThreshold, WakeUpBody},
         solver::{
-            joints::*,
-            schedule::{SolverSchedulePlugin, SolverSet, SubstepCount, SubstepSchedule},
+            PhysicsLengthUnit, SolverPlugin, SolverPlugins,
+            islands::{
+                IslandPlugin, IslandSleepingPlugin, SleepBody, SleepIslands, WakeBody, WakeIslands,
+                WakeUpBody,
+            },
+            schedule::{
+                SolverSchedulePlugin, SolverSet, SolverSystems, SubstepCount, SubstepSchedule,
+            },
             solver_body::SolverBodyPlugin,
-            PhysicsLengthUnit, SolverPlugin,
         },
+    };
+    #[cfg(feature = "3d")]
+    pub use super::{
+        joints::SphericalJoint,
+        rigid_body::forces::{ConstantLocalAngularAcceleration, ConstantLocalTorque},
     };
 }
 

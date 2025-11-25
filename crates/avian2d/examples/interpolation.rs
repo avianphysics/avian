@@ -166,7 +166,7 @@ fn setup_text(mut commands: Commands) {
     commands.spawn((
         Text::new("Change Timestep With Up/Down Arrow\nPress R to reset"),
         TextColor::from(WHITE),
-        TextLayout::new_with_justify(JustifyText::Right),
+        TextLayout::new_with_justify(Justify::Right),
         font.clone(),
         Node {
             position_type: PositionType::Absolute,

@@ -207,7 +207,7 @@ impl Plugin for SpatialQueryPlugin {
                     .chain(),
             )
                 .chain()
-                .in_set(PhysicsStepSet::SpatialQuery),
+                .in_set(PhysicsStepSystems::SpatialQuery),
         );
     }
 
@@ -284,17 +284,17 @@ fn update_ray_caster_positions(
                 .or(parent_transform.map(Rotation::from));
 
             // Apply parent transformations
-            if global_position.is_none() {
-                if let Some(position) = parent_position {
-                    let rotation = global_rotation.unwrap_or(parent_rotation.unwrap_or_default());
-                    ray.set_global_origin(position.0 + rotation * origin);
-                }
+            if global_position.is_none()
+                && let Some(position) = parent_position
+            {
+                let rotation = global_rotation.unwrap_or(parent_rotation.unwrap_or_default());
+                ray.set_global_origin(position.0 + rotation * origin);
             }
-            if global_rotation.is_none() {
-                if let Some(rotation) = parent_rotation {
-                    let global_direction = rotation * ray.direction;
-                    ray.set_global_direction(global_direction);
-                }
+            if global_rotation.is_none()
+                && let Some(rotation) = parent_rotation
+            {
+                let global_direction = rotation * ray.direction;
+                ray.set_global_direction(global_direction);
             }
         }
     }
@@ -372,25 +372,24 @@ fn update_shape_caster_positions(
                 .or(parent_transform.map(Rotation::from));
 
             // Apply parent transformations
-            if global_position.is_none() {
-                if let Some(position) = parent_position {
-                    let rotation = global_rotation.unwrap_or(parent_rotation.unwrap_or_default());
-                    shape_caster.set_global_origin(position.0 + rotation * origin);
-                }
+            if global_position.is_none()
+                && let Some(position) = parent_position
+            {
+                let rotation = global_rotation.unwrap_or(parent_rotation.unwrap_or_default());
+                shape_caster.set_global_origin(position.0 + rotation * origin);
             }
-            if global_rotation.is_none() {
-                if let Some(rotation) = parent_rotation {
-                    let global_direction = rotation * shape_caster.direction;
-                    shape_caster.set_global_direction(global_direction);
-                    #[cfg(feature = "2d")]
-                    {
-                        shape_caster
-                            .set_global_shape_rotation(shape_rotation + rotation.as_radians());
-                    }
-                    #[cfg(feature = "3d")]
-                    {
-                        shape_caster.set_global_shape_rotation(shape_rotation * rotation.0);
-                    }
+            if global_rotation.is_none()
+                && let Some(rotation) = parent_rotation
+            {
+                let global_direction = rotation * shape_caster.direction;
+                shape_caster.set_global_direction(global_direction);
+                #[cfg(feature = "2d")]
+                {
+                    shape_caster.set_global_shape_rotation(shape_rotation + rotation.as_radians());
+                }
+                #[cfg(feature = "3d")]
+                {
+                    shape_caster.set_global_shape_rotation(shape_rotation * rotation.0);
                 }
             }
         }

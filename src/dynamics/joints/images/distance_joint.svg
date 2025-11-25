@@ -1,0 +1,30 @@
+<svg width="513" height="507" viewBox="0 0 171 169" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="80" cy="80" r="79" stroke="#FF4E00" stroke-opacity="0.5" stroke-width="2" stroke-dasharray="4 4" />
+    <circle cx="80" cy="80" r="29" stroke="#64C850" stroke-opacity="0.5" stroke-width="2" stroke-dasharray="4 4" />
+    <rect x="33.3728" y="14.6645" width="79" height="49" rx="1.5" transform="rotate(25 33.3728 14.6645)" fill="#5064C8" stroke="black" />
+    <text fill="white" xml:space="preserve" style="white-space: pre" font-family="'Fira Code', monospace" font-size="6" font-weight="600" letter-spacing="0em">
+        <tspan x="50.0059" y="56.51">body1</tspan>
+    </text>
+    <path d="M170.117 149.5H92.207L140.9 100.806L170.117 149.5Z" fill="#5064C8" stroke="black" />
+    <text fill="white" xml:space="preserve" style="white-space: pre" font-family="'Fira Code', monospace" font-size="6" font-weight="600" letter-spacing="0em">
+        <tspan x="127.006" y="133.51">body2</tspan>
+    </text>
+    <path d="M80 80.0225L138 113" stroke="#E19664" />
+    <circle cx="138" cy="113" r="4" fill="#FFBB40" />
+    <text fill="#FFBB40" xml:space="preserve" style="white-space: pre" font-family="'Fira Code', monospace" font-size="6" font-weight="600" letter-spacing="0em">
+        <tspan x="125.408" y="123.51">anchor2</tspan>
+    </text>
+    <circle cx="80" cy="80" r="4" fill="#FFBB40" />
+    <text fill="#FFBB40" xml:space="preserve" style="white-space: pre" font-family="'Fira Code', monospace" font-size="6" font-weight="600" letter-spacing="0em">
+        <tspan x="67.4082" y="73.51">anchor1</tspan>
+    </text>
+    <text fill="#FF4E00" xml:space="preserve" style="white-space: pre" font-family="'Fira Code', monospace" font-size="6" font-weight="600" letter-spacing="0em">
+        <tspan x="74.1035" y="167.51">max</tspan>
+    </text>
+    <text fill="#64C850" xml:space="preserve" style="white-space: pre" font-family="'Fira Code', monospace" font-size="6" font-weight="600" letter-spacing="0em">
+        <tspan x="74.1035" y="117.51">min</tspan>
+    </text>
+    <text fill="#E19664" xml:space="preserve" style="white-space: pre" font-family="'Fira Code', monospace" font-size="6" font-weight="600" letter-spacing="0em">
+        <tspan x="110.109" y="92.51">distance</tspan>
+    </text>
+</svg>

@@ -4,7 +4,7 @@ use crate::prelude::*;
 use bevy::{
     ecs::{
         component::Mutable,
-        entity::{hash_set::EntityHashSet, EntityMapper, MapEntities},
+        entity::{EntityMapper, MapEntities, hash_set::EntityHashSet},
         system::{ReadOnlySystemParam, SystemParam, SystemParamItem},
     },
     prelude::*,
@@ -15,8 +15,14 @@ mod backend;
 
 pub use backend::{ColliderBackendPlugin, ColliderMarker};
 
+#[cfg(all(feature = "collider-from-mesh", feature = "default-collider"))]
+mod cache;
+#[cfg(all(feature = "collider-from-mesh", feature = "default-collider"))]
+pub use cache::ColliderCachePlugin;
 pub mod collider_hierarchy;
 pub mod collider_transform;
+#[cfg(all(feature = "3d", any(feature = "parry-f32", feature = "parry-f64")))]
+pub mod trimesh_builder;
 
 mod layers;
 pub use layers::*;
@@ -33,14 +39,12 @@ mod parry;
 ))]
 pub use parry::*;
 
-mod world_query;
-pub use world_query::*;
-
 #[cfg(feature = "default-collider")]
 mod constructor;
 #[cfg(feature = "default-collider")]
 pub use constructor::{
     ColliderConstructor, ColliderConstructorHierarchy, ColliderConstructorHierarchyConfig,
+    ColliderConstructorHierarchyReady, ColliderConstructorReady,
 };
 
 /// A trait for creating colliders from other types.
@@ -426,7 +430,7 @@ pub struct Sensor;
 
 /// The Axis-Aligned Bounding Box of a [collider](Collider) in world space.
 ///
-/// Note that the AABB will be [`ColliderAabb::INVALID`] until the first physics update.
+/// This is updated automatically.
 #[derive(Reflect, Clone, Copy, Component, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]

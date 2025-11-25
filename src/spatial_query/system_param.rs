@@ -75,7 +75,7 @@ pub struct SpatialQuery<'w, 's> {
 
 impl SpatialQuery<'_, '_> {
     /// Updates the colliders in the pipeline. This is done automatically once per physics frame in
-    /// [`PhysicsStepSet::SpatialQuery`], but if you modify colliders or their positions before that, you can
+    /// [`PhysicsStepSystems::SpatialQuery`], but if you modify colliders or their positions before that, you can
     /// call this to make sure the data is up to date when performing spatial queries using [`SpatialQuery`].
     pub fn update_pipeline(&mut self) {
         self.query_pipeline.update(self.colliders.iter());
@@ -522,7 +522,7 @@ impl SpatialQuery<'_, '_> {
     ///     let filter = SpatialQueryFilter::default();
     ///
     ///     // Cast shape and get up to 20 hits
-    ///     let hits = spatial_query.cast_shape(&shape, origin, rotation, direction, 20, &config, &filter);
+    ///     let hits = spatial_query.shape_hits(&shape, origin, rotation, direction, 20, &config, &filter);
     ///
     ///     // Print hits
     ///     for hit in hits.iter() {

@@ -2,9 +2,12 @@
 //!
 //! Most of the math types are feature-dependent, so they will be different for `2d`/`3d` and `f32`/`f64`.
 
+#![allow(unused_imports)]
+
 #[cfg(feature = "f32")]
 mod single;
 use approx::abs_diff_ne;
+use glam_matrix_extras::{SymmetricDMat2, SymmetricDMat3, SymmetricMat2, SymmetricMat3};
 #[cfg(feature = "f32")]
 pub use single::*;
 
@@ -30,9 +33,18 @@ pub(crate) use bevy_math::Vec2 as VectorF32;
 #[cfg(feature = "3d")]
 pub(crate) use bevy_math::Vec3 as VectorF32;
 
+/// The `i32` vector type chosen based on the dimension.
+#[cfg(feature = "2d")]
+pub(crate) use bevy_math::IVec2 as IVector;
+
+/// The `i32` vector type chosen based on the dimension.
+#[cfg(feature = "3d")]
+pub(crate) use bevy_math::IVec3 as IVector;
+
 /// The ray type chosen based on the dimension.
 #[cfg(feature = "2d")]
 pub(crate) type Ray = Ray2d;
+
 /// The ray type chosen based on the dimension.
 #[cfg(feature = "3d")]
 pub(crate) type Ray = Ray3d;
@@ -41,22 +53,48 @@ pub(crate) type Ray = Ray3d;
 /// The direction type chosen based on the dimension.
 #[cfg(feature = "2d")]
 pub(crate) type Dir = Dir2;
+
 /// The direction type chosen based on the dimension.
 #[cfg(feature = "3d")]
 pub(crate) type Dir = Dir3;
 
-/// The tensor type chosen based on the dimension.
+/// The vector type for angular values chosen based on the dimension.
+#[cfg(feature = "2d")]
+pub(crate) type AngularVector = Scalar;
+
+/// The vector type for angular values chosen based on the dimension.
+#[cfg(feature = "3d")]
+pub(crate) type AngularVector = Vector;
+
+/// The symmetric tensor type chosen based on the dimension.
 /// Often used for angular inertia.
 ///
 /// In 2D, this is a scalar, while in 3D, it is a 3x3 matrix.
 #[cfg(feature = "2d")]
-pub(crate) type Tensor = Scalar;
-/// The tensor type chosen based on the dimension.
+pub(crate) type SymmetricTensor = Scalar;
+
+/// The symmetric tensor type chosen based on the dimension.
 /// Often used for angular inertia.
 ///
 /// In 2D, this is a scalar, while in 3D, it is a 3x3 matrix.
 #[cfg(feature = "3d")]
-pub(crate) type Tensor = Matrix3;
+pub(crate) type SymmetricTensor = SymmetricMatrix;
+
+/// The rotation type chosen based on the dimension.
+#[cfg(feature = "2d")]
+pub(crate) type Rot = crate::physics_transform::Rotation;
+
+/// The rotation type chosen based on the dimension.
+#[cfg(feature = "3d")]
+pub(crate) type Rot = Quaternion;
+
+/// The isometry type chosen based on the dimension.
+#[cfg(feature = "2d")]
+pub(crate) type Isometry = Isometry2d;
+
+/// The isometry type chosen based on the dimension.
+#[cfg(feature = "3d")]
+pub(crate) type Isometry = Isometry3d;
 
 /// Adjust the precision of the math construct to the precision chosen for compilation.
 pub trait AdjustPrecision {
@@ -137,6 +175,24 @@ impl AsF32 for Mat2 {
     }
 }
 
+impl AsF32 for SymmetricDMat2 {
+    type F32 = SymmetricMat2;
+    fn f32(&self) -> Self::F32 {
+        SymmetricMat2 {
+            m00: self.m00 as f32,
+            m01: self.m01 as f32,
+            m11: self.m11 as f32,
+        }
+    }
+}
+
+impl AsF32 for SymmetricMat2 {
+    type F32 = Self;
+    fn f32(&self) -> Self::F32 {
+        *self
+    }
+}
+
 impl AsF32 for DMat3 {
     type F32 = Mat3;
     fn f32(&self) -> Self::F32 {
@@ -145,6 +201,27 @@ impl AsF32 for DMat3 {
 }
 
 impl AsF32 for Mat3 {
+    type F32 = Self;
+    fn f32(&self) -> Self::F32 {
+        *self
+    }
+}
+
+impl AsF32 for SymmetricDMat3 {
+    type F32 = SymmetricMat3;
+    fn f32(&self) -> Self::F32 {
+        SymmetricMat3 {
+            m00: self.m00 as f32,
+            m01: self.m01 as f32,
+            m02: self.m02 as f32,
+            m11: self.m11 as f32,
+            m12: self.m12 as f32,
+            m22: self.m22 as f32,
+        }
+    }
+}
+
+impl AsF32 for SymmetricMat3 {
     type F32 = Self;
     fn f32(&self) -> Self::F32 {
         *self
@@ -303,6 +380,60 @@ impl MatExt for DMat2 {
     }
 }
 
+impl MatExt for SymmetricMat2 {
+    type Scalar = f32;
+
+    #[inline]
+    fn inverse_or_zero(self) -> Self {
+        if self.determinant() == 0.0 {
+            Self::ZERO
+        } else {
+            self.inverse()
+        }
+    }
+
+    #[inline]
+    fn is_isotropic(&self, epsilon: f32) -> bool {
+        // Extract diagonal elements.
+        let diag = Vec2::new(self.m00, self.m11);
+
+        // All diagonal elements must be approximately equal.
+        if abs_diff_ne!(diag.x, diag.y, epsilon = epsilon) {
+            return false;
+        }
+
+        // All off-diagonal elements must be approximately zero.
+        self.m01.abs() < epsilon
+    }
+}
+
+impl MatExt for SymmetricDMat2 {
+    type Scalar = f64;
+
+    #[inline]
+    fn inverse_or_zero(self) -> Self {
+        if self.determinant() == 0.0 {
+            Self::ZERO
+        } else {
+            self.inverse()
+        }
+    }
+
+    #[inline]
+    fn is_isotropic(&self, epsilon: f64) -> bool {
+        // Extract diagonal elements.
+        let diag = DVec2::new(self.m00, self.m11);
+
+        // All diagonal elements must be approximately equal.
+        if abs_diff_ne!(diag.x, diag.y, epsilon = epsilon) {
+            return false;
+        }
+
+        // All off-diagonal elements must be approximately zero.
+        self.m01.abs() < epsilon
+    }
+}
+
 impl MatExt for Mat3 {
     type Scalar = f32;
 
@@ -381,7 +512,71 @@ impl MatExt for DMat3 {
     }
 }
 
-#[expect(clippy::unnecessary_cast)]
+impl MatExt for SymmetricMat3 {
+    type Scalar = f32;
+
+    #[inline]
+    fn inverse_or_zero(self) -> Self {
+        if self.determinant() == 0.0 {
+            Self::ZERO
+        } else {
+            self.inverse()
+        }
+    }
+
+    #[inline]
+    fn is_isotropic(&self, epsilon: f32) -> bool {
+        // Extract diagonal elements.
+        let diag = Vec3::new(self.m00, self.m11, self.m22);
+
+        // All diagonal elements must be approximately equal.
+        if abs_diff_ne!(diag.x, diag.y, epsilon = epsilon)
+            || abs_diff_ne!(diag.y, diag.z, epsilon = epsilon)
+        {
+            return false;
+        }
+
+        // Extract off-diagonal elements.
+        let off_diag = [self.m01, self.m02, self.m12];
+
+        // All off-diagonal elements must be approximately zero.
+        off_diag.iter().all(|&x| x.abs() < epsilon)
+    }
+}
+
+impl MatExt for SymmetricDMat3 {
+    type Scalar = f64;
+
+    #[inline]
+    fn inverse_or_zero(self) -> Self {
+        if self.determinant() == 0.0 {
+            Self::ZERO
+        } else {
+            self.inverse()
+        }
+    }
+
+    #[inline]
+    fn is_isotropic(&self, epsilon: f64) -> bool {
+        // Extract diagonal elements.
+        let diag = DVec3::new(self.m00, self.m11, self.m22);
+
+        // All diagonal elements must be approximately equal.
+        if abs_diff_ne!(diag.x, diag.y, epsilon = epsilon)
+            || abs_diff_ne!(diag.y, diag.z, epsilon = epsilon)
+        {
+            return false;
+        }
+
+        // Extract off-diagonal elements.
+        let off_diag = [self.m01, self.m02, self.m12];
+
+        // All off-diagonal elements must be approximately zero.
+        off_diag.iter().all(|&x| x.abs() < epsilon)
+    }
+}
+
+#[allow(clippy::unnecessary_cast)]
 #[cfg(all(feature = "2d", any(feature = "parry-f32", feature = "parry-f64")))]
 pub(crate) fn na_iso_to_iso(isometry: &parry::math::Isometry<Scalar>) -> Isometry2d {
     Isometry2d::new(
@@ -395,11 +590,6 @@ pub(crate) fn na_iso_to_iso(isometry: &parry::math::Isometry<Scalar>) -> Isometr
     any(feature = "parry-f32", feature = "parry-f64")
 ))]
 use crate::prelude::*;
-#[cfg(all(
-    feature = "default-collider",
-    any(feature = "parry-f32", feature = "parry-f64")
-))]
-use parry::math::Isometry;
 
 #[cfg(all(
     feature = "2d",
@@ -409,10 +599,10 @@ use parry::math::Isometry;
 pub(crate) fn make_isometry(
     position: impl Into<Position>,
     rotation: impl Into<Rotation>,
-) -> Isometry<Scalar> {
+) -> parry::math::Isometry<Scalar> {
     let position: Position = position.into();
     let rotation: Rotation = rotation.into();
-    Isometry::<Scalar>::new(position.0.into(), rotation.into())
+    parry::math::Isometry::<Scalar>::new(position.0.into(), rotation.into())
 }
 
 #[cfg(all(
@@ -423,10 +613,10 @@ pub(crate) fn make_isometry(
 pub(crate) fn make_isometry(
     position: impl Into<Position>,
     rotation: impl Into<Rotation>,
-) -> Isometry<Scalar> {
+) -> parry::math::Isometry<Scalar> {
     let position: Position = position.into();
     let rotation: Rotation = rotation.into();
-    Isometry::<Scalar>::new(position.0.into(), rotation.to_scaled_axis().into())
+    parry::math::Isometry::<Scalar>::new(position.0.into(), rotation.to_scaled_axis().into())
 }
 
 /// Computes the skew-symmetric matrix corresponding to the given vector.
@@ -441,4 +631,40 @@ pub(crate) fn make_isometry(
 #[cfg(feature = "3d")]
 pub fn skew_symmetric_mat3(v: Vector3) -> Matrix3 {
     Matrix3::from_cols_array(&[0.0, v.z, -v.y, -v.z, 0.0, v.x, v.y, -v.x, 0.0])
+}
+
+/// Computes the rotation matrix of the orthonormal basis computed from the given axis.
+///
+/// The `axis` must be a unit vector.
+#[inline]
+#[must_use]
+pub fn orthonormal_basis_from_vec(axis: Vector) -> Rot {
+    #[cfg(feature = "2d")]
+    {
+        let normal = axis.perp();
+        orthonormal_basis([axis, normal])
+    }
+    #[cfg(feature = "3d")]
+    {
+        let (normal1, normal2) = axis.any_orthonormal_pair();
+        orthonormal_basis([axis, normal1, normal2])
+    }
+}
+
+/// Computes the rotation matrix of the orthonormal basis computed from the given axes.
+///
+/// Each axis must be a unit vector.
+#[inline]
+#[must_use]
+pub fn orthonormal_basis(axes: [Vector; DIM]) -> Rot {
+    #[cfg(feature = "2d")]
+    {
+        let mat = Matrix2::from_cols(axes[0], axes[1]);
+        crate::physics_transform::Rotation::from(mat)
+    }
+    #[cfg(feature = "3d")]
+    {
+        let mat = Matrix3::from_cols(axes[0], axes[1], axes[2]);
+        Quaternion::from_mat3(&mat)
+    }
 }

@@ -3,7 +3,7 @@
 
 use avian3d::{math::*, prelude::*};
 use bevy::{
-    ecs::system::{lifetimeless::Read, SystemParam},
+    ecs::system::{SystemParam, lifetimeless::Read},
     prelude::*,
 };
 use examples_common_3d::ExampleCommonPlugin;

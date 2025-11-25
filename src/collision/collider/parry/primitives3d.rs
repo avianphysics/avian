@@ -1,5 +1,5 @@
 use bevy_math::primitives::{
-    BoxedPolyline3d, Capsule3d, Cone, Cuboid, Cylinder, Line3d, Plane3d, Polyline3d, Segment3d,
+    Capsule3d, Cone, Cuboid, Cylinder, InfinitePlane3d, Line3d, Plane3d, Polyline3d, Segment3d,
     Sphere,
 };
 use parry::shape::SharedShape;
@@ -12,7 +12,7 @@ impl IntoCollider<Collider> for Sphere {
     }
 }
 
-impl IntoCollider<Collider> for Plane3d {
+impl IntoCollider<Collider> for InfinitePlane3d {
     fn collider(&self) -> Collider {
         let half_size = 10_000.0;
         let rotation = Quaternion::from_rotation_arc(Vector::Y, self.normal.adjust_precision());
@@ -21,6 +21,21 @@ impl IntoCollider<Collider> for Plane3d {
             rotation * Vector::new(-half_size, 0.0, -half_size),
             rotation * Vector::new(-half_size, 0.0, half_size),
             rotation * Vector::new(half_size, 0.0, half_size),
+        ];
+
+        Collider::trimesh(vertices, vec![[0, 1, 2], [1, 2, 0]])
+    }
+}
+
+impl IntoCollider<Collider> for Plane3d {
+    fn collider(&self) -> Collider {
+        let half_size = self.half_size.adjust_precision();
+        let rotation = Quaternion::from_rotation_arc(Vector::Y, self.normal.adjust_precision());
+        let vertices = vec![
+            rotation * Vector::new(half_size.x, 0.0, -half_size.y),
+            rotation * Vector::new(-half_size.x, 0.0, -half_size.y),
+            rotation * Vector::new(-half_size.x, 0.0, half_size.y),
+            rotation * Vector::new(half_size.x, 0.0, half_size.y),
         ];
 
         Collider::trimesh(vertices, vec![[0, 1, 2], [1, 2, 0]])
@@ -41,17 +56,10 @@ impl IntoCollider<Collider> for Segment3d {
     }
 }
 
-impl<const N: usize> IntoCollider<Collider> for Polyline3d<N> {
+impl IntoCollider<Collider> for Polyline3d {
     fn collider(&self) -> Collider {
-        let vertices = self.vertices.map(|v| v.adjust_precision());
-        Collider::polyline(vertices.to_vec(), None)
-    }
-}
-
-impl IntoCollider<Collider> for BoxedPolyline3d {
-    fn collider(&self) -> Collider {
-        let vertices = self.vertices.iter().map(|v| v.adjust_precision());
-        Collider::polyline(vertices.collect(), None)
+        let vertices = self.vertices.iter().map(|v| v.adjust_precision()).collect();
+        Collider::polyline(vertices, None)
     }
 }
 

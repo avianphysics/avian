@@ -1,12 +1,12 @@
 [package]
 name = "avian2d"
-version = "0.3.0"
-edition = "2021"
+version = "0.4.1"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 authors = ["Joona Aalto <jondolf.dev@gmail.com>"]
 description = "An ECS-driven physics engine for the Bevy game engine"
 documentation = "https://docs.rs/avian2d"
-repository = "https://github.com/Jondolf/avian"
+repository = "https://github.com/avianphysics/avian"
 readme = "README.md"
 keywords = ["gamedev", "physics", "simulation", "bevy"]
 categories = ["game-development", "science", "simulation"]
@@ -17,6 +17,7 @@ default = [
     "f32",
     "parry-f32",
     "debug-plugin",
+    "xpbd_joints",
     "parallel",
     "bevy_scene",
     "bevy_picking",
@@ -47,15 +48,20 @@ default-collider = ["dep:nalgebra"]
 parry-f32 = ["f32", "dep:parry2d", "default-collider"]
 parry-f64 = ["f64", "dep:parry2d-f64", "default-collider"]
 
+# Enables the XPBD constraint solver for joints.
+xpbd_joints = []
+
 bevy_scene = ["bevy/bevy_scene"]
 bevy_picking = ["bevy/bevy_picking"]
 serialize = [
     "dep:serde",
     "bevy/serialize",
+    "glam_matrix_extras/serde",
     "bevy_heavy/serialize",
     "bevy_transform_interpolation/serialize",
     "parry2d?/serde-serialize",
     "parry2d-f64?/serde-serialize",
+    "smallvec/serde",
     "bitflags/serde",
 ]
 
@@ -65,6 +71,9 @@ bevy_diagnostic = []
 # Enables the `PhysicsDiagnosticsUiPlugin` for visualizing physics diagnostics data with a debug UI.
 diagnostic_ui = ["bevy_diagnostic", "bevy/bevy_ui"]
 
+# Enables additional correctness checks and validation at the cost of worse performance.
+validate = []
+
 [lib]
 name = "avian2d"
 path = "../../src/lib.rs"
@@ -73,34 +82,41 @@ bench = false
 
 [dependencies]
 avian_derive = { path = "../avian_derive", version = "0.2" }
-bevy = { version = "0.16", default-features = false, features = [
+bevy = { version = "0.17", default-features = false, features = [
     "std",
     "bevy_log",
 ] }
-bevy_math = { version = "0.16" }
-bevy_heavy = { version = "0.2" }
-bevy_transform_interpolation = { version = "0.2" }
+bevy_math = { version = "0.17", features = ["approx"] }
+glam_matrix_extras = { version = "0.1", features = ["bevy_reflect"] }
+bevy_heavy = { version = "0.3" }
+bevy_transform_interpolation = { version = "0.3" }
 libm = { version = "0.2", optional = true }
 approx = "0.5"
-parry2d = { version = "0.17", optional = true }
-parry2d-f64 = { version = "0.17", optional = true }
-nalgebra = { version = "0.33", features = ["convert-glam029"], optional = true }
+parry2d = { version = "0.25", optional = true }
+parry2d-f64 = { version = "0.25", optional = true }
+nalgebra = { version = "0.34", features = ["convert-glam030"], optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
-derive_more = "1"
+derive_more = "2"
+thiserror = "2"
 arrayvec = "0.7"
+smallvec = "1.15"
+slab = ">=0.4.10"
 itertools = "0.13"
 bitflags = "2.5.0"
 thread_local = { version = "1.1", optional = true }
+disqualified = { version = "1.0" }
 
 [dev-dependencies]
 examples_common_2d = { path = "../examples_common_2d" }
-benches_common_2d = { path = "../benches_common_2d" }
-bevy_math = { version = "0.16", features = ["approx"] }
-bevy_heavy = { version = "0.2", features = ["approx"] }
-glam = { version = "0.29", features = ["bytemuck"] }
+bevy = { version = "0.17", default-features = false, features = [
+    "debug",
+    "reflect_auto_register",
+] }
+bevy_heavy = { version = "0.3", features = ["approx"] }
+glam = { version = "0.30", features = ["bytemuck"] }
 bytemuck = "1.19"
 criterion = { version = "0.5", features = ["html_reports"] }
-bevy_mod_debugdump = { version = "0.13" }
+bevy_mod_debugdump = { version = "0.14" }
 
 [lints]
 workspace = true
@@ -143,7 +159,19 @@ required-features = ["2d", "default-collider"]
 
 [[example]]
 name = "interpolation"
-required-features = ["2d"]
+required-features = ["2d", "default-collider"]
+
+[[example]]
+name = "many_pyramids_2d"
+required-features = ["2d", "default-collider"]
+
+[[example]]
+name = "many_shapes"
+required-features = ["2d", "default-collider"]
+
+[[example]]
+name = "one_way_platform_2d"
+required-features = ["2d", "default-collider"]
 
 [[example]]
 name = "move_marbles"
@@ -166,5 +194,13 @@ name = "revolute_joint_2d"
 required-features = ["2d", "default-collider"]
 
 [[example]]
+name = "sensor"
+required-features = ["2d", "default-collider"]
+
+[[example]]
+name = "tumbler"
+required-features = ["2d", "default-collider"]
+
+[[example]]
 name = "debugdump_2d"
-required-features = ["2d"]
+required-features = ["2d", "debug-plugin"]

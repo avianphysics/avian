@@ -13,10 +13,14 @@ use core::time::Duration;
 use crate::prelude::*;
 
 use bevy::{
-    ecs::intern::Interned,
-    ecs::schedule::{ExecutorKind, LogLevel, ScheduleBuildSettings, ScheduleLabel},
+    ecs::{
+        component::Tick,
+        intern::Interned,
+        schedule::{ExecutorKind, LogLevel, ScheduleBuildSettings, ScheduleLabel},
+        system::SystemChangeTick,
+    },
     prelude::*,
-    transform::TransformSystem,
+    transform::TransformSystems,
 };
 
 /// Sets up the default scheduling, system set configuration, and time resources for physics.
@@ -25,11 +29,11 @@ use bevy::{
 ///
 /// This plugin initializes and configures the following schedules and system sets:
 ///
-/// - [`PhysicsSet`]: High-level system sets for the main phases of the physics engine.
+/// - [`PhysicsSystems`]: High-level system sets for the main phases of the physics engine.
 ///   You can use these to schedule your own systems before or after physics is run without
 ///   having to worry about implementation details.
-/// - [`PhysicsSchedule`]: Responsible for advancing the simulation in [`PhysicsSet::StepSimulation`].
-/// - [`PhysicsStepSet`]: System sets for the steps of the actual physics simulation loop.
+/// - [`PhysicsSchedule`]: Responsible for advancing the simulation in [`PhysicsSystems::StepSimulation`].
+/// - [`PhysicsStepSystems`]: System sets for the steps of the actual physics simulation loop.
 pub struct PhysicsSchedulePlugin {
     schedule: Interned<dyn ScheduleLabel>,
 }
@@ -53,9 +57,13 @@ impl Default for PhysicsSchedulePlugin {
 
 impl Plugin for PhysicsSchedulePlugin {
     fn build(&self, app: &mut App) {
+        // Register types with generics.
+        app.register_type::<Time<Physics>>();
+
         app.init_resource::<Time<Physics>>()
             .insert_resource(Time::new_with(Substeps))
-            .init_resource::<SubstepCount>();
+            .init_resource::<SubstepCount>()
+            .init_resource::<LastPhysicsTick>();
 
         // TODO: Where should this be initialized?
         app.init_resource::<PhysicsLengthUnit>();
@@ -66,12 +74,14 @@ impl Plugin for PhysicsSchedulePlugin {
         app.configure_sets(
             schedule,
             (
-                PhysicsSet::Prepare,
-                PhysicsSet::StepSimulation,
-                PhysicsSet::Sync,
+                PhysicsSystems::First,
+                PhysicsSystems::Prepare,
+                PhysicsSystems::StepSimulation,
+                PhysicsSystems::Writeback,
+                PhysicsSystems::Last,
             )
                 .chain()
-                .before(TransformSystem::TransformPropagate),
+                .before(TransformSystems::Propagate),
         );
 
         // Set up the physics schedule, the schedule that advances the physics simulation
@@ -85,14 +95,14 @@ impl Plugin for PhysicsSchedulePlugin {
 
             schedule.configure_sets(
                 (
-                    PhysicsStepSet::First,
-                    PhysicsStepSet::BroadPhase,
-                    PhysicsStepSet::NarrowPhase,
-                    PhysicsStepSet::Solver,
-                    PhysicsStepSet::Sleeping,
-                    PhysicsStepSet::SpatialQuery,
-                    PhysicsStepSet::Finalize,
-                    PhysicsStepSet::Last,
+                    PhysicsStepSystems::First,
+                    PhysicsStepSystems::BroadPhase,
+                    PhysicsStepSystems::NarrowPhase,
+                    PhysicsStepSystems::Solver,
+                    PhysicsStepSystems::Sleeping,
+                    PhysicsStepSystems::SpatialQuery,
+                    PhysicsStepSystems::Finalize,
+                    PhysicsStepSystems::Last,
                 )
                     .chain(),
             );
@@ -100,7 +110,12 @@ impl Plugin for PhysicsSchedulePlugin {
 
         app.add_systems(
             schedule,
-            run_physics_schedule.in_set(PhysicsSet::StepSimulation),
+            run_physics_schedule.in_set(PhysicsSystems::StepSimulation),
+        );
+
+        app.add_systems(
+            PhysicsSchedule,
+            update_last_physics_tick.after(PhysicsStepSystems::Last),
         );
     }
 }
@@ -114,9 +129,9 @@ impl Default for IsFirstRun {
     }
 }
 
-/// Responsible for advancing the physics simulation. This is run in [`PhysicsSet::StepSimulation`].
+/// Responsible for advancing the physics simulation. This is run in [`PhysicsSystems::StepSimulation`].
 ///
-/// See [`PhysicsStepSet`] for the system sets that are run in this schedule.
+/// See [`PhysicsStepSystems`] for the system sets that are run in this schedule.
 #[derive(Debug, Hash, PartialEq, Eq, Clone, ScheduleLabel)]
 pub struct PhysicsSchedule;
 
@@ -124,47 +139,53 @@ pub struct PhysicsSchedule;
 /// You can use these to schedule your own systems before or after physics is run without
 /// having to worry about implementation details.
 ///
-/// 1. `Prepare`: Responsible for initializing [rigid bodies](RigidBody) and [colliders](Collider) and
-///    updating several components.
-/// 2. `StepSimulation`: Responsible for advancing the simulation by running the steps in [`PhysicsStepSet`].
-/// 3. `Sync`: Responsible for synchronizing physics components with other data, like keeping [`Position`]
-///    and [`Rotation`] in sync with `Transform`.
+/// 1. `First`: Runs right before any of Avian's physics systems. Empty by default.
+/// 2. `Prepare`: Responsible for preparing data for the physics simulation, such as updating
+///    physics transforms or mass properties.
+/// 3. `StepSimulation`: Responsible for advancing the simulation by running the steps in [`PhysicsStepSystems`].
+/// 4. `Writeback`: Responsible for writing back the results of the physics simulation to other data,
+///    such as updating [`Transform`] based on the new [`Position`] and [`Rotation`].
+/// 5. `Last`: Runs right after all of Avian's physics systems. Empty by default.
 ///
 /// # See Also
 ///
-/// - [`PhysicsSchedule`]: Responsible for advancing the simulation in [`PhysicsSet::StepSimulation`].
-/// - [`PhysicsStepSet`]: System sets for the steps of the actual physics simulation loop, like
+/// - [`PhysicsSchedule`]: Responsible for advancing the simulation in [`PhysicsSystems::StepSimulation`].
+/// - [`PhysicsStepSystems`]: System sets for the steps of the actual physics simulation loop, like
 ///   the broad phase and the substepping loop.
-/// - [`SubstepSchedule`]: Responsible for running the substepping loop in [`PhysicsStepSet::Solver`].
+/// - [`SubstepSchedule`]: Responsible for running the substepping loop in [`PhysicsStepSystems::Solver`].
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum PhysicsSet {
-    /// Responsible for initializing [rigid bodies](RigidBody) and [colliders](Collider) and
-    /// updating several components.
-    ///
-    /// See [`PreparePlugin`].
+pub enum PhysicsSystems {
+    /// Runs right before any of Avian's physics systems. Empty by default.
+    First,
+    /// Responsible for preparing data for the physics simulation, such as updating
+    /// physics transforms or mass properties.
     Prepare,
-    /// Responsible for advancing the simulation by running the steps in [`PhysicsStepSet`].
+    /// Responsible for advancing the simulation by running the steps in [`PhysicsStepSystems`].
     /// Systems in this set are run in the [`PhysicsSchedule`].
     StepSimulation,
-    /// Responsible for synchronizing physics components with other data, like keeping [`Position`]
-    /// and [`Rotation`] in sync with `Transform`.
-    ///
-    /// See [`SyncPlugin`].
-    Sync,
+    /// Responsible for writing back the results of the physics simulation to other data,
+    /// such as updating [`Transform`] based on the new [`Position`] and [`Rotation`].
+    Writeback,
+    /// Runs right after all of Avian's physics systems. Empty by default.
+    Last,
 }
+
+/// A deprecated alias for [`PhysicsSystems`].
+#[deprecated(since = "0.4.0", note = "Renamed to `PhysicsSystems`")]
+pub type PhysicsSet = PhysicsSystems;
 
 /// System sets for the main steps in the physics simulation loop. These are typically run in the [`PhysicsSchedule`].
 ///
-/// 1. First (empty by default)
+/// 1. First
 /// 2. Broad phase
 /// 3. Narrow phase
 /// 4. Solver
 /// 5. Sleeping
 /// 6. Spatial queries
-/// 7. Last (empty by default)
+/// 7. Last
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum PhysicsStepSet {
-    /// Runs at the start of the [`PhysicsSchedule`]. Empty by default.
+pub enum PhysicsStepSystems {
+    /// Runs at the start of the [`PhysicsSchedule`].
     First,
     /// Responsible for finding pairs of entities with overlapping [`ColliderAabb`]
     /// and creating contact pairs for them in the [`ContactGraph`].
@@ -180,8 +201,6 @@ pub enum PhysicsStepSet {
     /// See [`SolverPlugin`] and [`SubstepSchedule`].
     Solver,
     /// Responsible for controlling when bodies should be deactivated and marked as [`Sleeping`].
-    ///
-    /// See [`SleepingPlugin`].
     Sleeping,
     /// Responsible for spatial queries like [raycasting](`RayCaster`) and shapecasting.
     ///
@@ -189,8 +208,26 @@ pub enum PhysicsStepSet {
     SpatialQuery,
     /// Responsible for logic that runs after the core physics step and prepares for the next one.
     Finalize,
-    /// Runs at the end of the [`PhysicsSchedule`]. Empty by default.
+    /// Runs at the end of the [`PhysicsSchedule`].
     Last,
+}
+
+/// A deprecated alias for [`PhysicsStepSystems`].
+#[deprecated(since = "0.4.0", note = "Renamed to `PhysicsStepSystems`")]
+pub type PhysicsStepSet = PhysicsStepSystems;
+
+/// A [`Tick`] corresponding to the end of the previous run of the [`PhysicsSchedule`].
+#[derive(Resource, Reflect, Default)]
+#[reflect(Resource, Default)]
+pub struct LastPhysicsTick(pub Tick);
+
+pub(crate) fn is_changed_after_tick<C: Component>(
+    component_ref: Ref<C>,
+    tick: Tick,
+    this_run: Tick,
+) -> bool {
+    let last_changed = component_ref.last_changed();
+    component_ref.is_changed() && last_changed.is_newer_than(tick, this_run)
 }
 
 /// Runs the [`PhysicsSchedule`].
@@ -238,4 +275,11 @@ fn run_physics_schedule(world: &mut World, mut is_first_run: Local<IsFirstRun>) 
     });
 
     is_first_run.0 = false;
+}
+
+fn update_last_physics_tick(
+    mut last_physics_tick: ResMut<LastPhysicsTick>,
+    system_change_tick: SystemChangeTick,
+) {
+    last_physics_tick.0 = system_change_tick.this_run();
 }

@@ -1,5 +1,8 @@
+use core::iter::once;
+
 use crate::prelude::*;
 use bevy::{platform::collections::HashMap, prelude::*};
+use itertools::Either;
 
 /// A component that will automatically generate [`Collider`]s on its descendants at runtime.
 /// The type of the generated collider can be specified using [`ColliderConstructor`].
@@ -126,6 +129,29 @@ pub struct ColliderConstructorHierarchy {
     /// For the entities not found in this `HashMap`, [`default_constructor`](Self::default_constructor),
     /// [`default_layers`](Self::default_layers), and [`default_density`](Self::default_density) will be used instead.
     pub config: HashMap<String, Option<ColliderConstructorHierarchyConfig>>,
+}
+
+/// Triggered when a [`ColliderConstructor`] successfully inserted a [`Collider`].
+///
+/// The event is not triggered when the [`ColliderConstructor`] failed to construct the [`Collider`]
+/// or when there was already a [`Collider`] on the entity.
+#[derive(EntityEvent, Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+pub struct ColliderConstructorReady {
+    /// The entity that held the [`ColliderConstructor`].
+    pub entity: Entity,
+}
+
+/// Triggered when a [`ColliderConstructorHierarchy`] finished inserting all its [`Collider`]s.
+///
+/// Note that the event will still be triggered when when the hierarchy had no colliders to insert
+/// or failed to insert all of them, so this event is not a guarantee that there are actually
+/// any colliders in the scene.
+#[derive(EntityEvent, Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+pub struct ColliderConstructorHierarchyReady {
+    /// The entity that held the [`ColliderConstructorHierarchy`].
+    pub entity: Entity,
 }
 
 impl ColliderConstructorHierarchy {
@@ -280,6 +306,7 @@ pub struct ColliderConstructorHierarchyConfig {
 #[cfg_attr(feature = "collider-from-mesh", derive(Default))]
 #[cfg_attr(feature = "collider-from-mesh", reflect(Default))]
 #[reflect(Debug, Component, PartialEq)]
+#[reflect(no_field_bounds)]
 #[non_exhaustive]
 #[allow(missing_docs)]
 pub enum ColliderConstructor {
@@ -394,6 +421,27 @@ pub enum ColliderConstructor {
     /// Constructs a collider with [`Collider::convex_polyline`].
     #[cfg(feature = "2d")]
     ConvexPolyline { points: Vec<Vector> },
+    /// Constructs a collider with [`Collider::voxels`].
+    Voxels {
+        voxel_size: Vector,
+        grid_coordinates: Vec<IVector>,
+    },
+    /// Constructs a collider with [`Collider::voxelized_polyline`].
+    #[cfg(feature = "2d")]
+    VoxelizedPolyline {
+        vertices: Vec<Vector>,
+        indices: Vec<[u32; 2]>,
+        voxel_size: Scalar,
+        fill_mode: FillMode,
+    },
+    /// Constructs a collider with [`Collider::voxelized_trimesh`].
+    #[cfg(feature = "3d")]
+    VoxelizedTrimesh {
+        vertices: Vec<Vector>,
+        indices: Vec<[u32; 3]>,
+        voxel_size: Scalar,
+        fill_mode: FillMode,
+    },
     /// Constructs a collider with [`Collider::heightfield`].
     #[cfg(feature = "2d")]
     Heightfield { heights: Vec<Scalar>, scale: Vector },
@@ -427,6 +475,14 @@ pub enum ColliderConstructor {
     /// Constructs a collider with [`Collider::convex_hull_from_mesh`].
     #[cfg(feature = "collider-from-mesh")]
     ConvexHullFromMesh,
+    /// Constructs a collider with [`Collider::voxelized_trimesh_from_mesh`].
+    #[cfg(feature = "collider-from-mesh")]
+    VoxelizedTrimeshFromMesh {
+        voxel_size: Scalar,
+        fill_mode: FillMode,
+    },
+    /// Constructs a collider with [`Collider::compound`].
+    Compound(Vec<(Position, Rotation, ColliderConstructor)>),
 }
 
 impl ColliderConstructor {
@@ -440,16 +496,53 @@ impl ColliderConstructor {
                 | Self::ConvexDecompositionFromMesh
                 | Self::ConvexDecompositionFromMeshWithConfig(_)
                 | Self::ConvexHullFromMesh
+                | Self::VoxelizedTrimeshFromMesh { .. }
         )
+    }
+
+    /// Construct a [`ColliderConstructor::Compound`] from arbitrary [`Position`] and [`Rotation`] representations.
+    pub fn compound<P, R>(shapes: Vec<(P, R, ColliderConstructor)>) -> Self
+    where
+        P: Into<Position>,
+        R: Into<Rotation>,
+    {
+        Self::Compound(
+            shapes
+                .into_iter()
+                .map(|(pos, rot, constructor)| (pos.into(), rot.into(), constructor))
+                .collect(),
+        )
+    }
+
+    pub(crate) fn flatten_compound_constructors(
+        constructors: Vec<(Position, Rotation, ColliderConstructor)>,
+    ) -> Vec<(Position, Rotation, ColliderConstructor)> {
+        constructors
+            .into_iter()
+            .flat_map(|(pos, rot, constructor)| match constructor {
+                ColliderConstructor::Compound(nested) => {
+                    Either::Left(Self::flatten_compound_constructors(nested).into_iter().map(
+                        move |(nested_pos, nested_rot, nested_constructor)| {
+                            (
+                                Position(pos.0 + rot * nested_pos.0),
+                                rot * nested_rot,
+                                nested_constructor,
+                            )
+                        },
+                    ))
+                }
+                other => Either::Right(once((pos, rot, other))),
+            })
+            .collect()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bevy::ecs::query::QueryData;
     #[cfg(feature = "bevy_scene")]
     use bevy::scene::ScenePlugin;
+    use bevy::{ecs::query::QueryData, mesh::MeshPlugin};
 
     #[test]
     fn collider_constructor_requires_no_mesh_on_primitive() {
@@ -653,6 +746,7 @@ mod tests {
         ignore = "The plugin setup requires access to the GPU, which is not available in the linux test environment"
     )]
     fn collider_constructor_hierarchy_inserts_correct_configs_on_scene() {
+        use bevy::gltf::GltfMeshName;
         use parry::shape::ShapeType;
 
         #[derive(Resource)]
@@ -661,7 +755,7 @@ mod tests {
         let mut app = create_gltf_test_app();
 
         app.add_observer(
-            |_trigger: Trigger<bevy::scene::SceneInstanceReady>, mut commands: Commands| {
+            |_trigger: On<bevy::scene::SceneInstanceReady>, mut commands: Commands| {
                 commands.insert_resource(SceneReady);
             },
         );
@@ -677,10 +771,10 @@ mod tests {
                 SceneRoot(scene_handle),
                 ColliderConstructorHierarchy::new(ColliderConstructor::ConvexDecompositionFromMesh)
                     // Use a primitive collider for the left arm.
-                    .with_constructor_for_name("armL_mesh", PRIMITIVE_COLLIDER)
-                    .with_density_for_name("armL_mesh", 2.0)
+                    .with_constructor_for_name("armL_mesh.ferris_material", PRIMITIVE_COLLIDER)
+                    .with_density_for_name("armL_mesh.ferris_material", 2.0)
                     // Remove the right arm. Don't worry, crabs can regrow lost limbs!
-                    .without_constructor_for_name("armR_mesh"),
+                    .without_constructor_for_name("armR_mesh.ferris_material"),
                 RigidBody::Dynamic,
             ))
             .id();
@@ -704,7 +798,7 @@ mod tests {
         // Check densities
         let densities: HashMap<_, _> = app
             .world_mut()
-            .query::<(&Name, &ColliderDensity)>()
+            .query::<(&GltfMeshName, &ColliderDensity)>()
             .iter(app.world())
             .map(|(name, density)| (name.to_string(), density.0))
             .collect();
@@ -716,7 +810,7 @@ mod tests {
         // Check collider shape types
         let colliders: HashMap<_, _> = app
             .world_mut()
-            .query::<(&Name, &Collider)>()
+            .query::<(&GltfMeshName, &Collider)>()
             .iter(app.world())
             .map(|(name, collider)| (name.to_string(), collider))
             .collect();
@@ -747,9 +841,9 @@ mod tests {
             AssetPlugin::default(),
             #[cfg(feature = "bevy_scene")]
             ScenePlugin,
+            MeshPlugin,
             PhysicsPlugins::default(),
-        ))
-        .init_resource::<Assets<Mesh>>();
+        ));
 
         app
     }

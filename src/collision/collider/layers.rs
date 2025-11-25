@@ -461,9 +461,11 @@ mod tests {
         assert!(with_bitmask.memberships.has_all(GameLayer::Enemy));
         assert!(!with_bitmask.memberships.has_all(GameLayer::Player));
 
-        assert!(with_bitmask
-            .filters
-            .has_all([GameLayer::Player, GameLayer::Ground]));
+        assert!(
+            with_bitmask
+                .filters
+                .has_all([GameLayer::Player, GameLayer::Ground])
+        );
         assert!(!with_bitmask.filters.has_all(GameLayer::Enemy));
     }
 }

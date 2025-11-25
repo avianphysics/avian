@@ -47,8 +47,8 @@ fn setup(
     // Connect anchor and dynamic object
     commands.spawn(
         PrismaticJoint::new(anchor, object)
-            .with_local_anchor_1(Vector::X)
-            .with_free_axis(Vector::X)
+            .with_local_anchor1(Vector::X)
+            .with_slider_axis(Vector::X)
             .with_limits(0.5, 2.0),
     );
 

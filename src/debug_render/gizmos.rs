@@ -275,6 +275,19 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
                 let d = basis2 * -10_000.0;
                 self.draw_polyline(&[a, b, c, d], &[[0, 1], [2, 3]], position, rotation, color);
             }
+            TypedShape::Voxels(v) => {
+                #[cfg(feature = "2d")]
+                let (vertices, indices) = v.to_polyline();
+                #[cfg(feature = "3d")]
+                let (vertices, indices) = v.to_outline();
+                self.draw_polyline(
+                    &nalgebra_to_glam(&vertices),
+                    &indices,
+                    position,
+                    rotation,
+                    color,
+                );
+            }
             TypedShape::HeightField(s) => {
                 #[cfg(feature = "2d")]
                 for segment in s.segments() {

@@ -1,0 +1,33 @@
+<svg width="597" height="369" viewBox="0 0 199 123" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M92 58.0039L141.35 84.225" stroke="#E19664" />
+    <path d="M85.0001 69.5L135 96.1" stroke="#E19664" />
+    <path d="M85.4 69.72L91.8001 57.88" stroke="#64C850" stroke-linecap="square" />
+    <path d="M134.57 95.88L140.925 84" stroke="#FF4E00" stroke-linecap="square" />
+    <path d="M198.117 122.5H120.207L168.9 73.8057L198.117 122.5Z" fill="#5064C8" stroke="black" />
+    <text fill="white" xml:space="preserve" style="white-space: pre" font-family="'Fira Code', monospace" font-size="6" font-weight="600" letter-spacing="0em">
+        <tspan x="155.006" y="106.51">body2</tspan>
+    </text>
+    <path d="M121 81L148 95" stroke="#FFBB40" />
+    <circle cx="121" cy="81" r="4" fill="#FFBB40" />
+    <rect x="21.3728" y="0.664463" width="79" height="49" rx="1.5" transform="rotate(25 21.3728 0.664463)" fill="#5064C8" stroke="black" />
+    <text fill="white" xml:space="preserve" style="white-space: pre" font-family="'Fira Code', monospace" font-size="6" font-weight="600" letter-spacing="0em">
+        <tspan x="38.0059" y="42.51">body1</tspan>
+    </text>
+    <path d="M81 60L89 64" stroke="#FFBB40" />
+    <circle cx="89" cy="64" r="4" fill="#FFBB40" />
+    <text fill="#FFBB40" xml:space="preserve" style="white-space: pre" font-family="'Fira Code', monospace" font-size="6" font-weight="600" letter-spacing="0em">
+        <tspan x="68.4082" y="83.51">anchor1</tspan>
+    </text>
+    <text fill="#FFBB40" xml:space="preserve" style="white-space: pre" font-family="'Fira Code', monospace" font-size="6" font-weight="600" letter-spacing="0em">
+        <tspan x="99.4082" y="97.51">anchor2</tspan>
+    </text>
+    <text fill="#64C850" xml:space="preserve" style="white-space: pre" font-family="'Fira Code', monospace" font-size="6" font-weight="600" letter-spacing="0em">
+        <tspan x="92.1035" y="54.51">min</tspan>
+    </text>
+    <text fill="#FF4E00" xml:space="preserve" style="white-space: pre" font-family="'Fira Code', monospace" font-size="6" font-weight="600" letter-spacing="0em">
+        <tspan x="141.104" y="80.51">max</tspan>
+    </text>
+    <text fill="#E19664" xml:space="preserve" style="white-space: pre" font-family="'Fira Code', monospace" font-size="6" font-weight="600" letter-spacing="0em">
+        <tspan x="108.213" y="62.51">slider_axis</tspan>
+    </text>
+</svg>

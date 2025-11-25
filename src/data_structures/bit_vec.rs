@@ -5,9 +5,15 @@
 use core::ops::BitOrAssign;
 use core::slice;
 
+use bevy::reflect::Reflect;
+#[cfg(feature = "serialize")]
+use bevy::reflect::{ReflectDeserialize, ReflectSerialize};
+
 /// A dynamically sized compact bit vector with a fixed block size of 64 bits.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(Debug)]
 pub struct BitVec {
     blocks: Vec<u64>,
     block_capacity: usize,
@@ -48,7 +54,7 @@ impl BitVec {
         self.blocks.iter_mut().for_each(|b| *b = 0);
     }
 
-    /// Sets the bit count of the [`BitVec`] and sets all bits.
+    /// Sets the bit at the specified index.
     ///
     /// # Panics
     ///
@@ -56,19 +62,57 @@ impl BitVec {
     #[inline]
     pub fn set(&mut self, index: usize) {
         let block_index = index / 64;
-        debug_assert!(block_index < self.block_count);
+        debug_assert!(
+            block_index < self.block_count,
+            "block index out of bounds for `BitVec::set` ({} >= {})",
+            block_index,
+            self.block_count
+        );
         let bit_index = index % 64;
         let mask = 1 << bit_index;
         self.blocks[block_index] |= mask;
+    }
+
+    /// Sets the specified bit and grows the [`BitVec`] if necessary.
+    #[inline]
+    pub fn set_and_grow(&mut self, index: usize) {
+        let block_index = index / 64;
+
+        if block_index >= self.block_count {
+            self.grow(block_index + 1);
+        }
+
+        let bit_index = index % 64;
+        let mask = 1 << bit_index;
+        self.blocks[block_index] |= mask;
+    }
+
+    /// Resizes the [`BitVec`] to the specified number of blocks.
+    ///
+    /// If the new block count exceeds the current capacity, the capacity is increased by half.
+    /// The blocks are not cleared.
+    #[inline]
+    pub fn grow(&mut self, new_block_count: usize) {
+        if new_block_count > self.block_capacity {
+            // Increase the block capacity by half if the new block count
+            // exceeds the current capacity.
+            let new_block_capacity = new_block_count + new_block_count / 2;
+            self.blocks.resize(new_block_capacity, 0);
+            self.block_capacity = new_block_capacity;
+        }
+
+        self.block_count = new_block_count;
     }
 
     /// Unsets the bit at the specified index.
     #[inline]
     pub fn unset(&mut self, index: usize) {
         let block_index = index / 64;
+
         if block_index >= self.block_count {
             return;
         }
+
         let bit_index = index % 64;
         let mask = 1 << bit_index;
         self.blocks[block_index] &= !mask;
@@ -80,9 +124,11 @@ impl BitVec {
     #[inline]
     pub fn get(&self, index: usize) -> bool {
         let block_index = index / 64;
+
         if block_index >= self.block_count {
             return false;
         }
+
         let bit_index = index % 64;
         let mask = 1 << bit_index;
         (self.blocks[block_index] & mask) != 0
@@ -100,6 +146,18 @@ impl BitVec {
         self.block_count
     }
 
+    /// Returns the number of set bits in the [`BitVec`].
+    #[inline]
+    pub fn count_ones(&self) -> usize {
+        self.blocks.iter().map(|&b| b.count_ones() as usize).sum()
+    }
+
+    /// Returns the number of unset bits in the [`BitVec`].
+    #[inline]
+    pub fn count_zeros(&self) -> usize {
+        self.block_count * 64 - self.count_ones()
+    }
+
     /// Clears all bits in the [`BitVec`].
     #[inline]
     pub fn clear(&mut self) {
@@ -108,7 +166,7 @@ impl BitVec {
 
     /// Returns an iterator over the blocks of the [`BitVec`].
     #[inline]
-    pub fn blocks(&self) -> Blocks {
+    pub fn blocks(&self) -> Blocks<'_> {
         Blocks {
             iter: self.blocks.iter(),
         }

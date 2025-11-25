@@ -196,9 +196,8 @@
 //! For example, [`MassPropertyHelper::total_mass_properties`] computes the total mass properties of an entity,
 //! taking into account the mass properties of descendants and colliders.
 
-use crate::{prelude::*, prepare::PrepareSet};
-#[cfg(feature = "3d")]
-use bevy::ecs::query::QueryFilter;
+use crate::physics_transform::PhysicsTransformSystems;
+use crate::prelude::*;
 use bevy::{
     ecs::{intern::Interned, schedule::ScheduleLabel},
     prelude::*,
@@ -277,22 +276,24 @@ impl Default for MassPropertyPlugin {
 
 impl Plugin for MassPropertyPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<(
-            Mass,
-            AngularInertia,
-            CenterOfMass,
-            ComputedMass,
-            ComputedAngularInertia,
-            ComputedCenterOfMass,
-            ColliderDensity,
-            ColliderMassProperties,
-            NoAutoMass,
-            NoAutoAngularInertia,
-            NoAutoCenterOfMass,
-        )>();
-
+        // TODO: We probably don't need this since we have the observer.
         // Force mass property computation for new rigid bodies.
         app.register_required_components::<RigidBody, RecomputeMassProperties>();
+
+        // Compute mass properties for new rigid bodies at spawn.
+        app.add_observer(
+            |trigger: On<Add, RigidBody>, mut mass_helper: MassPropertyHelper| {
+                mass_helper.update_mass_properties(trigger.entity);
+            },
+        );
+
+        // Update the mass properties of rigid bodies when colliders added or removed.
+        // TODO: Avoid duplicating work with the above observer.
+        app.add_observer(
+            |trigger: On<Insert, RigidBodyColliders>, mut mass_helper: MassPropertyHelper| {
+                mass_helper.update_mass_properties(trigger.entity);
+            },
+        );
 
         // Configure system sets for mass property computation.
         app.configure_sets(
@@ -303,7 +304,8 @@ impl Plugin for MassPropertyPlugin {
                 MassPropertySystems::UpdateComputedMassProperties,
             )
                 .chain()
-                .in_set(PrepareSet::Finalize),
+                .in_set(PhysicsSystems::Prepare)
+                .after(PhysicsTransformSystems::TransformToPosition),
         );
 
         // Queue mass property recomputation when mass properties are changed.
@@ -319,12 +321,7 @@ impl Plugin for MassPropertyPlugin {
         // Update mass properties for entities with the `RecomputeMassProperties` component.
         app.add_systems(
             self.schedule,
-            (
-                update_mass_properties,
-                #[cfg(feature = "3d")]
-                update_global_angular_inertia::<Added<RigidBody>>,
-                warn_missing_mass,
-            )
+            (update_mass_properties, warn_invalid_mass)
                 .chain()
                 .in_set(MassPropertySystems::UpdateComputedMassProperties),
         );
@@ -410,27 +407,17 @@ fn update_mass_properties(
     }
 }
 
-/// Updates [`GlobalAngularInertia`] for entities that match the given query filter `F`.
-#[cfg(feature = "3d")]
-pub(crate) fn update_global_angular_inertia<F: QueryFilter>(
-    mut query: Populated<
-        (
-            &Rotation,
-            &ComputedAngularInertia,
-            &mut GlobalAngularInertia,
-        ),
-        (Or<(Changed<ComputedAngularInertia>, Changed<Rotation>)>, F),
-    >,
-) {
-    query
-        .par_iter_mut()
-        .for_each(|(rotation, angular_inertia, mut global_angular_inertia)| {
-            global_angular_inertia.update(*angular_inertia, rotation.0);
-        });
-}
+#[cfg(feature = "default-collider")]
+type ShouldWarn = (
+    Without<ColliderConstructor>,
+    Without<ColliderConstructorHierarchy>,
+);
+
+#[cfg(not(feature = "default-collider"))]
+type ShouldWarn = ();
 
 /// Logs warnings when dynamic bodies have invalid [`Mass`] or [`AngularInertia`].
-fn warn_missing_mass(
+fn warn_invalid_mass(
     mut bodies: Query<
         (
             Entity,
@@ -438,15 +425,18 @@ fn warn_missing_mass(
             Ref<ComputedMass>,
             Ref<ComputedAngularInertia>,
         ),
-        Or<(Changed<ComputedMass>, Changed<ComputedAngularInertia>)>,
+        (
+            Or<(Changed<ComputedMass>, Changed<ComputedAngularInertia>)>,
+            ShouldWarn,
+        ),
     >,
 ) {
     for (entity, rb, mass, inertia) in &mut bodies {
-        let is_mass_valid = mass.value().is_finite();
+        let is_mass_valid = mass.is_finite();
         #[cfg(feature = "2d")]
-        let is_inertia_valid = inertia.value().is_finite();
+        let is_inertia_valid = inertia.is_finite();
         #[cfg(feature = "3d")]
-        let is_inertia_valid = inertia.value().is_finite();
+        let is_inertia_valid = inertia.is_finite();
 
         // Warn about dynamic bodies with no mass or inertia
         if rb.is_dynamic() && !(is_mass_valid && is_inertia_valid) {
@@ -459,8 +449,8 @@ fn warn_missing_mass(
 }
 
 #[cfg(test)]
-#[cfg(feature = "2d")]
-#[expect(clippy::unnecessary_cast)]
+#[cfg(all(feature = "2d", feature = "default-collider"))]
+#[allow(clippy::unnecessary_cast)]
 mod tests {
     use approx::assert_relative_eq;
 

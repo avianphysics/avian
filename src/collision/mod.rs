@@ -32,28 +32,25 @@
 //!
 //! # Collision Events
 //!
-//! Collision events can be used for detecting when colliders start or stop touching.
+//! [Collision events](collision_events) can be used for detecting when colliders start or stop touching.
 //!
-//! Avian provides two buffered collision event types that can be read using an [`EventReader`](bevy::ecs::event::EventReader):
+//! Avian provides two collision event types:
 //!
-//! - [`CollisionStarted`]
-//! - [`CollisionEnded`]
+//! - [`CollisionStart`]: Triggered when two colliders start touching.
+//! - [`CollisionEnd`]: Triggered when two colliders stop touching.
 //!
-//! These events are good for efficiently processing large numbers of collision events between pairs of entities,
-//! such as for detecting bullet hits or playing impact sounds when two objects collide.
-//!
-//! Avian also provides two collision event types that are triggered for observers:
-//!
-//! - [`OnCollisionStart`]
-//! - [`OnCollisionEnd`]
-//!
-//! These events are good for entity-specific collision scenarios, such as for detecting when a player
-//! steps on a pressure plate or enters a trigger volume.
+//! Depending on your use case, you may want to read them as [`Message`]s with a [`MessageReader`],
+//! or observe them as [`Event`]s with an [observer]. Avian supports both options.
 //!
 //! Collision events are only sent or triggered for entities that have the [`CollisionEventsEnabled`] component.
 //!
 //! See the documentation of the event types and the [`collision_events`] module
 //! for more information and usage examples.
+//!
+//! [`Message`]: bevy::ecs::message::Message
+//! [`MessageReader`]: bevy::ecs::message::MessageReader
+//! [`Event`]: bevy::ecs::event::Event
+//! [observer]: bevy::ecs::observer::Observer
 //!
 //! # Contact Filtering and Modification
 //!
@@ -81,26 +78,41 @@ pub use diagnostics::CollisionDiagnostics;
 
 /// Re-exports common types related to collision detection functionality.
 pub mod prelude {
-    pub use super::broad_phase::{BroadPhasePlugin, BroadPhaseSet};
+    pub use super::broad_phase::{BroadPhasePlugin, BroadPhaseSystems};
+    #[cfg(all(feature = "collider-from-mesh", feature = "default-collider"))]
+    pub use super::collider::ColliderCachePlugin;
     pub use super::collider::{
+        AabbContext, AnyCollider, ColliderAabb, ColliderBackendPlugin, ColliderDisabled,
+        ColliderMarker, CollidingEntities, CollisionLayers, CollisionMargin,
+        ContactManifoldContext, IntoCollider, LayerMask, PhysicsLayer, ScalableCollider, Sensor,
+        SimpleCollider,
         collider_hierarchy::{
             ColliderHierarchyPlugin, ColliderOf, RigidBodyColliders, RigidBodyHelper,
         },
         collider_transform::{ColliderTransform, ColliderTransformPlugin},
-        AabbContext, AnyCollider, Collider, ColliderAabb, ColliderBackendPlugin,
-        ColliderConstructor, ColliderConstructorHierarchy, ColliderDisabled, ColliderMarker,
-        CollidingEntities, CollisionLayers, CollisionMargin, ContactManifoldContext, FillMode,
-        IntoCollider, LayerMask, PhysicsLayer, ScalableCollider, Sensor, SimpleCollider,
-        TrimeshFlags, VhacdParameters,
     };
+    #[cfg(all(
+        feature = "default-collider",
+        any(feature = "parry-f32", feature = "parry-f64")
+    ))]
+    pub use super::collider::{
+        Collider, ColliderConstructor, ColliderConstructorHierarchy,
+        ColliderConstructorHierarchyReady, ColliderConstructorReady, FillMode, TrimeshFlags,
+        VhacdParameters,
+    };
+    #[expect(deprecated)]
     pub use super::collision_events::{
-        CollisionEnded, CollisionEventsEnabled, CollisionStarted, OnCollisionEnd, OnCollisionStart,
+        CollisionEnd, CollisionEventsEnabled, CollisionStart, OnCollisionEnd, OnCollisionStart,
     };
     pub use super::contact_types::{
-        Collisions, ContactGraph, ContactManifold, ContactPair, ContactPairFlags, ContactPoint,
+        Collisions, ContactEdge, ContactGraph, ContactManifold, ContactPair, ContactPairFlags,
+        ContactPoint,
     };
     pub use super::hooks::{ActiveCollisionHooks, CollisionHooks};
-    pub use super::narrow_phase::{NarrowPhaseConfig, NarrowPhasePlugin, NarrowPhaseSet};
+    #[expect(deprecated)]
+    pub use super::narrow_phase::{
+        NarrowPhaseConfig, NarrowPhasePlugin, NarrowPhaseSet, NarrowPhaseSystems,
+    };
 }
 
 #[expect(unused_imports)]

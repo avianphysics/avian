@@ -13,7 +13,7 @@ fn main() {
         ))
         .insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.1)))
         .insert_resource(Gravity(Vector::ZERO))
-        .add_event::<MovementAction>()
+        .add_message::<MovementAction>()
         .add_systems(Startup, setup)
         .add_systems(
             Update,
@@ -92,7 +92,7 @@ fn setup(
     commands.spawn(Camera2d);
 }
 
-#[derive(Event, Debug, Reflect)]
+#[derive(Message, Debug, Reflect)]
 pub enum MovementAction {
     Velocity(Vector),
     Offset(Vector),
@@ -101,7 +101,7 @@ pub enum MovementAction {
 
 // use velocity
 fn keyboard_input1(
-    mut movement_event_writer: EventWriter<MovementAction>,
+    mut movement_writer: MessageWriter<MovementAction>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     time: Res<Time<Physics>>,
 ) {
@@ -110,7 +110,7 @@ fn keyboard_input1(
     }
     let space = keyboard_input.pressed(KeyCode::Space);
     if space {
-        movement_event_writer.write(MovementAction::Stop);
+        movement_writer.write(MovementAction::Stop);
         return;
     }
 
@@ -122,12 +122,12 @@ fn keyboard_input1(
     let vertical = up as i8 - down as i8;
     let direction = Vector::new(horizontal as Scalar, vertical as Scalar);
     if direction != Vector::ZERO {
-        movement_event_writer.write(MovementAction::Velocity(direction));
+        movement_writer.write(MovementAction::Velocity(direction));
     }
 }
 // use position offset
 fn keyboard_input2(
-    mut movement_event_writer: EventWriter<MovementAction>,
+    mut movement_writer: MessageWriter<MovementAction>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     time: Res<Time<Physics>>,
 ) {
@@ -142,20 +142,20 @@ fn keyboard_input2(
     let vertical = up as i8 - down as i8;
     let direction = Vector::new(horizontal as Scalar, vertical as Scalar);
     if direction != Vector::ZERO {
-        movement_event_writer.write(MovementAction::Offset(direction));
+        movement_writer.write(MovementAction::Offset(direction));
     }
 }
 
-fn has_movement(mut reader: EventReader<MovementAction>) -> bool {
+fn has_movement(mut reader: MessageReader<MovementAction>) -> bool {
     reader.read().next().is_some()
 }
 fn movement(
     time: Res<Time>,
-    mut movement_event_reader: EventReader<MovementAction>,
+    mut movement_reader: MessageReader<MovementAction>,
     mut controllers: Query<(&mut LinearVelocity, &mut Position), With<Character>>,
 ) {
     let delta_time = time.delta_secs_f64().adjust_precision();
-    for event in movement_event_reader.read() {
+    for event in movement_reader.read() {
         for (mut linear_velocity, mut position) in &mut controllers {
             match event {
                 MovementAction::Stop => {
@@ -233,12 +233,12 @@ fn update_velocity_text(
     Ok(())
 }
 
-fn log_events(mut started: EventReader<CollisionStarted>, mut ended: EventReader<CollisionEnded>) {
+fn log_events(mut started: MessageReader<CollisionStart>, mut ended: MessageReader<CollisionEnd>) {
     // print out the started and ended events
     for event in started.read() {
-        println!("CollisionStarted: {:?}", event);
+        println!("CollisionStart: {event:?}");
     }
     for event in ended.read() {
-        println!("CollisionEnded: {:?}", event);
+        println!("CollisionEnd: {event:?}");
     }
 }
