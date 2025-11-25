@@ -369,10 +369,12 @@
 //!
 //! ## Is there a character controller?
 //!
-//! Avian does not have a built-in character controller yet, so if you need one,
-//! you will need to implement it yourself. However, third party character controllers
-//! like [`bevy_tnua`](https://github.com/idanarye/bevy-tnua) support Avian, and [`bevy_mod_wanderlust`](https://github.com/PROMETHIA-27/bevy_mod_wanderlust)
-//! and others are also likely to get Avian support soon.
+//! Avian does not have a built-in character controller yet. However, it has a [`MoveAndSlide`]
+//! system parameter with utilities for implementing your own kinematic character controllers.
+//! See its documentation for more information.
+//!
+//! There are also some third party character controllers such as [`bevy_tnua`](https://github.com/idanarye/bevy-tnua)
+//! that support Avian.
 //!
 //! For custom character controllers, you can take a look at the
 #![cfg_attr(
