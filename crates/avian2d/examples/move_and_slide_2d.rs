@@ -1,7 +1,8 @@
-use avian2d::{
-    math::{AdjustPrecision as _, AsF32, Vector},
-    prelude::*,
-};
+//! Demonstrates using move and slide to control a kinematic character.
+//!
+//! This is intended more as a testbed and less as a polished usage example.
+
+use avian2d::{math::*, prelude::*};
 use bevy::{
     asset::RenderAssetUsages, color::palettes::tailwind, ecs::entity::EntityHashSet,
     mesh::PrimitiveTopology, prelude::*,
@@ -13,13 +14,30 @@ fn main() {
         .add_plugins((
             DefaultPlugins,
             ExampleCommonPlugin,
-            PhysicsPlugins::default(),
+            PhysicsPlugins::default()
+                // Specify a units-per-meter scaling factor, 1 meter = 50 pixels.
+                // The unit allows the engine to tune its parameters for the scale of the world, improving stability.
+                .with_length_unit(50.0),
         ))
         .add_systems(Startup, setup)
         .add_systems(FixedUpdate, move_player)
         .add_systems(Update, update_debug_text)
         .run();
 }
+
+#[derive(Component, Default)]
+struct Player {
+    /// The velocity of the player.
+    ///
+    /// We cannot use [`LinearVelocity`] directly, because we control the transform manually,
+    /// and don't want to also apply simulation velocity on top.
+    velocity: Vec2,
+    /// The entities touched during the last `move_and_slide` call. Stored for debug printing.
+    touched: EntityHashSet,
+}
+
+#[derive(Component)]
+struct DebugText;
 
 fn setup(
     mut commands: Commands,
@@ -35,7 +53,7 @@ fn setup(
         RigidBody::Kinematic,
         Player::default(),
         TransformInterpolation,
-        // Not needed for collide-and-slide to work, but we add it for debug printing
+        // Not needed for meve and slide to work, but we add it for debug printing
         CollidingEntities::default(),
     ));
 
@@ -168,15 +186,6 @@ fn setup(
     ));
 }
 
-#[derive(Component)]
-struct DebugText;
-
-#[derive(Component, Default)]
-struct Player {
-    internal_velocity: Vector,
-    touched: EntityHashSet,
-}
-
 fn move_player(
     player: Single<(Entity, &mut Transform, &mut Player, &Collider), Without<Camera>>,
     move_and_slide: MoveAndSlide,
@@ -185,37 +194,41 @@ fn move_player(
     mut gizmos: Gizmos,
 ) {
     let (entity, mut transform, mut player, collider) = player.into_inner();
-    let mut wish_velocity = Vector::ZERO;
+    let mut movement_velocity = Vec2::ZERO;
     if input.pressed(KeyCode::KeyW) {
-        wish_velocity += Vector::Y
+        movement_velocity += Vec2::Y
     }
     if input.pressed(KeyCode::KeyS) {
-        wish_velocity += Vector::NEG_Y
+        movement_velocity += Vec2::NEG_Y
     }
     if input.pressed(KeyCode::KeyA) {
-        wish_velocity += Vector::NEG_X
+        movement_velocity += Vec2::NEG_X
     }
     if input.pressed(KeyCode::KeyD) {
-        wish_velocity += Vector::X
+        movement_velocity += Vec2::X
     }
-    wish_velocity = wish_velocity.normalize_or_zero();
-    wish_velocity *= 100.0;
+    movement_velocity = movement_velocity.normalize_or_zero();
+    movement_velocity *= 100.0;
     if input.pressed(KeyCode::ShiftLeft) {
-        wish_velocity *= 2.0;
+        movement_velocity *= 2.0;
     }
-    // preserve momentum
-    wish_velocity += player.internal_velocity;
-    let current_speed = wish_velocity.length();
+
+    // Add velocity from last frame to preserve momentum
+    movement_velocity += player.velocity;
+
+    let current_speed = movement_velocity.length();
     if current_speed > 0.0 {
-        // apply friction
-        wish_velocity = wish_velocity / current_speed
-            * (current_speed - current_speed * 20.0 * time.delta_secs().adjust_precision()).max(0.0)
+        // Apply friction
+        movement_velocity = movement_velocity / current_speed
+            * (current_speed - current_speed * 20.0 * time.delta_secs()).max(0.0)
     }
 
     player.touched.clear();
+
+    // Perform move and slide
     let MoveAndSlideOutput {
         position,
-        projected_velocity: internal_velocity,
+        projected_velocity: velocity,
     } = move_and_slide.move_and_slide(
         collider,
         transform.translation.xy().adjust_precision(),
@@ -224,11 +237,12 @@ fn move_player(
             .to_euler(EulerRot::XYZ)
             .2
             .adjust_precision(),
-        wish_velocity,
+        movement_velocity.adjust_precision(),
         time.delta(),
         &MoveAndSlideConfig::default(),
         &SpatialQueryFilter::from_excluded_entities([entity]),
         |hit| {
+            // For each collision, draw debug gizmos
             if hit.intersects() {
                 gizmos.circle_2d(
                     Isometry2d::from_translation(transform.translation.xy()),
@@ -249,8 +263,10 @@ fn move_player(
             true
         },
     );
+
+    // Update transform and stored velocity
     transform.translation = position.extend(0.0).f32();
-    player.internal_velocity = internal_velocity;
+    player.velocity = velocity.f32();
 }
 
 fn update_debug_text(
@@ -261,8 +277,8 @@ fn update_debug_text(
     let (player, colliding_entities) = player.into_inner();
     ***text = format!(
         "velocity: [{:.3}, {:.3}]\n{} intersections (goal is 0): {:#?}\n{} touched: {:#?}",
-        player.internal_velocity.x,
-        player.internal_velocity.y,
+        player.velocity.x,
+        player.velocity.y,
         colliding_entities.len(),
         names
             .iter_many(colliding_entities.iter())
