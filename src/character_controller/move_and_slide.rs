@@ -67,7 +67,7 @@ pub const COS_5_DEGREES: Scalar = 0.99619469809;
 pub struct MoveAndSlide<'w, 's> {
     /// The [`SpatialQueryPipeline`] used to perform spatial queries.
     pub query_pipeline: Res<'w, SpatialQueryPipeline>,
-    /// The [`Query`] used to query colliders.
+    /// The [`Query`] used to query for colliders.
     pub colliders: Query<
         'w,
         's,
@@ -82,6 +82,288 @@ pub struct MoveAndSlide<'w, 's> {
     /// A units-per-meter scaling factor that adjusts some thresholds and tolerances
     /// to the scale of the world for better behavior.
     pub length_unit: Res<'w, PhysicsLengthUnit>,
+}
+
+/// Configuration for [`MoveAndSlide::move_and_slide`].
+#[derive(Clone, Debug, PartialEq, Reflect)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(Debug, PartialEq)]
+pub struct MoveAndSlideConfig {
+    /// How many iterations to use when moving the character.
+    ///
+    /// A single iteration consists of:
+    ///
+    /// - Moving the character as far as possible in the desired velocity direction.
+    /// - Modifying the velocity to slide along any contact surfaces.
+    ///
+    /// Increasing this allows the character to slide along more surfaces in a single frame,
+    /// which can help with complex geometry and high speeds, but increases computation time.
+    pub move_and_slide_iterations: usize,
+
+    /// How many iterations to use when performing depenetration.
+    ///
+    /// Depenetration is an iterative process that solves penetrations for all planes,
+    /// until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`]
+    /// or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`].
+    ///
+    /// To disable depenetration, set this to `0`.
+    pub depenetration_iterations: usize,
+
+    /// The target error to achieve when performing depenetration.
+    ///
+    /// Depenetration is an iterative process that solves penetrations for all planes,
+    /// until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`]
+    /// or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`].
+    ///
+    /// This is implicitly scaled by the [`PhysicsLengthUnit`].
+    pub max_depenetration_error: Scalar,
+
+    /// The maximum penetration depth that is allowed for a contact to be resolved during depenetration.
+    ///
+    /// This is used to reject invalid contacts that have an excessively high penetration depth,
+    /// which can lead to clipping through geometry. This may be removed in the future once the
+    /// collision errors in the underlying collision detection system are fixed.
+    ///
+    /// This is implicitly scaled by the [`PhysicsLengthUnit`].
+    pub penetration_rejection_threshold: Scalar,
+
+    /// A minimal distance to always keep between the collider and any other colliders.
+    ///
+    /// This exists to improve numerical stability and ensure that the collider never intersects anything.
+    /// Set this to a small enough value that you don't see visual artifacts but have good stability.
+    ///
+    /// Increase the value if you notice your character getting stuck in geometry.
+    /// Decrease it when you notice jittering, especially around V-shaped walls.
+    pub skin_width: Scalar,
+
+    /// The initial planes to consider for the move and slide algorithm.
+    ///
+    /// This will be expanded during the algorithm with contact planes, but you can also initialize it
+    /// with some predefined planes that the algorithm should never move against.
+    ///
+    /// A common use case is adding the ground plane when a character controller is standing or walking on the ground.
+    pub planes: Vec<Dir>,
+
+    /// The dot product threshold to consider two planes as similar when pruning nearly parallel planes.
+    /// The comparison used is `n1.dot(n2) >= plane_similarity_dot_threshold`.
+    ///
+    /// This is used to reduce the number of planes considered during move and slide,
+    /// which can improve performance for dense geomtry. However, setting this value too high
+    /// can lead to unwanted behavior, as it may discard important planes.
+    ///
+    /// The default value of [`COS_5_DEGREES`] (≈0.996) corresponds to a 5 degree angle between the planes.
+    pub plane_similarity_dot_threshold: Scalar,
+
+    /// The maximum number of planes to solve while performing move and slide.
+    ///
+    /// If the number of planes exceeds this value, the algorithm will stop collecting new planes.
+    /// This is a safety measure to prevent excessive computation time for dense geometry.
+    pub max_planes: usize,
+}
+
+impl Default for MoveAndSlideConfig {
+    fn default() -> Self {
+        let default_depen_cfg = DepenetrationConfig::default();
+        Self {
+            move_and_slide_iterations: 4,
+            depenetration_iterations: default_depen_cfg.depenetration_iterations,
+            max_depenetration_error: default_depen_cfg.max_depenetration_error,
+            penetration_rejection_threshold: default_depen_cfg.penetration_rejection_threshold,
+            skin_width: default_depen_cfg.skin_width,
+            planes: Vec::new(),
+            plane_similarity_dot_threshold: COS_5_DEGREES,
+            max_planes: 20,
+        }
+    }
+}
+
+/// Configuration for [`MoveAndSlide::depenetrate`].
+#[derive(Clone, Debug, PartialEq, Reflect)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(Debug, PartialEq)]
+pub struct DepenetrationConfig {
+    /// How many iterations to use when performing depenetration.
+    ///
+    /// Depenetration is an iterative process that solves penetrations for all planes,
+    /// until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`]
+    /// or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`].
+    ///
+    /// To disable depenetration, set this to `0`.
+    pub depenetration_iterations: usize,
+
+    /// The target error to achieve when performing depenetration.
+    ///
+    /// Depenetration is an iterative process that solves penetrations for all planes,
+    /// until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`]
+    /// or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`].
+    ///
+    /// This is implicitly scaled by the [`PhysicsLengthUnit`].
+    pub max_depenetration_error: Scalar,
+
+    /// The maximum penetration depth that is allowed for a contact to be resolved during depenetration.
+    ///
+    /// This is used to reject invalid contacts that have an excessively high penetration depth,
+    /// which can lead to clipping through geometry. This may be removed in the future once the
+    /// collision errors in the underlying collision detection system are fixed.
+    ///
+    /// This is implicitly scaled by the [`PhysicsLengthUnit`].
+    pub penetration_rejection_threshold: Scalar,
+
+    /// A minimal distance to always keep between the collider and any other colliders.
+    ///
+    /// This exists to improve numerical stability and ensure that the collider never intersects anything.
+    /// Set this to a small enough value that you don't see visual artifacts but have good stability.
+    ///
+    /// Increase the value if you notice your character getting stuck in geometry.
+    /// Decrease it when you notice jittering, especially around V-shaped walls.
+    pub skin_width: Scalar,
+}
+
+impl Default for DepenetrationConfig {
+    fn default() -> Self {
+        Self {
+            depenetration_iterations: 16,
+            max_depenetration_error: 0.0001,
+            penetration_rejection_threshold: 0.5,
+            skin_width: 0.01,
+        }
+    }
+}
+
+impl From<&MoveAndSlideConfig> for DepenetrationConfig {
+    fn from(config: &MoveAndSlideConfig) -> Self {
+        Self {
+            depenetration_iterations: config.depenetration_iterations,
+            max_depenetration_error: config.max_depenetration_error,
+            penetration_rejection_threshold: config.penetration_rejection_threshold,
+            skin_width: config.skin_width,
+        }
+    }
+}
+
+/// Output from [`MoveAndSlide::move_and_slide`].
+#[derive(Clone, Copy, Debug, PartialEq, Reflect)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(Debug, PartialEq)]
+pub struct MoveAndSlideOutput {
+    /// The final position of the character after move and slide.
+    ///
+    /// Set your [`Transform::translation`] to this value.
+    pub position: Vector,
+
+    /// The final velocity of the character after move and slide.
+    ///
+    /// This corresponds to the remaining velocity after the algorithm has slid along all contact surfaces.
+    /// For example, if the character is trying to move to the right, but there is a ramp in its path,
+    /// the projected velocity will point up the ramp, with reduced magnitude.
+    ///
+    /// It is useful to store this value and apply your desired movement vectors, friction, and gravity on it
+    /// before handing it to [`MoveAndSlide::move_and_slide`] as the input `velocity`.
+    ///
+    /// You can also ignore this value if you don't wish to preserve momentum between frames.
+    ///
+    /// Do *not* set [`LinearVelocity`] to this value, as that would apply the movement twice and cause intersections.
+    /// Instead, set [`Transform::translation`] to [`MoveAndSlideOutput::position`].
+    pub projected_velocity: Vector,
+}
+
+/// Data related to a hit during [`MoveAndSlide::move_and_slide`].
+#[derive(Debug, PartialEq)]
+pub struct MoveAndSlideHitData<'a> {
+    /// The entity of the collider that was hit by the shape.
+    pub entity: Entity,
+
+    /// The maximum distance that is safe to move in the given direction so that the collider still keeps a distance of `skin_width` to the other colliders.
+    ///
+    /// This is `0.0` when any of the following is true:
+    ///
+    /// - The collider started off intersecting another collider.
+    /// - The collider is moving toward another collider that is already closer than `skin_width`.
+    ///
+    /// If you want to know the real distance to the next collision, use [`Self::collision_distance`].
+    pub distance: Scalar,
+
+    /// The hit point on the shape that was hit, expressed in world space.
+    pub point: Vector,
+
+    /// The outward surface normal on the hit shape at `point`, expressed in world space.
+    pub normal: &'a mut Dir,
+
+    /// The position of the collider at the time of the move and slide iteration.
+    pub position: &'a mut Vector,
+
+    /// The velocity of the collider at the time of the move and slide iteration.
+    pub velocity: &'a mut Vector,
+
+    /// The raw distance to the next collision, not respecting skin width.
+    /// To move the shape, use [`Self::distance`] instead.
+    #[doc(alias = "time_of_impact")]
+    pub collision_distance: Scalar,
+}
+
+impl<'a> MoveAndSlideHitData<'a> {
+    /// Whether the collider started off already intersecting another collider when it was cast.
+    ///
+    /// Note that this will be `false` if the collider was closer than `skin_width`, but not physically intersecting.
+    pub fn intersects(&self) -> bool {
+        self.collision_distance == 0.0
+    }
+}
+
+/// Data related to a hit during [`MoveAndSlide::cast_move`].
+#[derive(Clone, Copy, Debug, PartialEq, Reflect)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(Debug, PartialEq)]
+pub struct MoveHitData {
+    /// The entity of the collider that was hit by the shape.
+    pub entity: Entity,
+
+    /// The maximum distance that is safe to move in the given direction so that the collider still keeps a distance of `skin_width` to the other colliders.
+    ///
+    /// This is `0.0` when any of the following is true:
+    ///
+    /// - The collider started off intersecting another collider.
+    /// - The collider is moving toward another collider that is already closer than `skin_width`.
+    ///
+    /// If you want to know the real distance to the next collision, use [`Self::collision_distance`].
+    #[doc(alias = "time_of_impact")]
+    pub distance: Scalar,
+
+    /// The closest point on the shape that was hit, expressed in world space.
+    ///
+    /// If the shapes are penetrating or the target distance is greater than zero,
+    /// this will be different from `point2`.
+    pub point1: Vector,
+
+    /// The closest point on the shape that was cast, expressed in world space.
+    ///
+    /// If the shapes are penetrating or the target distance is greater than zero,
+    /// this will be different from `point1`.
+    pub point2: Vector,
+
+    /// The outward surface normal on the hit shape at `point1`, expressed in world space.
+    pub normal1: Vector,
+
+    /// The outward surface normal on the cast shape at `point2`, expressed in world space.
+    pub normal2: Vector,
+
+    /// The raw distance to the next collision, not respecting skin width.
+    /// To move the shape, use [`Self::distance`] instead.
+    #[doc(alias = "time_of_impact")]
+    pub collision_distance: Scalar,
+}
+
+impl MoveHitData {
+    /// Whether the collider started off already intersecting another collider when it was cast.
+    ///
+    /// Note that this will be `false` if the collider was closer than `skin_width`, but not physically intersecting.
+    pub fn intersects(self) -> bool {
+        self.collision_distance == 0.0
+    }
 }
 
 impl<'w, 's> MoveAndSlide<'w, 's> {
@@ -869,287 +1151,6 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             Vector::ZERO
         } else {
             best_projection
-        }
-    }
-}
-
-/// Data related to a hit during [`MoveAndSlide::move_and_slide`].
-#[derive(Debug, PartialEq)]
-pub struct MoveAndSlideHitData<'a> {
-    /// The entity of the collider that was hit by the shape.
-    pub entity: Entity,
-
-    /// The maximum distance that is safe to move in the given direction so that the collider still keeps a distance of `skin_width` to the other colliders.
-    ///
-    /// This is `0.0` when any of the following is true:
-    ///
-    /// - The collider started off intersecting another collider.
-    /// - The collider is moving toward another collider that is already closer than `skin_width`.
-    ///
-    /// If you want to know the real distance to the next collision, use [`Self::collision_distance`].
-    pub distance: Scalar,
-
-    /// The hit point on the shape that was hit, expressed in world space.
-    pub point: Vector,
-
-    /// The outward surface normal on the hit shape at `point`, expressed in world space.
-    pub normal: &'a mut Dir,
-
-    /// The position of the collider at the time of the move and slide iteration.
-    pub position: &'a mut Vector,
-
-    /// The velocity of the collider at the time of the move and slide iteration.
-    pub velocity: &'a mut Vector,
-
-    /// The raw distance to the next collision, not respecting skin width.
-    /// To move the shape, use [`Self::distance`] instead.
-    #[doc(alias = "time_of_impact")]
-    pub collision_distance: Scalar,
-}
-
-impl<'a> MoveAndSlideHitData<'a> {
-    /// Whether the collider started off already intersecting another collider when it was cast.
-    ///
-    /// Note that this will be `false` if the collider was closer than `skin_width`, but not physically intersecting.
-    pub fn intersects(&self) -> bool {
-        self.collision_distance == 0.0
-    }
-}
-
-/// Data related to a hit during [`MoveAndSlide::cast_move`].
-#[derive(Clone, Copy, Debug, PartialEq, Reflect)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
-#[reflect(Debug, PartialEq)]
-pub struct MoveHitData {
-    /// The entity of the collider that was hit by the shape.
-    pub entity: Entity,
-
-    /// The maximum distance that is safe to move in the given direction so that the collider still keeps a distance of `skin_width` to the other colliders.
-    ///
-    /// This is `0.0` when any of the following is true:
-    ///
-    /// - The collider started off intersecting another collider.
-    /// - The collider is moving toward another collider that is already closer than `skin_width`.
-    ///
-    /// If you want to know the real distance to the next collision, use [`Self::collision_distance`].
-    #[doc(alias = "time_of_impact")]
-    pub distance: Scalar,
-
-    /// The closest point on the shape that was hit, expressed in world space.
-    ///
-    /// If the shapes are penetrating or the target distance is greater than zero,
-    /// this will be different from `point2`.
-    pub point1: Vector,
-
-    /// The closest point on the shape that was cast, expressed in world space.
-    ///
-    /// If the shapes are penetrating or the target distance is greater than zero,
-    /// this will be different from `point1`.
-    pub point2: Vector,
-
-    /// The outward surface normal on the hit shape at `point1`, expressed in world space.
-    pub normal1: Vector,
-
-    /// The outward surface normal on the cast shape at `point2`, expressed in world space.
-    pub normal2: Vector,
-
-    /// The raw distance to the next collision, not respecting skin width.
-    /// To move the shape, use [`Self::distance`] instead.
-    #[doc(alias = "time_of_impact")]
-    pub collision_distance: Scalar,
-}
-
-impl MoveHitData {
-    /// Whether the collider started off already intersecting another collider when it was cast.
-    ///
-    /// Note that this will be `false` if the collider was closer than `skin_width`, but not physically intersecting.
-    pub fn intersects(self) -> bool {
-        self.collision_distance == 0.0
-    }
-}
-
-/// Configuration for [`MoveAndSlide::move_and_slide`].
-#[derive(Clone, Debug, PartialEq, Reflect)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
-#[reflect(Debug, PartialEq)]
-pub struct MoveAndSlideConfig {
-    /// How many iterations to use when moving the character.
-    ///
-    /// A single iteration consists of:
-    ///
-    /// - Moving the character as far as possible in the desired velocity direction.
-    /// - Modifying the velocity to slide along any contact surfaces.
-    ///
-    /// Increasing this allows the character to slide along more surfaces in a single frame,
-    /// which can help with complex geometry and high speeds, but increases computation time.
-    pub move_and_slide_iterations: usize,
-
-    /// How many iterations to use when performing depenetration.
-    ///
-    /// Depenetration is an iterative process that solves penetrations for all planes,
-    /// until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`]
-    /// or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`].
-    ///
-    /// To disable depenetration, set this to `0`.
-    pub depenetration_iterations: usize,
-
-    /// The target error to achieve when performing depenetration.
-    ///
-    /// Depenetration is an iterative process that solves penetrations for all planes,
-    /// until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`]
-    /// or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`].
-    ///
-    /// This is implicitly scaled by the [`PhysicsLengthUnit`].
-    pub max_depenetration_error: Scalar,
-
-    /// The maximum penetration depth that is allowed for a contact to be resolved during depenetration.
-    ///
-    /// This is used to reject invalid contacts that have an excessively high penetration depth,
-    /// which can lead to clipping through geometry. This may be removed in the future once the
-    /// collision errors in the underlying collision detection system are fixed.
-    ///
-    /// This is implicitly scaled by the [`PhysicsLengthUnit`].
-    pub penetration_rejection_threshold: Scalar,
-
-    /// A minimal distance to always keep between the collider and any other colliders.
-    ///
-    /// This exists to improve numerical stability and ensure that the collider never intersects anything.
-    /// Set this to a small enough value that you don't see visual artifacts but have good stability.
-    ///
-    /// Increase the value if you notice your character getting stuck in geometry.
-    /// Decrease it when you notice jittering, especially around V-shaped walls.
-    pub skin_width: Scalar,
-
-    /// The initial planes to consider for the move and slide algorithm.
-    ///
-    /// This will be expanded during the algorithm with contact planes, but you can also initialize it
-    /// with some predefined planes that the algorithm should never move against.
-    ///
-    /// A common use case is adding the ground plane when a character controller is standing or walking on the ground.
-    pub planes: Vec<Dir>,
-
-    /// The dot product threshold to consider two planes as similar when pruning nearly parallel planes.
-    /// The comparison used is `n1.dot(n2) >= plane_similarity_dot_threshold`.
-    ///
-    /// This is used to reduce the number of planes considered during move and slide,
-    /// which can improve performance for dense geomtry. However, setting this value too high
-    /// can lead to unwanted behavior, as it may discard important planes.
-    ///
-    /// The default value of [`COS_5_DEGREES`] (≈0.996) corresponds to a 5 degree angle between the planes.
-    pub plane_similarity_dot_threshold: Scalar,
-
-    /// The maximum number of planes to solve while performing move and slide.
-    ///
-    /// If the number of planes exceeds this value, the algorithm will stop collecting new planes.
-    /// This is a safety measure to prevent excessive computation time for dense geometry.
-    pub max_planes: usize,
-}
-
-/// Configuration for [`MoveAndSlide::depenetrate_intersections`].
-#[derive(Clone, Debug, PartialEq, Reflect)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
-#[reflect(Debug, PartialEq)]
-pub struct DepenetrationConfig {
-    /// How many iterations to use when performing depenetration.
-    ///
-    /// Depenetration is an iterative process that solves penetrations for all planes,
-    /// until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`] or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`].
-    ///
-    /// To disable depenetration, set this to `0`.
-    pub depenetration_iterations: usize,
-
-    /// The target error to achieve when performing depenetration.
-    ///
-    /// Depenetration is an iterative process that solves penetrations for all planes,
-    /// until we either reached [`MoveAndSlideConfig::move_and_slide_iterations`]
-    /// or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`].
-    ///
-    /// This is implicitly scaled by the [`PhysicsLengthUnit`].
-    pub max_depenetration_error: Scalar,
-
-    /// The maximum penetration depth that is allowed for a contact to be resolved during depenetration.
-    ///
-    /// This is used to reject invalid contacts that have an excessively high penetration depth,
-    /// which can lead to clipping through geometry. This may be removed in the future once the
-    /// collision errors in the underlying collision detection system are fixed.
-    ///
-    /// This is implicitly scaled by the [`PhysicsLengthUnit`].
-    pub penetration_rejection_threshold: Scalar,
-
-    /// A minimal distance to always keep between the collider and any other colliders.
-    ///
-    /// This exists to improve numerical stability and ensure that the collider never intersects anything.
-    /// Set this to a small enough value that you don't see visual artifacts but have good stability.
-    ///
-    /// Increase the value if you notice your character getting stuck in geometry.
-    /// Decrease it when you notice jittering, especially around V-shaped walls.
-    pub skin_width: Scalar,
-}
-
-impl Default for DepenetrationConfig {
-    fn default() -> Self {
-        Self {
-            depenetration_iterations: 16,
-            max_depenetration_error: 0.0001,
-            penetration_rejection_threshold: 0.5,
-            skin_width: 0.01,
-        }
-    }
-}
-
-impl From<&MoveAndSlideConfig> for DepenetrationConfig {
-    fn from(config: &MoveAndSlideConfig) -> Self {
-        Self {
-            depenetration_iterations: config.depenetration_iterations,
-            max_depenetration_error: config.max_depenetration_error,
-            penetration_rejection_threshold: config.penetration_rejection_threshold,
-            skin_width: config.skin_width,
-        }
-    }
-}
-
-/// Output from [`MoveAndSlide::move_and_slide`].
-#[derive(Clone, Copy, Debug, PartialEq, Reflect)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
-#[reflect(Debug, PartialEq)]
-pub struct MoveAndSlideOutput {
-    /// The final position of the character after move and slide.
-    ///
-    /// Set your [`Transform::translation`] to this value.
-    pub position: Vector,
-
-    /// The final velocity of the character after move and slide.
-    ///
-    /// This corresponds to the remaining velocity after the algorithm has slid along all contact surfaces.
-    /// For example, if the character is trying to move to the right, but there is a ramp in its path,
-    /// the projected velocity will point up the ramp, with reduced magnitude.
-    ///
-    /// It is useful to store this value and apply your desired movement vectors, friction, and gravity on it
-    /// before handing it to [`MoveAndSlide::move_and_slide`] as the input `velocity`.
-    ///
-    /// You can also ignore this value if you don't wish to preserve momentum between frames.
-    ///
-    /// Do *not* set [`LinearVelocity`] to this value, as that would apply the movement twice and cause intersections.
-    /// Instead, set [`Transform::translation`] to [`MoveAndSlideOutput::position`].
-    pub projected_velocity: Vector,
-}
-
-impl Default for MoveAndSlideConfig {
-    fn default() -> Self {
-        let default_depen_cfg = DepenetrationConfig::default();
-        Self {
-            move_and_slide_iterations: 4,
-            depenetration_iterations: default_depen_cfg.depenetration_iterations,
-            max_depenetration_error: default_depen_cfg.max_depenetration_error,
-            penetration_rejection_threshold: default_depen_cfg.penetration_rejection_threshold,
-            skin_width: default_depen_cfg.skin_width,
-            planes: Vec::new(),
-            plane_similarity_dot_threshold: COS_5_DEGREES,
-            max_planes: 20,
         }
     }
 }
