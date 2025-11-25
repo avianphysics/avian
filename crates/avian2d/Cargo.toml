@@ -146,10 +146,6 @@ name = "collision_layers"
 required-features = ["2d", "default-collider"]
 
 [[example]]
-name = "move_and_slide"
-required-features = ["2d", "default-collider"]
-
-[[example]]
 name = "custom_collider"
 required-features = ["2d"]
 
@@ -174,11 +170,15 @@ name = "many_shapes"
 required-features = ["2d", "default-collider"]
 
 [[example]]
-name = "one_way_platform_2d"
+name = "move_and_slide_2d"
 required-features = ["2d", "default-collider"]
 
 [[example]]
 name = "move_marbles"
+required-features = ["2d", "default-collider"]
+
+[[example]]
+name = "one_way_platform_2d"
 required-features = ["2d", "default-collider"]
 
 [[example]]

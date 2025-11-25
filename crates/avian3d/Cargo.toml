@@ -149,10 +149,6 @@ name = "collider_constructors"
 required-features = ["3d", "default-collider", "bevy_scene"]
 
 [[example]]
-name = "move_and_slide"
-required-features = ["3d", "default-collider", "bevy_scene"]
-
-[[example]]
 name = "conveyor_belt"
 required-features = ["3d", "default-collider"]
 
@@ -187,6 +183,10 @@ required-features = ["3d", "default-collider"]
 [[example]]
 name = "gyroscopic_motion"
 required-features = ["3d", "default-collider"]
+
+[[example]]
+name = "move_and_slide_3d"
+required-features = ["3d", "default-collider", "bevy_scene"]
 
 [[example]]
 name = "picking"
