@@ -83,7 +83,9 @@ pub use diagnostics::CollisionDiagnostics;
 pub mod prelude {
     pub use super::broad_phase::{BroadPhasePlugin, BroadPhaseSet};
     pub use super::collider::{
-        collider_hierarchy::{ColliderHierarchyPlugin, ColliderOf, RigidBodyColliders},
+        collider_hierarchy::{
+            ColliderHierarchyPlugin, ColliderOf, RigidBodyColliders, RigidBodyHelper,
+        },
         collider_transform::{ColliderTransform, ColliderTransformPlugin},
         AabbContext, AnyCollider, Collider, ColliderAabb, ColliderBackendPlugin,
         ColliderConstructor, ColliderConstructorHierarchy, ColliderDisabled, ColliderMarker,

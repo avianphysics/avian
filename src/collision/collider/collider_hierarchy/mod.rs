@@ -10,6 +10,7 @@ use bevy::{
     ecs::{
         component::HookContext,
         relationship::{Relationship, RelationshipHookMode, RelationshipSourceCollection},
+        system::SystemParam,
         world::DeferredWorld,
     },
     prelude::*,
@@ -189,3 +190,195 @@ impl Relationship for ColliderOf {
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, Component, Default, PartialEq)]
 pub struct RigidBodyColliders(Vec<Entity>);
+
+#[derive(SystemParam)]
+pub struct RigidBodyHelper<'w, 's> {
+    rigid_bodies: Query<
+        'w,
+        's,
+        (
+            &'static Position,
+            &'static Rotation,
+            &'static RigidBodyColliders,
+        ),
+    >,
+    colliders: Query<
+        'w,
+        's,
+        (
+            &'static Position,
+            &'static Rotation,
+            &'static Collider,
+            Option<&'static CollisionLayers>,
+        ),
+    >,
+}
+
+impl<'w, 's> RigidBodyHelper<'w, 's> {
+    pub fn create_compound_collider(&self, entity: Entity) -> Result<Collider> {
+        self.create_compound_collider_filtered(entity, &SpatialQueryFilter::DEFAULT)
+    }
+    pub fn create_compound_collider_filtered(
+        &self,
+        entity: Entity,
+        filter: &SpatialQueryFilter,
+    ) -> Result<Collider> {
+        let (root_position, root_rotation, colliders) =
+            self.rigid_bodies.get(entity).map_err(|_| {
+                BevyError::from(
+                    format!("Entity {entity} is not a valid rigid body, or has been filtered by a default filter."),
+                )
+            })?;
+        let mut compound_colliders = Vec::new();
+        for (position, rotation, collider, layers) in self.colliders.iter_many(colliders.iter()) {
+            let layers = layers.copied().unwrap_or_default();
+            if !filter.test(entity, layers) {
+                continue;
+            };
+            let relative_position = position.0 - root_position.0;
+            let relative_rotation = *root_rotation * rotation.inverse();
+            if let Some(compound) = collider.shape_scaled().as_compound() {
+                // Need to unpack compound shapes because we are later returning a big compound collider for the whole rigid body
+                // and parry crashes on nested compound shapes
+                for (isometry, shape) in compound.shapes() {
+                    let translation = Vector::from(isometry.translation);
+                    #[cfg(feature = "2d")]
+                    let rotation = Rotation::radians(isometry.rotation.angle());
+                    #[cfg(feature = "3d")]
+                    let rotation = Rotation(Quaternion::from(isometry.rotation));
+                    compound_colliders.push((
+                        relative_position + translation,
+                        relative_rotation * rotation,
+                        shape.clone().into(),
+                    ));
+                }
+            } else {
+                compound_colliders.push((relative_position, relative_rotation, collider.clone()));
+            }
+        }
+        if compound_colliders.is_empty() {
+            return Err(BevyError::from(format!(
+                "Rigid body {entity} contains no colliders."
+            )));
+        }
+        Ok(Collider::compound(compound_colliders))
+    }
+    pub fn compute_compound_aabb(&self, entity: Entity) -> Result<ColliderAabb> {
+        self.compute_compound_aabb_filtered(entity, &SpatialQueryFilter::DEFAULT)
+    }
+
+    pub fn compute_compound_aabb_filtered(
+        &self,
+        entity: Entity,
+        filter: &SpatialQueryFilter,
+    ) -> Result<ColliderAabb> {
+        todo!()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(feature = "f32")]
+    use std::f32::consts::TAU;
+    use std::f32::consts::TAU as TAU_F32;
+    #[cfg(feature = "f64")]
+    use std::f64::consts::TAU;
+
+    use bevy::{scene::ScenePlugin, time::TimeUpdateStrategy};
+
+    use super::*;
+
+    #[test]
+    fn creates_compound_collider() {
+        let mut app = App::new();
+        app.add_plugins(min_plugins);
+        app.finish();
+
+        let rigid_body = app
+            .world_mut()
+            .spawn((
+                RigidBody::Dynamic,
+                // [1 0 0], 90°
+                Transform::from_xyz(1.0, 0.0, 0.0)
+                    .with_rotation(Quat::from_rotation_y(TAU_F32 / 4.0)),
+                children![(
+                    // [1 1 0], 135°
+                    Transform::from_xyz(0.0, 1.0, 0.0)
+                        .with_rotation(Quat::from_rotation_y(TAU_F32 / 8.0)),
+                    children![
+                        (
+                            // Collider 1:
+                            // [1 1 1], 225°
+                            Transform::from_xyz(0.0, 0.0, 1.0)
+                                .with_rotation(Quat::from_rotation_y(TAU_F32 / 4.0)),
+                            Collider::default(),
+                        ),
+                        (
+                            // [2 1 0], 225°
+                            Transform::from_xyz(0.0, 0.0, 1.0)
+                                .with_rotation(Quat::from_rotation_y(TAU_F32 / 4.0)),
+                            Collider::compound(vec![(
+                                // Collider 2:
+                                // [3 1 0], 270°
+                                Vector::X,
+                                Quaternion::from_rotation_y(TAU / 8.0),
+                                Collider::default()
+                            )]),
+                        )
+                    ]
+                )],
+            ))
+            .id();
+        app.update();
+        app.update();
+
+        fn validate_compound(In(rigid_body): In<Entity>, rb_helper: RigidBodyHelper) {
+            let compound = rb_helper.create_compound_collider(rigid_body).unwrap();
+            let compound = compound.shape().as_compound().unwrap();
+            let colliders = compound.shapes();
+
+            #[cfg(feature = "2d")]
+            let expected = make_isometry(
+                Position(vec2(1.0, 0.0).adjust_precision()),
+                Rotation::degrees(225.0),
+            );
+            #[cfg(feature = "3d")]
+            let expected = make_isometry(
+                Position(vec3(1.0, 0.0, 0.0).adjust_precision()),
+                Rotation(Quat::from_rotation_y(225.0_f32.to_radians()).adjust_precision()),
+            );
+
+            assert_eq!(expected, colliders[0].0);
+
+            #[cfg(feature = "2d")]
+            let expected = make_isometry(
+                Position(vec2(1.0, 0.0).adjust_precision()),
+                Rotation::degrees(225.0),
+            );
+            #[cfg(feature = "3d")]
+            let expected = make_isometry(
+                Position(vec3(1.0, 0.0, 0.0).adjust_precision()),
+                Rotation(Quat::from_rotation_y(225.0_f32.to_radians()).adjust_precision()),
+            );
+
+            assert_eq!(expected, colliders[1].0);
+        }
+        app.world_mut()
+            .run_system_cached_with(validate_compound, rigid_body)
+            .unwrap();
+    }
+
+    fn min_plugins(app: &mut App) {
+        app.add_plugins((
+            MinimalPlugins,
+            TransformPlugin,
+            AssetPlugin::default(),
+            ScenePlugin,
+            PhysicsPlugins::default(),
+        ))
+        .init_resource::<Assets<Mesh>>()
+        .insert_resource(TimeUpdateStrategy::ManualDuration(
+            Time::<Fixed>::default().timestep(),
+        ));
+    }
+}
