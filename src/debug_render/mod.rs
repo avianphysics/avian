@@ -539,7 +539,7 @@ fn change_mesh_visibility(
                 .unwrap_or_default()
                 .or(config.1.mesh_visibility);
 
-            if let MeshVisibility::Overwrite(value) = mesh_visibility {
+            if let Some(value) = mesh_visibility.to_visibility() {
                 *visibility = value;
             }
         }

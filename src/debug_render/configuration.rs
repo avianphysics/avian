@@ -133,7 +133,7 @@ impl Default for ContactGizmoScale {
 }
 
 /// Determines if the visibility of entities with [colliders](Collider) should
-/// be overwritten. Setting this to `MeshVisibility::Overwrite(Visibility::Hidden)`,
+/// be overwritten. Setting this to `MeshVisibility::AlwaysHide`,
 /// will only show the debug renders.
 #[derive(Reflect, Clone, Copy, PartialEq, Default)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
@@ -143,14 +143,38 @@ pub enum MeshVisibility {
     /// Do not change the visibility of the entity's mesh.
     #[default]
     Ignore,
-    /// Always overwrite the visibility of the entity's mesh.
-    Overwrite(Visibility),
+    /// Always overwrite the visibility of the entity's mesh to use parent visibility.
+    AlwaysInherit,
+    /// Always overwrite the visibility of the entity's mesh to hidden.
+    AlwaysHide,
+    /// Always overwrite the visibility of the entity's mesh to visible.
+    AlwaysShow,
+}
+
+impl From<Visibility> for MeshVisibility {
+    fn from(visibility: Visibility) -> Self {
+        match visibility {
+            Visibility::Inherited => MeshVisibility::AlwaysInherit,
+            Visibility::Hidden => MeshVisibility::AlwaysHide,
+            Visibility::Visible => MeshVisibility::AlwaysShow,
+        }
+    }
 }
 
 impl MeshVisibility {
     /// Returns the first non-ignore visibility.
     pub fn or(self, other: Self) -> Self {
         if self == Self::Ignore { other } else { self }
+    }
+
+    /// Returns the visibility that should be used to replace the entity's mesh visibility.
+    pub fn to_visibility(self) -> Option<Visibility> {
+        match self {
+            MeshVisibility::Ignore => None,
+            MeshVisibility::AlwaysInherit => Some(Visibility::Inherited),
+            MeshVisibility::AlwaysHide => Some(Visibility::Hidden),
+            MeshVisibility::AlwaysShow => Some(Visibility::Visible),
+        }
     }
 }
 
@@ -175,7 +199,7 @@ impl PhysicsGizmos {
             shapecast_point_color: Some(YELLOW.into()),
             shapecast_normal_color: Some(PINK.into()),
             island_color: Some(RED.into()),
-            mesh_visibility: MeshVisibility::Overwrite(Visibility::Hidden),
+            mesh_visibility: MeshVisibility::from(Visibility::Hidden),
         }
     }
 
@@ -477,7 +501,7 @@ impl DebugRender {
             aabb_color: Some(Color::srgb(0.8, 0.8, 0.8)),
             collider_color: Some(ORANGE.into()),
             sleeping_color_multiplier: Some([1.0, 1.0, 0.4, 1.0]),
-            mesh_visibility: MeshVisibility::Overwrite(Visibility::Hidden),
+            mesh_visibility: MeshVisibility::from(Visibility::Hidden),
         }
     }
 
