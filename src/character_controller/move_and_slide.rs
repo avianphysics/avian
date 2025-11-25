@@ -314,7 +314,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// To do this, call [`MoveAndSlide::depenetrate`] and add the resulting offset vector to the character's position
     /// before calling this method. See the example below.
     ///
-    /// It is often useful to clip the velocity afterwards so that it no longer points into the collision plane using [`Self::project_velocity`].
+    /// It is often useful to clip the velocity afterwards so that it no longer points into the contact plane using [`Self::project_velocity`].
     ///
     /// # Arguments
     ///
@@ -419,7 +419,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         feature = "3d",
         doc = "         transform.translation += (velocity.normalize_or_zero() * hit.distance).f32();"
     )]
-    ///         // Then project the velocity to make sure it no longer points towards the collision plane.
+    ///         // Then project the velocity to make sure it no longer points towards the contact plane.
     ///         controller.velocity =
     ///             MoveAndSlide::project_velocity(velocity, &[Dir::new_unchecked(hit.normal1.f32())])
     ///     } else {
@@ -873,7 +873,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     }
 }
 
-/// Data related to a hit during a [`MoveAndSlide::move_and_slide`].
+/// Data related to a hit during [`MoveAndSlide::move_and_slide`].
 #[derive(Debug, PartialEq)]
 pub struct MoveAndSlideHitData<'a> {
     /// The entity of the collider that was hit by the shape.
@@ -916,7 +916,7 @@ impl<'a> MoveAndSlideHitData<'a> {
     }
 }
 
-/// Data related to a hit during a [`MoveAndSlide::cast_move`].
+/// Data related to a hit during [`MoveAndSlide::cast_move`].
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
@@ -980,7 +980,7 @@ pub struct MoveAndSlideConfig {
     /// A single iteration consists of:
     ///
     /// - Moving the character as far as possible in the desired velocity direction.
-    /// - Modifying the velocity to slide along any colliding planes.
+    /// - Modifying the velocity to slide along any contact surfaces.
     ///
     /// Increasing this allows the character to slide along more surfaces in a single frame,
     /// which can help with complex geometry and high speeds, but increases computation time.
@@ -1022,9 +1022,9 @@ pub struct MoveAndSlideConfig {
     /// Decrease it when you notice jittering, especially around V-shaped walls.
     pub skin_width: Scalar,
 
-    /// The initial planes to consider for the move-and-slide algorithm.
+    /// The initial planes to consider for the move and slide algorithm.
     ///
-    /// This will be expanded during the algorithm with collision planes, but you can also initialize it
+    /// This will be expanded during the algorithm with contact planes, but you can also initialize it
     /// with some predefined planes that the algorithm should never move against.
     ///
     /// A common use case is adding the ground plane when a character controller is standing or walking on the ground.
@@ -1033,14 +1033,14 @@ pub struct MoveAndSlideConfig {
     /// The dot product threshold to consider two planes as similar when pruning nearly parallel planes.
     /// The comparison used is `n1.dot(n2) >= plane_similarity_dot_threshold`.
     ///
-    /// This is used to reduce the number of planes considered during move-and-slide,
+    /// This is used to reduce the number of planes considered during move and slide,
     /// which can improve performance for dense geomtry. However, setting this value too high
     /// can lead to unwanted behavior, as it may discard important planes.
     ///
     /// The default value of [`COS_5_DEGREES`] (≈0.996) corresponds to a 5 degree angle between the planes.
     pub plane_similarity_dot_threshold: Scalar,
 
-    /// The maximum number of planes to solve while performing move-and-slide.
+    /// The maximum number of planes to solve while performing move and slide.
     ///
     /// If the number of planes exceeds this value, the algorithm will stop collecting new planes.
     /// This is a safety measure to prevent excessive computation time for dense geometry.
@@ -1124,14 +1124,14 @@ pub struct MoveAndSlideOutput {
 
     /// The final velocity of the character after move and slide.
     ///
-    /// This corresponds to the remaining velocity after the algorithm has slid along all colliding planes.
-    /// For example, if the character is trying to move to the right, but there is a ramp on its path,
-    /// the projected velocity will point up the ramp.
+    /// This corresponds to the remaining velocity after the algorithm has slid along all contact surfaces.
+    /// For example, if the character is trying to move to the right, but there is a ramp in its path,
+    /// the projected velocity will point up the ramp, with reduced magnitude.
     ///
     /// It is useful to store this value and apply your desired movement vectors, friction, and gravity on it
     /// before handing it to [`MoveAndSlide::move_and_slide`] as the input `velocity`.
     ///
-    /// You can also ignore this value if you don't wish to preserve momentum along sliding along surfaces.
+    /// You can also ignore this value if you don't wish to preserve momentum between frames.
     ///
     /// Do *not* set [`LinearVelocity`] to this value, as that would apply the movement twice and cause intersections.
     /// Instead, set [`Transform::translation`] to [`MoveAndSlideOutput::position`].
