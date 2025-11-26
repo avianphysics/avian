@@ -515,6 +515,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 position += sweep;
                 break;
             };
+            let point = sweep_hit.point2 + position;
 
             // Move up to the hit point.
             time_left -= time_left * (sweep_hit.distance / distance);
@@ -523,9 +524,21 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             // Initialize velocity clipping planes with the user-defined planes.
             // This often includes a ground plane.
             let mut planes: Vec<Dir> = config.planes.clone();
-            // Need to add the sweep explicitly, as `contact_manifolds` sometimes returns nothing
-            // due to a parry bug. Otherwise, `contact_manifolds` would pick up this normal anyways.
-            planes.push(Dir::new_unchecked(sweep_hit.normal1.f32()));
+
+            // We need to add the sweep hit's plane explicitly, as `contact_manifolds` sometimes returns nothing
+            // due to a Parry bug. Otherwise, `contact_manifolds` would pick up this normal anyways.
+            // TODO: Remove this once the collision bug is fixed.
+            if on_hit(MoveAndSlideHitData {
+                entity: sweep_hit.entity,
+                point,
+                normal: &mut Dir::new_unchecked(sweep_hit.normal1.f32()),
+                collision_distance: sweep_hit.collision_distance,
+                distance: sweep_hit.distance,
+                position: &mut position,
+                velocity: &mut velocity,
+            }) {
+                planes.push(Dir::new_unchecked(sweep_hit.normal1.f32()));
+            }
 
             // Collect contact planes.
             self.intersections(
