@@ -218,6 +218,8 @@ pub struct DepenetrationConfig {
     ///
     /// Increase the value if you notice your character getting stuck in geometry.
     /// Decrease it when you notice jittering, especially around V-shaped walls.
+    ///
+    /// This is implicitly scaled by the [`PhysicsLengthUnit`].
     pub skin_width: Scalar,
 }
 
@@ -751,7 +753,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         let safe_distance = if distance == 0.0 {
             0.0
         } else {
-            Self::pull_back(shape_hit, direction, skin_width)
+            Self::pull_back(shape_hit, direction, self.length_unit.0 * skin_width)
         };
         Some(MoveHitData {
             distance: safe_distance,
@@ -994,7 +996,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// - `shape_position`: The position of the shape.
     /// - `shape_rotation`: The rotation of the shape.
     /// - `filter`: A [`SpatialQueryFilter`] that determines which colliders are taken into account in the query.
-    /// - `prediction_distance`: An extra margin applied to the [`Collider`].
+    /// - `prediction_distance`: An extra margin applied to the [`Collider`]. This is implicitly scaled by the [`PhysicsLengthUnit`].
     /// - `callback`: A callback that is called for each intersection found. The callback receives the deepest contact point and the contact normal.
     ///   Returning `false` will stop further processing of intersections.
     ///
@@ -1015,12 +1017,15 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         filter: &SpatialQueryFilter,
         mut callback: impl FnMut(&ContactPoint, Dir) -> bool,
     ) {
+        let prediction_distance = self.length_unit.0 * prediction_distance;
+
         let expanded_aabb = shape
             .aabb(shape_position, shape_rotation)
             .grow(Vector::splat(prediction_distance));
         let aabb_intersections = self
             .query_pipeline
             .aabb_intersections_with_aabb(expanded_aabb);
+
         for intersection_entity in aabb_intersections {
             let Ok((intersection_collider, intersection_pos, intersection_rot, layers)) =
                 self.colliders.get(intersection_entity)
