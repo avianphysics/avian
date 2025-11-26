@@ -221,7 +221,8 @@ fn player_movement(
         if current_speed > 0.0 {
             // Apply friction
             lin_vel.0 = lin_vel.0 / current_speed
-                * (current_speed - current_speed * 20.0 * time.delta_secs()).max(0.0)
+                * (current_speed - current_speed * 20.0 * time.delta_secs().adjust_precision())
+                    .max(0.0)
         }
     }
 }
