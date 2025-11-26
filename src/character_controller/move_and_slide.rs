@@ -523,6 +523,9 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             // Initialize velocity clipping planes with the user-defined planes.
             // This often includes a ground plane.
             let mut planes: Vec<Dir> = config.planes.clone();
+            // Need to add the sweep explicitly, as `contact_manifolds` sometimes returns nothing
+            // due to a parry bug. Otherwise, `contact_manifolds` would pick up this normal anyways.
+            planes.push(Dir::new_unchecked(sweep_hit.normal1));
 
             // Collect contact planes.
             self.intersections(
