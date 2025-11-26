@@ -260,13 +260,12 @@ pub struct MoveAndSlideOutput {
     /// For example, if the character is trying to move to the right, but there is a ramp in its path,
     /// the projected velocity will point up the ramp, with reduced magnitude.
     ///
-    /// It is useful to store this value and apply your desired movement vectors, friction, and gravity on it
-    /// before handing it to [`MoveAndSlide::move_and_slide`] as the input `velocity`.
+    /// It is useful to store this value or apply it to [`LinearVelocity`] and use it as the input velocity
+    /// for the next frame's call to [`MoveAndSlide::move_and_slide`].
     ///
-    /// You can also ignore this value if you don't wish to preserve momentum between frames.
-    ///
-    /// Do *not* set [`LinearVelocity`] to this value, as that would apply the movement twice and cause intersections.
-    /// Instead, set [`Transform::translation`] to [`MoveAndSlideOutput::position`].
+    /// Note that if you apply this to [`LinearVelocity`], it is recommended to use [`CustomPositionIntegration`].
+    /// This ways, the character's position is only updated via the move and slide algorithm,
+    /// and not also by the physics integrator.
     pub projected_velocity: Vector,
 }
 

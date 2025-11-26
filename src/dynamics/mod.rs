@@ -75,7 +75,9 @@ pub mod prelude {
     #[expect(deprecated)]
     pub use super::{
         ccd::{CcdPlugin, SpeculativeMargin, SweepMode, SweptCcd},
-        integrator::{Gravity, IntegratorPlugin},
+        integrator::{
+            CustomPositionIntegration, CustomVelocityIntegration, Gravity, IntegratorPlugin,
+        },
         joints::{
             AngleLimit, DistanceJoint, DistanceLimit, FixedJoint, JointAnchor, JointBasis,
             JointCollisionDisabled, JointDamping, JointDisabled, JointForces, JointFrame,

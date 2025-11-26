@@ -166,6 +166,34 @@ impl Gravity {
     pub const ZERO: Gravity = Gravity(Vector::ZERO);
 }
 
+/// A marker component for bodies that use custom velocity integration.
+///
+/// This means that gravity, damping, and external forces will not be applied automatically.
+/// You are responsible for applying all forces and updating velocities manually.
+///
+/// Exceptions include:
+///
+/// - Contact impulses and joint impulses for dynamic bodies
+/// - Impulses applied via [`Forces`]
+#[derive(Component, Debug, Default, Reflect)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(Component, Debug, Default)]
+pub struct CustomVelocityIntegration;
+
+/// A marker component for bodies that use custom position integration.
+///
+/// This means that the body's position and rotation will not be updated automatically
+/// based on velocity. You are responsible for updating the position and rotation manually.
+///
+/// This can be useful for implementing kinematic bodies that are moved according to custom logic,
+/// such as with [`MoveAndSlide`].
+#[derive(Component, Debug, Default, Reflect)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(Component, Debug, Default)]
+pub struct CustomPositionIntegration;
+
 /// Pre-computed data for speeding up velocity integration.
 ///
 /// This includes:
@@ -313,7 +341,10 @@ pub struct VelocityIntegrationQuery {
 
 /// Integrates the velocities of bodies by applying velocity increments and damping.
 pub fn integrate_velocities(
-    mut bodies: Query<VelocityIntegrationQuery, RigidBodyActiveFilter>,
+    mut bodies: Query<
+        VelocityIntegrationQuery,
+        (RigidBodyActiveFilter, Without<CustomVelocityIntegration>),
+    >,
     mut diagnostics: ResMut<SolverDiagnostics>,
     #[cfg(feature = "3d")] time: Res<Time>,
 ) {
@@ -470,7 +501,7 @@ fn clamp_velocities(
 
 /// Integrates the positions of bodies based on their velocities and the time step.
 pub fn integrate_positions(
-    mut solver_bodies: Query<&mut SolverBody>,
+    mut solver_bodies: Query<&mut SolverBody, Without<CustomPositionIntegration>>,
     time: Res<Time>,
     mut diagnostics: ResMut<SolverDiagnostics>,
 ) {

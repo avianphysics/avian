@@ -27,7 +27,7 @@ fn main() {
             PhysicsPlugins::default(),
         ))
         .add_systems(Startup, setup)
-        .add_systems(FixedUpdate, move_player)
+        .add_systems(FixedUpdate, (player_movement, run_move_and_slide).chain())
         .add_systems(
             Update,
             (
@@ -40,16 +40,12 @@ fn main() {
         .run();
 }
 
-#[derive(Component, Default)]
-struct Player {
-    /// The velocity of the player.
-    ///
-    /// We cannot use [`LinearVelocity`] directly, because we control the transform manually,
-    /// and don't want to also apply simulation velocity on top.
-    velocity: Vec3,
-    /// The entities touched during the last `move_and_slide` call. Stored for debug printing.
-    touched: EntityHashSet,
-}
+#[derive(Component)]
+struct Player;
+
+/// The entities touched during the last `move_and_slide` call. Stored for debug printing.
+#[derive(Component, Default, Deref, DerefMut)]
+struct TouchedEntities(EntityHashSet);
 
 #[derive(Component)]
 struct DebugText;
@@ -63,13 +59,16 @@ fn setup(
     // Character
     let shape = Sphere::new(0.5);
     commands.spawn((
+        Player,
         Mesh3d(meshes.add(shape)),
         MeshMaterial3d(materials.add(Color::from(tailwind::SKY_400.with_alpha(0.6)))),
         Collider::from(shape),
         RigidBody::Kinematic,
-        Player::default(),
         TransformInterpolation,
-        // Not needed for move and slide to work, but we add it for debug printing
+        // We want to control position updates manually using move and slide.
+        CustomPositionIntegration,
+        // Store touched and colliding entities for debug printing.
+        TouchedEntities::default(),
         CollidingEntities::default(),
     ));
 
@@ -144,97 +143,119 @@ fn setup(
     ));
 }
 
-fn move_player(
-    player: Single<(Entity, &mut Transform, &mut Player, &Collider), Without<Camera>>,
-    move_and_slide: MoveAndSlide,
+/// System to handle player movement and friction.
+///
+/// This only updates velocity. The actual movement is handled by the `run_move_and_slide` system.
+fn player_movement(
+    mut query: Query<&mut LinearVelocity, With<Player>>,
+    camera: Single<&Transform, With<Camera>>,
     time: Res<Time>,
     input: Res<ButtonInput<KeyCode>>,
-    camera: Single<&Transform, With<Camera>>,
+) {
+    for mut lin_vel in &mut query {
+        // Determine movement velocity from input
+        let mut movement_velocity = Vec3::ZERO;
+        if input.pressed(KeyCode::KeyW) {
+            movement_velocity += Vec3::NEG_Z
+        }
+        if input.pressed(KeyCode::KeyS) {
+            movement_velocity += Vec3::Z
+        }
+        if input.pressed(KeyCode::KeyA) {
+            movement_velocity += Vec3::NEG_X
+        }
+        if input.pressed(KeyCode::KeyD) {
+            movement_velocity += Vec3::X
+        }
+        if input.pressed(KeyCode::Space) || input.pressed(KeyCode::KeyE) {
+            movement_velocity += Vec3::Y
+        }
+        if input.pressed(KeyCode::ControlLeft) || input.pressed(KeyCode::KeyQ) {
+            movement_velocity += Vec3::NEG_Y
+        }
+        movement_velocity = movement_velocity.normalize_or_zero();
+        movement_velocity *= 7.0;
+        if input.pressed(KeyCode::ShiftLeft) {
+            movement_velocity *= 3.0;
+        }
+        movement_velocity = camera.rotation * movement_velocity;
+
+        // Add to current velocity
+        lin_vel.0 += movement_velocity.adjust_precision();
+
+        let current_speed = lin_vel.length();
+        if current_speed > 0.0 {
+            // Apply friction
+            lin_vel.0 = lin_vel.0 / current_speed
+                * (current_speed - current_speed * 20.0 * time.delta_secs().adjust_precision())
+                    .max(0.0)
+        }
+    }
+}
+
+/// System to run the move and slide algorithm, updating the player's transform and velocity.
+///
+/// This replaces Avian's default "position integration" that moves kinematic bodies based on their
+/// velocity without any collision handling.
+fn run_move_and_slide(
+    mut query: Query<
+        (
+            Entity,
+            &mut Transform,
+            &mut LinearVelocity,
+            &mut TouchedEntities,
+            &Collider,
+        ),
+        With<Player>,
+    >,
+    move_and_slide: MoveAndSlide,
+    time: Res<Time>,
     mut gizmos: Gizmos,
 ) {
-    let (entity, mut transform, mut player, collider) = player.into_inner();
-    let mut movement_velocity = Vec3::ZERO;
-    if input.pressed(KeyCode::KeyW) {
-        movement_velocity += Vec3::NEG_Z
-    }
-    if input.pressed(KeyCode::KeyS) {
-        movement_velocity += Vec3::Z
-    }
-    if input.pressed(KeyCode::KeyA) {
-        movement_velocity += Vec3::NEG_X
-    }
-    if input.pressed(KeyCode::KeyD) {
-        movement_velocity += Vec3::X
-    }
-    if input.pressed(KeyCode::Space) || input.pressed(KeyCode::KeyE) {
-        movement_velocity += Vec3::Y
-    }
-    if input.pressed(KeyCode::ControlLeft) || input.pressed(KeyCode::KeyQ) {
-        movement_velocity += Vec3::NEG_Y
-    }
-    movement_velocity = movement_velocity.normalize_or_zero();
-    movement_velocity *= 7.0;
-    if input.pressed(KeyCode::ShiftLeft) {
-        movement_velocity *= 3.0;
-    }
-    movement_velocity = camera.rotation * movement_velocity;
+    for (entity, mut transform, mut lin_vel, mut touched, collider) in &mut query {
+        touched.clear();
 
-    // Add velocity from last frame to preserve momentum
-    movement_velocity += player.velocity;
+        // Perform move and slide
+        let MoveAndSlideOutput {
+            position,
+            projected_velocity,
+        } = move_and_slide.move_and_slide(
+            collider,
+            transform.translation.adjust_precision(),
+            transform.rotation.adjust_precision(),
+            lin_vel.0,
+            time.delta(),
+            &MoveAndSlideConfig::default(),
+            &SpatialQueryFilter::from_excluded_entities([entity]),
+            |hit| {
+                // For each collision, draw debug gizmos
+                if hit.intersects() {
+                    gizmos.circle(transform.translation, 33.0, tailwind::RED_600);
+                } else {
+                    gizmos.arrow(
+                        hit.point.f32(),
+                        (hit.point
+                            + hit.normal.adjust_precision() * hit.collision_distance
+                                / time.delta_secs().adjust_precision())
+                        .f32(),
+                        tailwind::EMERALD_400,
+                    );
+                }
+                touched.insert(hit.entity);
+                true
+            },
+        );
 
-    let current_speed = movement_velocity.length();
-    if current_speed > 0.0 {
-        // Apply friction
-        movement_velocity = movement_velocity / current_speed
-            * (current_speed - current_speed * 20.0 * time.delta_secs()).max(0.0)
+        // Update transform and velocity
+        transform.translation = position.f32();
+        lin_vel.0 = projected_velocity;
     }
-
-    player.touched.clear();
-
-    // Perform move and slide
-    let MoveAndSlideOutput {
-        position,
-        projected_velocity: velocity,
-    } = move_and_slide.move_and_slide(
-        collider,
-        transform.translation.adjust_precision(),
-        transform.rotation.adjust_precision(),
-        movement_velocity.adjust_precision(),
-        time.delta(),
-        &MoveAndSlideConfig::default(),
-        &SpatialQueryFilter::from_excluded_entities([entity]),
-        |hit| {
-            // For each collision, draw debug gizmos
-            if hit.intersects() {
-                gizmos.sphere(
-                    Isometry3d::from_translation(transform.translation),
-                    0.6,
-                    tailwind::RED_600,
-                );
-            } else {
-                gizmos.arrow(
-                    hit.point.f32(),
-                    (hit.point
-                        + hit.normal.adjust_precision() * hit.collision_distance
-                            / time.delta_secs().adjust_precision())
-                    .f32(),
-                    tailwind::EMERALD_400,
-                );
-            }
-            player.touched.insert(hit.entity);
-            true
-        },
-    );
-
-    // Update transform and stored velocity
-    transform.translation = position.f32();
-    player.velocity = velocity.f32();
 }
 
 fn update_camera_transform(
     accumulated_mouse_motion: Res<AccumulatedMouseMotion>,
-    player: Single<(Entity, &Transform), With<Player>>,
-    mut camera: Single<&mut Transform, (With<Camera>, Without<Player>)>,
+    player: Single<(Entity, &Transform), With<TouchedEntities>>,
+    mut camera: Single<&mut Transform, (With<Camera>, Without<TouchedEntities>)>,
     spatial: Res<SpatialQueryPipeline>,
 ) {
     let (player_entity, player_transform) = player.into_inner();
@@ -276,15 +297,15 @@ fn release_cursor(mut cursor: Single<&mut CursorOptions>) {
 
 fn update_debug_text(
     mut text: Single<&mut Text, With<DebugText>>,
-    player: Single<(&Player, &CollidingEntities), With<Player>>,
+    player: Single<(&LinearVelocity, &TouchedEntities, &CollidingEntities), With<Player>>,
     names: Query<NameOrEntity>,
 ) {
-    let (player, colliding_entities) = player.into_inner();
+    let (lin_vel, touched, colliding_entities) = player.into_inner();
     ***text = format!(
         "velocity: [{:.3}, {:.3}, {:.3}]\n{} intersections (goal is 0): {:#?}\n{} touched: {:#?}",
-        player.velocity.x,
-        player.velocity.y,
-        player.velocity.z,
+        lin_vel.x,
+        lin_vel.y,
+        lin_vel.z,
         colliding_entities.len(),
         names
             .iter_many(colliding_entities.iter())
@@ -293,9 +314,9 @@ fn update_debug_text(
                 .map(|n| format!("{} ({})", name.entity, n))
                 .unwrap_or_else(|| format!("{}", name.entity)))
             .collect::<Vec<_>>(),
-        player.touched.len(),
+        touched.len(),
         names
-            .iter_many(player.touched.iter())
+            .iter_many(touched.iter())
             .map(|name| name
                 .name
                 .map(|n| format!("{} ({})", name.entity, n))

@@ -1,6 +1,8 @@
 use crate::{
     dynamics::{
-        integrator::{self, IntegrationSystems, VelocityIntegrationData},
+        integrator::{
+            self, CustomVelocityIntegration, IntegrationSystems, VelocityIntegrationData,
+        },
         solver::{
             SolverDiagnostics,
             solver_body::{SolverBody, SolverBodyInertia},
@@ -203,7 +205,10 @@ fn apply_constant_local_angular_acceleration(
 ///
 /// This should run in the substepping loop, just before [`IntegrationSystems::Velocity`].
 fn apply_local_acceleration(
-    mut bodies: Query<(&mut SolverBody, &AccumulatedLocalAcceleration, &Rotation)>,
+    mut bodies: Query<
+        (&mut SolverBody, &AccumulatedLocalAcceleration, &Rotation),
+        Without<CustomVelocityIntegration>,
+    >,
     mut diagnostics: ResMut<SolverDiagnostics>,
     time: Res<Time<Substeps>>,
 ) {
