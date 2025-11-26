@@ -1000,7 +1000,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// - `shape_position`: The position of the shape.
     /// - `shape_rotation`: The rotation of the shape.
     /// - `filter`: A [`SpatialQueryFilter`] that determines which colliders are taken into account in the query.
-    /// - `prediction_distance`: An extra margin applied to the [`Collider`]. This is implicitly scaled by the [`PhysicsLengthUnit`].
+    /// - `prediction_distance`: An extra margin applied to the [`Collider`].
     /// - `callback`: A callback that is called for each intersection found. The callback receives the deepest contact point and the contact normal.
     ///   Returning `false` will stop further processing of intersections.
     ///
@@ -1021,8 +1021,6 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         filter: &SpatialQueryFilter,
         mut callback: impl FnMut(&ContactPoint, Dir) -> bool,
     ) {
-        let prediction_distance = self.length_unit.0 * prediction_distance;
-
         let expanded_aabb = shape
             .aabb(shape_position, shape_rotation)
             .grow(Vector::splat(prediction_distance));
