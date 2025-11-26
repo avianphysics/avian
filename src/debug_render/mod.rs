@@ -530,12 +530,17 @@ fn change_mesh_visibility(
     let config = store.config::<PhysicsGizmos>();
     if store.is_changed() {
         for (mut visibility, render_config) in &mut meshes {
-            let hide_mesh =
-                config.0.enabled && render_config.map_or(config.1.hide_meshes, |c| c.hide_mesh);
-            if hide_mesh {
-                *visibility = Visibility::Hidden;
-            } else {
-                *visibility = Visibility::Visible;
+            if !config.0.enabled {
+                continue;
+            }
+
+            let mesh_visibility = render_config
+                .map(|global_config| global_config.mesh_visibility)
+                .unwrap_or_default()
+                .or(config.1.mesh_visibility);
+
+            if let Some(value) = mesh_visibility.to_visibility() {
+                *visibility = value;
             }
         }
     }
