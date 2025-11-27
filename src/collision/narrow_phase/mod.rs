@@ -441,6 +441,9 @@ fn remove_collider(
         if let Ok(mut colliding_entities) = colliding_entities_query.get_mut(other_entity) {
             colliding_entities.remove(&entity);
         }
+        if let Ok(mut colliding_entities) = colliding_entities_query.get_mut(entity) {
+            colliding_entities.remove(&other_entity);
+        }
 
         let has_island = contact_edge.island.is_some();
 
