@@ -86,7 +86,9 @@ pub mod prelude {
         ColliderMarker, CollidingEntities, CollisionLayers, CollisionMargin,
         ContactManifoldContext, IntoCollider, LayerMask, PhysicsLayer, ScalableCollider, Sensor,
         SimpleCollider,
-        collider_hierarchy::{ColliderHierarchyPlugin, ColliderOf, RigidBodyColliders},
+        collider_hierarchy::{
+            ColliderHierarchyPlugin, ColliderOf, RigidBodyColliders, RigidBodyHelper,
+        },
         collider_transform::{ColliderTransform, ColliderTransformPlugin},
     };
     #[cfg(all(
