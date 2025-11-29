@@ -44,13 +44,11 @@ fn setup(
     let shape = Circle::new(30.0);
     commands.spawn((
         Player,
+        VirtualCharacter,
         Mesh2d(meshes.add(shape)),
         MeshMaterial2d(materials.add(Color::from(tailwind::SKY_400.with_alpha(0.6)))),
         Collider::from(shape),
-        RigidBody::Kinematic,
         TransformInterpolation,
-        // We want to control position updates manually using move and slide.
-        CustomPositionIntegration,
         // Store touched and colliding entities for debug printing.
         TouchedEntities::default(),
         CollidingEntities::default(),

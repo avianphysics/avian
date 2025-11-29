@@ -96,6 +96,7 @@ impl Plugin for PhysicsSchedulePlugin {
             schedule.configure_sets(
                 (
                     PhysicsStepSystems::First,
+                    PhysicsStepSystems::VirtualCharacters,
                     PhysicsStepSystems::BroadPhase,
                     PhysicsStepSystems::NarrowPhase,
                     PhysicsStepSystems::Solver,
@@ -177,16 +178,21 @@ pub type PhysicsSet = PhysicsSystems;
 /// System sets for the main steps in the physics simulation loop. These are typically run in the [`PhysicsSchedule`].
 ///
 /// 1. First
-/// 2. Broad phase
-/// 3. Narrow phase
-/// 4. Solver
-/// 5. Sleeping
-/// 6. Spatial queries
-/// 7. Last
+/// 2. Virtual characters
+/// 3. Broad phase
+/// 4. Narrow phase
+/// 5. Solver
+/// 6. Sleeping
+/// 7. Spatial queries
+/// 8. Last
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PhysicsStepSystems {
     /// Runs at the start of the [`PhysicsSchedule`].
     First,
+    /// Responsible for updating [`VirtualCharacter`]s using [`MoveAndSlide`].
+    ///
+    /// [`VirtualCharacter`]: crate::character_controller::character_virtual::VirtualCharacter
+    VirtualCharacters,
     /// Responsible for finding pairs of entities with overlapping [`ColliderAabb`]
     /// and creating contact pairs for them in the [`ContactGraph`].
     ///
