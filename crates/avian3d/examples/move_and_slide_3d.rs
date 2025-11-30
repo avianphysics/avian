@@ -27,7 +27,7 @@ fn main() {
             PhysicsPlugins::default(),
         ))
         .add_systems(Startup, setup)
-        .add_systems(FixedUpdate, (player_movement, run_move_and_slide).chain())
+        .add_systems(FixedUpdate, player_movement)
         .add_systems(
             Update,
             (

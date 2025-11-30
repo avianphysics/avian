@@ -528,16 +528,17 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             // We need to add the sweep hit's plane explicitly, as `contact_manifolds` sometimes returns nothing
             // due to a Parry bug. Otherwise, `contact_manifolds` would pick up this normal anyways.
             // TODO: Remove this once the collision bug is fixed.
+            let mut first_normal = Dir::new_unchecked(sweep_hit.normal1.f32());
             if on_hit(MoveAndSlideHitData {
                 entity: sweep_hit.entity,
                 point,
-                normal: &mut Dir::new_unchecked(sweep_hit.normal1.f32()),
+                normal: &mut first_normal,
                 collision_distance: sweep_hit.collision_distance,
                 distance: sweep_hit.distance,
                 position: &mut position,
                 velocity: &mut velocity,
             }) {
-                planes.push(Dir::new_unchecked(sweep_hit.normal1.f32()));
+                planes.push(first_normal);
             }
 
             // Collect contact planes.
@@ -589,6 +590,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                     true
                 },
             );
+
+            println!("Normals: {:?}", planes);
 
             // Project velocity to slide along contact planes.
             velocity = Self::project_velocity(velocity, &planes);

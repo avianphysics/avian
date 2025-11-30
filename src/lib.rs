@@ -837,6 +837,7 @@ impl PluginGroup for PhysicsPlugins {
             .add(BroadPhasePlugin::<()>::default())
             .add(JointPlugin)
             .add(SpatialQueryPlugin)
+            .add(MoveAndSlidePlugin::new(self.schedule))
             .add(PhysicsTransformPlugin::new(self.schedule))
             .add(PhysicsInterpolationPlugin::default())
     }
