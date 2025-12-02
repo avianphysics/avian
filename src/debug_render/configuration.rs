@@ -85,9 +85,8 @@ pub struct PhysicsGizmos {
     pub shapecast_normal_color: Option<Color>,
     /// The color used for the bounds of [`PhysicsIsland`](dynamics::solver::islands::PhysicsIsland)s.
     pub island_color: Option<Color>,
-    /// Determines if the visibility of entities with [colliders](Collider) should be set to `Visibility::Hidden`,
-    /// which will only show the debug renders.
-    pub hide_meshes: bool,
+    /// Determines if the visibility of entities with [colliders](Collider).
+    pub mesh_visibility: MeshVisibility,
 }
 
 impl Default for PhysicsGizmos {
@@ -110,7 +109,7 @@ impl Default for PhysicsGizmos {
             shapecast_point_color: Some(YELLOW.into()),
             shapecast_normal_color: Some(PINK.into()),
             island_color: None,
-            hide_meshes: false,
+            mesh_visibility: MeshVisibility::Ignore,
         }
     }
 }
@@ -130,6 +129,52 @@ pub enum ContactGizmoScale {
 impl Default for ContactGizmoScale {
     fn default() -> Self {
         Self::Scaled(0.025)
+    }
+}
+
+/// Determines if the visibility of entities with [colliders](Collider) should
+/// be overwritten. Setting this to `MeshVisibility::AlwaysHide`,
+/// will only show the debug renders.
+#[derive(Reflect, Clone, Copy, PartialEq, Default)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(PartialEq)]
+pub enum MeshVisibility {
+    /// Do not change the visibility of the entity's mesh.
+    #[default]
+    Ignore,
+    /// Always overwrite the visibility of the entity's mesh to use parent visibility.
+    AlwaysInherit,
+    /// Always overwrite the visibility of the entity's mesh to hidden.
+    AlwaysHide,
+    /// Always overwrite the visibility of the entity's mesh to visible.
+    AlwaysShow,
+}
+
+impl From<Visibility> for MeshVisibility {
+    fn from(visibility: Visibility) -> Self {
+        match visibility {
+            Visibility::Inherited => MeshVisibility::AlwaysInherit,
+            Visibility::Hidden => MeshVisibility::AlwaysHide,
+            Visibility::Visible => MeshVisibility::AlwaysShow,
+        }
+    }
+}
+
+impl MeshVisibility {
+    /// Returns the first non-ignore visibility.
+    pub fn or(self, other: Self) -> Self {
+        if self == Self::Ignore { other } else { self }
+    }
+
+    /// Returns the visibility that should be used to replace the entity's mesh visibility.
+    pub fn to_visibility(self) -> Option<Visibility> {
+        match self {
+            MeshVisibility::Ignore => None,
+            MeshVisibility::AlwaysInherit => Some(Visibility::Inherited),
+            MeshVisibility::AlwaysHide => Some(Visibility::Hidden),
+            MeshVisibility::AlwaysShow => Some(Visibility::Visible),
+        }
     }
 }
 
@@ -154,7 +199,7 @@ impl PhysicsGizmos {
             shapecast_point_color: Some(YELLOW.into()),
             shapecast_normal_color: Some(PINK.into()),
             island_color: Some(RED.into()),
-            hide_meshes: true,
+            mesh_visibility: MeshVisibility::from(Visibility::Hidden),
         }
     }
 
@@ -180,7 +225,7 @@ impl PhysicsGizmos {
             shapecast_point_color: None,
             shapecast_normal_color: None,
             island_color: None,
-            hide_meshes: false,
+            mesh_visibility: MeshVisibility::Ignore,
         }
     }
 
@@ -319,8 +364,8 @@ impl PhysicsGizmos {
     }
 
     /// Sets the visibility of the entity's visual mesh.
-    pub fn with_mesh_visibility(mut self, is_visible: bool) -> Self {
-        self.hide_meshes = !is_visible;
+    pub fn with_mesh_visibility(mut self, visibility: MeshVisibility) -> Self {
+        self.mesh_visibility = visibility;
         self
     }
 
@@ -426,8 +471,8 @@ pub struct DebugRender {
     /// If the entity is [sleeping](Sleeping), its colors (in HSLA) will be multiplied by this array.
     /// If `None`, sleeping will have no effect on the colors.
     pub sleeping_color_multiplier: Option<[f32; 4]>,
-    /// Determines if the entity's visibility should be set to `Visibility::Hidden`, which will only show the debug render.
-    pub hide_mesh: bool,
+    /// Determines if the entity's visibility should be overwritten.
+    pub mesh_visibility: MeshVisibility,
 }
 
 impl Default for DebugRender {
@@ -440,7 +485,7 @@ impl Default for DebugRender {
             aabb_color: None,
             collider_color: Some(ORANGE.into()),
             sleeping_color_multiplier: Some([1.0, 1.0, 0.4, 1.0]),
-            hide_mesh: false,
+            mesh_visibility: MeshVisibility::Ignore,
         }
     }
 }
@@ -456,7 +501,7 @@ impl DebugRender {
             aabb_color: Some(Color::srgb(0.8, 0.8, 0.8)),
             collider_color: Some(ORANGE.into()),
             sleeping_color_multiplier: Some([1.0, 1.0, 0.4, 1.0]),
-            hide_mesh: true,
+            mesh_visibility: MeshVisibility::from(Visibility::Hidden),
         }
     }
 
@@ -467,7 +512,7 @@ impl DebugRender {
             aabb_color: None,
             collider_color: None,
             sleeping_color_multiplier: None,
-            hide_mesh: false,
+            mesh_visibility: MeshVisibility::Ignore,
         }
     }
 
@@ -523,8 +568,8 @@ impl DebugRender {
     }
 
     /// Sets the visibility of the entity's visual mesh.
-    pub fn with_mesh_visibility(mut self, is_visible: bool) -> Self {
-        self.hide_mesh = !is_visible;
+    pub fn with_mesh_visibility(mut self, visibility: MeshVisibility) -> Self {
+        self.mesh_visibility = visibility;
         self
     }
 
