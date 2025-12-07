@@ -212,3 +212,7 @@ required-features = ["3d", "default-collider", "diagnostic_ui"]
 [[example]]
 name = "debugdump_3d"
 required-features = ["3d", "debug-plugin"]
+
+[[bench]]
+name = "velocity_projection"
+harness = false
