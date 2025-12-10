@@ -166,6 +166,7 @@ impl<'w, 's> NonWakingForcesItem<'w, 's> {
 
 impl ReadRigidBodyForces for ForcesItem<'_, '_> {}
 impl ReadRigidBodyForces for NonWakingForcesItem<'_, '_> {}
+impl ReadRigidBodyForces for ForcesReadOnlyItem<'_, '_> {}
 impl WriteRigidBodyForces for ForcesItem<'_, '_> {}
 impl WriteRigidBodyForces for NonWakingForcesItem<'_, '_> {}
 
@@ -724,6 +725,41 @@ impl ReadRigidBodyForcesInternal for NonWakingForcesItem<'_, '_> {
     #[inline]
     fn accumulated_local_acceleration(&self) -> &AccumulatedLocalAcceleration {
         self.0.accumulated_local_acceleration()
+    }
+}
+
+impl ReadRigidBodyForcesInternal for ForcesReadOnlyItem<'_, '_> {
+    #[inline]
+    fn pos(&self) -> &Position {
+        self.position
+    }
+    #[inline]
+    fn rot(&self) -> &Rotation {
+        self.rotation
+    }
+    #[inline]
+    fn lin_vel(&self) -> Vector {
+        self.linear_velocity.0
+    }
+    #[inline]
+    fn ang_vel(&self) -> AngularVector {
+        self.angular_velocity.0
+    }
+    #[inline]
+    fn global_center_of_mass(&self) -> Vector {
+        self.position.0 + self.rotation * self.center_of_mass.0
+    }
+    #[inline]
+    fn locked_axes(&self) -> LockedAxes {
+        self.locked_axes.copied().unwrap_or_default()
+    }
+    #[inline]
+    fn integration_data(&self) -> &VelocityIntegrationData {
+        &self.integration
+    }
+    #[inline]
+    fn accumulated_local_acceleration(&self) -> &AccumulatedLocalAcceleration {
+        &self.accumulated_local_acceleration
     }
 }
 
