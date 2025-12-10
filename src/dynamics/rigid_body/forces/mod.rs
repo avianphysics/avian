@@ -201,7 +201,10 @@ mod query_data;
 mod tests;
 
 pub use plugin::{ForcePlugin, ForceSystems};
-pub use query_data::{Forces, ForcesItem, NonWakingForcesItem, RigidBodyForces};
+pub use query_data::{
+    Forces, ForcesItem, NonWakingForcesItem, ReadRigidBodyForces, RigidBodyForces,
+    WriteRigidBodyForces,
+};
 
 use crate::prelude::*;
 use bevy::prelude::*;

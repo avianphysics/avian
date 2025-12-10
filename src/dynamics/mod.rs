@@ -87,7 +87,7 @@ pub mod prelude {
             forces::{
                 ConstantAngularAcceleration, ConstantForce, ConstantLinearAcceleration,
                 ConstantLocalForce, ConstantLocalLinearAcceleration, ConstantTorque, ForcePlugin,
-                ForceSystems, Forces, RigidBodyForces,
+                ForceSystems, Forces, ReadRigidBodyForces, RigidBodyForces, WriteRigidBodyForces,
             },
             mass_properties::{
                 MassPropertiesExt, MassPropertyHelper, MassPropertyPlugin,

@@ -164,8 +164,119 @@ impl<'w, 's> NonWakingForcesItem<'w, 's> {
     }
 }
 
-impl RigidBodyForces for ForcesItem<'_, '_> {}
-impl RigidBodyForces for NonWakingForcesItem<'_, '_> {}
+impl ReadRigidBodyForces for ForcesItem<'_, '_> {}
+impl ReadRigidBodyForces for NonWakingForcesItem<'_, '_> {}
+impl WriteRigidBodyForces for ForcesItem<'_, '_> {}
+impl WriteRigidBodyForces for NonWakingForcesItem<'_, '_> {}
+
+/// A trait for reading and writing properties of a dynamic [rigid body](RigidBody).
+///
+/// This is implemented as a shared interface for the [`ForcesItem`] and [`NonWakingForcesItem`]
+/// returned by [`Forces`].
+///
+/// See the documentation of [`Forces`] for more information on how to work with forces in Avian.
+pub trait RigidBodyForces: ReadRigidBodyForces + WriteRigidBodyForces {}
+
+/// A trait for reading properties of a dynamic [rigid body](RigidBody).
+///
+/// This is implemented as a shared interface for the [`ForcesItem`] and [`NonWakingForcesItem`]
+/// returned by [`Forces`].
+///
+/// See the documentation of [`Forces`] for more information on how to work with forces in Avian.
+#[expect(
+    private_bounds,
+    reason = "The internal methods should not be publicly accessible."
+)]
+pub trait ReadRigidBodyForces: ReadRigidBodyForcesInternal {
+    /// Returns the [`Position`] of the body.
+    #[inline]
+    fn position(&self) -> &Position {
+        self.pos()
+    }
+
+    /// Returns the [`Rotation`] of the body.
+    #[inline]
+    fn rotation(&self) -> &Rotation {
+        self.rot()
+    }
+
+    /// Returns the [`LinearVelocity`] of the body in world space.
+    #[inline]
+    fn linear_velocity(&self) -> Vector {
+        self.lin_vel()
+    }
+
+    /// Returns the [`AngularVelocity`] of the body in world space.
+    #[inline]
+    fn angular_velocity(&self) -> AngularVector {
+        self.ang_vel()
+    }
+
+    /// Returns the linear acceleration that the body has accumulated
+    /// before the physics step in world space, including acceleration
+    /// caused by forces.
+    ///
+    /// This does not include gravity, contact forces, or joint forces.
+    /// Only forces and accelerations applied through [`Forces`] are included.
+    #[inline]
+    fn accumulated_linear_acceleration(&self) -> Vector {
+        // The linear increment is treated as linear acceleration until the integration step.
+        let world_linear_acceleration = self.integration_data().linear_increment;
+        let local_linear_acceleration = self.accumulated_local_acceleration().linear;
+
+        // Return the total world-space linear acceleration.
+        self.locked_axes()
+            .apply_to_vec(world_linear_acceleration + self.rot() * local_linear_acceleration)
+    }
+
+    /// Returns the angular acceleration that the body has accumulated
+    /// before the physics step in world space, including acceleration
+    /// caused by torques.
+    ///
+    /// This does not include gravity, contact forces, or joint forces.
+    /// Only torques and accelerations applied through [`Forces`] are included.
+    #[cfg(feature = "2d")]
+    #[inline]
+    fn accumulated_angular_acceleration(&self) -> AngularVector {
+        // The angular increment is treated as angular acceleration until the integration step.
+        self.locked_axes()
+            .apply_to_angular_velocity(self.integration_data().angular_increment)
+    }
+
+    /// Returns the angular acceleration that the body has accumulated
+    /// before the physics step in world space, including acceleration
+    /// caused by torques.
+    ///
+    /// This does not include gravity, contact forces, or joint forces.
+    /// Only torques and accelerations applied through [`Forces`] are included.
+    #[cfg(feature = "3d")]
+    #[inline]
+    fn accumulated_angular_acceleration(&self) -> AngularVector {
+        // The angular increment is treated as angular acceleration until the integration step.
+        let world_angular_acceleration = self.integration_data().angular_increment;
+        let local_angular_acceleration = self.accumulated_local_acceleration().angular;
+
+        // Return the total world-space angular acceleration.
+        self.locked_axes().apply_to_angular_velocity(
+            world_angular_acceleration + self.rot() * local_angular_acceleration,
+        )
+    }
+
+    /// Returns the velocity of a point in world space on the body.
+    #[inline]
+    #[doc(alias = "linear_velocity_at_point")]
+    fn velocity_at_point(&self, world_point: Vector) -> Vector {
+        let offset = world_point - self.global_center_of_mass();
+        #[cfg(feature = "2d")]
+        {
+            self.linear_velocity() + self.angular_velocity() * offset.perp()
+        }
+        #[cfg(feature = "3d")]
+        {
+            self.linear_velocity() + self.angular_velocity().cross(offset)
+        }
+    }
+}
 
 /// A trait for applying forces, impulses, and accelerations to a dynamic [rigid body](RigidBody).
 ///
@@ -175,9 +286,9 @@ impl RigidBodyForces for NonWakingForcesItem<'_, '_> {}
 /// See the documentation of [`Forces`] for more information on how to apply forces in Avian.
 #[expect(
     private_bounds,
-    reason = "The `data` method should not be publicly accessible."
+    reason = "The internal methods should not be publicly accessible."
 )]
-pub trait RigidBodyForces: RigidBodyForcesInternal {
+pub trait WriteRigidBodyForces: ReadRigidBodyForces + WriteRigidBodyForcesInternal {
     /// Applies a force at the center of mass in world space. The unit is typically N or kg⋅m/s².
     ///
     /// The force is applied continuously over the physics step and cleared afterwards.
@@ -445,54 +556,16 @@ pub trait RigidBodyForces: RigidBodyForcesInternal {
         }
     }
 
-    /// Returns the linear acceleration that the body has accumulated
-    /// before the physics step in world space, including acceleration
-    /// caused by forces.
-    ///
-    /// This does not include gravity, contact forces, or joint forces.
-    /// Only forces and accelerations applied through [`Forces`] are included.
+    /// Returns a mutable reference to the [`LinearVelocity`] of the body in world space.
     #[inline]
-    fn accumulated_linear_acceleration(&self) -> Vector {
-        // The linear increment is treated as linear acceleration until the integration step.
-        let world_linear_acceleration = self.integration_data().linear_increment;
-        let local_linear_acceleration = self.accumulated_local_acceleration().linear;
-
-        // Return the total world-space linear acceleration.
-        self.locked_axes()
-            .apply_to_vec(world_linear_acceleration + self.rot() * local_linear_acceleration)
+    fn linear_velocity_mut(&mut self) -> &mut Vector {
+        self.lin_vel_mut()
     }
 
-    /// Returns the angular acceleration that the body has accumulated
-    /// before the physics step in world space, including acceleration
-    /// caused by torques.
-    ///
-    /// This does not include gravity, contact forces, or joint forces.
-    /// Only torques and accelerations applied through [`Forces`] are included.
-    #[cfg(feature = "2d")]
+    /// Returns a mutable reference to the [`AngularVelocity`] of the body in world space.
     #[inline]
-    fn accumulated_angular_acceleration(&self) -> AngularVector {
-        // The angular increment is treated as angular acceleration until the integration step.
-        self.locked_axes()
-            .apply_to_angular_velocity(self.integration_data().angular_increment)
-    }
-
-    /// Returns the angular acceleration that the body has accumulated
-    /// before the physics step in world space, including acceleration
-    /// caused by torques.
-    ///
-    /// This does not include gravity, contact forces, or joint forces.
-    /// Only torques and accelerations applied through [`Forces`] are included.
-    #[cfg(feature = "3d")]
-    #[inline]
-    fn accumulated_angular_acceleration(&self) -> AngularVector {
-        // The angular increment is treated as angular acceleration until the integration step.
-        let world_angular_acceleration = self.integration_data().angular_increment;
-        let local_angular_acceleration = self.accumulated_local_acceleration().angular;
-
-        // Return the total world-space angular acceleration.
-        self.locked_axes().apply_to_angular_velocity(
-            world_angular_acceleration + self.rot() * local_angular_acceleration,
-        )
+    fn angular_velocity_mut(&mut self) -> &mut AngularVector {
+        self.ang_vel_mut()
     }
 
     /// Resets the accumulated linear acceleration to zero.
@@ -511,81 +584,34 @@ pub trait RigidBodyForces: RigidBodyForcesInternal {
             self.accumulated_local_acceleration_mut().angular = AngularVector::ZERO;
         }
     }
-
-    /// Returns the [`Position`] of the body.
-    #[inline]
-    fn position(&self) -> &Position {
-        self.pos()
-    }
-
-    /// Returns the [`Rotation`] of the body.
-    #[inline]
-    fn rotation(&self) -> &Rotation {
-        self.rot()
-    }
-
-    /// Returns the [`LinearVelocity`] of the body in world space.
-    #[inline]
-    fn linear_velocity(&self) -> Vector {
-        self.lin_vel()
-    }
-
-    /// Returns a mutable reference to the [`LinearVelocity`] of the body in world space.
-    #[inline]
-    fn linear_velocity_mut(&mut self) -> &mut Vector {
-        self.lin_vel_mut()
-    }
-
-    /// Returns the [`AngularVelocity`] of the body in world space.
-    #[inline]
-    fn angular_velocity(&self) -> AngularVector {
-        self.ang_vel()
-    }
-
-    /// Returns a mutable reference to the [`AngularVelocity`] of the body in world space.
-    #[inline]
-    fn angular_velocity_mut(&mut self) -> &mut AngularVector {
-        self.ang_vel_mut()
-    }
-
-    /// Returns the velocity of a point in world space on the body.
-    #[inline]
-    #[doc(alias = "linear_velocity_at_point")]
-    fn velocity_at_point(&self, world_point: Vector) -> Vector {
-        let offset = world_point - self.global_center_of_mass();
-        #[cfg(feature = "2d")]
-        {
-            self.linear_velocity() + self.angular_velocity() * offset.perp()
-        }
-        #[cfg(feature = "3d")]
-        {
-            self.linear_velocity() + self.angular_velocity().cross(offset)
-        }
-    }
 }
 
-/// A trait to provide internal getters and helpers for [`RigidBodyForces`].
-trait RigidBodyForcesInternal {
+/// A trait to provide internal read-only getters for [`ReadRigidBodyForces`].
+trait ReadRigidBodyForcesInternal {
     fn pos(&self) -> &Position;
     fn rot(&self) -> &Rotation;
     fn lin_vel(&self) -> Vector;
-    fn lin_vel_mut(&mut self) -> &mut Vector;
     fn ang_vel(&self) -> AngularVector;
+    fn global_center_of_mass(&self) -> Vector;
+    fn locked_axes(&self) -> LockedAxes;
+    fn integration_data(&self) -> &VelocityIntegrationData;
+    fn accumulated_local_acceleration(&self) -> &AccumulatedLocalAcceleration;
+}
+
+/// A trait to provide internal mutable getters and helpers for [`WriteRigidBodyForces`].
+trait WriteRigidBodyForcesInternal: ReadRigidBodyForcesInternal {
+    fn lin_vel_mut(&mut self) -> &mut Vector;
     fn ang_vel_mut(&mut self) -> &mut AngularVector;
     fn inverse_mass(&self) -> Scalar;
     #[cfg(feature = "3d")]
     fn inverse_angular_inertia(&self) -> SymmetricTensor;
     fn effective_inverse_angular_inertia(&self) -> SymmetricTensor;
-    fn global_center_of_mass(&self) -> Vector;
-    fn locked_axes(&self) -> LockedAxes;
-    fn integration_data(&self) -> &VelocityIntegrationData;
     fn integration_data_mut(&mut self) -> &mut VelocityIntegrationData;
-    fn accumulated_local_acceleration(&self) -> &AccumulatedLocalAcceleration;
     fn accumulated_local_acceleration_mut(&mut self) -> &mut AccumulatedLocalAcceleration;
     fn try_wake_up(&mut self) -> bool;
 }
 
-impl RigidBodyForcesInternal for ForcesItem<'_, '_> {
+impl ReadRigidBodyForcesInternal for ForcesItem<'_, '_> {
     #[inline]
     fn pos(&self) -> &Position {
         self.position
@@ -599,12 +625,31 @@ impl RigidBodyForcesInternal for ForcesItem<'_, '_> {
         self.linear_velocity.0
     }
     #[inline]
-    fn lin_vel_mut(&mut self) -> &mut Vector {
-        &mut self.linear_velocity.0
-    }
-    #[inline]
     fn ang_vel(&self) -> AngularVector {
         self.angular_velocity.0
+    }
+    #[inline]
+    fn global_center_of_mass(&self) -> Vector {
+        self.position.0 + self.rotation * self.center_of_mass.0
+    }
+    #[inline]
+    fn locked_axes(&self) -> LockedAxes {
+        self.locked_axes.copied().unwrap_or_default()
+    }
+    #[inline]
+    fn integration_data(&self) -> &VelocityIntegrationData {
+        &self.integration
+    }
+    #[inline]
+    fn accumulated_local_acceleration(&self) -> &AccumulatedLocalAcceleration {
+        &self.accumulated_local_acceleration
+    }
+}
+
+impl WriteRigidBodyForcesInternal for ForcesItem<'_, '_> {
+    #[inline]
+    fn lin_vel_mut(&mut self) -> &mut Vector {
+        &mut self.linear_velocity.0
     }
     #[inline]
     fn ang_vel_mut(&mut self) -> &mut AngularVector {
@@ -630,24 +675,8 @@ impl RigidBodyForcesInternal for ForcesItem<'_, '_> {
             .inverse()
     }
     #[inline]
-    fn global_center_of_mass(&self) -> Vector {
-        self.position.0 + self.rotation * self.center_of_mass.0
-    }
-    #[inline]
-    fn locked_axes(&self) -> LockedAxes {
-        self.locked_axes.copied().unwrap_or_default()
-    }
-    #[inline]
-    fn integration_data(&self) -> &VelocityIntegrationData {
-        &self.integration
-    }
-    #[inline]
     fn integration_data_mut(&mut self) -> &mut VelocityIntegrationData {
         &mut self.integration
-    }
-    #[inline]
-    fn accumulated_local_acceleration(&self) -> &AccumulatedLocalAcceleration {
-        &self.accumulated_local_acceleration
     }
     #[inline]
     fn accumulated_local_acceleration_mut(&mut self) -> &mut AccumulatedLocalAcceleration {
@@ -663,7 +692,7 @@ impl RigidBodyForcesInternal for ForcesItem<'_, '_> {
     }
 }
 
-impl RigidBodyForcesInternal for NonWakingForcesItem<'_, '_> {
+impl ReadRigidBodyForcesInternal for NonWakingForcesItem<'_, '_> {
     #[inline]
     fn pos(&self) -> &Position {
         self.0.position()
@@ -677,12 +706,31 @@ impl RigidBodyForcesInternal for NonWakingForcesItem<'_, '_> {
         self.0.lin_vel()
     }
     #[inline]
-    fn lin_vel_mut(&mut self) -> &mut Vector {
-        self.0.lin_vel_mut()
-    }
-    #[inline]
     fn ang_vel(&self) -> AngularVector {
         self.0.ang_vel()
+    }
+    #[inline]
+    fn global_center_of_mass(&self) -> Vector {
+        self.0.global_center_of_mass()
+    }
+    #[inline]
+    fn locked_axes(&self) -> LockedAxes {
+        self.0.locked_axes()
+    }
+    #[inline]
+    fn integration_data(&self) -> &VelocityIntegrationData {
+        self.0.integration_data()
+    }
+    #[inline]
+    fn accumulated_local_acceleration(&self) -> &AccumulatedLocalAcceleration {
+        self.0.accumulated_local_acceleration()
+    }
+}
+
+impl WriteRigidBodyForcesInternal for NonWakingForcesItem<'_, '_> {
+    #[inline]
+    fn lin_vel_mut(&mut self) -> &mut Vector {
+        self.0.lin_vel_mut()
     }
     #[inline]
     fn ang_vel_mut(&mut self) -> &mut AngularVector {
@@ -702,24 +750,8 @@ impl RigidBodyForcesInternal for NonWakingForcesItem<'_, '_> {
         self.0.effective_inverse_angular_inertia()
     }
     #[inline]
-    fn global_center_of_mass(&self) -> Vector {
-        self.0.global_center_of_mass()
-    }
-    #[inline]
-    fn locked_axes(&self) -> LockedAxes {
-        self.0.locked_axes()
-    }
-    #[inline]
-    fn integration_data(&self) -> &VelocityIntegrationData {
-        self.0.integration_data()
-    }
-    #[inline]
     fn integration_data_mut(&mut self) -> &mut VelocityIntegrationData {
         self.0.integration_data_mut()
-    }
-    #[inline]
-    fn accumulated_local_acceleration(&self) -> &AccumulatedLocalAcceleration {
-        self.0.accumulated_local_acceleration()
     }
     #[inline]
     fn accumulated_local_acceleration_mut(&mut self) -> &mut AccumulatedLocalAcceleration {
