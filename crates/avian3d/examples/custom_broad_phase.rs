@@ -1,4 +1,4 @@
-use avian3d::{data_structures::pair_key::PairKey, math::*, prelude::*};
+use avian3d::{dynamics::solver::joint_graph::JointGraph, math::*, prelude::*};
 use bevy::prelude::*;
 use examples_common_3d::ExampleCommonPlugin;
 
@@ -56,8 +56,8 @@ fn setup(
     ));
 }
 
-/// Finds pairs of entities with overlapping `ColliderAabb`s
-/// and creates contact pairs for them in the `ContactGraph`.
+/// Finds pairs of entities with overlapping `ColliderAabb`s and creates contact pairs for them in the `ContactGraph`.
+/// The narrow phasoe will then process these contact pairs and compute contact data.
 ///
 // A brute force algorithm is used for simplicity.
 pub struct BruteForceBroadPhasePlugin;
@@ -67,32 +67,56 @@ impl Plugin for BruteForceBroadPhasePlugin {
         // Add the broad phase system into the broad phase set.
         app.add_systems(
             PhysicsSchedule,
-            collect_collision_pairs.in_set(PhysicsStepSet::BroadPhase),
+            collect_collision_pairs.in_set(PhysicsStepSystems::BroadPhase),
         );
     }
 }
 
 fn collect_collision_pairs(
-    bodies: Query<(Entity, &ColliderAabb, &RigidBody)>,
-    mut collisions: ResMut<ContactGraph>,
+    colliders: Query<(Entity, &ColliderAabb, &ColliderOf)>,
+    bodies: Query<&RigidBody>,
+    mut contact_graph: ResMut<ContactGraph>,
+    joint_graph: Res<JointGraph>,
 ) {
-    // Loop through all entity combinations and collect pairs of bodies with intersecting AABBs.
-    for [(entity1, aabb1, rb1), (entity2, aabb2, rb2)] in bodies.iter_combinations() {
-        // At least one of the bodies is dynamic and their AABBs intersect.
-        if (rb1.is_dynamic() || rb2.is_dynamic()) && aabb1.intersects(aabb2) {
-            // Create a pair key from the entity indices.
-            let key = PairKey::new(entity1.index(), entity2.index());
+    // Loop through all entity combinations and create contact pairs for overlapping AABBs.
+    for [
+        (collider1, aabb1, collider_of1),
+        (collider2, aabb2, collider_of2),
+    ] in colliders.iter_combinations()
+    {
+        // Get the rigid bodies of the colliders.
+        let Ok(rb1) = bodies.get(collider_of1.body) else {
+            continue;
+        };
+        let Ok(rb2) = bodies.get(collider_of2.body) else {
+            continue;
+        };
 
-            // Avoid duplicate pairs.
-            if collisions.contains_key(&key) {
-                continue;
-            }
-
-            // Create a contact pair as non-touching.
-            // The narrow phase will determine if the entities are touching and compute contact data.
-            // NOTE: To handle sensors, collision hooks, and child colliders, you may need to configure
-            //       `flags` and other properties of the contact pair. This is not done here for simplicity.
-            collisions.add_pair_with_key(ContactPair::new(entity1, entity2), key);
+        // Skip pairs where both bodies are non-dynamic.
+        if !rb1.is_dynamic() && !rb2.is_dynamic() {
+            continue;
         }
+
+        // Check if the AABBs of the colliders intersect.
+        if !aabb1.intersects(aabb2) {
+            continue;
+        }
+
+        // Optional: Check if a joint disables contacts between the two bodies.
+        if joint_graph
+            .joints_between(collider_of1.body, collider_of2.body)
+            .any(|edge| edge.collision_disabled)
+        {
+            continue;
+        }
+
+        // Create a contact pair as non-touching by adding an edge between the entities in the contact graph.
+        let mut contact_edge = ContactEdge::new(collider1, collider2);
+        contact_edge.body1 = Some(collider_of1.body);
+        contact_edge.body2 = Some(collider_of2.body);
+        contact_graph.add_edge_with(contact_edge, |contact_pair| {
+            contact_pair.body1 = Some(collider_of1.body);
+            contact_pair.body2 = Some(collider_of2.body);
+        });
     }
 }

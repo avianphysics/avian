@@ -1,0 +1,19 @@
+<svg width="357" height="387" viewBox="0 0 119 129" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="21.3728" y="0.664463" width="79" height="49" rx="1.5" transform="rotate(25 21.3728 0.664463)" fill="#5064C8" stroke="black" />
+    <text fill="white" xml:space="preserve" style="white-space: pre" font-family="'Fira Code', monospace" font-size="6" font-weight="600" letter-spacing="0em">
+        <tspan x="38.0059" y="42.51">body1</tspan>
+    </text>
+    <path d="M103.117 128.5H25.207L73.9004 79.8057L103.117 128.5Z" fill="#5064C8" stroke="black" />
+    <text fill="white" xml:space="preserve" style="white-space: pre" font-family="'Fira Code', monospace" font-size="6" font-weight="600" letter-spacing="0em">
+        <tspan x="60.0059" y="112.51">body2</tspan>
+    </text>
+    <circle cx="73" cy="79" r="4" fill="#FFBB40" />
+    <path d="M63.4553 80.2761C63.5228 80.4523 63.7538 80.4931 63.8775 80.3506L67.1376 76.5955C67.265 76.4488 67.1836 76.2192 66.9922 76.1854L61.953 75.2969C61.7617 75.2631 61.6066 75.4511 61.6762 75.6325L63.4553 80.2761Z" fill="#E19664" />
+    <path d="M82 79C82 79 82 70 73 70C64 70 64 79 64 79" stroke="#E19664" stroke-width="2" />
+    <text fill="#FFBB40" xml:space="preserve" style="white-space: pre" font-family="'Fira Code', monospace" font-size="6" font-weight="600" letter-spacing="0em">
+        <tspan x="83.207" y="84.51">anchor</tspan>
+    </text>
+    <text fill="#E19664" xml:space="preserve" style="white-space: pre" font-family="'Fira Code', monospace" font-size="6" font-weight="600" letter-spacing="0em">
+        <tspan x="83.0059" y="68.51">angle</tspan>
+    </text>
+</svg>

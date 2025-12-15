@@ -3,27 +3,20 @@ use alloc::sync::Arc;
 use crate::prelude::*;
 use bevy::prelude::*;
 use parry::{
-    bounding_volume::Aabb,
+    bounding_volume::{Aabb, BoundingVolume},
     math::Isometry,
-    partitioning::Qbvh,
+    partitioning::{Bvh, BvhBuildStrategy, BvhNode},
     query::{
-        details::{
-            NormalConstraints, RayCompositeShapeToiAndNormalBestFirstVisitor,
-            TOICompositeShapeShapeBestFirstVisitor,
-        },
-        point::PointCompositeShapeProjBestFirstVisitor,
-        visitors::{
-            BoundingVolumeIntersectionsVisitor, PointIntersectionsVisitor, RayIntersectionsVisitor,
-        },
-        DefaultQueryDispatcher, QueryDispatcher, ShapeCastOptions,
+        DefaultQueryDispatcher, QueryDispatcher, RayCast, ShapeCastOptions,
+        details::NormalConstraints,
     },
-    shape::{Shape, TypedSimdCompositeShape},
+    shape::{CompositeShape, CompositeShapeRef, Shape, TypedCompositeShape},
 };
 
 // TODO: It'd be nice not to store so much duplicate data.
 //       Should we just query the ECS?
 #[derive(Clone)]
-pub(crate) struct QbvhProxyData {
+pub(crate) struct BvhProxyData {
     pub entity: Entity,
     pub isometry: Isometry<Scalar>,
     pub collider: Collider,
@@ -32,20 +25,20 @@ pub(crate) struct QbvhProxyData {
 
 /// A resource for the spatial query pipeline.
 ///
-/// The pipeline maintains a quaternary bounding volume hierarchy `Qbvh` of the world's colliders
+/// The pipeline maintains a quaternary bounding volume hierarchy `Bvh` of the world's colliders
 /// as an acceleration structure for spatial queries.
 #[derive(Resource, Clone)]
 pub struct SpatialQueryPipeline {
-    pub(crate) qbvh: Qbvh<u32>,
+    pub(crate) bvh: Bvh,
     pub(crate) dispatcher: Arc<dyn QueryDispatcher>,
-    // TODO: Store the proxies as `Qbvh` leaf data.
-    pub(crate) proxies: Vec<QbvhProxyData>,
+    // TODO: Store the proxies as `Bvh` leaf data.
+    pub(crate) proxies: Vec<BvhProxyData>,
 }
 
 impl Default for SpatialQueryPipeline {
     fn default() -> Self {
         Self {
-            qbvh: Qbvh::new(),
+            bvh: Bvh::new(),
             dispatcher: Arc::new(DefaultQueryDispatcher),
             proxies: Vec::default(),
         }
@@ -58,28 +51,45 @@ impl SpatialQueryPipeline {
         SpatialQueryPipeline::default()
     }
 
-    pub(crate) fn as_composite_shape<'a>(
+    pub(crate) fn as_composite_shape_internal<'a>(
         &'a self,
         query_filter: &'a SpatialQueryFilter,
     ) -> QueryPipelineAsCompositeShape<'a> {
         QueryPipelineAsCompositeShape {
             pipeline: self,
-            proxies: &self.proxies,
             query_filter,
         }
     }
 
-    pub(crate) fn as_composite_shape_with_predicate<'a: 'b, 'b>(
+    /// Creates a parry [`TypedCompositeShape`] for this pipeline.
+    /// Can be used to implement custom spatial queries
+    pub fn as_composite_shape<'a>(
+        &'a self,
+        query_filter: &'a SpatialQueryFilter,
+    ) -> impl TypedCompositeShape {
+        self.as_composite_shape_internal(query_filter)
+    }
+
+    pub(crate) fn as_composite_shape_with_predicate_internal<'a: 'b, 'b>(
         &'a self,
         query_filter: &'a SpatialQueryFilter,
         predicate: &'a dyn Fn(Entity) -> bool,
     ) -> QueryPipelineAsCompositeShapeWithPredicate<'a, 'b> {
         QueryPipelineAsCompositeShapeWithPredicate {
             pipeline: self,
-            proxies: &self.proxies,
             query_filter,
             predicate,
         }
+    }
+
+    /// Creates a parry [`TypedCompositeShape`] for this pipeline, with a predicate.
+    /// Can be used to implement custom spatial queries
+    pub fn as_composite_shape_with_predicate<'a>(
+        &'a self,
+        query_filter: &'a SpatialQueryFilter,
+        predicate: &'a dyn Fn(Entity) -> bool,
+    ) -> impl TypedCompositeShape {
+        self.as_composite_shape_with_predicate_internal(query_filter, predicate)
     }
 
     /// Updates the associated acceleration structures with a new set of entities.
@@ -97,7 +107,7 @@ impl SpatialQueryPipeline {
     ) {
         self.update_internal(
             colliders.map(
-                |(entity, position, rotation, collider, layers)| QbvhProxyData {
+                |(entity, position, rotation, collider, layers)| BvhProxyData {
                     entity,
                     isometry: make_isometry(position.0, *rotation),
                     collider: collider.clone(),
@@ -108,29 +118,28 @@ impl SpatialQueryPipeline {
     }
 
     // TODO: Incremental updates.
-    fn update_internal(&mut self, proxies: impl Iterator<Item = QbvhProxyData>) {
+    fn update_internal(&mut self, proxies: impl Iterator<Item = BvhProxyData>) {
         self.proxies.clear();
         self.proxies.extend(proxies);
 
-        struct DataGenerator<'a>(&'a Vec<QbvhProxyData>);
+        let aabbs = self.proxies.iter().enumerate().map(|(i, proxy)| {
+            (
+                i,
+                proxy.collider.shape_scaled().compute_aabb(&proxy.isometry),
+            )
+        });
 
-        impl parry::partitioning::QbvhDataGenerator<u32> for DataGenerator<'_> {
-            fn size_hint(&self) -> usize {
-                self.0.len()
-            }
+        self.bvh = Bvh::from_iter(BvhBuildStrategy::Binned, aabbs);
+    }
 
-            #[inline(always)]
-            fn for_each(&mut self, mut f: impl FnMut(u32, parry::bounding_volume::Aabb)) {
-                for (i, proxy) in self.0.iter().enumerate() {
-                    // Compute and return AABB
-                    let aabb = proxy.collider.shape_scaled().compute_aabb(&proxy.isometry);
-                    f(i as u32, aabb)
-                }
-            }
-        }
+    /// Get the entity corresponding to a given index in the pipeline
+    pub fn entity(&self, index: usize) -> Entity {
+        self.proxies[index].entity
+    }
 
-        self.qbvh
-            .clear_and_rebuild(DataGenerator(&self.proxies), 0.01);
+    /// Get a dyn reference to the query dispatcher used in this pipeline
+    pub fn dispatcher_ref(&self) -> &dyn QueryDispatcher {
+        self.dispatcher.as_ref()
     }
 
     /// Casts a [ray](spatial_query#raycasting) and computes the closest [hit](RayHitData) with a collider.
@@ -188,18 +197,13 @@ impl SpatialQueryPipeline {
         filter: &SpatialQueryFilter,
         predicate: &dyn Fn(Entity) -> bool,
     ) -> Option<RayHitData> {
-        let pipeline_shape = self.as_composite_shape_with_predicate(filter, predicate);
+        let composite = self.as_composite_shape_with_predicate(filter, predicate);
+        let pipeline_shape = CompositeShapeRef(&composite);
         let ray = parry::query::Ray::new(origin.into(), direction.adjust_precision().into());
-        let mut visitor = RayCompositeShapeToiAndNormalBestFirstVisitor::new(
-            &pipeline_shape,
-            &ray,
-            max_distance,
-            solid,
-        );
 
-        self.qbvh
-            .traverse_best_first(&mut visitor)
-            .map(|(_, (index, hit))| RayHitData {
+        pipeline_shape
+            .cast_local_ray_and_get_normal(&ray, max_distance, solid)
+            .map(|(index, hit)| RayHitData {
                 entity: self.proxies[index as usize].entity,
                 distance: hit.time_of_impact,
                 normal: hit.normal.into(),
@@ -270,36 +274,42 @@ impl SpatialQueryPipeline {
         max_distance: Scalar,
         solid: bool,
         filter: &SpatialQueryFilter,
+        // TODO: Just return an iterator
         mut callback: impl FnMut(RayHitData) -> bool,
     ) {
         let proxies = &self.proxies;
 
         let ray = parry::query::Ray::new(origin.into(), direction.adjust_precision().into());
 
-        let mut leaf_callback = &mut |index: &u32| {
-            if let Some(proxy) = proxies.get(*index as usize) {
-                if filter.test(proxy.entity, proxy.layers) {
-                    if let Some(hit) = proxy.collider.shape_scaled().cast_ray_and_get_normal(
-                        &proxy.isometry,
-                        &ray,
-                        max_distance,
-                        solid,
-                    ) {
-                        let hit = RayHitData {
-                            entity: proxy.entity,
-                            distance: hit.time_of_impact,
-                            normal: hit.normal.into(),
-                        };
+        let hits = self
+            .bvh
+            .leaves(move |node: &BvhNode| node.aabb().intersects_local_ray(&ray, max_distance))
+            .filter_map(move |leaf| {
+                let proxy = proxies.get(leaf as usize)?;
 
-                        return callback(hit);
-                    }
+                if !filter.test(proxy.entity, proxy.layers) {
+                    return None;
                 }
-            }
-            true
-        };
 
-        let mut visitor = RayIntersectionsVisitor::new(&ray, max_distance, &mut leaf_callback);
-        self.qbvh.traverse_depth_first(&mut visitor);
+                let hit = proxy.collider.shape_scaled().cast_ray_and_get_normal(
+                    &proxy.isometry,
+                    &ray,
+                    max_distance,
+                    solid,
+                )?;
+
+                Some(RayHitData {
+                    entity: proxy.entity,
+                    distance: hit.time_of_impact,
+                    normal: hit.normal.into(),
+                })
+            });
+
+        for hit in hits {
+            if !callback(hit) {
+                break;
+            }
+        }
     }
 
     /// Casts a [shape](spatial_query#shapecasting) with a given rotation and computes the closest [hit](ShapeHits)
@@ -385,24 +395,23 @@ impl SpatialQueryPipeline {
 
         let shape_isometry = make_isometry(origin, rotation);
         let shape_direction = direction.adjust_precision().into();
-        let pipeline_shape = self.as_composite_shape_with_predicate(filter, predicate);
-        let mut visitor = TOICompositeShapeShapeBestFirstVisitor::new(
-            &*self.dispatcher,
-            &shape_isometry,
-            &shape_direction,
-            &pipeline_shape,
-            shape.shape_scaled().as_ref(),
-            ShapeCastOptions {
-                max_time_of_impact: config.max_distance,
-                stop_at_penetration: !config.ignore_origin_penetration,
-                compute_impact_geometry_on_penetration: config.compute_contact_on_penetration,
-                ..default()
-            },
-        );
+        let composite = self.as_composite_shape_with_predicate(filter, predicate);
+        let pipeline_shape = CompositeShapeRef(&composite);
 
-        self.qbvh
-            .traverse_best_first(&mut visitor)
-            .map(|(_, (index, hit))| ShapeHitData {
+        pipeline_shape
+            .cast_shape(
+                self.dispatcher.as_ref(),
+                &shape_isometry,
+                &shape_direction,
+                shape.shape_scaled().as_ref(),
+                ShapeCastOptions {
+                    max_time_of_impact: config.max_distance,
+                    stop_at_penetration: !config.ignore_origin_penetration,
+                    compute_impact_geometry_on_penetration: config.compute_contact_on_penetration,
+                    ..default()
+                },
+            )
+            .map(|(index, hit)| ShapeHitData {
                 entity: self.proxies[index as usize].entity,
                 distance: hit.time_of_impact,
                 point1: hit.witness1.into(),
@@ -489,7 +498,7 @@ impl SpatialQueryPipeline {
     ) {
         // TODO: This clone is here so that the excluded entities in the original `query_filter` aren't modified.
         //       We could remove this if shapecasting could compute multiple hits without just doing casts in a loop.
-        //       See https://github.com/Jondolf/avian/issues/403.
+        //       See https://github.com/avianphysics/avian/issues/403.
         let mut query_filter = filter.clone();
 
         let shape_cast_options = ShapeCastOptions {
@@ -513,28 +522,27 @@ impl SpatialQueryPipeline {
         let shape_direction = direction.adjust_precision().into();
 
         loop {
-            let pipeline_shape = self.as_composite_shape(&query_filter);
-            let mut visitor = TOICompositeShapeShapeBestFirstVisitor::new(
-                &*self.dispatcher,
-                &shape_isometry,
-                &shape_direction,
-                &pipeline_shape,
-                shape.shape_scaled().as_ref(),
-                shape_cast_options,
-            );
+            let composite = self.as_composite_shape_internal(&query_filter);
+            let pipeline_shape = CompositeShapeRef(&composite);
 
-            if let Some(hit) =
-                self.qbvh
-                    .traverse_best_first(&mut visitor)
-                    .map(|(_, (index, hit))| ShapeHitData {
-                        entity: self.proxies[index as usize].entity,
-                        distance: hit.time_of_impact,
-                        point1: hit.witness1.into(),
-                        point2: hit.witness2.into(),
-                        normal1: hit.normal1.into(),
-                        normal2: hit.normal2.into(),
-                    })
-            {
+            let hit = pipeline_shape
+                .cast_shape(
+                    self.dispatcher.as_ref(),
+                    &shape_isometry,
+                    &shape_direction,
+                    shape.shape_scaled().as_ref(),
+                    shape_cast_options,
+                )
+                .map(|(index, hit)| ShapeHitData {
+                    entity: self.proxies[index as usize].entity,
+                    distance: hit.time_of_impact,
+                    point1: hit.witness1.into(),
+                    point2: hit.witness2.into(),
+                    normal1: hit.normal1.into(),
+                    normal2: hit.normal2.into(),
+                });
+
+            if let Some(hit) = hit {
                 query_filter.excluded_entities.insert(hit.entity);
 
                 if !callback(hit) {
@@ -589,18 +597,21 @@ impl SpatialQueryPipeline {
         filter: &SpatialQueryFilter,
         predicate: &dyn Fn(Entity) -> bool,
     ) -> Option<PointProjection> {
-        let point = point.into();
-        let pipeline_shape = self.as_composite_shape_with_predicate(filter, predicate);
-        let mut visitor =
-            PointCompositeShapeProjBestFirstVisitor::new(&pipeline_shape, &point, solid);
+        if self.proxies.is_empty() {
+            return None;
+        }
 
-        self.qbvh
-            .traverse_best_first(&mut visitor)
-            .map(|(_, (projection, index))| PointProjection {
-                entity: self.proxies[index as usize].entity,
-                point: projection.point.into(),
-                is_inside: projection.is_inside,
-            })
+        let point = point.into();
+        let composite = self.as_composite_shape_with_predicate(filter, predicate);
+        let pipeline_shape = CompositeShapeRef(&composite);
+
+        let (index, projection) = pipeline_shape.project_local_point(&point, solid);
+
+        Some(PointProjection {
+            entity: self.proxies[index as usize].entity,
+            point: projection.point.into(),
+            is_inside: projection.is_inside,
+        })
     }
 
     /// An [intersection test](spatial_query#intersection-tests) that finds all entities with a [collider](Collider)
@@ -616,10 +627,12 @@ impl SpatialQueryPipeline {
     /// - [`SpatialQueryPipeline::point_intersections_callback`]
     pub fn point_intersections(&self, point: Vector, filter: &SpatialQueryFilter) -> Vec<Entity> {
         let mut intersections = vec![];
+
         self.point_intersections_callback(point, filter, |e| {
             intersections.push(e);
             true
         });
+
         intersections
     }
 
@@ -644,22 +657,29 @@ impl SpatialQueryPipeline {
     ) {
         let point = point.into();
 
-        let mut leaf_callback = &mut |index: &u32| {
-            if let Some(proxy) = self.proxies.get(*index as usize) {
+        let intersecting_entities = self
+            .bvh
+            .leaves(|node: &BvhNode| node.aabb().contains_local_point(&point))
+            .filter_map(move |leaf| {
+                let proxy = self.proxies.get(leaf as usize)?;
+
                 if filter.test(proxy.entity, proxy.layers)
                     && proxy
                         .collider
                         .shape_scaled()
                         .contains_point(&proxy.isometry, &point)
                 {
-                    return callback(proxy.entity);
+                    Some(proxy.entity)
+                } else {
+                    None
                 }
-            }
-            true
-        };
+            });
 
-        let mut visitor = PointIntersectionsVisitor::new(&point, &mut leaf_callback);
-        self.qbvh.traverse_depth_first(&mut visitor);
+        for entity in intersecting_entities {
+            if !callback(entity) {
+                break;
+            }
+        }
     }
 
     /// An [intersection test](spatial_query#intersection-tests) that finds all entities with a [`ColliderAabb`]
@@ -670,10 +690,12 @@ impl SpatialQueryPipeline {
     /// - [`SpatialQueryPipeline::aabb_intersections_with_aabb_callback`]
     pub fn aabb_intersections_with_aabb(&self, aabb: ColliderAabb) -> Vec<Entity> {
         let mut intersections = vec![];
+
         self.aabb_intersections_with_aabb_callback(aabb, |e| {
             intersections.push(e);
             true
         });
+
         intersections
     }
 
@@ -689,19 +711,21 @@ impl SpatialQueryPipeline {
         aabb: ColliderAabb,
         mut callback: impl FnMut(Entity) -> bool,
     ) {
-        let mut leaf_callback = |index: &u32| {
-            let entity = self.proxies[*index as usize].entity;
-            callback(entity)
+        let aabb = Aabb {
+            mins: aabb.min.into(),
+            maxs: aabb.max.into(),
         };
 
-        let mut visitor = BoundingVolumeIntersectionsVisitor::new(
-            &Aabb {
-                mins: aabb.min.into(),
-                maxs: aabb.max.into(),
-            },
-            &mut leaf_callback,
-        );
-        self.qbvh.traverse_depth_first(&mut visitor);
+        let intersecting_entities = self
+            .bvh
+            .leaves(move |node: &BvhNode| node.aabb().intersects(&aabb))
+            .filter_map(move |leaf| self.proxies.get(leaf as usize).map(|p| p.entity));
+
+        for entity in intersecting_entities {
+            if !callback(entity) {
+                break;
+            }
+        }
     }
 
     /// An [intersection test](spatial_query#intersection-tests) that finds all entities with a [`Collider`]
@@ -771,117 +795,165 @@ impl SpatialQueryPipeline {
 
         let dispatcher = &*self.dispatcher;
 
-        let mut leaf_callback = &mut |index: &u32| {
-            if let Some(proxy) = proxies.get(*index as usize) {
-                if filter.test(proxy.entity, proxy.layers) {
-                    let isometry = inverse_shape_isometry * proxy.isometry;
+        let shape_aabb = shape.shape_scaled().compute_aabb(&shape_isometry);
+        let entities = self
+            .bvh
+            .leaves(move |node: &BvhNode| node.aabb().intersects(&shape_aabb))
+            .filter_map(move |leaf| {
+                let proxy = proxies.get(leaf as usize)?;
 
-                    if dispatcher.intersection_test(
+                if !filter.test(proxy.entity, proxy.layers) {
+                    return None;
+                }
+
+                let isometry = inverse_shape_isometry * proxy.isometry;
+                let intersects = dispatcher
+                    .intersection_test(
                         &isometry,
                         shape.shape_scaled().as_ref(),
                         proxy.collider.shape_scaled().as_ref(),
-                    ) == Ok(true)
-                    {
-                        return callback(proxy.entity);
-                    }
-                }
-            }
-            true
-        };
+                    )
+                    .is_ok_and(|b| b);
 
-        let shape_aabb = shape.shape_scaled().compute_aabb(&shape_isometry);
-        let mut visitor = BoundingVolumeIntersectionsVisitor::new(&shape_aabb, &mut leaf_callback);
-        self.qbvh.traverse_depth_first(&mut visitor);
+                intersects.then_some(proxy.entity)
+            });
+
+        for entity in entities {
+            if !callback(entity) {
+                break;
+            }
+        }
     }
 }
 
 pub(crate) struct QueryPipelineAsCompositeShape<'a> {
-    proxies: &'a Vec<QbvhProxyData>,
     pipeline: &'a SpatialQueryPipeline,
     query_filter: &'a SpatialQueryFilter,
 }
 
-impl TypedSimdCompositeShape for QueryPipelineAsCompositeShape<'_> {
-    type PartShape = dyn Shape;
-    type PartNormalConstraints = dyn NormalConstraints;
-    type PartId = u32;
-
-    fn map_typed_part_at(
+impl CompositeShape for QueryPipelineAsCompositeShape<'_> {
+    fn map_part_at(
         &self,
-        shape_id: Self::PartId,
+        shape_id: u32,
+        f: &mut dyn FnMut(Option<&Isometry<Scalar>>, &dyn Shape, Option<&dyn NormalConstraints>),
+    ) {
+        self.map_untyped_part_at(shape_id, f);
+    }
+
+    fn bvh(&self) -> &Bvh {
+        &self.pipeline.bvh
+    }
+}
+
+impl TypedCompositeShape for QueryPipelineAsCompositeShape<'_> {
+    type PartNormalConstraints = ();
+    type PartShape = dyn Shape;
+
+    fn map_typed_part_at<T>(
+        &self,
+        shape_id: u32,
         mut f: impl FnMut(
             Option<&Isometry<Scalar>>,
             &Self::PartShape,
             Option<&Self::PartNormalConstraints>,
-        ),
-    ) {
-        if let Some(proxy) = self.proxies.get(shape_id as usize) {
-            if self.query_filter.test(proxy.entity, proxy.layers) {
-                f(
-                    Some(&proxy.isometry),
-                    proxy.collider.shape_scaled().as_ref(),
-                    None,
-                );
-            }
+        ) -> T,
+    ) -> Option<T> {
+        let proxy = self.pipeline.proxies.get(shape_id as usize)?;
+
+        if self.query_filter.test(proxy.entity, proxy.layers) {
+            Some(f(
+                Some(&proxy.isometry),
+                proxy.collider.shape_scaled().as_ref(),
+                None,
+            ))
+        } else {
+            None
         }
     }
 
-    fn map_untyped_part_at(
+    fn map_untyped_part_at<T>(
         &self,
-        shape_id: Self::PartId,
-        f: impl FnMut(Option<&Isometry<Scalar>>, &dyn Shape, Option<&dyn NormalConstraints>),
-    ) {
-        self.map_typed_part_at(shape_id, f);
-    }
+        shape_id: u32,
+        mut f: impl FnMut(Option<&Isometry<Scalar>>, &dyn Shape, Option<&dyn NormalConstraints>) -> T,
+    ) -> Option<T> {
+        let proxy = self.pipeline.proxies.get(shape_id as usize)?;
 
-    fn typed_qbvh(&self) -> &Qbvh<Self::PartId> {
-        &self.pipeline.qbvh
+        if self.query_filter.test(proxy.entity, proxy.layers) {
+            Some(f(
+                Some(&proxy.isometry),
+                proxy.collider.shape_scaled().as_ref(),
+                None,
+            ))
+        } else {
+            None
+        }
     }
 }
 
 pub(crate) struct QueryPipelineAsCompositeShapeWithPredicate<'a, 'b> {
-    proxies: &'a Vec<QbvhProxyData>,
     pipeline: &'a SpatialQueryPipeline,
     query_filter: &'a SpatialQueryFilter,
     predicate: &'b dyn Fn(Entity) -> bool,
 }
 
-impl TypedSimdCompositeShape for QueryPipelineAsCompositeShapeWithPredicate<'_, '_> {
-    type PartShape = dyn Shape;
-    type PartNormalConstraints = dyn NormalConstraints;
-    type PartId = u32;
-
-    fn map_typed_part_at(
+impl CompositeShape for QueryPipelineAsCompositeShapeWithPredicate<'_, '_> {
+    fn map_part_at(
         &self,
-        shape_id: Self::PartId,
+        shape_id: u32,
+        f: &mut dyn FnMut(Option<&Isometry<Scalar>>, &dyn Shape, Option<&dyn NormalConstraints>),
+    ) {
+        self.map_untyped_part_at(shape_id, f);
+    }
+
+    fn bvh(&self) -> &Bvh {
+        &self.pipeline.bvh
+    }
+}
+
+impl TypedCompositeShape for QueryPipelineAsCompositeShapeWithPredicate<'_, '_> {
+    type PartNormalConstraints = ();
+    type PartShape = dyn Shape;
+
+    fn map_typed_part_at<T>(
+        &self,
+        shape_id: u32,
         mut f: impl FnMut(
             Option<&Isometry<Scalar>>,
             &Self::PartShape,
             Option<&Self::PartNormalConstraints>,
-        ),
-    ) {
-        if let Some(proxy) = self.proxies.get(shape_id as usize) {
-            if self.query_filter.test(proxy.entity, proxy.layers) && (self.predicate)(proxy.entity)
-            {
-                f(
-                    Some(&proxy.isometry),
-                    proxy.collider.shape_scaled().as_ref(),
-                    None,
-                );
-            }
+        ) -> T,
+    ) -> Option<T> {
+        if let Some(proxy) = self.pipeline.proxies.get(shape_id as usize)
+            && self.query_filter.test(proxy.entity, proxy.layers)
+            && (self.predicate)(proxy.entity)
+        {
+            Some(f(
+                Some(&proxy.isometry),
+                proxy.collider.shape_scaled().as_ref(),
+                None,
+            ))
+        } else {
+            None
         }
     }
 
-    fn map_untyped_part_at(
+    fn map_untyped_part_at<T>(
         &self,
-        shape_id: Self::PartId,
-        f: impl FnMut(Option<&Isometry<Scalar>>, &dyn Shape, Option<&dyn NormalConstraints>),
-    ) {
-        self.map_typed_part_at(shape_id, f);
-    }
-
-    fn typed_qbvh(&self) -> &Qbvh<Self::PartId> {
-        &self.pipeline.qbvh
+        shape_id: u32,
+        mut f: impl FnMut(Option<&Isometry<Scalar>>, &dyn Shape, Option<&dyn NormalConstraints>) -> T,
+    ) -> Option<T> {
+        if let Some(proxy) = self.pipeline.proxies.get(shape_id as usize)
+            && self.query_filter.test(proxy.entity, proxy.layers)
+            && (self.predicate)(proxy.entity)
+        {
+            Some(f(
+                Some(&proxy.isometry),
+                proxy.collider.shape_scaled().as_ref(),
+                None,
+            ))
+        } else {
+            None
+        }
     }
 }
 

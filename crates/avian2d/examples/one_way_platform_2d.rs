@@ -10,7 +10,7 @@ use avian2d::{math::*, prelude::*};
 use bevy::{
     ecs::{
         entity::hash_set::EntityHashSet,
-        system::{lifetimeless::Read, SystemParam},
+        system::{SystemParam, lifetimeless::Read},
     },
     prelude::*,
 };
@@ -168,17 +168,12 @@ fn movement(
 }
 
 fn pass_through_one_way_platform(
-    mut commands: Commands,
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut actors: Query<(Entity, &mut PassThroughOneWayPlatform), With<Actor>>,
+    mut actors: Query<&mut PassThroughOneWayPlatform, With<Actor>>,
 ) {
-    for (entity, mut pass_through_one_way_platform) in &mut actors {
+    for mut pass_through_one_way_platform in &mut actors {
         if keyboard_input.pressed(KeyCode::ArrowDown) && keyboard_input.pressed(KeyCode::Space) {
             *pass_through_one_way_platform = PassThroughOneWayPlatform::Always;
-
-            // Wake up the body when it's allowed to drop down.
-            // Otherwise it won't fall because gravity isn't simulated.
-            commands.queue(WakeUpBody(entity));
         } else {
             *pass_through_one_way_platform = PassThroughOneWayPlatform::ByNormal;
         }

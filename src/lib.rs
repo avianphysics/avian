@@ -2,7 +2,7 @@
 //!
 //! **Avian** is an ECS-driven 2D and 3D physics engine for the [Bevy game engine](https://bevyengine.org/).
 //!
-//! Check out the [GitHub repository](https://github.com/Jondolf/avian)
+//! Check out the [GitHub repository](https://github.com/avianphysics/avian)
 //! for more information about the design, read the [Getting Started](#getting-started)
 //! guide below to get up to speed, and take a look at the [Table of Contents](#table-of-contents)
 //! for an overview of the engine's features and their documentation.
@@ -17,19 +17,19 @@
 //! ## Add the Dependency
 //!
 //! First, add `avian2d` or `avian3d` to the dependencies in your `Cargo.toml`:
-//!  
+//!
 //! ```toml
 //! # For 2D applications:
 //! [dependencies]
-//! avian2d = "0.3"
+//! avian2d = "0.4"
 //!
 //! # For 3D applications:
 //! [dependencies]
-//! avian3d = "0.3"
+//! avian3d = "0.4"
 //!
 //! # If you want to use the most up-to-date version, you can follow the main branch:
 //! [dependencies]
-//! avian3d = { git = "https://github.com/Jondolf/avian", branch = "main" }
+//! avian3d = { git = "https://github.com/avianphysics/avian", branch = "main" }
 //! ```
 //!
 //! You can specify features by disabling the default features and manually adding
@@ -39,7 +39,7 @@
 //! [dependencies]
 //! # Add 3D Avian with double-precision floating point numbers.
 //! # `parry-f64` enables collision detection using Parry.
-//! avian3d = { version = "0.3", default-features = false, features = ["3d", "f64", "parry-f64"] }
+//! avian3d = { version = "0.4", default-features = false, features = ["3d", "f64", "parry-f64", "xpbd_joints"] }
 //! ```
 //!
 //! ## Feature Flags
@@ -53,6 +53,7 @@
 //! | `default-collider`     | Enables the default [`Collider`]. Required for [spatial queries](spatial_query). Requires either the `parry-f32` or `parry-f64` feature.           | Yes             |
 //! | `parry-f32`            | Enables the `f32` version of the Parry collision detection library. Also enables the `default-collider` feature.                                   | Yes             |
 //! | `parry-f64`            | Enables the `f64` version of the Parry collision detection library. Also enables the `default-collider` feature.                                   | No              |
+//! | `xpbd_joints`          | Enables support for [XPBD joints](dynamics::solver::xpbd).                            .                                                            | Yes             |
 #![cfg_attr(
     feature = "3d",
     doc = "| `collider-from-mesh`   | Allows you to create [`Collider`]s from `Mesh`es.                                                                                                  | Yes             |"
@@ -66,6 +67,7 @@
 //! | `parallel`             | Enables some extra multithreading, which improves performance for larger simulations but can add some overhead for smaller ones.                    | Yes             |
 //! | `simd`                 | Enables [SIMD] optimizations.                                                                                                                       | No              |
 //! | `serialize`            | Enables support for serialization and deserialization using Serde.                                                                                  | No              |
+//! | `validate`             | Enables additional correctness checks and validation at the cost of worse performance.                                                              | No              |
 //!
 //! [`bevy_picking`]: bevy::picking
 //! [physics diagnostics]: diagnostics
@@ -113,8 +115,8 @@
 //! }
 //! ```
 //!
-//! You can find lots of [usage examples](https://github.com/Jondolf/avian#more-examples)
-//! in the project's [repository](https://github.com/Jondolf/avian).
+//! You can find lots of [usage examples](https://github.com/avianphysics/avian#more-examples)
+//! in the project's [repository](https://github.com/avianphysics/avian).
 //!
 //! # Table of Contents
 //!
@@ -127,7 +129,7 @@
 //! - [Creating rigid bodies](RigidBody#creation)
 //! - [Movement](RigidBody#movement)
 //!     - [Linear](LinearVelocity) and [angular](AngularVelocity) velocity
-//!     - [Forces](ExternalForce), [torque](ExternalTorque), and [linear](ExternalImpulse) and [angular](ExternalAngularImpulse) impulses
+//!     - [External forces, impulses, and acceleration](dynamics::rigid_body::forces)
 //! - [Gravity] and [gravity scale](GravityScale)
 //! - [Mass properties](dynamics::rigid_body::mass_properties)
 //! - [Linear](LinearDamping) and [angular](AngularDamping) velocity damping
@@ -165,14 +167,17 @@
 //!
 //! ## Constraints and Joints
 //!
-//! - [Joints](dynamics::solver::joints)
+//! - [Joints](dynamics::joints)
 //!     - [Fixed joint](FixedJoint)
 //!     - [Distance joint](DistanceJoint)
 //!     - [Prismatic joint](PrismaticJoint)
 //!     - [Revolute joint](RevoluteJoint)
 #![cfg_attr(feature = "3d", doc = "    - [Spherical joint](SphericalJoint)")]
 //! - [Temporarily disabling a joint](JointDisabled)
-//! - [Custom XPBD constraints](dynamics::solver::xpbd#constraints) (advanced)
+#![cfg_attr(
+    feature = "xpbd_joints",
+    doc = "- [Custom XPBD constraints](dynamics::solver::xpbd#constraints) (advanced)"
+)]
 //!
 //! Joint motors and articulations are not supported yet, but they will be implemented in a future release.
 //!
@@ -201,11 +206,10 @@
 //! ## Scheduling
 //!
 //! - [Schedules and sets](PhysicsSchedulePlugin#schedules-and-sets)
-//!     - [`PhysicsSet`]
-//!     - [`PhysicsSchedule`] and [`PhysicsStepSet`]
+//!     - [`PhysicsSystems`]
+//!     - [`PhysicsSchedule`] and [`PhysicsStepSystems`]
 //!     - [`SubstepSchedule`]
-//!     - [`SolverSet`] and [`SubstepSolverSet`](dynamics::solver::schedule::SubstepSolverSet)
-//!     - [`PrepareSet`](prepare::PrepareSet)
+//!     - [`SolverSystems`] and [`SubstepSolverSystems`](dynamics::solver::schedule::SubstepSolverSystems)
 //!     - Many more internal system sets
 //! - [Configure the schedule used for running physics](PhysicsPlugins#custom-schedule)
 //! - [Pausing, resuming and stepping physics](Physics#pausing-resuming-and-stepping-physics)
@@ -214,10 +218,7 @@
 //! ## Architecture
 //!
 //! - [List of plugins and their responsibilities](PhysicsPlugins)
-//! - Extending and modifying the engine
-//!     - [Custom plugins](PhysicsPlugins#custom-plugins)
-//!     - [Custom XPBD constraints](dynamics::solver::xpbd#custom-constraints)
-//!     - [Custom joints](dynamics::solver::joints#custom-joints)
+//! - [Custom plugins](PhysicsPlugins#custom-plugins)
 //!
 //! # Frequently Asked Questions
 //!
@@ -244,8 +245,7 @@
 //! for Bevy
 //! - It has poor docs.rs documentation, and the documentation on rapier.rs is often outdated and
 //! missing features
-//! - It is hard to extend as it's not very modular or composable in design
-//! - Overall, it doesn't have a native ECS-like feel outside of its public API
+//! - Overall, it doesn't have a native ECS-like feel
 //!
 //! Avian on the other hand is built *for* Bevy *with* Bevy, and it uses the ECS for both the internals
 //! and the public API. This removes the need for a separate physics world, reduces overhead, and makes
@@ -254,7 +254,7 @@
 //! In part thanks to Bevy's modular architecture and the ECS, Avian is also highly composable,
 //! as it consists of several independent plugins and provides lots of options for configuration and extensions,
 //! from [custom schedules](PhysicsPlugins#custom-schedule) and [plugins](PhysicsPlugins#custom-plugins) to
-//! [custom joints](dynamics::solver::joints#custom-joints) and [constraints](dynamics::solver::xpbd#custom-constraints).
+//! [custom joints](dynamics::joints#custom-joints) and [constraints](dynamics::solver::xpbd#custom-constraints).
 //!
 //! One disadvantage of Avian is that it is still relatively young, so it can have more bugs,
 //! some missing features, and fewer community resources and third party crates. However, it is growing quite
@@ -278,15 +278,32 @@
 //!
 //! ## Why is performance so bad?
 //!
-//! Make sure you are building your project in release mode using `cargo build --release`.
+//! It is highly recommended to enable some optimizations for debug builds, or to run your project
+//! in release mode. This can have over a 100x performance impact in some cases.
 //!
-//! You can further optimize builds by setting the number of codegen units in your `Cargo.toml` to 1,
+//! Add the following to your `Cargo.toml` to enable optimizations for debug builds:
+//!
+//! ```toml
+//! # Enable a small amount of optimization in the dev profile.
+//! [profile.dev]
+//! opt-level = 1
+//!
+//! # Enable a large amount of optimization in the dev profile for dependencies.
+//! [profile.dev.package."*"]
+//! opt-level = 3
+//! ```
+//!
+//! You can also further optimize release builds by setting the number of codegen units to `1`,
 //! although this will also increase build times.
 //!
 //! ```toml
 //! [profile.release]
 //! codegen-units = 1
 //! ```
+//!
+//! If you still have performance issues, consider enabling the [`PhysicsDiagnosticsPlugin`]
+//! and [`PhysicsDiagnosticsUiPlugin`] (requires the `diagnostic_ui` feature) to see where time is being spent.
+//! See the [diagnostics](diagnostics) module for more information.
 //!
 //! ## Why does movement look choppy?
 //!
@@ -344,7 +361,7 @@
 //! #
 //! app.add_systems(
 //!     PostUpdate,
-//!     camera_follow_player.before(TransformSystem::TransformPropagate),
+//!     camera_follow_player.before(TransformSystems::Propagate),
 //! );
 //! #
 //! # fn camera_follow_player() {}
@@ -352,10 +369,12 @@
 //!
 //! ## Is there a character controller?
 //!
-//! Avian does not have a built-in character controller, so if you need one,
-//! you will need to implement it yourself. However, third party character controllers
-//! like [`bevy_tnua`](https://github.com/idanarye/bevy-tnua) support Avian, and [`bevy_mod_wanderlust`](https://github.com/PROMETHIA-27/bevy_mod_wanderlust)
-//! and others are also likely to get Avian support soon.
+//! Avian does not have a built-in character controller yet. However, it has a [`MoveAndSlide`]
+//! system parameter with utilities for implementing your own kinematic character controllers.
+//! See its documentation for more information.
+//!
+//! There are also some third party character controllers such as [`bevy_tnua`](https://github.com/idanarye/bevy-tnua)
+//! that support Avian.
 //!
 //! For custom character controllers, you can take a look at the
 #![cfg_attr(
@@ -369,20 +388,20 @@
 //!
 #![cfg_attr(
     feature = "2d",
-    doc = "[`dynamic_character_2d`]: https://github.com/Jondolf/avian/tree/main/crates/avian2d/examples/dynamic_character_2d
-[`kinematic_character_2d`]: https://github.com/Jondolf/avian/tree/main/crates/avian2d/examples/kinematic_character_2d"
+    doc = "[`dynamic_character_2d`]: https://github.com/avianphysics/avian/tree/main/crates/avian2d/examples/dynamic_character_2d
+[`kinematic_character_2d`]: https://github.com/avianphysics/avian/tree/main/crates/avian2d/examples/kinematic_character_2d"
 )]
 #![cfg_attr(
     feature = "3d",
-    doc = "[`dynamic_character_3d`]: https://github.com/Jondolf/avian/tree/main/crates/avian3d/examples/dynamic_character_3d
-[`kinematic_character_3d`]: https://github.com/Jondolf/avian/tree/main/crates/avian3d/examples/kinematic_character_3d"
+    doc = "[`dynamic_character_3d`]: https://github.com/avianphysics/avian/tree/main/crates/avian3d/examples/dynamic_character_3d
+[`kinematic_character_3d`]: https://github.com/avianphysics/avian/tree/main/crates/avian3d/examples/kinematic_character_3d"
 )]
 //!
 //! ## Why are there separate `Position` and `Rotation` components?
 //!
 //! While `Transform` can be used for the vast majority of things, Avian internally
 //! uses separate [`Position`] and [`Rotation`] components. These are automatically
-//! kept in sync by the [`SyncPlugin`].
+//! kept in sync by the [`PhysicsTransformPlugin`].
 //!
 //! There are several reasons why the separate components are currently used.
 //!
@@ -395,7 +414,7 @@
 //! - Only rigid bodies have rotation, particles typically don't (although we don't make a distinction yet).
 //!
 //! In external projects however, using [`Position`] and [`Rotation`] is only necessary when you
-//! need to manage positions within [`PhysicsSet::StepSimulation`]. Elsewhere, you should be able to use `Transform`.
+//! need to manage positions within [`PhysicsSystems::StepSimulation`]. Elsewhere, you should be able to use `Transform`.
 //!
 //! There is also a possibility that we will revisit this if/when Bevy has a `Transform2d` component.
 //! Using `Transform` feels more idiomatic and simple, so it would be nice if it could be used directly
@@ -409,11 +428,11 @@
 //!
 //! ## Something else?
 //!
-//! Physics engines are very large and Avian is young, so stability issues and bugs are to be expected.
+//! Physics engines are very large and Avian is still young, so stability issues and bugs are to be expected.
 //!
 //! If you encounter issues, please consider first taking a look at the
-//! [issues on GitHub](https://github.com/Jondolf/avian/issues) and
-//! [open a new issue](https://github.com/Jondolf/avian/issues/new) if there already isn't one regarding your problem.
+//! [issues on GitHub](https://github.com/avianphysics/avian/issues) and
+//! [open a new issue](https://github.com/avianphysics/avian/issues/new) if there already isn't one regarding your problem.
 //!
 //! You can also come and say hello on the [Bevy Discord server](https://discord.com/invite/gMUk5Ph).
 //! There, you can find an Avian Physics topic on the `#ecosystem-crates` channel where you can ask questions.
@@ -422,9 +441,9 @@
 //!
 //! Avian is free and open source. All code in the Avian repository is dual-licensed under either:
 //!
-//! - MIT License ([LICENSE-MIT](https://github.com/Jondolf/avian/blob/main/LICENSE-MIT)
+//! - MIT License ([LICENSE-MIT](https://github.com/avianphysics/avian/blob/main/LICENSE-MIT)
 //! or <http://opensource.org/licenses/MIT>)
-//! - Apache License, Version 2.0 ([LICENSE-APACHE](https://github.com/Jondolf/avian/blob/main/LICENSE-APACHE)
+//! - Apache License, Version 2.0 ([LICENSE-APACHE](https://github.com/avianphysics/avian/blob/main/LICENSE-APACHE)
 //! or <http://www.apache.org/licenses/LICENSE-2.0>)
 //!
 //! at your option.
@@ -485,6 +504,11 @@ pub extern crate parry3d as parry;
 #[cfg(all(feature = "3d", feature = "parry-f64"))]
 pub extern crate parry3d_f64 as parry;
 
+#[cfg(all(
+    feature = "default-collider",
+    any(feature = "parry-f32", feature = "parry-f64")
+))]
+pub mod character_controller;
 pub mod collision;
 #[cfg(feature = "debug-plugin")]
 pub mod debug_render;
@@ -492,49 +516,55 @@ pub mod diagnostics;
 pub mod dynamics;
 pub mod interpolation;
 pub mod math;
+pub mod physics_transform;
 #[cfg(feature = "bevy_picking")]
 pub mod picking;
-pub mod position;
-pub mod prepare;
 pub mod schedule;
 pub mod spatial_query;
-pub mod sync;
 
 pub mod data_structures;
 
-mod type_registration;
-pub use type_registration::PhysicsTypeRegistrationPlugin;
+// TODO: Where should this go?
+pub(crate) mod ancestor_marker;
 
 /// Re-exports common components, bundles, resources, plugins and types.
 pub mod prelude {
     #[cfg(feature = "debug-plugin")]
     pub use crate::debug_render::*;
-    #[cfg(feature = "diagnostic_ui")]
-    pub use crate::diagnostics::ui::{PhysicsDiagnosticsUiPlugin, PhysicsDiagnosticsUiSettings};
     #[cfg(feature = "bevy_diagnostic")]
     pub use crate::diagnostics::PhysicsDiagnosticsPlugin;
+    #[cfg(feature = "diagnostic_ui")]
+    pub use crate::diagnostics::ui::{PhysicsDiagnosticsUiPlugin, PhysicsDiagnosticsUiSettings};
+    #[cfg(feature = "default-collider")]
+    pub(crate) use crate::physics_transform::RotationValue;
     #[cfg(feature = "bevy_picking")]
     pub use crate::picking::{
         PhysicsPickable, PhysicsPickingFilter, PhysicsPickingPlugin, PhysicsPickingSettings,
     };
-    #[cfg(feature = "default-collider")]
-    pub(crate) use crate::position::RotationValue;
+    #[expect(deprecated)]
     pub use crate::{
+        PhysicsPlugins,
         collision::prelude::*,
         dynamics::{self, ccd::SpeculativeMargin, prelude::*},
         interpolation::*,
-        position::{Position, Rotation},
-        prepare::{PrepareConfig, PreparePlugin},
-        schedule::*,
+        physics_transform::{PhysicsTransformHelper, PhysicsTransformPlugin, Position, Rotation},
+        schedule::{
+            Physics, PhysicsSchedule, PhysicsSchedulePlugin, PhysicsSet, PhysicsStepSet,
+            PhysicsStepSystems, PhysicsSystems, PhysicsTime, Substeps,
+        },
         spatial_query::{self, *},
-        sync::SyncPlugin,
-        type_registration::PhysicsTypeRegistrationPlugin,
-        PhysicsPlugins,
     };
+
+    #[cfg(all(
+        feature = "default-collider",
+        any(feature = "parry-f32", feature = "parry-f64")
+    ))]
+    pub use crate::character_controller::prelude::*;
     pub(crate) use crate::{
         diagnostics::AppDiagnosticsExt,
         math::*,
-        position::{PreSolveDeltaPosition, PreSolveDeltaRotation},
+        physics_transform::{PreSolveDeltaPosition, PreSolveDeltaRotation},
+        schedule::TimePrecisionAdjusted,
     };
     pub use avian_derive::*;
 }
@@ -552,7 +582,7 @@ use bevy::{
 #[allow(unused_imports)]
 use prelude::*;
 
-/// A plugin group containing all of Avian's plugins.
+/// A plugin group containing Avian's plugins.
 ///
 /// # Plugins
 ///
@@ -561,9 +591,6 @@ use prelude::*;
 /// | Plugin                            | Description                                                                                                                                                |
 /// | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 /// | [`PhysicsSchedulePlugin`]         | Sets up the physics engine by initializing the necessary schedules, sets and resources.                                                                    |
-/// | [`PhysicsTypeRegistrationPlugin`] | Registers physics types to the `TypeRegistry` resource in `bevy_reflect`.                                                                                  |
-/// | [`PreparePlugin`]                 | Runs systems at the start of each physics frame. Initializes [rigid bodies](RigidBody) and updates components.                                             |
-/// | [`MassPropertyPlugin`]            | Manages mass properties of dynamic [rigid bodies](RigidBody).                                                                                              |
 /// | [`ColliderBackendPlugin`]         | Handles generic collider backend logic, like initializing colliders and AABBs and updating related components.                                             |
 /// | [`ColliderHierarchyPlugin`]       | Manages [`ColliderOf`] relationships based on the entity hierarchy.                                                                                        |
 /// | [`ColliderTransformPlugin`]       | Propagates and updates transforms for colliders.
@@ -573,15 +600,13 @@ use prelude::*;
 )]
 /// | [`BroadPhasePlugin`]              | Finds pairs of entities with overlapping [AABBs](ColliderAabb) to reduce the number of potential contacts for the [narrow phase](collision::narrow_phase). |
 /// | [`NarrowPhasePlugin`]             | Manages contacts and generates contact constraints.                                                                                                        |
-/// | [`SolverSchedulePlugin`]          | Sets up the solver and substepping loop by initializing the necessary schedules, sets and resources.                                                       |
-/// | [`IntegratorPlugin`]              | Handles motion caused by velocity, and applies external forces and gravity.                                                                                |
-/// | [`SolverBodyPlugin`]              | Manages [solver bodies](dynamics::solver::solver_body::SolverBody).                                                                                        |
-/// | [`SolverPlugin`]                  | Manages and solves contacts, [joints](dynamics::solver::joints), and other constraints.                                                                    |
-/// | [`CcdPlugin`]                     | Performs sweep-based [Continuous Collision Detection](dynamics::ccd) for bodies with the [`SweptCcd`] component.                                           |
-/// | [`SleepingPlugin`]                | Manages sleeping and waking for bodies, automatically deactivating them to save computational resources.                                                   |
+/// | [`SolverPlugins`]                 | A plugin group for the physics solver's plugins. See the plugin group's documentation for more information.                                                |
+/// | [`JointPlugin`]                   | A plugin for managing and initializing [joints](dynamics::joints). Does *not* include the actual joint solver.                                             |
+/// | [`MassPropertyPlugin`]            | Manages mass properties of dynamic [rigid bodies](RigidBody).                                                                                              |
+/// | [`ForcePlugin`]                   | Manages and applies external forces, torques, and acceleration for rigid bodies. See the [module-level documentation](dynamics::rigid_body::forces).       |
 /// | [`SpatialQueryPlugin`]            | Handles spatial queries like [raycasting](spatial_query#raycasting) and [shapecasting](spatial_query#shapecasting).                                        |
 /// | [`PhysicsInterpolationPlugin`]    | [`Transform`] interpolation and extrapolation for rigid bodies.                                                                                            |
-/// | [`SyncPlugin`]                    | Keeps [`Position`] and [`Rotation`] in sync with `Transform`.                                                                                              |
+/// | [`PhysicsTransformPlugin`]        | Manages physics transforms and synchronizes them with [`Transform`].                                                                                       |
 ///
 /// Optional additional plugins include:
 ///
@@ -650,7 +675,7 @@ use prelude::*;
 ///
 /// First, create a new plugin. If you want to run your systems in the engine's schedules, get either the [`PhysicsSchedule`]
 /// or the [`SubstepSchedule`]. Then you can add your systems to that schedule and control system ordering with system sets like
-/// [`PhysicsStepSet`], [`SolverSet`], or [`SubstepSolverSet`](dynamics::solver::schedule::SubstepSolverSet).
+/// [`PhysicsStepSystems`], [`SolverSystems`], or [`SubstepSolverSystems`](dynamics::solver::schedule::SubstepSolverSystems).
 ///
 /// Here we will create a custom broad phase plugin that will replace the default [`BroadPhasePlugin`]:
 ///
@@ -669,7 +694,7 @@ use prelude::*;
 ///             .expect("add PhysicsSchedule first");
 ///
 ///         // Add the system into the broad phase system set
-///         physics_schedule.add_systems(collect_collision_pairs.in_set(PhysicsStepSet::BroadPhase));
+///         physics_schedule.add_systems(collect_collision_pairs.in_set(PhysicsStepSystems::BroadPhase));
 ///     }
 /// }
 ///
@@ -708,7 +733,7 @@ use prelude::*;
 /// ```
 ///
 /// You can find a full working example
-/// [here](https://github.com/Jondolf/avian/blob/main/crates/avian3d/examples/custom_broad_phase.rs).
+/// [here](https://github.com/avianphysics/avian/blob/main/crates/avian3d/examples/custom_broad_phase.rs).
 pub struct PhysicsPlugins {
     schedule: Interned<dyn ScheduleLabel>,
     length_unit: Scalar,
@@ -789,9 +814,8 @@ impl PluginGroup for PhysicsPlugins {
     fn build(self) -> PluginGroupBuilder {
         let builder = PluginGroupBuilder::start::<Self>()
             .add(PhysicsSchedulePlugin::new(self.schedule))
-            .add(PhysicsTypeRegistrationPlugin)
-            .add(PreparePlugin::new(self.schedule))
             .add(MassPropertyPlugin::new(self.schedule))
+            .add(ForcePlugin)
             .add(ColliderHierarchyPlugin)
             .add(ColliderTransformPlugin::new(self.schedule));
 
@@ -806,15 +830,14 @@ impl PluginGroup for PhysicsPlugins {
             .add(ColliderBackendPlugin::<Collider>::new(self.schedule))
             .add(NarrowPhasePlugin::<Collider>::default());
 
+        // Add solver plugins.
+        let builder = builder.add_group(SolverPlugins::new_with_length_unit(self.length_unit));
+
         builder
             .add(BroadPhasePlugin::<()>::default())
-            .add(IntegratorPlugin::default())
-            .add(SolverPlugin::new_with_length_unit(self.length_unit))
-            .add(SolverSchedulePlugin)
-            .add(CcdPlugin)
-            .add(SleepingPlugin)
+            .add(JointPlugin)
             .add(SpatialQueryPlugin)
-            .add(SyncPlugin::new(self.schedule))
+            .add(PhysicsTransformPlugin::new(self.schedule))
             .add(PhysicsInterpolationPlugin::default())
     }
 }

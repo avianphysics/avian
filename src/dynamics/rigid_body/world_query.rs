@@ -18,19 +18,16 @@ pub struct RigidBodyQuery {
     pub angular_velocity: &'static mut AngularVelocity,
     pub mass: &'static mut ComputedMass,
     pub angular_inertia: &'static mut ComputedAngularInertia,
-    #[cfg(feature = "3d")]
-    pub global_angular_inertia: &'static mut GlobalAngularInertia,
     pub center_of_mass: &'static mut ComputedCenterOfMass,
     pub friction: Option<&'static Friction>,
     pub restitution: Option<&'static Restitution>,
     pub locked_axes: Option<&'static LockedAxes>,
     pub dominance: Option<&'static Dominance>,
-    pub time_sleeping: Option<&'static mut TimeSleeping>,
     pub is_sleeping: Has<Sleeping>,
     pub is_sensor: Has<Sensor>,
 }
 
-impl RigidBodyQueryItem<'_> {
+impl RigidBodyQueryItem<'_, '_> {
     /// Computes the velocity at the given `point` relative to the center of the body.
     pub fn velocity_at_point(&self, point: Vector) -> Vector {
         #[cfg(feature = "2d")]
@@ -76,7 +73,7 @@ impl RigidBodyQueryItem<'_> {
         #[cfg(feature = "2d")]
         let mut angular_inertia = *self.angular_inertia;
         #[cfg(feature = "3d")]
-        let mut angular_inertia = **self.global_angular_inertia;
+        let mut angular_inertia = self.angular_inertia.rotated(self.rotation.0);
 
         if let Some(locked_axes) = self.locked_axes {
             angular_inertia = locked_axes.apply_to_angular_inertia(angular_inertia);
@@ -88,17 +85,17 @@ impl RigidBodyQueryItem<'_> {
     /// Returns the [dominance](Dominance) of the body.
     ///
     /// If it isn't specified, the default of `0` is returned for dynamic bodies.
-    /// For static and kinematic bodies, `i8::MAX` (`127`) is always returned instead.
-    pub fn dominance(&self) -> i8 {
+    /// For static and kinematic bodies, `i8::MAX + 1` (`128`) is always returned instead.
+    pub fn dominance(&self) -> i16 {
         if !self.rb.is_dynamic() {
-            i8::MAX
+            i8::MAX as i16 + 1
         } else {
-            self.dominance.map_or(0, |dominance| dominance.0)
+            self.dominance.map_or(0, |dominance| dominance.0) as i16
         }
     }
 }
 
-impl RigidBodyQueryReadOnlyItem<'_> {
+impl RigidBodyQueryReadOnlyItem<'_, '_> {
     /// Computes the velocity at the given `point` relative to the center of mass.
     pub fn velocity_at_point(&self, point: Vector) -> Vector {
         #[cfg(feature = "2d")]
@@ -153,7 +150,7 @@ impl RigidBodyQueryReadOnlyItem<'_> {
         #[cfg(feature = "2d")]
         let mut angular_inertia = *self.angular_inertia;
         #[cfg(feature = "3d")]
-        let mut angular_inertia = **self.global_angular_inertia;
+        let mut angular_inertia = self.angular_inertia.rotated(self.rotation.0);
 
         if let Some(locked_axes) = self.locked_axes {
             angular_inertia = locked_axes.apply_to_angular_inertia(angular_inertia);

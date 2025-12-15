@@ -6,12 +6,10 @@
 
 use avian3d::prelude::*;
 use bevy::{
+    asset::RenderAssetUsages,
     color::palettes::css::SILVER,
     prelude::*,
-    render::{
-        render_asset::RenderAssetUsages,
-        render_resource::{Extent3d, TextureDimension, TextureFormat},
-    },
+    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
 use examples_common_3d::ExampleCommonPlugin;
 

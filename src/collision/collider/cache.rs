@@ -42,14 +42,14 @@ impl ColliderCache {
 }
 
 fn clear_unused_colliders(
-    mut asset_events: EventReader<AssetEvent<Mesh>>,
+    mut asset_events: MessageReader<AssetEvent<Mesh>>,
     mut collider_cache: ResMut<ColliderCache>,
 ) {
     for event in asset_events.read() {
-        if let AssetEvent::Removed { id } | AssetEvent::Unused { id } = event {
-            if collider_cache.0.contains_key(id) {
-                collider_cache.0.remove(id);
-            }
+        if let AssetEvent::Removed { id } | AssetEvent::Unused { id } = event
+            && collider_cache.0.contains_key(id)
+        {
+            collider_cache.0.remove(id);
         }
     }
 }

@@ -4,13 +4,17 @@ use bevy::{
 };
 
 use super::{SolverBody, SolverBodyInertia};
-#[cfg(feature = "3d")]
-use crate::{dynamics::solver::solver_body::SolverBodyFlags, math::MatExt};
 use crate::{
-    dynamics::solver::SolverDiagnostics,
-    prelude::{ComputedAngularInertia, ComputedCenterOfMass, ComputedMass, LockedAxes},
     AngularVelocity, LinearVelocity, PhysicsSchedule, Position, RigidBody, RigidBodyActiveFilter,
-    RigidBodyDisabled, Rotation, Sleeping, SolverSet, Vector,
+    RigidBodyDisabled, Rotation, Sleeping, SolverSystems, Vector,
+    dynamics::solver::{SolverDiagnostics, solver_body::SolverBodyFlags},
+    prelude::{ComputedAngularInertia, ComputedCenterOfMass, ComputedMass, Dominance, LockedAxes},
+};
+#[cfg(feature = "3d")]
+use crate::{
+    MatExt,
+    dynamics::integrator::{IntegrationSystems, integrate_positions},
+    prelude::SubstepSchedule,
 };
 
 /// A plugin for managing solver bodies.
@@ -32,28 +36,20 @@ pub struct SolverBodyPlugin;
 
 impl Plugin for SolverBodyPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<(SolverBody, SolverBodyInertia)>();
-
-        // Add a solver body for each dynamic and kinematic rigid body when the rigid body is created.
-        app.add_observer(
-            |trigger: Trigger<OnAdd, RigidBody>,
-             rb_query: Query<&RigidBody, RigidBodyActiveFilter>,
-             commands: Commands| {
-                add_solver_body(In(trigger.target()), rb_query, commands);
-            },
-        );
+        // Add or remove solver bodies when `RigidBody` component is added or replaced.
+        app.add_observer(on_insert_rigid_body);
 
         // Add a solver body for each dynamic and kinematic rigid body
         // when the associated rigid body is enabled or woken up.
         app.add_observer(
-            |trigger: Trigger<OnRemove, RigidBodyDisabled>,
+            |trigger: On<Remove, RigidBodyDisabled>,
              rb_query: Query<&RigidBody, Without<Sleeping>>,
              commands: Commands| {
-                add_solver_body::<Without<Sleeping>>(In(trigger.target()), rb_query, commands);
+                add_solver_body::<Without<Sleeping>>(In(trigger.entity), rb_query, commands);
             },
         );
         app.add_observer(
-            |trigger: Trigger<OnRemove, Disabled>,
+            |trigger: On<Remove, Disabled>,
              rb_query: Query<
                 &RigidBody,
                 (
@@ -69,15 +65,15 @@ impl Plugin for SolverBodyPlugin {
                     With<Disabled>,
                     Without<RigidBodyDisabled>,
                     Without<Sleeping>,
-                )>(In(trigger.target()), rb_query, commands);
+                )>(In(trigger.entity), rb_query, commands);
             },
         );
         app.add_observer(
-            |trigger: Trigger<OnRemove, Sleeping>,
+            |trigger: On<Remove, Sleeping>,
              rb_query: Query<&RigidBody, Without<RigidBodyDisabled>>,
              commands: Commands| {
                 add_solver_body::<Without<RigidBodyDisabled>>(
-                    In(trigger.target()),
+                    In(trigger.entity),
                     rb_query,
                     commands,
                 );
@@ -86,57 +82,64 @@ impl Plugin for SolverBodyPlugin {
 
         // Remove solver bodies when their associated rigid body is removed.
         app.add_observer(
-            |trigger: Trigger<OnRemove, RigidBody>, deferred_world: DeferredWorld| {
-                remove_solver_body(In(trigger.target()), deferred_world);
+            |trigger: On<Remove, RigidBody>, deferred_world: DeferredWorld| {
+                remove_solver_body(In(trigger.entity), deferred_world);
             },
         );
 
         // Remove solver bodies when their associated rigid body is disabled or put to sleep.
         app.add_observer(
-            |trigger: Trigger<OnAdd, (Disabled, RigidBodyDisabled, Sleeping)>,
+            |trigger: On<Add, (Disabled, RigidBodyDisabled, Sleeping)>,
              deferred_world: DeferredWorld| {
-                remove_solver_body(In(trigger.target()), deferred_world);
+                remove_solver_body(In(trigger.entity), deferred_world);
             },
         );
 
         // Prepare solver bodies before the substepping loop.
         app.add_systems(
             PhysicsSchedule,
-            (on_change_rigid_body_type, prepare_solver_bodies)
+            prepare_solver_bodies
                 .chain()
-                .in_set(SolverSet::PrepareSolverBodies),
+                .in_set(SolverSystems::PrepareSolverBodies),
         );
 
         // Write back solver body data to rigid bodies after the substepping loop.
         app.add_systems(
             PhysicsSchedule,
-            writeback_solver_bodies.in_set(SolverSet::Finalize),
+            writeback_solver_bodies.in_set(SolverSystems::Finalize),
+        );
+
+        // Update the world-space angular inertia of solver bodies right after position integration
+        // in the substepping loop.
+        #[cfg(feature = "3d")]
+        app.add_systems(
+            SubstepSchedule,
+            update_solver_body_angular_inertia
+                .in_set(IntegrationSystems::Position)
+                .after(integrate_positions),
         );
     }
 }
 
-fn on_change_rigid_body_type(
-    rb_query: Query<(Entity, Ref<RigidBody>)>,
-    solver_body_query: Query<(), With<SolverBody>>,
+fn on_insert_rigid_body(
+    trigger: On<Insert, RigidBody>,
+    bodies: Query<(&RigidBody, Has<SolverBody>), RigidBodyActiveFilter>,
     mut commands: Commands,
 ) {
-    for (entity, rb) in &rb_query {
-        // Only handle modifications to the rigid body type here.
-        if !rb.is_changed() || rb.is_added() {
-            continue;
-        }
+    let Ok((rb, has_solver_body)) = bodies.get(trigger.entity) else {
+        return;
+    };
 
-        if rb.is_static() {
-            // Remove the solver body if the rigid body is static.
-            commands
-                .entity(entity)
-                .try_remove::<(SolverBody, SolverBodyInertia)>();
-        } else if !solver_body_query.contains(entity) {
-            // Create a new solver body if the rigid body is dynamic or kinematic.
-            commands
-                .entity(entity)
-                .try_insert((SolverBody::default(), SolverBodyInertia::default()));
-        }
+    if rb.is_static() && has_solver_body {
+        // Remove the solver body if the rigid body is static.
+        commands
+            .entity(trigger.entity)
+            .try_remove::<(SolverBody, SolverBodyInertia)>();
+    } else if !rb.is_static() && !has_solver_body {
+        // Create a new solver body if the rigid body is dynamic or kinematic.
+        commands
+            .entity(trigger.entity)
+            .try_insert((SolverBody::default(), SolverBodyInertia::default()));
     }
 }
 
@@ -169,6 +172,7 @@ fn remove_solver_body(In(entity): In<Entity>, mut deferred_world: DeferredWorld)
 
 fn prepare_solver_bodies(
     mut query: Query<(
+        &RigidBody,
         &mut SolverBody,
         &mut SolverBodyInertia,
         &LinearVelocity,
@@ -177,11 +181,13 @@ fn prepare_solver_bodies(
         &ComputedMass,
         &ComputedAngularInertia,
         Option<&LockedAxes>,
+        Option<&Dominance>,
     )>,
 ) {
     #[allow(unused_variables)]
     query.par_iter_mut().for_each(
         |(
+            rb,
             mut solver_body,
             mut inertial_properties,
             linear_velocity,
@@ -190,33 +196,55 @@ fn prepare_solver_bodies(
             mass,
             angular_inertia,
             locked_axes,
+            dominance,
         )| {
             solver_body.linear_velocity = linear_velocity.0;
             solver_body.angular_velocity = angular_velocity.0;
             solver_body.delta_position = Vector::ZERO;
             solver_body.delta_rotation = Rotation::IDENTITY;
 
+            let locked_axes = locked_axes.copied().unwrap_or_default();
             *inertial_properties = SolverBodyInertia::new(
                 mass.inverse(),
                 #[cfg(feature = "2d")]
                 angular_inertia.inverse(),
                 #[cfg(feature = "3d")]
                 angular_inertia.rotated(rotation.0).inverse(),
-                locked_axes.copied().unwrap_or_default(),
+                locked_axes,
+                dominance.map_or(0, |dominance| dominance.0),
+                rb.is_dynamic(),
             );
+            solver_body.flags = SolverBodyFlags(locked_axes.to_bits() as u32);
+            solver_body
+                .flags
+                .set(SolverBodyFlags::IS_KINEMATIC, rb.is_kinematic());
 
             #[cfg(feature = "3d")]
             {
-                // Check if the inertia tensor is isotropic, meaning that it is invariant
-                // under all rotations. If it is, we can skip computing gyroscopic motion.
-                // This applies to shapes like spheres and regular solids.
+                // Only compute gyroscopic motion if the following conditions are met:
+                //
+                // 1. Rotation is unlocked on at least one axis.
+                // 2. The inertia tensor is not isotropic.
+                //
+                // If the inertia tensor is isotropic, it is invariant under all rotations,
+                // and the same around any axis passing through the object's center of mass.
+                // This is the case for shapes like spheres, as well as cubes and other regular solids.
+                //
+                // From Moments of inertia of Archimedean solids by Frédéric Perrier:
+                // "The condition of two axes of threefold or higher rotational symmetry
+                // crossing at the center of gravity is sufficient to produce an isotropic tensor of inertia.
+                // The MI around any axis passing by the center of gravity are then identical."
+
+                // TODO: Kinematic bodies should not have gyroscopic motion.
                 // TODO: Should we scale the epsilon based on the `PhysicsLengthUnit`?
                 // TODO: We should only do this when the body is added or the local inertia tensor is changed.
                 let epsilon = 1e-6;
-                let is_inertia_isotropic = angular_inertia.inverse().is_isotropic(epsilon);
+                let is_gyroscopic = !locked_axes.is_rotation_locked()
+                    && !angular_inertia.inverse().is_isotropic(epsilon);
+
                 solver_body
                     .flags
-                    .set(SolverBodyFlags::GYROSCOPIC_MOTION, !is_inertia_isotropic);
+                    .set(SolverBodyFlags::GYROSCOPIC_MOTION, is_gyroscopic);
             }
         },
     );
@@ -253,6 +281,17 @@ fn writeback_solver_bodies(
     );
 
     diagnostics.finalize += start.elapsed();
+}
+
+#[cfg(feature = "3d")]
+pub(crate) fn update_solver_body_angular_inertia(
+    mut query: Query<(&mut SolverBodyInertia, &ComputedAngularInertia, &Rotation)>,
+) {
+    query
+        .par_iter_mut()
+        .for_each(|(mut inertia, angular_inertia, rotation)| {
+            inertia.update_effective_inv_angular_inertia(angular_inertia, rotation.0);
+        });
 }
 
 #[cfg(test)]

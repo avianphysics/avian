@@ -58,7 +58,7 @@ fn setup(
 
         commands.spawn(
             RevoluteJoint::new(previous_particle, current_particle)
-                .with_local_anchor_2(Vector::Y * (particle_radius * 2.0 + 1.0))
+                .with_local_anchor2(Vector::Y * (particle_radius * 2.0 + 1.0))
                 .with_point_compliance(0.0000001),
         );
 

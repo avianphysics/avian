@@ -42,7 +42,7 @@ impl Plugin for ExampleCommonPlugin {
         // Add the physics debug plugin automatically if the `use-debug-plugin` feature is enabled
         // and the plugin is not already added.
         if !app.is_plugin_added::<PhysicsDebugPlugin>() {
-            app.add_plugins(PhysicsDebugPlugin::default());
+            app.add_plugins(PhysicsDebugPlugin);
         }
     }
 }

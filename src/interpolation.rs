@@ -3,16 +3,17 @@
 //! See [`PhysicsInterpolationPlugin`].
 
 use bevy::{ecs::query::QueryData, prelude::*};
-use bevy_transform_interpolation::{prelude::*, VelocitySource};
+use bevy_transform_interpolation::{VelocitySource, prelude::*};
 
+#[expect(deprecated)]
 pub use bevy_transform_interpolation::{
+    TransformEasingSet, TransformEasingSystems,
     prelude::{
         NoRotationEasing, NoScaleEasing, NoTransformEasing, NoTranslationEasing,
         RotationExtrapolation, RotationHermiteEasing, RotationInterpolation, ScaleInterpolation,
         TransformExtrapolation, TransformHermiteEasing, TransformInterpolation,
         TranslationExtrapolation, TranslationHermiteEasing, TranslationInterpolation,
     },
-    TransformEasingSet,
 };
 
 use crate::prelude::*;
@@ -293,7 +294,7 @@ impl Plugin for PhysicsInterpolationPlugin {
         // Update previous velocity components for Hermite interpolation.
         app.add_systems(
             PhysicsSchedule,
-            update_previous_velocity.in_set(PhysicsStepSet::First),
+            update_previous_velocity.in_set(PhysicsStepSystems::First),
         );
     }
 }
@@ -347,7 +348,7 @@ impl VelocitySource for AngVelSource {
     fn previous(previous: &Self::Previous) -> Vec3 {
         #[cfg(feature = "2d")]
         {
-            Vec3::Z * previous.0 .0 as f32
+            Vec3::Z * previous.0.0 as f32
         }
         #[cfg(feature = "3d")]
         {

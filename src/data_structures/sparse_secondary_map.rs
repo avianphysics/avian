@@ -15,11 +15,11 @@ use core::mem::MaybeUninit;
 use std::collections::hash_map::{self, HashMap};
 use std::hash;
 
-use bevy::ecs::entity::Entity;
+use bevy::ecs::entity::{Entity, EntityGeneration};
 
 #[derive(Debug, Clone)]
 struct Slot<T> {
-    generation: u32,
+    generation: EntityGeneration,
     value: T,
 }
 
@@ -146,7 +146,12 @@ impl<V, S: hash::BuildHasher> SparseSecondaryEntityMap<V, S> {
             }
 
             // Don't replace existing newer values.
-            if is_older_generation(generation, slot.generation) {
+            if unsafe {
+                is_older_generation(
+                    core::mem::transmute::<EntityGeneration, u32>(generation),
+                    core::mem::transmute::<EntityGeneration, u32>(slot.generation),
+                )
+            } {
                 return None;
             }
 
@@ -164,10 +169,10 @@ impl<V, S: hash::BuildHasher> SparseSecondaryEntityMap<V, S> {
     /// the entity was not previously removed.
     #[inline]
     pub fn remove(&mut self, entity: Entity) -> Option<V> {
-        if let hash_map::Entry::Occupied(entry) = self.slots.entry(entity.index()) {
-            if entry.get().generation == entity.generation() {
-                return Some(entry.remove_entry().1.value);
-            }
+        if let hash_map::Entry::Occupied(entry) = self.slots.entry(entity.index())
+            && entry.get().generation == entity.generation()
+        {
+            return Some(entry.remove_entry().1.value);
         }
 
         None
@@ -198,7 +203,7 @@ impl<V, S: hash::BuildHasher> SparseSecondaryEntityMap<V, S> {
     #[inline]
     pub unsafe fn get_unchecked(&self, entity: Entity) -> &V {
         debug_assert!(self.contains(entity));
-        self.get(entity).unwrap_unchecked()
+        unsafe { self.get(entity).unwrap_unchecked() }
     }
 
     /// Returns a mutable reference to the value corresponding to the entity.
@@ -220,7 +225,7 @@ impl<V, S: hash::BuildHasher> SparseSecondaryEntityMap<V, S> {
     #[inline]
     pub unsafe fn get_unchecked_mut(&mut self, entity: Entity) -> &mut V {
         debug_assert!(self.contains(entity));
-        self.get_mut(entity).unwrap_unchecked()
+        unsafe { self.get_mut(entity).unwrap_unchecked() }
     }
 
     /// Returns the value corresponding to the entity if it exists, otherwise inserts
@@ -267,7 +272,9 @@ impl<V, S: hash::BuildHasher> SparseSecondaryEntityMap<V, S> {
                     // invalid, since keys always have an odd generation. This
                     // gives us a linear time disjointness check.
                     ptrs[i] = MaybeUninit::new(&mut *value);
-                    *generation ^= 1;
+                    unsafe {
+                        *core::mem::transmute::<&mut EntityGeneration, &mut u32>(generation) ^= 1;
+                    }
                 }
 
                 _ => break,
@@ -279,9 +286,9 @@ impl<V, S: hash::BuildHasher> SparseSecondaryEntityMap<V, S> {
         // Undo temporary even versions.
         for entity in &entities[0..i] {
             match self.slots.get_mut(&entity.index()) {
-                Some(Slot { generation, .. }) => {
-                    *generation ^= 1;
-                }
+                Some(Slot { generation, .. }) => unsafe {
+                    *core::mem::transmute::<&mut EntityGeneration, &mut u32>(generation) ^= 1;
+                },
                 _ => unsafe { core::hint::unreachable_unchecked() },
             }
         }
@@ -307,11 +314,13 @@ impl<V, S: hash::BuildHasher> SparseSecondaryEntityMap<V, S> {
         entities: [Entity; N],
     ) -> [&mut V; N] {
         // Safe, see get_disjoint_mut.
-        let mut ptrs: [MaybeUninit<*mut V>; N] = MaybeUninit::uninit().assume_init();
-        for i in 0..N {
-            ptrs[i] = MaybeUninit::new(self.get_unchecked_mut(entities[i]));
+        unsafe {
+            let mut ptrs: [MaybeUninit<*mut V>; N] = MaybeUninit::uninit().assume_init();
+            for i in 0..N {
+                ptrs[i] = MaybeUninit::new(self.get_unchecked_mut(entities[i]));
+            }
+            core::mem::transmute_copy::<_, [&mut V; N]>(&ptrs)
         }
-        core::mem::transmute_copy::<_, [&mut V; N]>(&ptrs)
     }
 }
 

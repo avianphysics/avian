@@ -65,8 +65,8 @@ fn setup(
 
         commands.spawn(
             SphericalJoint::new(previous_particle, current_particle)
-                .with_local_anchor_1(Vector::NEG_Y * particle_radius * 1.1)
-                .with_local_anchor_2(Vector::Y * particle_radius * 1.1)
+                .with_local_anchor1(Vector::NEG_Y * particle_radius * 1.1)
+                .with_local_anchor2(Vector::Y * particle_radius * 1.1)
                 .with_point_compliance(0.00001),
         );
 

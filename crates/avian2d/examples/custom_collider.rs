@@ -26,7 +26,7 @@ fn main() {
         .add_systems(Startup, setup)
         .add_systems(
             FixedUpdate,
-            (center_gravity, rotate).in_set(PhysicsStepSet::First),
+            (center_gravity, rotate).in_set(PhysicsStepSystems::First),
         )
         .run();
 }
@@ -74,7 +74,7 @@ impl AnyCollider for CircleCollider {
         position1: Vector,
         rotation1: impl Into<Rotation>,
         position2: Vector,
-        rotation2: impl Into<Rotation>,
+        _rotation2: impl Into<Rotation>,
         prediction_distance: Scalar,
         manifolds: &mut Vec<ContactManifold>,
         _: ContactManifoldContext<Self::Context>,
@@ -83,11 +83,9 @@ impl AnyCollider for CircleCollider {
         manifolds.clear();
 
         let rotation1: Rotation = rotation1.into();
-        let rotation2: Rotation = rotation2.into();
 
         let inv_rotation1 = rotation1.inverse();
         let delta_pos = inv_rotation1 * (position2 - position1);
-        let delta_rot = inv_rotation1 * rotation2;
 
         let distance_squared = delta_pos.length_squared();
         let sum_radius = self.radius + other.radius;
@@ -98,18 +96,22 @@ impl AnyCollider for CircleCollider {
             } else {
                 Vector::X
             };
-            let local_normal2 = delta_rot.inverse() * (-local_normal1);
             let local_point1 = local_normal1 * self.radius;
-            let local_point2 = local_normal2 * other.radius;
+            let normal = rotation1 * local_normal1;
 
-            let point = ContactPoint::new(
-                local_point1,
-                local_point2,
-                sum_radius - distance_squared.sqrt(),
-            )
-            .with_feature_ids(PackedFeatureId::face(0), PackedFeatureId::face(0));
+            let separation = distance_squared.sqrt() - sum_radius;
 
-            manifolds.push(ContactManifold::new([point], rotation1 * local_normal1, 0));
+            // The contact point is the midpoint of the two points in world space.
+            // The anchors are relative to the positions of the colliders.
+            let point1 = rotation1 * local_point1;
+            let anchor1 = point1 + normal * separation * 0.5;
+            let anchor2 = anchor1 + (position1 - position2);
+            let world_point = position1 + anchor1;
+
+            let point = ContactPoint::new(anchor1, anchor2, world_point, -separation)
+                .with_feature_ids(PackedFeatureId::face(0), PackedFeatureId::face(0));
+
+            manifolds.push(ContactManifold::new([point], rotation1 * local_normal1));
         }
     }
 }

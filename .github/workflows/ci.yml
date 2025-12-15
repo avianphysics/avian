@@ -13,7 +13,7 @@ env:
 
 jobs:
     check:
-        name: Check
+        name: Check Minimal Features
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
@@ -24,7 +24,7 @@ jobs:
                 cache-all-crates: true
                 shared-key: lints
             - name: Run cargo check
-              run: cargo check --locked --all-targets
+              run: cargo check --locked --all-targets --no-default-features --features 2d,3d,f32
 
     docs:
         name: Check Documentation
@@ -94,9 +94,9 @@ jobs:
                 cache-directories: ${{ steps.ld-windows.outputs.libdir }}
                 cache-all-crates: true
             - name: Run cargo test
-              run: cargo nextest run --locked --no-default-features --lib --bins --examples --no-fail-fast --features enhanced-determinism,parallel,collider-from-mesh,serialize,debug-plugin,avian2d/2d,avian3d/3d,avian2d/f64,avian3d/f64,default-collider,parry-f64,bevy_scene,bevy_picking,diagnostic_ui,bevy/dynamic_linking
+              run: cargo nextest run --locked --no-default-features --lib --bins --examples --no-fail-fast --features enhanced-determinism,parallel,collider-from-mesh,serialize,debug-plugin,xpbd_joints,avian2d/2d,avian3d/3d,avian2d/f64,avian3d/f64,default-collider,parry-f64,bevy_scene,bevy_picking,diagnostic_ui,bevy/dynamic_linking
             - name: Run doc tests
-              run: cargo test --locked --doc --no-default-features --features enhanced-determinism,parallel,collider-from-mesh,serialize,debug-plugin,avian2d/2d,avian3d/3d,avian2d/f64,avian3d/f64,default-collider,parry-f64,bevy_scene,bevy_picking,diagnostic_ui,bevy/dynamic_linking
+              run: cargo test --locked --doc --no-default-features --features enhanced-determinism,parallel,collider-from-mesh,serialize,debug-plugin,xpbd_joints,avian2d/2d,avian3d/3d,avian2d/f64,avian3d/f64,default-collider,parry-f64,bevy_scene,bevy_picking,diagnostic_ui,bevy/dynamic_linking
   
            
     lints:
@@ -105,6 +105,8 @@ jobs:
         steps:
             - uses: actions/checkout@v4
             - uses: dtolnay/rust-toolchain@stable
+              with:
+                components: rustfmt, clippy
             - uses: Swatinem/rust-cache@v2
               with:
                 save-if: ${{ github.ref == 'refs/heads/main' }}

@@ -47,7 +47,7 @@ fn setup(
     // Connect anchor and dynamic object
     commands.spawn(
         RevoluteJoint::new(anchor, object)
-            .with_local_anchor_2(Vector::Y * 2.0)
+            .with_local_anchor2(Vector::Y * 2.0)
             .with_angle_limits(-1.0, 1.0),
     );
 

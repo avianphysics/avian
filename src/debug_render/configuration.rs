@@ -21,7 +21,7 @@ use bevy::{color::palettes::css::*, prelude::*};
 ///             DefaultPlugins,
 ///             PhysicsPlugins::default(),
 ///             // Enables debug rendering
-///             PhysicsDebugPlugin::default(),
+///             PhysicsDebugPlugin,
 ///         ))
 ///         // Overwrite default debug rendering configuration (optional)
 ///         .insert_gizmo_config(
@@ -83,6 +83,8 @@ pub struct PhysicsGizmos {
     pub shapecast_point_color: Option<Color>,
     /// The color used for the hit normals in [shapecasts](spatial_query#shapecasting).
     pub shapecast_normal_color: Option<Color>,
+    /// The color used for the bounds of [`PhysicsIsland`](dynamics::solver::islands::PhysicsIsland)s.
+    pub island_color: Option<Color>,
     /// Determines if the visibility of entities with [colliders](Collider) should be set to `Visibility::Hidden`,
     /// which will only show the debug renders.
     pub hide_meshes: bool,
@@ -107,6 +109,7 @@ impl Default for PhysicsGizmos {
             shapecast_shape_color: Some(Color::srgb(0.4, 0.6, 1.0)),
             shapecast_point_color: Some(YELLOW.into()),
             shapecast_normal_color: Some(PINK.into()),
+            island_color: None,
             hide_meshes: false,
         }
     }
@@ -150,6 +153,7 @@ impl PhysicsGizmos {
             shapecast_shape_color: Some(Color::srgb(0.4, 0.6, 1.0)),
             shapecast_point_color: Some(YELLOW.into()),
             shapecast_normal_color: Some(PINK.into()),
+            island_color: Some(RED.into()),
             hide_meshes: true,
         }
     }
@@ -175,6 +179,7 @@ impl PhysicsGizmos {
             shapecast_shape_color: None,
             shapecast_point_color: None,
             shapecast_normal_color: None,
+            island_color: None,
             hide_meshes: false,
         }
     }
@@ -391,7 +396,7 @@ impl PhysicsGizmos {
 ///             DefaultPlugins,
 ///             PhysicsPlugins::default(),
 ///             // Enables debug rendering
-///             PhysicsDebugPlugin::default(),
+///             PhysicsDebugPlugin,
 ///         ))
 ///         .run();
 /// }

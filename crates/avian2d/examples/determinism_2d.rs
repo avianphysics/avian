@@ -15,12 +15,12 @@
 //! <https://github.com/erincatto/box2d/blob/90c2781f64775085035655661d5fe6542bf0fbd5/samples/sample_determinism.cpp>
 
 use avian2d::{
-    math::{AdjustPrecision, Scalar, Vector, PI},
+    math::{AdjustPrecision, PI, Scalar, Vector},
     prelude::*,
 };
 use bevy::{
-    color::palettes::tailwind::CYAN_400, ecs::system::SystemParam,
-    input::common_conditions::input_just_pressed, prelude::*, render::camera::ScalingMode,
+    camera::ScalingMode, color::palettes::tailwind::CYAN_400,
+    input::common_conditions::input_just_pressed, prelude::*,
 };
 use bytemuck::{Pod, Zeroable};
 
@@ -34,10 +34,8 @@ fn main() {
     App::new()
         .add_plugins((
             DefaultPlugins,
-            PhysicsPlugins::default()
-                .with_length_unit(0.5)
-                .with_collision_hooks::<PhysicsHooks>(),
-            PhysicsDebugPlugin::default(),
+            PhysicsPlugins::default().with_length_unit(0.5),
+            PhysicsDebugPlugin,
         ))
         .init_resource::<Step>()
         .add_systems(Startup, (setup_scene, setup_ui))
@@ -125,8 +123,9 @@ fn setup_scene(
                     RevoluteJoint::new(prev_entity.unwrap(), entity)
                         .with_angle_limits(-0.1 * PI, 0.2 * PI)
                         .with_point_compliance(0.0001)
-                        .with_local_anchor_1(Vec2::splat(half_size).adjust_precision())
-                        .with_local_anchor_2(Vec2::new(offset, -half_size).adjust_precision()),
+                        .with_local_anchor1(Vec2::splat(half_size).adjust_precision())
+                        .with_local_anchor2(Vec2::new(offset, -half_size).adjust_precision()),
+                    JointCollisionDisabled,
                 ));
                 prev_entity = None;
             }
@@ -182,25 +181,6 @@ fn setup_ui(mut commands: Commands) {
             ..default()
         },
     ));
-}
-
-#[derive(SystemParam)]
-pub struct PhysicsHooks<'w, 's> {
-    joints: Query<'w, 's, &'static RevoluteJoint>,
-}
-
-impl CollisionHooks for PhysicsHooks<'_, '_> {
-    fn filter_pairs(&self, collider1: Entity, collider2: Entity, _commands: &mut Commands) -> bool {
-        // Ignore the collision if the entities are connected by a joint.
-        // TODO: This should be an optimized built-in feature for joints.
-        self.joints
-            .iter()
-            .find(|joint| {
-                (joint.entity1 == collider1 && joint.entity2 == collider2)
-                    || (joint.entity1 == collider2 && joint.entity2 == collider1)
-            })
-            .is_some()
-    }
 }
 
 fn clear_scene(

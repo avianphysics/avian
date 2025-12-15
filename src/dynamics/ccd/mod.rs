@@ -241,7 +241,7 @@ use derive_more::From;
 use dynamics::solver::SolverDiagnostics;
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 use parry::query::{
-    cast_shapes, cast_shapes_nonlinear, NonlinearRigidMotion, ShapeCastHit, ShapeCastOptions,
+    NonlinearRigidMotion, ShapeCastHit, ShapeCastOptions, cast_shapes, cast_shapes_nonlinear,
 };
 
 /// A plugin for [Continuous Collision Detection](self).
@@ -249,23 +249,29 @@ pub struct CcdPlugin;
 
 impl Plugin for CcdPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<SweptCcd>().register_type::<SweepMode>();
-
         // Get the `PhysicsSchedule`, and panic if it doesn't exist.
         let physics = app
             .get_schedule_mut(PhysicsSchedule)
             .expect("add PhysicsSchedule first");
 
-        physics.configure_sets(SweptCcdSet.in_set(SolverSet::PostSubstep));
+        physics.configure_sets(
+            SweptCcdSystems
+                .after(SolverSystems::PostSubstep)
+                .before(SolverSystems::Restitution),
+        );
 
         #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
-        physics.add_systems(solve_swept_ccd.in_set(SweptCcdSet));
+        physics.add_systems(solve_swept_ccd.in_set(SweptCcdSystems));
     }
 }
 
 /// A system set for [Continuous Collision Detection](self) systems.
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct SweptCcdSet;
+pub struct SweptCcdSystems;
+
+/// A deprecated alias for [`SweptCcdSystems`].
+#[deprecated(since = "0.4.0", note = "Renamed to `SweptCcdSystems`")]
+pub type SweptCcdSet = SweptCcdSystems;
 
 /// The maximum distance at which [speculative contacts](self#speculative-collision)
 /// are generated for this entity. A value greater than zero helps prevent missing
@@ -693,10 +699,7 @@ fn compute_ccd_toi(
     prediction_distance: Scalar,
 ) -> Option<Scalar> {
     if mode == SweepMode::Linear {
-        if let Ok(Some(ShapeCastHit {
-            time_of_impact: toi,
-            ..
-        })) = cast_shapes(
+        let hit = cast_shapes(
             &motion1.start,
             &motion1.linvel,
             collider1.shape_scaled().as_ref(),
@@ -708,34 +711,33 @@ fn compute_ccd_toi(
                 stop_at_penetration: false,
                 ..default()
             },
-        ) {
+        )
+        .ok()??;
+        let toi = hit.time_of_impact;
+        if toi > 0.0 && toi < min_toi {
+            // New smaller time of impact found
+            return Some(toi);
+        } else if toi == 0.0 {
+            // If the time of impact is zero, fall back to computing the TOI of a small circle
+            // around the centroid of the first body.
+            let hit = cast_shapes(
+                &motion1.start,
+                &motion1.linvel,
+                collider1.shape_scaled().as_ref(),
+                &motion2.start,
+                &motion2.linvel,
+                &parry::shape::Ball::new(prediction_distance),
+                ShapeCastOptions {
+                    max_time_of_impact: min_toi,
+                    stop_at_penetration: false,
+                    ..default()
+                },
+            )
+            .ok()??;
+            let toi = hit.time_of_impact;
             if toi > 0.0 && toi < min_toi {
                 // New smaller time of impact found
                 return Some(toi);
-            } else if toi == 0.0 {
-                // If the time of impact is zero, fall back to computing the TOI of a small circle
-                // around the centroid of the first body.
-                if let Ok(Some(ShapeCastHit {
-                    time_of_impact: toi,
-                    ..
-                })) = cast_shapes(
-                    &motion1.start,
-                    &motion1.linvel,
-                    collider1.shape_scaled().as_ref(),
-                    &motion2.start,
-                    &motion2.linvel,
-                    &parry::shape::Ball::new(prediction_distance),
-                    ShapeCastOptions {
-                        max_time_of_impact: min_toi,
-                        stop_at_penetration: false,
-                        ..default()
-                    },
-                ) {
-                    if toi > 0.0 && toi < min_toi {
-                        // New smaller time of impact found
-                        return Some(toi);
-                    }
-                }
             }
         }
     } else if let Ok(Some(ShapeCastHit {
@@ -756,10 +758,7 @@ fn compute_ccd_toi(
         } else if toi == 0.0 {
             // If the time of impact is zero, fall back to computing the TOI of a small circle
             // around the centroid of the first body.
-            if let Ok(Some(ShapeCastHit {
-                time_of_impact: toi,
-                ..
-            })) = cast_shapes_nonlinear(
+            let hit = cast_shapes_nonlinear(
                 motion1,
                 collider1.shape_scaled().as_ref(),
                 motion2,
@@ -767,11 +766,12 @@ fn compute_ccd_toi(
                 0.0,
                 min_toi,
                 false,
-            ) {
-                if toi > 0.0 && toi < min_toi {
-                    // New smaller time of impact found
-                    return Some(toi);
-                }
+            )
+            .ok()??;
+            let toi = hit.time_of_impact;
+            if toi > 0.0 && toi < min_toi {
+                // New smaller time of impact found
+                return Some(toi);
             }
         }
     }

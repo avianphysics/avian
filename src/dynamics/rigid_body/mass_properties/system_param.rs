@@ -1,8 +1,8 @@
 use crate::prelude::*;
 use bevy::{
     ecs::system::{
-        lifetimeless::{Read, Write},
         SystemParam,
+        lifetimeless::{Read, Write},
     },
     prelude::*,
 };
@@ -103,11 +103,9 @@ impl MassPropertyHelper<'_, '_> {
                 {
                     mass_props.principal_angular_inertia = angular_inertia.principal;
                     mass_props.local_inertial_frame = angular_inertia.local_frame;
-                    computed_inertia.set(
-                        mass_props
-                            .angular_inertia_tensor()
-                            .as_mat3()
-                            .adjust_precision(),
+                    *computed_inertia = ComputedAngularInertia::new_with_local_frame(
+                        mass_props.principal_angular_inertia.adjust_precision(),
+                        mass_props.local_inertial_frame.adjust_precision(),
                     );
                 }
             }
@@ -118,11 +116,9 @@ impl MassPropertyHelper<'_, '_> {
             }
             #[cfg(feature = "3d")]
             {
-                computed_inertia.set(
-                    mass_props
-                        .angular_inertia_tensor()
-                        .as_mat3()
-                        .adjust_precision(),
+                *computed_inertia = ComputedAngularInertia::new_with_local_frame(
+                    mass_props.principal_angular_inertia.adjust_precision(),
+                    mass_props.local_inertial_frame.adjust_precision(),
                 );
             }
         }

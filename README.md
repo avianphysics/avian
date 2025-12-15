@@ -1,7 +1,7 @@
 # ![Avian Physics](https://raw.githubusercontent.com/Jondolf/avian/avian/assets/branding/logo.svg)
 
-[![MIT/Apache 2.0](https://img.shields.io/badge/license-MIT%2FApache-blue.svg)](https://github.com/Jondolf/avian#license)
-[![ci](https://github.com/Jondolf/avian/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Jondolf/avian/actions/workflows/ci.yml)
+[![MIT/Apache 2.0](https://img.shields.io/badge/license-MIT%2FApache-blue.svg)](https://github.com/avianphysics/avian#license)
+[![ci](https://github.com/avianphysics/avian/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/avianphysics/avian/actions/workflows/ci.yml)
 [![2D crates.io](https://img.shields.io/crates/v/avian2d?label=2D%20crates.io)](https://crates.io/crates/avian2d)
 [![2D docs.rs](https://img.shields.io/docsrs/avian2d?label=2D%20docs.rs)](https://docs.rs/avian2d)
 [![3D crates.io](https://img.shields.io/crates/v/avian3d?label=3D%20crates.io)](https://crates.io/crates/avian3d)
@@ -41,7 +41,7 @@ Below are some of the current features of Avian.
   - Collider generation for meshes and entire scenes
   - Collision events
   - Access to colliding entities
-  - Filtering and modifying collisions with custom systems
+  - Filtering and modifying collisions with collision hooks
   - Manual contact queries and intersection tests
 - Constraints and joints
   - Several built-in joint types: fixed, distance, prismatic, revolute, spherical
@@ -52,7 +52,7 @@ Below are some of the current features of Avian.
   - Flexible `SpatialQuery` system parameter
   - Spatial query filters
 - `Transform` interpolation and extrapolation for fixed timesteps
-- Debug rendering for colliders, AABBs, contacts, joints, sleeping, axes and spatial queries
+- Debug rendering for colliders, AABBs, contacts, joints, spatial queries, and more
 - Configurable scheduling and high customizability
 - Highly modular plugin architecture, freely extend and replace parts of the engine
 - Support for custom collision backends
@@ -74,15 +74,15 @@ First, add `avian2d` or `avian3d` to your dependencies in `Cargo.toml`:
 ```toml
 # For 2D applications:
 [dependencies]
-avian2d = "0.3"
+avian2d = "0.4"
 
 # For 3D applications:
 [dependencies]
-avian3d = "0.3"
+avian3d = "0.4"
 
 # If you want to use the most up-to-date version, you can follow the main branch:
 [dependencies]
-avian3d = { git = "https://github.com/Jondolf/avian", branch = "main" }
+avian3d = { git = "https://github.com/avianphysics/avian", branch = "main" }
 ```
 
 Below is a very simple example where a cube with initial angular velocity falls onto a circular platform.
@@ -157,13 +157,16 @@ and precision:
 cargo run --example cubes --no-default-features --features "3d f64 parry-f64"
 ```
 
-## Supported Bevy Versions
+## Version Table
 
-| Bevy    | Avian |
-| ------- | ----- |
-| 0.16    | 0.3   |
-| 0.15    | 0.2   |
-| 0.14    | 0.1   |
+| Bevy    | Avian  |
+| ------- | ------ |
+| 0.17    | 0.4    |
+| 0.16    | 0.3    |
+| 0.15    | 0.2    |
+| 0.14    | 0.1    |
+
+Avian provides [migration guides](./migration-guides) for each version.
 
 <details>
   <summary>Bevy XPBD versions (the predecessor of Avian)</summary>
@@ -177,16 +180,6 @@ cargo run --example cubes --no-default-features --features "3d f64 parry-f64"
   | 0.10 | 0.1       |
 
 </details>
-
-## Future Features
-
-- Flags for what types of collisions are active, like collisions against specific rigid body types, sensors or parents
-- Performance optimization (better broad phase, parallel solver, proper SIMD...)
-- Joint motors
-- Articulations, aka. multibody joints
-- Proper cross-platform determinism
-- Soft bodies (cloth and deformable solids)
-- Maybe fluid simulation
 
 ## Contributing
 

@@ -18,10 +18,10 @@
 use core::time::Duration;
 
 use crate::{
-    math::{Vector, PI},
+    math::{PI, Vector},
     prelude::*,
 };
-use bevy::{ecs::system::SystemParam, prelude::*, time::TimeUpdateStrategy};
+use bevy::{prelude::*, time::TimeUpdateStrategy};
 use bytemuck::{Pod, Zeroable};
 
 // How many steps to record the hash for.
@@ -37,13 +37,11 @@ fn cross_platform_determinism_2d() {
     app.add_plugins((
         MinimalPlugins,
         TransformPlugin,
-        PhysicsPlugins::default()
-            .with_length_unit(0.5)
-            .with_collision_hooks::<PhysicsHooks>(),
+        PhysicsPlugins::default().with_length_unit(0.5),
         #[cfg(feature = "bevy_scene")]
         AssetPlugin::default(),
         #[cfg(feature = "bevy_scene")]
-        bevy::scene::ScenePlugin::default(),
+        bevy::scene::ScenePlugin,
     ))
     .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f32(
         1.0 / 64.0,
@@ -62,11 +60,13 @@ fn cross_platform_determinism_2d() {
     let hash = compute_hash(app.world(), query);
 
     // Update this value if simulation behavior changes.
-    let expected = 0x10b3db5;
+    let expected = 0x8111821f;
 
     assert!(
         hash == expected,
-        "\nExpected transform hash 0x{:x}, found 0x{:x} instead.\nIf changes in behavior were expected, update the hash in src/tests/determinism_2d.rs on line 61.\n", expected, hash,
+        "\nExpected transform hash 0x{:x}, found 0x{:x} instead.\nIf changes in behavior were expected, update the hash in src/tests/determinism_2d.rs on line 61.\n",
+        expected,
+        hash,
     );
 }
 
@@ -143,30 +143,12 @@ fn setup_scene(mut commands: Commands) {
                     RevoluteJoint::new(prev_entity.unwrap(), entity)
                         .with_angle_limits(-0.1 * PI, 0.2 * PI)
                         .with_point_compliance(0.0001)
-                        .with_local_anchor_1(Vec2::splat(half_size).adjust_precision())
-                        .with_local_anchor_2(Vec2::new(offset, -half_size).adjust_precision()),
+                        .with_local_anchor1(Vec2::splat(half_size).adjust_precision())
+                        .with_local_anchor2(Vec2::new(offset, -half_size).adjust_precision()),
+                    JointCollisionDisabled,
                 ));
                 prev_entity = None;
             }
         }
-    }
-}
-
-#[derive(SystemParam)]
-pub struct PhysicsHooks<'w, 's> {
-    joints: Query<'w, 's, &'static RevoluteJoint>,
-}
-
-impl CollisionHooks for PhysicsHooks<'_, '_> {
-    fn filter_pairs(&self, entity1: Entity, entity2: Entity, _commands: &mut Commands) -> bool {
-        // Ignore the collision if the entities are connected by a joint.
-        // TODO: This should be an optimized built-in feature for joints.
-        self.joints
-            .iter()
-            .find(|joint| {
-                (joint.entity1 == entity1 && joint.entity2 == entity2)
-                    || (joint.entity1 == entity2 && joint.entity2 == entity1)
-            })
-            .is_some()
     }
 }

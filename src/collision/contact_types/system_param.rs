@@ -1,12 +1,12 @@
 use crate::data_structures::pair_key::PairKey;
 use bevy::{ecs::system::SystemParam, prelude::*};
 
-use super::{ContactGraph, ContactPair, ContactPairFlags};
+use super::{ContactGraph, ContactPair};
 
 /// A [`SystemParam`] for accessing and querying collision data.
 ///
 /// This is a wrapper around the [`ContactGraph`] resource that provides a convenient API
-/// for querying touching contact pairs between entities. If you need more lower-level control
+/// for querying touching [`ContactPair`]s between entities. If you need more lower-level control
 /// and access to non-touching contact pairs, consider using the [`ContactGraph`] directly.
 ///
 /// # Usage
@@ -51,8 +51,8 @@ use super::{ContactGraph, ContactPair, ContactPairFlags};
 /// [`CollisionHooks`]: crate::collision::hooks::CollisionHooks
 #[derive(SystemParam)]
 pub struct Collisions<'w> {
-    /// The [`ContactGraph`] that stores all contact pairs.
-    graph: Res<'w, ContactGraph>,
+    /// The [`ContactGraph`] that stores all contact edges.
+    contact_graph: ResMut<'w, ContactGraph>,
 }
 
 impl Collisions<'_> {
@@ -62,20 +62,22 @@ impl Collisions<'_> {
     /// the contact graph includes both touching and non-touching contacts.
     #[inline]
     pub fn graph(&self) -> &ContactGraph {
-        &self.graph
+        &self.contact_graph
     }
 
     /// Returns a touching contact pair between two entities.
     /// If the pair does not exist, `None` is returned.
     #[inline]
     pub fn get(&self, entity1: Entity, entity2: Entity) -> Option<&ContactPair> {
-        self.graph.get(entity1, entity2)
+        self.contact_graph
+            .get(entity1, entity2)
+            .map(|(_edge, pair)| pair)
     }
 
     /// Returns `true` if the given entities have a touching contact pair.
     #[inline]
     pub fn contains(&self, entity1: Entity, entity2: Entity) -> bool {
-        self.graph.contains(entity1, entity2)
+        self.contact_graph.contains(entity1, entity2)
     }
 
     /// Returns `true` if the given pair key matches a touching contact pair.
@@ -86,24 +88,24 @@ impl Collisions<'_> {
     /// If the key is not available, consider using [`contains`](Self::contains) instead.
     #[inline]
     pub fn contains_key(&self, pair_key: &PairKey) -> bool {
-        self.graph.contains_key(pair_key)
+        self.contact_graph.contains_key(pair_key)
     }
 
     /// Returns an iterator yielding immutable access to all touching contact pairs.
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = &ContactPair> {
-        self.graph
-            .iter()
-            .filter(|contacts| contacts.flags.contains(ContactPairFlags::TOUCHING))
+        self.contact_graph
+            .iter_active_touching()
+            .chain(self.contact_graph.iter_sleeping_touching())
     }
 
     /// Returns an iterator yielding immutable access to all touching contact pairs
     /// involving the given entity.
     #[inline]
     pub fn collisions_with(&self, entity: Entity) -> impl Iterator<Item = &ContactPair> {
-        self.graph
-            .collisions_with(entity)
-            .filter(|contacts| contacts.is_touching())
+        self.contact_graph
+            .contact_pairs_with(entity)
+            .filter(|contact_pair| contact_pair.is_touching())
     }
 
     /// Returns an iterator yielding immutable access to all entities

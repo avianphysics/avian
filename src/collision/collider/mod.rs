@@ -4,7 +4,7 @@ use crate::prelude::*;
 use bevy::{
     ecs::{
         component::Mutable,
-        entity::{hash_set::EntityHashSet, EntityMapper, MapEntities},
+        entity::{EntityMapper, MapEntities, hash_set::EntityHashSet},
         system::{ReadOnlySystemParam, SystemParam, SystemParamItem},
     },
     prelude::*,
@@ -21,6 +21,8 @@ mod cache;
 pub use cache::ColliderCachePlugin;
 pub mod collider_hierarchy;
 pub mod collider_transform;
+#[cfg(all(feature = "3d", any(feature = "parry-f32", feature = "parry-f64")))]
+pub mod trimesh_builder;
 
 mod layers;
 pub use layers::*;
@@ -37,14 +39,12 @@ mod parry;
 ))]
 pub use parry::*;
 
-mod world_query;
-pub use world_query::*;
-
 #[cfg(feature = "default-collider")]
 mod constructor;
 #[cfg(feature = "default-collider")]
 pub use constructor::{
     ColliderConstructor, ColliderConstructorHierarchy, ColliderConstructorHierarchyConfig,
+    ColliderConstructorHierarchyReady, ColliderConstructorReady,
 };
 
 /// A trait for creating colliders from other types.

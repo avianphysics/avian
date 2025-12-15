@@ -1,5 +1,6 @@
 use super::AdjustPrecision;
 use bevy_math::*;
+use glam_matrix_extras::*;
 
 /// The floating point number type used by Avian.
 pub type Scalar = f32;
@@ -33,6 +34,16 @@ pub type Matrix = Mat3;
 pub type Matrix2 = Mat2;
 /// The 3x3 matrix type used by Avian.
 pub type Matrix3 = Mat3;
+/// The dimension-specific matrix type used by Avian.
+#[cfg(feature = "2d")]
+pub type SymmetricMatrix = SymmetricMat2;
+/// The dimension-specific matrix type used by Avian.
+#[cfg(feature = "3d")]
+pub type SymmetricMatrix = SymmetricMat3;
+/// The 2x2 matrix type used by Avian.
+pub type SymmetricMatrix2 = SymmetricMat2;
+/// The 3x3 matrix type used by Avian.
+pub type SymmetricMatrix3 = SymmetricMat3;
 /// The quaternion type used by Avian.
 pub type Quaternion = Quat;
 
@@ -103,5 +114,33 @@ impl AdjustPrecision for DMat3 {
     type Adjusted = Matrix3;
     fn adjust_precision(&self) -> Self::Adjusted {
         self.as_mat3()
+    }
+}
+
+impl AdjustPrecision for SymmetricMat2 {
+    type Adjusted = SymmetricMatrix2;
+    fn adjust_precision(&self) -> Self::Adjusted {
+        *self
+    }
+}
+
+impl AdjustPrecision for SymmetricDMat2 {
+    type Adjusted = SymmetricMatrix2;
+    fn adjust_precision(&self) -> Self::Adjusted {
+        self.as_symmetric_mat2()
+    }
+}
+
+impl AdjustPrecision for SymmetricMat3 {
+    type Adjusted = SymmetricMatrix3;
+    fn adjust_precision(&self) -> Self::Adjusted {
+        *self
+    }
+}
+
+impl AdjustPrecision for SymmetricDMat3 {
+    type Adjusted = SymmetricMatrix3;
+    fn adjust_precision(&self) -> Self::Adjusted {
+        self.as_symmetric_mat3()
     }
 }

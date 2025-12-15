@@ -1,7 +1,7 @@
 #![allow(clippy::unnecessary_cast)]
 
 use avian3d::{math::*, prelude::*};
-use bevy::{color::palettes::css::RED, pbr::NotShadowReceiver, prelude::*};
+use bevy::{color::palettes::css::RED, light::NotShadowReceiver, prelude::*};
 use examples_common_3d::ExampleCommonPlugin;
 
 fn main() {
@@ -161,10 +161,10 @@ fn raycast(
         })
     {
         // Set the color of the hit object to red.
-        if let Ok((material_handle, _)) = cubes.get(ray_hit_data.entity) {
-            if let Some(material) = materials.get_mut(material_handle) {
-                material.base_color = RED.into();
-            }
+        if let Ok((material_handle, _)) = cubes.get(ray_hit_data.entity)
+            && let Some(material) = materials.get_mut(material_handle)
+        {
+            material.base_color = RED.into();
         }
 
         // Set the length of the ray indicator to look more like a laser,

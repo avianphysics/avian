@@ -1,8 +1,11 @@
 use avian3d::{
-    dynamics::solver::{
-        schedule::SubstepSolverSet,
-        solver_body::{SolverBody, SolverBodyInertia},
-        xpbd::*,
+    dynamics::{
+        joints::EntityConstraint,
+        solver::{
+            joint_graph::JointGraphPlugin,
+            solver_body::{SolverBody, SolverBodyInertia},
+            xpbd::*,
+        },
     },
     math::*,
     prelude::*,
@@ -21,13 +24,16 @@ fn main() {
         DefaultPlugins,
         ExampleCommonPlugin,
         PhysicsPlugins::default(),
+        // Consider our custom joint type for the joint graph.
+        // This is required for sleeping and the `JointCollisionDisabled` component to work.
+        JointGraphPlugin::<CenterDistanceConstraint>::default(),
     ))
     .add_systems(Startup, setup);
 
     app.add_systems(
         PhysicsSchedule,
         prepare_xpbd_joint::<CenterDistanceConstraint>
-            .in_set(SolverSet::PreSubstep)
+            .in_set(SolverSystems::PreSubstep)
             .ambiguous_with_all(),
     );
 
@@ -36,7 +42,8 @@ fn main() {
         .get_schedule_mut(SubstepSchedule)
         .expect("add SubstepSchedule first");
     substeps.add_systems(
-        solve_xpbd_joint::<CenterDistanceConstraint>.in_set(SubstepSolverSet::SolveUserConstraints),
+        solve_xpbd_joint::<CenterDistanceConstraint>
+            .in_set(XpbdSolverSystems::SolveUserConstraints),
     );
 
     // Run the app
@@ -45,45 +52,36 @@ fn main() {
 
 /// A constraint that keeps the distance between the centers of two bodies at `rest_distance`.
 #[derive(Component)]
+#[require(CenterDistanceConstraintSolverData)]
 struct CenterDistanceConstraint {
     entity1: Entity,
     entity2: Entity,
     rest_distance: Scalar,
-    /// The relative dominance of the bodies.
-    ///
-    /// If the relative dominance is positive, the first body is dominant
-    /// and is considered to have infinite mass.
-    relative_dominance: i16,
     compliance: Scalar,
-    /// Data stored from before the solver step.
-    pre_step: PreStepData,
 }
 
-/// Pre-step data for the [`CenterDistanceConstraint`].
-#[derive(Default)]
-struct PreStepData {
+/// Solver data for the [`CenterDistanceConstraint`].
+#[derive(Component, Default)]
+struct CenterDistanceConstraintSolverData {
     /// The world-space vector from the center of mass of body 1
     /// to the center of mass of body 2.
     center_difference: Vector,
 }
 
+impl XpbdConstraintSolverData for CenterDistanceConstraintSolverData {}
+
 impl CenterDistanceConstraint {
     /// Creates a new [`CenterDistanceConstraint`] with the given entities and rest distance.
     /// The compliance is set to `0.0` by default.
-    pub fn new(entity1: Entity, entity2: Entity, rest_distance: Scalar) -> Self {
+    pub const fn new(entity1: Entity, entity2: Entity, rest_distance: Scalar) -> Self {
         Self {
             entity1,
             entity2,
             rest_distance,
-            relative_dominance: 0,
             compliance: 0.0,
-            pre_step: PreStepData::default(),
         }
     }
 }
-
-impl PositionConstraint for CenterDistanceConstraint {}
-impl AngularConstraint for CenterDistanceConstraint {}
 
 impl EntityConstraint<2> for CenterDistanceConstraint {
     fn entities(&self) -> [Entity; 2] {
@@ -92,16 +90,19 @@ impl EntityConstraint<2> for CenterDistanceConstraint {
 }
 
 impl XpbdConstraint<2> for CenterDistanceConstraint {
-    fn prepare(&mut self, bodies: [&RigidBodyQueryReadOnlyItem; 2], _dt: Scalar) {
+    type SolverData = CenterDistanceConstraintSolverData;
+
+    fn prepare(
+        &mut self,
+        bodies: [&RigidBodyQueryReadOnlyItem; 2],
+        solver_data: &mut CenterDistanceConstraintSolverData,
+    ) {
         let [body1, body2] = bodies;
 
         // Prepare the base center difference.
         // The solver will compute the updated version based on the position deltas of the bodies.
-        self.pre_step.center_difference = (body2.position.0 - body1.position.0)
+        solver_data.center_difference = (body2.position.0 - body1.position.0)
             + (body2.rotation * body2.center_of_mass.0 - body1.rotation * body1.center_of_mass.0);
-
-        // Prepare the relative dominance.
-        self.relative_dominance = body1.dominance() - body2.dominance();
     }
 
     // This method is called by the solver to actually solve the constraint.
@@ -113,6 +114,7 @@ impl XpbdConstraint<2> for CenterDistanceConstraint {
         &mut self,
         bodies: [&mut SolverBody; 2],
         inertias: [&SolverBodyInertia; 2],
+        solver_data: &mut CenterDistanceConstraintSolverData,
         dt: Scalar,
     ) {
         let [body1, body2] = bodies;
@@ -127,7 +129,7 @@ impl XpbdConstraint<2> for CenterDistanceConstraint {
 
         // Compute the positional difference.
         let center_difference =
-            body2.delta_position - body1.delta_position + self.pre_step.center_difference;
+            body2.delta_position - body1.delta_position + solver_data.center_difference;
 
         // The current separation distance
         let distance = center_difference.length();
@@ -169,48 +171,19 @@ impl XpbdConstraint<2> for CenterDistanceConstraint {
 
         // Compute the Lagrange multiplier update, essentially the signed magnitude of the correction.
         let lagrange = 0.0;
-        let delta_lagrange =
-            self.compute_lagrange_update(lagrange, c, &[w1, w2], self.compliance, dt);
+        let delta_lagrange = compute_lagrange_update(lagrange, c, &[w1, w2], self.compliance, dt);
+
+        // Compute the positional impulse.
+        let impulse = delta_lagrange * n;
 
         // Apply the positional correction (method from PositionConstraint).
-        self.apply_positional_lagrange_update(
-            body1,
-            body2,
-            inertia1,
-            inertia2,
-            delta_lagrange,
-            n,
-            r1,
-            r2,
-        );
+        self.apply_positional_impulse(body1, body2, inertia1, inertia2, impulse, r1, r2);
     }
 }
 
-impl Joint for CenterDistanceConstraint {
-    fn new(entity1: Entity, entity2: Entity) -> Self {
-        Self::new(entity1, entity2, 0.0)
-    }
+impl PositionConstraint for CenterDistanceConstraint {}
 
-    fn local_anchor_1(&self) -> Vector {
-        Vector::ZERO
-    }
-
-    fn local_anchor_2(&self) -> Vector {
-        Vector::ZERO
-    }
-
-    fn damping_linear(&self) -> Scalar {
-        0.0
-    }
-
-    fn damping_angular(&self) -> Scalar {
-        0.0
-    }
-
-    fn relative_dominance(&self) -> i16 {
-        self.relative_dominance
-    }
-}
+impl AngularConstraint for CenterDistanceConstraint {}
 
 impl MapEntities for CenterDistanceConstraint {
     fn map_entities<M: EntityMapper>(&mut self, entity_mapper: &mut M) {

@@ -1,11 +1,11 @@
 //! Extended Position-Based Dynamics (XPBD) constraint functionality.
 //!
 //! XPBD is a simulation method that solves constraints at the position-level.
-//! Avian currently uses it for [joints](dynamics::solver::joints),
+//! Avian currently uses it for [joints](dynamics::joints),
 //! while contacts use an impulse-based approach.
 //!
 //! This module contains traits and systems for XPBD functionality.
-//! The actual joint implementations are in [`dynamics::solver::joints`],
+//! The actual XPBD joint implementations are in [`dynamics::solver::xpbd::joints`],
 //! but it is also possible to create your own constraints.
 //!
 //! The following section has an overview of what exactly constraints are,
@@ -15,7 +15,7 @@
 //!
 //! **Constraints** are a way to model physical relationships between entities.
 //! They are an integral part of physics simulation, and they can be used for things
-//! like contact resolution, [joints](super::joints), soft bodies, and much more.
+//! like contact resolution, [joints](dynamics::joints), soft bodies, and much more.
 //!
 //! At its core, a constraint is just a rule that is enforced by moving the participating entities in a way that satisfies that rule.
 //! For example, a distance constraint is satisfied when the distance between two entities is equal to the desired distance.
@@ -26,11 +26,11 @@
 //!
 //! Below are the currently implemented XPBD-based constraints.
 //!
-//! - [Joints](super::joints)
+//! - [Joints](dynamics::joints)
 //!     - [`FixedJoint`]
+//!     - [`RevoluteJoint`]
 //!     - [`DistanceJoint`]
 #![cfg_attr(feature = "3d", doc = "    - [`SphericalJoint`]")]
-//!     - [`RevoluteJoint`]
 //!     - [`PrismaticJoint`]
 //!
 //! Avian's [`ContactConstraint`](dynamics::solver::contact::ContactConstraint)
@@ -38,44 +38,68 @@
 //!
 //! ## Custom constraints
 //!
-//! In Avian, you can easily create your own XPBD constraints using the same APIs that the engine uses for its own constraints.
+//! <div class="warning">
+//!
+//! The constraint APIs are intended for advanced users, and prone to large sweeping changes and breakage.
+//! Only use them if you know what you are doing and are willing to risk your code breaking in the future.
+//!
+//! </div>
+//!
+//! In Avian, you can create your own XPBD constraints using the same APIs that the engine uses for its own constraints.
 //!
 //! First, create a struct and implement the [`EntityConstraint`] and [`XpbdConstraint`] traits,
-//! giving the number of participating entities using generics. It should look similar to this:
+//! giving the number of participating entities using generics. You can additionally pass a `SolverData` component
+//! implementing [`XpbdConstraintSolverData`] for storing additional solver-related data such as Lagrange multipliers
+//! or world-space anchors from the beginning of the time step.
 //!
 //! ```
 #![cfg_attr(
     feature = "2d",
-    doc = "use avian2d::{prelude::*, dynamics::solver::xpbd::XpbdConstraint};"
+    doc = "# use avian2d::{dynamics::{joints::EntityConstraint, solver::{solver_body::{SolverBody, SolverBodyInertia}, xpbd::{XpbdConstraint, XpbdConstraintSolverData}}}, math::{Scalar, Vector}, prelude::*};"
 )]
 #![cfg_attr(
     feature = "3d",
-    doc = "use avian3d::{prelude::*, dynamics::solver::xpbd::XpbdConstraint};"
+    doc = "# use avian3d::{dynamics::{joints::EntityConstraint, solver::{solver_body::{SolverBody, SolverBodyInertia}, xpbd::{XpbdConstraint, XpbdConstraintSolverData}}}, math::{Scalar, Vector}, prelude::*};"
 )]
-//! use bevy::{ecs::entity::{EntityMapper, MapEntities}, prelude::*};
-//!
+//! # use bevy::{ecs::entity::{EntityMapper, MapEntities}, prelude::*};
+//! #
 //! struct CustomConstraint {
 //!     entity1: Entity,
 //!     entity2: Entity,
-//!     lagrange: f32,
+//! }
+//!
+//! // Store additional internal solver data for the constraint.
+//! struct CustomConstraintSolverData {
+//!     // Accumulated Lagrange multipliers for the `JointForces` component.
+//!     total_lagrange: Vector,
+//! }
+//!
+//! impl XpbdConstraintSolverData for CustomConstraintSolverData {
+//!     fn clear_lagrange_multipliers(&mut self) {
+//!         self.total_lagrange = Vector::ZERO;
+//!     }
+//!
+//!     fn total_position_lagrange(&self) -> Vector {
+//!         self.total_lagrange
+//!     }
 //! }
 //!
 //! // This tells the solver how to get the entities from the constraint.
-//! # #[cfg(feature = "f32")]
 //! impl EntityConstraint<2> for CustomConstraint {
 //!     fn entities(&self) -> [Entity; 2] {
 //!         [self.entity1, self.entity2]
 //!     }
 //! }
 //!
-//! # #[cfg(feature = "f32")]
 //! impl XpbdConstraint<2> for CustomConstraint {
-//!     fn clear_lagrange_multipliers(&mut self) {
-//!         self.lagrange = 0.0;
-//!     }
+//!     type SolverData = CustomConstraintSolverData;
 //!
-//!     fn prepare(&mut self, bodies: [&RigidBodyQueryReadOnlyItem; 2], dt: f32) {
-//!          // Prepare the constraint for `solve` (compute current anchor positions, offsets, and so on).
+//!     fn prepare(
+//!         &mut self,
+//!         bodies: [&RigidBodyQueryReadOnlyItem; 2],
+//!         solver_data: &mut CustomConstraintSolverData,
+//!     ) {
+//!          // Prepare the constraint solver data for `solve` (compute current anchor positions, offsets, and so on).
 //!          // This runs before the substepping loop.
 //!     }
 //!
@@ -83,7 +107,8 @@
 //!         &mut self,
 //!         bodies: [&mut SolverBody; 2],
 //!         inertias: [&SolverBodyInertia; 2],
-//!         dt: f32,
+//!         solver_data: &mut CustomConstraintSolverData,
+//!         dt: Scalar,
 //!     ) {
 //!         // Solve the constraint by applying corrections to the `delta_position`
 //!         // and `delta_rotation` of the participating bodies.
@@ -106,30 +131,43 @@
 //! system that handles some of the background work for you.
 //!
 //! Add the `solve_xpbd_joint::<YourConstraint>` system to the [substepping schedule's](SubstepSchedule)
-//! [`SubstepSolverSet::SolveUserConstraints`](dynamics::solver::SubstepSolverSet::SolveUserConstraints) system set.
-//! It should look like this:
+//! [`XpbdSolverSystems::SolveUserConstraints`] system set. It should look like this:
 //!
 //! ```ignore
 //! // Prepare custom constraint
 //! app.add_systems(
 //!     PhysicsSchedule,
 //!     prepare_xpbd_joint::<CustomConstraint>
-//!         .in_set(SolverSet::PrepareJoints),
+//!         .in_set(SolverSystems::PrepareJoints),
 //! );
 //!
 //! // Solve custom constraint
 //! app.add_systems(
 //!     SubstepSchedule,
 //!     solve_xpbd_joint::<CustomConstraint>
-//!         .in_set(SubstepSolverSet::SolveUserConstraints),
+//!         .in_set(XpbdSolverSystems::SolveUserConstraints),
+//! );
+//!
+//! // Optional: Write back constraint forces to the `JointForces` component.
+//! app.add_systems(
+//!     PhysicsSchedule,
+//!     write_back_joint_forces::<CustomConstraint>
+//!         .in_set(SolverSystems::Finalize)
+//!         .ambiguous_with(SolverSystems::Finalize),
 //! );
 //! ```
 //!
 //! Now, just spawn an instance of the constraint, give it the participating entities, and the constraint should be getting
 //! solved automatically according to the `solve` method!
 //!
+//! If the constraint is a [joint](crate::dynamics::joints), it is recommended to also add an instance
+//! of [`JointGraphPlugin`](crate::dynamics::solver::joint_graph::JointGraphPlugin) for the constraint type.
+//! This is required for sleeping and the `JointCollisionDisabled` component to work.
+//!
 //! You can find a working example of a custom constraint
-//! [here](https://github.com/Jondolf/avian/blob/main/crates/avian3d/examples/custom_constraint.rs).
+//! [here](https://github.com/avianphysics/avian/blob/main/crates/avian3d/examples/custom_constraint.rs).
+//!
+//! [`EntityConstraint`]: crate::dynamics::joints::EntityConstraint
 //!
 //! ## Theory
 //!
@@ -154,7 +192,7 @@
 //! because this would be zero when the distance is equal to the desired rest distance.
 //!
 //! For *inequality constraints* the equation instead takes the form `C(x) >= 0`. These constraints are only applied
-//! when `C(x) < 0`, which is useful for things like static friction and [joint limits](super::joints#joint-limits).
+//! when `C(x) < 0`, which is useful for things like static friction and [joint limits](dynamics::joints#joint-limits).
 //!
 //! ### Constraint gradients
 //!
@@ -240,6 +278,11 @@
 //! where `q_i` is the [rotation](Rotation) of body `i` and `r_i` is a vector pointing from the body's center of mass to some
 //! attachment position.
 
+mod plugin;
+pub use plugin::{XpbdSolverPlugin, XpbdSolverSystems, prepare_xpbd_joint, solve_xpbd_joint};
+
+pub mod joints;
+
 mod angular_constraint;
 mod positional_constraint;
 
@@ -247,24 +290,36 @@ pub use angular_constraint::AngularConstraint;
 pub use positional_constraint::PositionConstraint;
 
 use crate::prelude::*;
-use bevy::{
-    ecs::{component::Mutable, entity::MapEntities},
-    prelude::*,
-};
-use core::cmp::Ordering;
 
 use super::solver_body::{SolverBody, SolverBodyInertia};
 
-/// A trait for constraints between entities.
-pub trait EntityConstraint<const ENTITY_COUNT: usize>: MapEntities {
-    /// The entities participating in the constraint.
-    fn entities(&self) -> [Entity; ENTITY_COUNT];
+/// A trait for additional data required for solving an XPBD constraint.
+pub trait XpbdConstraintSolverData {
+    /// Sets the constraint's [Lagrange multipliers](self#lagrange-multipliers) to 0.
+    fn clear_lagrange_multipliers(&mut self) {}
+
+    /// Returns the total Lagrange multiplier update applied to satisfy the position constraint.
+    fn total_position_lagrange(&self) -> Vector {
+        Vector::ZERO
+    }
+
+    /// Returns the total Lagrange multiplier update applied to satisfy the rotation constraint.
+    fn total_rotation_lagrange(&self) -> AngularVector {
+        AngularVector::ZERO
+    }
 }
 
 /// A trait for all XPBD [constraints](self#constraints).
 pub trait XpbdConstraint<const ENTITY_COUNT: usize> {
+    /// A component that holds additional data required for solving the constraint.
+    type SolverData: XpbdConstraintSolverData;
+
     /// Prepares the constraint for solving.
-    fn prepare(&mut self, bodies: [&RigidBodyQueryReadOnlyItem; ENTITY_COUNT], dt: Scalar);
+    fn prepare(
+        &mut self,
+        bodies: [&RigidBodyQueryReadOnlyItem; ENTITY_COUNT],
+        solver_data: &mut Self::SolverData,
+    );
 
     /// Solves the constraint.
     ///
@@ -274,8 +329,8 @@ pub trait XpbdConstraint<const ENTITY_COUNT: usize> {
     ///    and the [Lagrange multiplier](self#lagrange-multipliers) update.
     /// 2. Apply corrections along the gradients using the Lagrange multiplier update.
     ///
-    /// [`XpbdConstraint`] provides the [`compute_lagrange_update`](XpbdConstraint::compute_lagrange_update)
-    /// method for all constraints. It requires the gradients and inverse masses of the participating entities.
+    /// The [`compute_lagrange_update`] function is provided for all constraints.
+    /// It requires the gradients and inverse masses of the participating entities.
     ///
     /// For constraints between two bodies, you can implement [`PositionConstraint`]. and [`AngularConstraint`]
     /// to get the associated `compute_generalized_inverse_mass`, `apply_positional_correction` and
@@ -283,205 +338,76 @@ pub trait XpbdConstraint<const ENTITY_COUNT: usize> {
     /// computations and correction applying logic yourself.
     ///
     /// You can find a working example of a custom constraint
-    /// [here](https://github.com/Jondolf/avian/blob/main/crates/avian3d/examples/custom_constraint.rs).
+    /// [here](https://github.com/avianphysics/avian/blob/main/crates/avian3d/examples/custom_constraint.rs).
     fn solve(
         &mut self,
         bodies: [&mut SolverBody; ENTITY_COUNT],
         inertias: [&SolverBodyInertia; ENTITY_COUNT],
+        solver_data: &mut Self::SolverData,
         dt: Scalar,
     );
-
-    /// Computes how much a constraint's [Lagrange multiplier](self#lagrange-multipliers) changes when projecting
-    /// the constraint for all participating particles.
-    ///
-    /// `c` is a scalar value returned by the [constraint function](self#constraint-functions).
-    /// When it is zero, the constraint is satisfied.
-    ///
-    /// Each particle should have a corresponding [gradient](self#constraint-gradients) in `gradients`.
-    /// A gradient is a vector that refers to the direction in which `c` increases the most.
-    ///
-    /// See the [constraint theory](#theory) for more information.
-    fn compute_lagrange_update_with_gradients(
-        &self,
-        lagrange: Scalar,
-        c: Scalar,
-        gradients: &[Vector],
-        inverse_masses: &[Scalar],
-        compliance: Scalar,
-        dt: Scalar,
-    ) -> Scalar {
-        // Compute the sum of all inverse masses multiplied by the squared lengths of the corresponding gradients.
-        let w_sum = inverse_masses
-            .iter()
-            .enumerate()
-            .fold(0.0, |acc, (i, w)| acc + *w * gradients[i].length_squared());
-
-        // Avoid division by zero
-        if w_sum <= Scalar::EPSILON {
-            return 0.0;
-        }
-
-        // tilde_a = a/h^2
-        let tilde_compliance = compliance / dt.powi(2);
-
-        (-c - tilde_compliance * lagrange) / (w_sum + tilde_compliance)
-    }
-
-    /// Computes how much a constraint's [Lagrange multiplier](self#lagrange-multipliers) changes when projecting
-    /// the constraint for all participating particles. The constraint gradients are assumed to be unit-length.
-    ///
-    /// `c` is a scalar value returned by the [constraint function](self#constraint-functions).
-    /// When it is zero, the constraint is satisfied.
-    ///
-    /// See the [constraint theory](#theory) for more information.
-    fn compute_lagrange_update(
-        &self,
-        lagrange: Scalar,
-        c: Scalar,
-        inverse_masses: &[Scalar],
-        compliance: Scalar,
-        dt: Scalar,
-    ) -> Scalar {
-        // Compute the sum of all inverse masses.
-        // The gradients are unit length, so they don't need to be considered.
-        let w_sum: Scalar = inverse_masses.iter().copied().sum();
-
-        // Avoid division by zero
-        if w_sum <= Scalar::EPSILON {
-            return 0.0;
-        }
-
-        // tilde_a = a/h^2
-        let tilde_compliance = compliance / dt.powi(2);
-
-        (-c - tilde_compliance * lagrange) / (w_sum + tilde_compliance)
-    }
-
-    /// Sets the constraint's [Lagrange multipliers](self#lagrange-multipliers) to 0.
-    fn clear_lagrange_multipliers(&mut self) {}
 }
 
-/// Iterates through the XPBD joints of a given type and solves them.
-pub fn prepare_xpbd_joint<
-    C: Joint + EntityConstraint<2> + XpbdConstraint<2> + Component<Mutability = Mutable>,
->(
-    bodies: Query<RigidBodyQueryReadOnly, Without<RigidBodyDisabled>>,
-    mut joints: Query<&mut C, (Without<RigidBody>, Without<JointDisabled>)>,
-    time: Res<Time>,
-    mut commands: Commands,
-) {
-    let delta_secs = time.delta_seconds_adjusted();
+/// Computes how much a constraint's [Lagrange multiplier](self#lagrange-multipliers) changes when projecting
+/// the constraint for all participating particles.
+///
+/// `c` is a scalar value returned by the [constraint function](self#constraint-functions).
+/// When it is zero, the constraint is satisfied.
+///
+/// Each particle should have a corresponding [gradient](self#constraint-gradients) in `gradients`.
+/// A gradient is a vector that refers to the direction in which `c` increases the most.
+///
+/// See the [constraint theory](#theory) for more information.
+pub fn compute_lagrange_update_with_gradients(
+    lagrange: Scalar,
+    c: Scalar,
+    gradients: &[Vector],
+    inverse_masses: &[Scalar],
+    compliance: Scalar,
+    dt: Scalar,
+) -> Scalar {
+    // Compute the sum of all inverse masses multiplied by the squared lengths of the corresponding gradients.
+    let w_sum = inverse_masses
+        .iter()
+        .enumerate()
+        .fold(0.0, |acc, (i, w)| acc + *w * gradients[i].length_squared());
 
-    for mut joint in &mut joints {
-        // Get components for entities
-        if let Ok([body1, body2]) = bodies.get_many(joint.entities()) {
-            joint.prepare([&body1, &body2], delta_secs);
-
-            // Wake up the bodies if they are sleeping.
-            // TODO: Simulation islands will let us handle this better.
-            if body1.is_sleeping {
-                commands.queue(WakeUpBody(body1.entity));
-            }
-            if body2.is_sleeping {
-                commands.queue(WakeUpBody(body2.entity));
-            }
-        }
+    // Avoid division by zero
+    if w_sum <= Scalar::EPSILON {
+        return 0.0;
     }
+
+    // tilde_a = a/h^2
+    let tilde_compliance = compliance / dt.powi(2);
+
+    (-c - tilde_compliance * lagrange) / (w_sum + tilde_compliance)
 }
 
-/// Iterates through the XPBD joints of a given type and solves them.
-pub fn solve_xpbd_joint<
-    C: Joint + EntityConstraint<2> + XpbdConstraint<2> + Component<Mutability = Mutable>,
->(
-    bodies: Query<(&mut SolverBody, &SolverBodyInertia), Without<RigidBodyDisabled>>,
-    mut joints: Query<&mut C, (Without<RigidBody>, Without<JointDisabled>)>,
-    time: Res<Time>,
-) {
-    let delta_secs = time.delta_seconds_adjusted();
+/// Computes how much a constraint's [Lagrange multiplier](self#lagrange-multipliers) changes when projecting
+/// the constraint for all participating particles. The constraint gradients are assumed to be unit-length.
+///
+/// `c` is a scalar value returned by the [constraint function](self#constraint-functions).
+/// When it is zero, the constraint is satisfied.
+///
+/// See the [constraint theory](#theory) for more information.
+pub fn compute_lagrange_update(
+    lagrange: Scalar,
+    c: Scalar,
+    inverse_masses: &[Scalar],
+    compliance: Scalar,
+    dt: Scalar,
+) -> Scalar {
+    // Compute the sum of all inverse masses.
+    // The gradients are unit length, so they don't need to be considered.
+    let w_sum: Scalar = inverse_masses.iter().copied().sum();
 
-    // Clear Lagrange multipliers
-    joints
-        .iter_mut()
-        .for_each(|mut c| c.clear_lagrange_multipliers());
-
-    let mut dummy_body1 = SolverBody::default();
-    let mut dummy_body2 = SolverBody::default();
-    let dummy_inertia = SolverBodyInertia::default();
-
-    for mut joint in &mut joints {
-        let [entity1, entity2] = joint.entities();
-
-        let (mut body1, mut inertia1) = (&mut dummy_body1, &dummy_inertia);
-        let (mut body2, mut inertia2) = (&mut dummy_body2, &dummy_inertia);
-
-        // Get the solver bodies for the two colliding entities.
-        if let Ok((body, inertia)) = unsafe { bodies.get_unchecked(entity1) } {
-            body1 = body.into_inner();
-            inertia1 = inertia;
-        }
-        if let Ok((body, inertia)) = unsafe { bodies.get_unchecked(entity2) } {
-            body2 = body.into_inner();
-            inertia2 = inertia;
-        }
-
-        // If a body has a higher dominance, it is treated as a static or kinematic body.
-        match joint.relative_dominance().cmp(&0) {
-            Ordering::Greater => inertia1 = &dummy_inertia,
-            Ordering::Less => inertia2 = &dummy_inertia,
-            _ => {}
-        }
-
-        joint.solve([body1, body2], [inertia1, inertia2], delta_secs);
+    // Avoid division by zero
+    if w_sum <= Scalar::EPSILON {
+        return 0.0;
     }
-}
 
-/// Updates the linear velocity of all dynamic bodies based on the change in position from the XPBD solver.
-pub(super) fn project_linear_velocity(
-    mut bodies: Query<(&mut SolverBody, &PreSolveDeltaPosition), RigidBodyActiveFilter>,
-    time: Res<Time>,
-) {
-    let delta_secs = time.delta_seconds_adjusted();
+    // tilde_a = a/h^2
+    let tilde_compliance = compliance / dt.powi(2);
 
-    for (mut body, pre_solve_delta_pos) in &mut bodies {
-        // v = (x - x_prev) / h
-        let new_lin_vel = (body.delta_position - pre_solve_delta_pos.0) / delta_secs;
-        body.linear_velocity += new_lin_vel;
-    }
-}
-
-/// Updates the angular velocity of all dynamic bodies based on the change in rotation from the XPBD solver.
-#[cfg(feature = "2d")]
-pub(super) fn project_angular_velocity(
-    mut bodies: Query<(&mut SolverBody, &PreSolveDeltaRotation), RigidBodyActiveFilter>,
-    time: Res<Time>,
-) {
-    let delta_secs = time.delta_seconds_adjusted();
-
-    for (mut body, pre_solve_delta_rot) in &mut bodies {
-        let new_ang_vel = pre_solve_delta_rot.angle_between(body.delta_rotation) / delta_secs;
-        body.angular_velocity += new_ang_vel;
-    }
-}
-
-/// Updates the angular velocity of all dynamic bodies based on the change in rotation from the XPBD solver.
-#[cfg(feature = "3d")]
-pub(super) fn project_angular_velocity(
-    mut bodies: Query<(&mut SolverBody, &PreSolveDeltaRotation), RigidBodyActiveFilter>,
-    time: Res<Time>,
-) {
-    let delta_secs = time.delta_seconds_adjusted();
-
-    for (mut body, pre_solve_delta_rot) in &mut bodies {
-        let delta_rot = body
-            .delta_rotation
-            .mul_quat(pre_solve_delta_rot.inverse().0);
-
-        let mut new_ang_vel = 2.0 * delta_rot.xyz() / delta_secs;
-
-        if delta_rot.w < 0.0 {
-            new_ang_vel = -new_ang_vel;
-        }
-
-        body.angular_velocity += new_ang_vel;
-    }
+    (-c - tilde_compliance * lagrange) / (w_sum + tilde_compliance)
 }

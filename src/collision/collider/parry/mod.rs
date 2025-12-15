@@ -13,7 +13,7 @@ pub use primitives2d::{EllipseColliderShape, RegularPolygonColliderShape};
 use super::EnlargedAabb;
 use crate::{collision::broad_phase::BroadPhaseProxyIndex, make_isometry, prelude::*};
 #[cfg(feature = "collider-from-mesh")]
-use bevy::render::mesh::{Indices, VertexAttributeValues};
+use bevy::mesh::{Indices, VertexAttributeValues};
 use bevy::{log, prelude::*};
 use contact_query::UnsupportedShape;
 use itertools::Either;
@@ -1817,7 +1817,7 @@ mod tests {
         // 3. Apply grandparent's 90 Z rotation -> (0, 1, 0)
         // 4. Add grandparent's position (5, 0, 0) -> (5, 1, 0)
         let expected_grandchild_world_pos = Vector::new(5.0, 1.0, 0.0);
-        let actual_grandchild_world_pos = flattened_grandchild.0 .0;
+        let actual_grandchild_world_pos = flattened_grandchild.0.0;
 
         assert_relative_eq!(
             actual_grandchild_world_pos.x,
@@ -1839,7 +1839,7 @@ mod tests {
         // 1. Apply parent's 90 Z rotation -> (-3, 0, 0)
         // 2. Add parent's position (5, 0, 0) -> (2, 0, 0)
         let expected_sibling_world_pos = Vector::new(2.0, 0.0, 0.0);
-        let actual_sibling_world_pos = flattened_sibling.0 .0;
+        let actual_sibling_world_pos = flattened_sibling.0.0;
 
         assert_relative_eq!(
             actual_sibling_world_pos.x,

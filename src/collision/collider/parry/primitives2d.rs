@@ -1,4 +1,4 @@
-use crate::{math, AdjustPrecision, Scalar, Vector, FRAC_PI_2, PI, TAU};
+use crate::{AdjustPrecision, FRAC_PI_2, PI, Scalar, TAU, Vector, math};
 
 use super::{AsF32, Collider, IntoCollider};
 use bevy::prelude::{Deref, DerefMut};
@@ -8,8 +8,8 @@ use parry::{
     mass_properties::MassProperties,
     math::Isometry,
     query::{
-        details::local_ray_intersection_with_support_map_with_params, gjk::VoronoiSimplex,
-        point::local_point_projection_on_support_map, PointQuery, RayCast,
+        PointQuery, RayCast, details::local_ray_intersection_with_support_map_with_params,
+        gjk::VoronoiSimplex, point::local_point_projection_on_support_map,
     },
     shape::{
         FeatureId, PackedFeatureId, PolygonalFeature, PolygonalFeatureMap, Shape, SharedShape,
@@ -190,20 +190,6 @@ impl IntoCollider<Collider> for Segment2d {
     }
 }
 
-impl<const N: usize> IntoCollider<Collider> for Polyline2d<N> {
-    fn collider(&self) -> Collider {
-        let vertices = self.vertices.map(|v| v.adjust_precision());
-        Collider::polyline(vertices.to_vec(), None)
-    }
-}
-
-impl IntoCollider<Collider> for BoxedPolyline2d {
-    fn collider(&self) -> Collider {
-        let vertices = self.vertices.iter().map(|v| v.adjust_precision());
-        Collider::polyline(vertices.collect(), None)
-    }
-}
-
 impl IntoCollider<Collider> for Triangle2d {
     fn collider(&self) -> Collider {
         Collider::triangle(
@@ -223,21 +209,24 @@ impl IntoCollider<Collider> for Rectangle {
     }
 }
 
-impl<const N: usize> IntoCollider<Collider> for Polygon<N> {
+impl IntoCollider<Collider> for Polygon {
     fn collider(&self) -> Collider {
-        let vertices = self.vertices.map(|v| v.adjust_precision());
-        let indices = (0..N as u32 - 1).map(|i| [i, i + 1]).collect();
-        Collider::convex_decomposition(vertices.to_vec(), indices)
-    }
-}
-
-impl IntoCollider<Collider> for BoxedPolygon {
-    fn collider(&self) -> Collider {
-        let vertices = self.vertices.iter().map(|v| v.adjust_precision());
+        let vertices = self.vertices.iter().map(|v| v.adjust_precision()).collect();
         let indices = (0..self.vertices.len() as u32 - 1)
             .map(|i| [i, i + 1])
             .collect();
-        Collider::convex_decomposition(vertices.collect(), indices)
+        Collider::convex_decomposition(vertices, indices)
+    }
+}
+
+impl IntoCollider<Collider> for ConvexPolygon {
+    fn collider(&self) -> Collider {
+        let vertices = self
+            .vertices()
+            .iter()
+            .map(|v| v.adjust_precision())
+            .collect();
+        Collider::convex_polyline(vertices).unwrap()
     }
 }
 

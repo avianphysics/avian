@@ -1,5 +1,7 @@
 use crate::prelude::*;
 use bevy::reflect::Reflect;
+#[cfg(feature = "serialize")]
+use bevy::reflect::{ReflectDeserialize, ReflectSerialize};
 
 #[cfg(feature = "2d")]
 pub type TangentImpulse = Scalar;
@@ -9,6 +11,9 @@ pub type TangentImpulse = Vector2;
 // TODO: One-body constraint version
 /// The tangential friction part of a [`ContactConstraintPoint`](super::ContactConstraintPoint).
 #[derive(Clone, Debug, Default, PartialEq, Reflect)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(Debug, PartialEq)]
 pub struct ContactTangentPart {
     /// The contact impulse magnitude along the contact tangent.
     ///
@@ -27,20 +32,17 @@ pub struct ContactTangentPart {
 
 impl ContactTangentPart {
     /// Generates a new [`ContactTangentPart`].
-    #[allow(clippy::too_many_arguments)]
     pub fn generate(
-        inverse_mass_sum: Scalar,
-        angular_inertia1: impl Into<ComputedAngularInertia>,
-        angular_inertia2: impl Into<ComputedAngularInertia>,
+        effective_inverse_mass_sum: Vector,
+        inverse_angular_inertia1: &SymmetricTensor,
+        inverse_angular_inertia2: &SymmetricTensor,
         r1: Vector,
         r2: Vector,
         tangents: [Vector; DIM - 1],
         warm_start_impulse: Option<TangentImpulse>,
     ) -> Self {
-        let angular_inertia1: ComputedAngularInertia = angular_inertia1.into();
-        let angular_inertia2: ComputedAngularInertia = angular_inertia2.into();
-        let i1 = angular_inertia1.inverse();
-        let i2 = angular_inertia2.inverse();
+        let i1 = inverse_angular_inertia1;
+        let i2 = inverse_angular_inertia2;
 
         let mut part = Self {
             impulse: warm_start_impulse.unwrap_or_default(),
@@ -108,7 +110,8 @@ impl ContactTangentPart {
             let rt1 = cross(r1, tangents[0]);
             let rt2 = cross(r2, tangents[0]);
 
-            let k = inverse_mass_sum + i1 * rt1 * rt1 + i2 * rt2 * rt2;
+            let k_linear = tangents[0].dot(effective_inverse_mass_sum * tangents[0]);
+            let k = k_linear + i1 * rt1 * rt1 + i2 * rt2 * rt2;
 
             part.effective_mass = k.recip_or_zero();
         }
@@ -129,8 +132,10 @@ impl ContactTangentPart {
             let i1_rt21 = i1 * rt21;
             let i2_rt22 = i2 * rt22;
 
-            let k1 = inverse_mass_sum + rt11.dot(i1_rt11) + rt12.dot(i2_rt12);
-            let k2 = inverse_mass_sum + rt21.dot(i1_rt21) + rt22.dot(i2_rt22);
+            let k_linear1 = tangents[0].dot(effective_inverse_mass_sum * tangents[0]);
+            let k_linear2 = tangents[1].dot(effective_inverse_mass_sum * tangents[1]);
+            let k1 = k_linear1 + rt11.dot(i1_rt11) + rt12.dot(i2_rt12);
+            let k2 = k_linear2 + rt21.dot(i1_rt21) + rt22.dot(i2_rt22);
 
             // Note: The invertion is done in `solve_impulse`, unlike in 2D.
             part.effective_inverse_mass[0] = k1;

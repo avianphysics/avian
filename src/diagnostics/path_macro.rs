@@ -27,7 +27,7 @@
 /// ```
 macro_rules! impl_diagnostic_paths {
     ($(#[$meta:meta])* impl $name:ident { $($path:ident: $path_str:expr,)* }) => {
-        #[expect(missing_docs)]
+        #[allow(missing_docs)]
         impl $name {
             $(
                 pub const $path: &'static bevy::diagnostic::DiagnosticPath = &bevy::diagnostic::DiagnosticPath::const_new($path_str);

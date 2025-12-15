@@ -7,7 +7,7 @@ use bevy::prelude::*;
 fn main() {
     let mut app = App::new();
 
-    app.add_plugins((PhysicsPlugins::default(), PhysicsDebugPlugin::default()));
+    app.add_plugins((PhysicsPlugins::default(), PhysicsDebugPlugin));
 
     // Schedules of interest:
     // - PhysicsSchedule

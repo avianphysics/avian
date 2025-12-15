@@ -4,12 +4,143 @@ mod contact_graph;
 mod feature_id;
 mod system_param;
 
-pub use contact_graph::ContactGraph;
+pub use contact_graph::{ContactGraph, ContactGraphInternal};
 pub use feature_id::PackedFeatureId;
+use smallvec::SmallVec;
 pub use system_param::Collisions;
 
-use crate::prelude::*;
+use crate::{
+    data_structures::graph::EdgeIndex,
+    dynamics::solver::{constraint_graph::ContactConstraintHandle, islands::IslandNode},
+    prelude::*,
+};
 use bevy::prelude::*;
+
+/// A stable identifier for a [`ContactEdge`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Reflect)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(Debug, PartialEq)]
+pub struct ContactId(pub u32);
+
+impl ContactId {
+    /// A placeholder identifier for a [`ContactEdge`].
+    ///
+    /// Used as a temporary value before the contact pair is added to the [`ContactGraph`].
+    pub const PLACEHOLDER: Self = Self(u32::MAX);
+}
+
+impl From<ContactId> for EdgeIndex {
+    fn from(id: ContactId) -> Self {
+        Self(id.0)
+    }
+}
+
+impl From<EdgeIndex> for ContactId {
+    fn from(id: EdgeIndex) -> Self {
+        Self(id.0)
+    }
+}
+
+impl core::fmt::Display for ContactId {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "ContactId({})", self.0)
+    }
+}
+
+/// Cold contact data stored in the [`ContactGraph`]. Used as a persistent handle for a [`ContactPair`].
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+pub struct ContactEdge {
+    /// The stable identifier of this contact edge.
+    pub id: ContactId,
+
+    /// The first collider entity in the contact.
+    pub collider1: Entity,
+
+    /// The second collider entity in the contact.
+    pub collider2: Entity,
+
+    /// The entity of the first body involved in the contact.
+    pub body1: Option<Entity>,
+
+    /// The entity of the second body involved in the contact.
+    pub body2: Option<Entity>,
+
+    /// The index of the [`ContactPair`] in the [`ContactGraph`].
+    pub pair_index: usize,
+
+    /// The handles to the constraints associated with this contact edge.
+    #[cfg(feature = "2d")]
+    pub constraint_handles: SmallVec<[ContactConstraintHandle; 2]>,
+
+    /// The handles to the constraints associated with this contact edge.
+    #[cfg(feature = "3d")]
+    pub constraint_handles: SmallVec<[ContactConstraintHandle; 4]>,
+
+    /// The [`IslandNode`] associated with this contact edge.
+    pub island: Option<IslandNode<ContactId>>,
+
+    /// Flags for the contact edge.
+    pub flags: ContactEdgeFlags,
+}
+
+impl ContactEdge {
+    /// Creates a new non-touching [`ContactEdge`] with the given entities.
+    #[inline]
+    pub fn new(collider1: Entity, collider2: Entity) -> Self {
+        Self {
+            // This gets set to a valid ID when the contact pair is added to the `ContactGraph`.
+            id: ContactId::PLACEHOLDER,
+            collider1,
+            collider2,
+            body1: None,
+            body2: None,
+            pair_index: 0,
+            constraint_handles: SmallVec::new(),
+            island: None,
+            flags: ContactEdgeFlags::empty(),
+        }
+    }
+
+    /// Returns `true` if the colliders are touching.
+    #[inline]
+    pub fn is_touching(&self) -> bool {
+        self.flags.contains(ContactEdgeFlags::TOUCHING)
+    }
+
+    /// Returns `true` if the contact pair is between sleeping bodies.
+    #[inline]
+    pub fn is_sleeping(&self) -> bool {
+        self.flags.contains(ContactEdgeFlags::SLEEPING)
+    }
+
+    /// Returns `true` if collision events are enabled for the contact.
+    #[inline]
+    pub fn events_enabled(&self) -> bool {
+        self.flags.contains(ContactEdgeFlags::CONTACT_EVENTS)
+    }
+}
+
+// These are stored separately from `ContactPairFlags` to avoid needing to fetch
+// the `ContactPair` when for example querying for touching contacts.
+/// Flags for a [`ContactEdge`].
+#[repr(transparent)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Hash, Clone, Copy, PartialEq, Eq, Debug, Reflect)]
+#[reflect(opaque, Hash, PartialEq, Debug)]
+pub struct ContactEdgeFlags(u8);
+
+bitflags::bitflags! {
+    impl ContactEdgeFlags: u8 {
+        /// Set if the colliders are touching, including sensors.
+        const TOUCHING = 1 << 0;
+        /// Set if the contact pair is between sleeping bodies.
+        const SLEEPING = 1 << 1;
+        /// Set if the contact pair should emit contact events or sensor events.
+        const CONTACT_EVENTS = 1 << 2;
+    }
+}
 
 /// A contact pair between two colliders.
 ///
@@ -22,6 +153,8 @@ use bevy::prelude::*;
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct ContactPair {
+    /// The stable identifier of the [`ContactEdge`] in the [`ContactGraph`].
+    pub contact_id: ContactId,
     /// The first collider entity in the contact.
     pub collider1: Entity,
     /// The second collider entity in the contact.
@@ -34,6 +167,12 @@ pub struct ContactPair {
     /// Each manifold contains one or more contact points, but each contact
     /// in a given manifold shares the same contact normal.
     pub manifolds: Vec<ContactManifold>,
+    /// The number of manifolds that were added or removed during the current time step.
+    ///
+    /// This is used to manage contact constraint updates for persistent contacts in the [`ConstraintGraph`].
+    ///
+    /// [`ConstraintGraph`]: crate::dynamics::solver::constraint_graph::ConstraintGraph
+    pub(crate) manifold_count_change: i16,
     /// Flag indicating the status and type of the contact pair.
     pub flags: ContactPairFlags,
 }
@@ -43,44 +182,52 @@ pub struct ContactPair {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Hash, Clone, Copy, PartialEq, Eq, Debug, Reflect)]
 #[reflect(opaque, Hash, PartialEq, Debug)]
-pub struct ContactPairFlags(u8);
+pub struct ContactPairFlags(u16);
 
 bitflags::bitflags! {
-    impl ContactPairFlags: u8 {
+    impl ContactPairFlags: u16 {
         /// Set if the colliders are touching, including sensors.
-        const TOUCHING = 0b0000_0001;
+        const TOUCHING = 1 << 0;
         /// Set if the AABBs of the colliders are no longer overlapping.
-        const DISJOINT_AABB = 0b0000_0010;
+        const DISJOINT_AABB = 1 << 1;
         /// Set if the colliders are touching and were not touching previously.
-        const STARTED_TOUCHING = 0b0000_0100;
+        const STARTED_TOUCHING = 1 << 2;
         /// Set if the colliders are not touching and were touching previously.
-        const STOPPED_TOUCHING = 0b0000_1000;
-        /// Set if at least one of the colliders is a sensor.
-        const SENSOR = 0b0001_0000;
-        /// Set if the contact pair should emit contact events or sensor events.
-        const CONTACT_EVENTS = 0b0010_0000;
+        const STOPPED_TOUCHING = 1 << 3;
+        /// Set if the contact pair should generate contact constraints.
+        const GENERATE_CONSTRAINTS = 1 << 4;
+        /// Set if the contact pair just started generating contact constraints,
+        /// for example because a sensor became a normal collider or a collider was attached to a rigid body.
+        const STARTED_GENERATING_CONSTRAINTS = 1 << 5;
+        /// Set if the first rigid body is static.
+        const STATIC1 = 1 << 6;
+        /// Set if the second rigid body is static.
+        const STATIC2 = 1 << 7;
         /// Set if the contact pair should have a custom contact modification hook applied.
-        const MODIFY_CONTACTS = 0b0100_0000;
+        const MODIFY_CONTACTS = 1 << 8;
     }
 }
 
 impl ContactPair {
     /// Creates a new [`ContactPair`] with the given entities.
     #[inline]
-    pub fn new(collider1: Entity, collider2: Entity) -> Self {
+    pub fn new(collider1: Entity, collider2: Entity, contact_id: ContactId) -> Self {
         Self {
+            contact_id,
             collider1,
             collider2,
             body1: None,
             body2: None,
             manifolds: Vec::new(),
+            manifold_count_change: 0,
             flags: ContactPairFlags::empty(),
         }
     }
 
     /// Computes the sum of all impulses applied along contact normals between the contact pair.
     ///
-    /// To get the corresponding force, divide the impulse by `Time::<Substeps>::delta_secs()`.
+    /// To get the corresponding force, divide the impulse by the time step.
+    #[inline]
     pub fn total_normal_impulse(&self) -> Vector {
         self.manifolds.iter().fold(Vector::ZERO, |acc, manifold| {
             acc + manifold.normal * manifold.total_normal_impulse()
@@ -91,7 +238,8 @@ impl ContactPair {
     ///
     /// This is the sum of impulse magnitudes, *not* the magnitude of the [`total_normal_impulse`](Self::total_normal_impulse).
     ///
-    /// To get the corresponding force, divide the impulse by `Time::<Substeps>::delta_secs()`.
+    /// To get the corresponding force, divide the impulse by the time step.
+    #[inline]
     pub fn total_normal_impulse_magnitude(&self) -> Scalar {
         self.manifolds
             .iter()
@@ -99,65 +247,65 @@ impl ContactPair {
     }
 
     // TODO: We could also return a reference to the whole manifold. Would that be useful?
-    /// Finds the largest impulse between the contact pair, and the associated world-space contact normal,
-    /// pointing from the first shape to the second.
+    /// Finds the largest normal impulse between the contact pair, pointing along the world-space contact normal
+    /// from the first shape to the second.
     ///
-    /// To get the corresponding force, divide the impulse by `Time::<Substeps>::delta_secs()`.
-    pub fn max_normal_impulse(&self) -> (Scalar, Vector) {
-        let mut magnitude: Scalar = 0.0;
+    /// To get the corresponding force, divide the impulse by the time step.
+    #[inline]
+    pub fn max_normal_impulse(&self) -> Vector {
+        let mut magnitude: Scalar = Scalar::MIN;
         let mut normal = Vector::ZERO;
 
         for manifold in &self.manifolds {
             let impulse = manifold.max_normal_impulse();
-            if impulse.abs() > magnitude.abs() {
+            if impulse > magnitude {
                 magnitude = impulse;
                 normal = manifold.normal;
             }
         }
-
-        (magnitude, normal)
+        normal * magnitude
     }
 
-    /// The force corresponding to the total normal impulse applied over `delta_time`.
+    /// Finds the magnitude of the largest normal impulse between the contact pair.
     ///
-    /// Because contacts are solved over several substeps, `delta_time` should
-    /// typically use `Time<Substeps>::delta_secs()`.
-    #[deprecated(
-        note = "Use `total_normal_impulse` instead, and divide it by `Time<Substeps>::delta_secs()`",
-        since = "0.3.0"
-    )]
-    pub fn total_normal_force(&self, delta_time: Scalar) -> Scalar {
-        self.total_normal_impulse_magnitude() / delta_time
-    }
-
-    /// Returns `true` if at least one of the colliders is a [`Sensor`].
-    pub fn is_sensor(&self) -> bool {
-        self.flags.contains(ContactPairFlags::SENSOR)
+    /// To get the corresponding force, divide the impulse by the time step.
+    #[inline]
+    pub fn max_normal_impulse_magnitude(&self) -> Scalar {
+        self.manifolds
+            .iter()
+            .fold(0.0, |acc, manifold| acc.max(manifold.max_normal_impulse()))
     }
 
     /// Returns `true` if the colliders are touching, including sensors.
+    #[inline]
     pub fn is_touching(&self) -> bool {
         self.flags.contains(ContactPairFlags::TOUCHING)
     }
 
     /// Returns `true` if the AABBs of the colliders are no longer overlapping.
+    #[inline]
     pub fn aabbs_disjoint(&self) -> bool {
         self.flags.contains(ContactPairFlags::DISJOINT_AABB)
     }
 
     /// Returns `true` if a collision started during the current frame.
+    #[inline]
     pub fn collision_started(&self) -> bool {
         self.flags.contains(ContactPairFlags::STARTED_TOUCHING)
     }
 
     /// Returns `true` if a collision ended during the current frame.
+    #[inline]
     pub fn collision_ended(&self) -> bool {
         self.flags.contains(ContactPairFlags::STOPPED_TOUCHING)
     }
 
-    /// Returns `true` if collision events are enabled for the contact pair.
-    pub fn events_enabled(&self) -> bool {
-        self.flags.contains(ContactPairFlags::CONTACT_EVENTS)
+    /// Returns `true` if the contact pair should generate contact constraints.
+    ///
+    /// This is typically `true` unless the contact pair involves a [`Sensor`] or a disabled rigid body.
+    #[inline]
+    pub fn generates_constraints(&self) -> bool {
+        self.flags.contains(ContactPairFlags::GENERATE_CONSTRAINTS)
     }
 
     /// Returns the contact with the largest penetration depth.
@@ -166,6 +314,7 @@ impl ContactPair {
     /// the penetration depth will be negative.
     ///
     /// If there are no contacts, `None` is returned.
+    #[inline]
     pub fn find_deepest_contact(&self) -> Option<&ContactPoint> {
         self.manifolds
             .iter()
@@ -200,6 +349,7 @@ pub struct ContactManifold {
     ///
     /// Each point in a manifold shares the same `normal`.
     #[cfg(feature = "3d")]
+    // TODO: Store a maximum of 4 points in 3D in an `ArrayVec`.
     pub points: Vec<ContactPoint>,
     /// The unit contact normal in world space, pointing from the first shape to the second.
     ///
@@ -225,8 +375,6 @@ pub struct ContactManifold {
     /// such as conveyor belts.
     #[cfg(feature = "3d")]
     pub tangent_velocity: Vector,
-    /// The index of the manifold in the collision.
-    pub index: usize,
 }
 
 impl ContactManifold {
@@ -234,11 +382,8 @@ impl ContactManifold {
     /// expressed in local space.
     ///
     /// `index` represents the index of the manifold in the collision.
-    pub fn new(
-        points: impl IntoIterator<Item = ContactPoint>,
-        normal: Vector,
-        index: usize,
-    ) -> Self {
+    #[inline]
+    pub fn new(points: impl IntoIterator<Item = ContactPoint>, normal: Vector) -> Self {
         Self {
             #[cfg(feature = "2d")]
             points: arrayvec::ArrayVec::from_iter(points),
@@ -251,19 +396,20 @@ impl ContactManifold {
             tangent_speed: 0.0,
             #[cfg(feature = "3d")]
             tangent_velocity: Vector::ZERO,
-            index,
         }
     }
 
     /// The sum of the impulses applied at the contact points in the manifold along the contact normal.
-    fn total_normal_impulse(&self) -> Scalar {
+    #[inline]
+    pub fn total_normal_impulse(&self) -> Scalar {
         self.points
             .iter()
             .fold(0.0, |acc, contact| acc + contact.normal_impulse)
     }
 
     /// The magnitude of the largest impulse applied at a contact point in the manifold along the contact normal.
-    fn max_normal_impulse(&self) -> Scalar {
+    #[inline]
+    pub fn max_normal_impulse(&self) -> Scalar {
         self.points
             .iter()
             .map(|contact| contact.normal_impulse)
@@ -276,6 +422,7 @@ impl ContactManifold {
     /// Contacts are first matched based on their [feature IDs](PackedFeatureId), and if they are unknown,
     /// matching is done based on contact positions using the given `distance_threshold`
     /// for determining if points are too far away from each other to be considered matching.
+    #[inline]
     pub fn match_contacts(
         &mut self,
         previous_contacts: &[ContactPoint],
@@ -294,8 +441,9 @@ impl ContactManifold {
                     (contact.feature_id2 == previous_contact.feature_id1
                     && contact.feature_id1 == previous_contact.feature_id2)
                 {
-                    contact.normal_impulse = previous_contact.normal_impulse;
-                    contact.tangent_impulse = previous_contact.tangent_impulse;
+                    contact.warm_start_normal_impulse = previous_contact.warm_start_normal_impulse;
+                    contact.warm_start_tangent_impulse =
+                        previous_contact.warm_start_tangent_impulse;
                     break;
                 }
 
@@ -305,28 +453,115 @@ impl ContactManifold {
                 // If the feature IDs are unknown and the contact positions match closely enough,
                 // copy the contact impulses over for warm starting.
                 if unknown_features
-                    && (contact
-                        .local_point1
-                        .distance_squared(previous_contact.local_point1)
+                    && (contact.anchor1.distance_squared(previous_contact.anchor1)
                         < distance_threshold_squared
-                        && contact
-                            .local_point2
-                            .distance_squared(previous_contact.local_point2)
+                        && contact.anchor2.distance_squared(previous_contact.anchor2)
                             < distance_threshold_squared)
-                    || (contact
-                        .local_point1
-                        .distance_squared(previous_contact.local_point2)
+                    || (contact.anchor1.distance_squared(previous_contact.anchor2)
                         < distance_threshold_squared
-                        && contact
-                            .local_point2
-                            .distance_squared(previous_contact.local_point1)
+                        && contact.anchor2.distance_squared(previous_contact.anchor1)
                             < distance_threshold_squared)
                 {
-                    contact.normal_impulse = previous_contact.normal_impulse;
-                    contact.tangent_impulse = previous_contact.tangent_impulse;
+                    contact.warm_start_normal_impulse = previous_contact.warm_start_normal_impulse;
+                    contact.warm_start_tangent_impulse =
+                        previous_contact.warm_start_tangent_impulse;
                     break;
                 }
             }
+        }
+    }
+
+    /// Prunes the contact points in the manifold to a maximum of 4 points.
+    /// This is done to improve performance and stability.
+    #[inline]
+    #[cfg(feature = "3d")]
+    pub fn prune_points(&mut self) {
+        // Based on `PruneContactPoints` in Jolt by Jorrit Rouwe.
+        // https://github.com/jrouwe/JoltPhysics/blob/f3dbdd2dadac4a5510391f103f264c0427d55c50/Jolt/Physics/Collision/ManifoldBetweenTwoFaces.cpp#L16
+
+        debug_assert!(
+            self.points.len() > 4,
+            "`ContactManifold::prune_points` called on a manifold with 4 or fewer points"
+        );
+
+        // We use a heuristic of `distance_to_com * penetration` to find the points we should keep.
+        // Neither of these should become zero, so we clamp the minimum distance.
+        const MIN_DISTANCE_SQUARED: Scalar = 1e-6;
+
+        // Project the contact points onto the contact normal and compute the squared penetration depths.
+        let (projected, penetrations_squared): (Vec<Vector>, Vec<Scalar>) = self
+            .points
+            .iter()
+            .map(|point| {
+                (
+                    point.anchor1.reject_from_normalized(self.normal),
+                    (point.penetration * point.penetration).max(MIN_DISTANCE_SQUARED),
+                )
+            })
+            .unzip();
+
+        // Find the point that is farthest from the center of mass, as its torque has the largest influence,
+        // while also taking into account the penetration depth heuristic.
+        let mut point1_index = 0;
+        let mut value = Scalar::MIN;
+        for (i, point) in projected.iter().enumerate() {
+            let v = point.length_squared().max(MIN_DISTANCE_SQUARED) * penetrations_squared[i];
+            if v > value {
+                value = v;
+                point1_index = i;
+            }
+        }
+        let point1 = projected[point1_index];
+
+        // Find the point farthest from the first point, forming a line segment.
+        // Also consider the penetration depth heuristic.
+        let mut point2_index = usize::MAX;
+        let mut max_distance = Scalar::MIN;
+        for (i, point) in projected.iter().enumerate() {
+            if i == point1_index {
+                continue;
+            }
+            let v =
+                point.distance_squared(point1).max(MIN_DISTANCE_SQUARED) * penetrations_squared[i];
+            if v > max_distance {
+                max_distance = v;
+                point2_index = i;
+            }
+        }
+        debug_assert!(point2_index != usize::MAX, "No second point found");
+        let point2 = projected[point2_index];
+
+        // Find the farthest points on both sides of the line segment in order to maximize the area.
+        let mut point3_index = usize::MAX;
+        let mut point4_index = usize::MAX;
+        let mut min_value = 0.0;
+        let mut max_value = 0.0;
+        let perp = (point2 - point1).cross(self.normal);
+        for (i, point) in projected.iter().enumerate() {
+            if i == point1_index || i == point2_index {
+                continue;
+            }
+            let v = perp.dot(point - point1);
+            if v < min_value {
+                min_value = v;
+                point3_index = i;
+            } else if v > max_value {
+                max_value = v;
+                point4_index = i;
+            }
+        }
+
+        // Construct the manifold, ensuring the order is correct to form a convex polygon.
+        // TODO: The points in the manifold should be in an `ArrayVec`, and the input points should be separate.
+        let points = core::mem::take(&mut self.points);
+        self.points.push(points[point1_index]);
+        if point3_index != usize::MAX {
+            self.points.push(points[point3_index]);
+        }
+        self.points.push(points[point2_index]);
+        if point4_index != usize::MAX {
+            debug_assert_ne!(point3_index, point4_index);
+            self.points.push(points[point4_index]);
         }
     }
 
@@ -336,6 +571,7 @@ impl ContactManifold {
     /// the penetration depth will be negative.
     ///
     /// If there are no contacts, `None` is returned.
+    #[inline]
     pub fn find_deepest_contact(&self) -> Option<&ContactPoint> {
         self.points.iter().max_by(|a, b| {
             a.penetration
@@ -343,38 +579,78 @@ impl ContactManifold {
                 .unwrap_or(core::cmp::Ordering::Equal)
         })
     }
+
+    /// Retains only the elements specified by the predicate.
+    #[inline]
+    pub(crate) fn retain_points_mut<F>(&mut self, f: F)
+    where
+        F: FnMut(&mut ContactPoint) -> bool,
+    {
+        #[cfg(feature = "2d")]
+        {
+            self.points.retain(f);
+        }
+        #[cfg(feature = "3d")]
+        {
+            self.points.retain_mut(f);
+        }
+    }
 }
 
 /// Data associated with a contact point in a [`ContactManifold`].
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct ContactPoint {
-    /// The contact point on the first shape in local space.
-    pub local_point1: Vector,
-    /// The contact point on the second shape in local space.
-    pub local_point2: Vector,
+    /// The world-space contact point on the first shape relative to the center of mass.
+    pub anchor1: Vector,
+    /// The world-space contact point on the second shape relative to the center of mass.
+    pub anchor2: Vector,
+    /// The contact point in world space.
+    ///
+    /// This is the midpoint between the closest points on the surfaces of the two shapes.
+    ///
+    /// Note that because the contact point is expressed in world space,
+    /// it is subject to precision loss at large coordinates.
+    pub point: Vector,
     /// The penetration depth.
     ///
     /// Can be negative if the objects are separated and [speculative collision] is enabled.
     ///
     /// [speculative collision]: crate::dynamics::ccd#speculative-collision
     pub penetration: Scalar,
-    /// The impulse applied to the first body along the contact normal.
+    /// The total normal impulse applied to the first body at this contact point.
+    /// The unit is typically N⋅s or kg⋅m/s.
     ///
-    /// To get the corresponding force, divide the impulse by `Time<Substeps>::delta_secs()`.
+    /// This can be used to determine how "strong" a contact is. To compute the corresponding
+    /// contact force, divide the impulse by the time step.
     pub normal_impulse: Scalar,
-    /// The impulse applied to the first body along the contact tangent. This corresponds to the impulse caused by friction.
+    /// The relative velocity of the bodies at the contact point along the contact normal.
+    /// If negative, the bodies are approaching. The unit is typically m/s.
     ///
-    /// To get the corresponding force, divide the impulse by `Time<Substeps>::delta_secs()`.
+    /// This is computed before the solver, and can be used as an impact velocity to determine
+    /// how "strong" the contact is in a mass-independent way.
+    ///
+    /// Internally, the `normal_speed` is used for restitution.
+    pub normal_speed: Scalar,
+    /// The normal impulse used to warm start the contact solver.
+    ///
+    /// This corresponds to the clamped accumulated impulse from the last substep
+    /// of the previous time step.
+    pub warm_start_normal_impulse: Scalar,
+    /// The frictional impulse used to warm start the contact solver.
+    ///
+    /// This corresponds to the clamped accumulated impulse from the last substep
+    /// of the previous time step.
     #[cfg(feature = "2d")]
-    #[doc(alias = "friction_impulse")]
-    pub tangent_impulse: Scalar,
-    /// The impulse applied to the first body along the contact tangent. This corresponds to the impulse caused by friction.
+    #[doc(alias = "warm_start_friction_impulse")]
+    pub warm_start_tangent_impulse: Scalar,
+    /// The frictional impulse used to warm start the contact solver.
     ///
-    /// To get the corresponding force, divide the impulse by `Time<Substeps>::delta_secs()`.
+    /// This corresponds to the clamped accumulated impulse from the last substep
+    /// of the previous time step.
     #[cfg(feature = "3d")]
-    #[doc(alias = "friction_impulse")]
-    pub tangent_impulse: Vector2,
+    #[doc(alias = "warm_start_friction_impulse")]
+    pub warm_start_tangent_impulse: Vector2,
     /// The contact feature ID on the first shape. This indicates the ID of
     /// the vertex, edge, or face of the contact, if one can be determined.
     pub feature_id1: PackedFeatureId,
@@ -384,88 +660,62 @@ pub struct ContactPoint {
 }
 
 impl ContactPoint {
-    /// Creates a new [`ContactPoint`] with the given points expressed in the local space
-    /// of the first and second shape respectively.
+    /// Creates a new [`ContactPoint`] with the given world-space contact points
+    /// relative to the centers of mass of the two shapes, the world-space contact point,
+    /// and the penetration depth.
     ///
     /// [Feature IDs](PackedFeatureId) can be specified for the contact points using [`with_feature_ids`](Self::with_feature_ids).
     #[allow(clippy::too_many_arguments)]
-    pub fn new(local_point1: Vector, local_point2: Vector, penetration: Scalar) -> Self {
+    pub fn new(anchor1: Vector, anchor2: Vector, world_point: Vector, penetration: Scalar) -> Self {
         Self {
-            local_point1,
-            local_point2,
+            anchor1,
+            anchor2,
+            point: world_point,
             penetration,
             normal_impulse: 0.0,
-            tangent_impulse: default(),
+            normal_speed: 0.0,
+            warm_start_normal_impulse: 0.0,
+            #[cfg(feature = "2d")]
+            warm_start_tangent_impulse: 0.0,
+            #[cfg(feature = "3d")]
+            warm_start_tangent_impulse: Vector2::ZERO,
             feature_id1: PackedFeatureId::UNKNOWN,
             feature_id2: PackedFeatureId::UNKNOWN,
         }
     }
 
     /// Sets the [feature IDs](PackedFeatureId) of the contact points.
+    #[inline]
     pub fn with_feature_ids(mut self, id1: PackedFeatureId, id2: PackedFeatureId) -> Self {
         self.feature_id1 = id1;
         self.feature_id2 = id2;
         self
     }
 
-    /// The force corresponding to the normal impulse applied over `delta_time`.
-    ///
-    /// Because contacts are solved over several substeps, `delta_time` should
-    /// typically use `Time<Substeps>::delta_secs()`.
-    pub fn normal_force(&self, delta_time: Scalar) -> Scalar {
-        self.normal_impulse / delta_time
-    }
-
-    /// The force corresponding to the tangent impulse applied over `delta_time`.
-    ///
-    /// Because contacts are solved over several substeps, `delta_time` should
-    /// typically use `Time<Substeps>::delta_secs()`.
-    #[cfg(feature = "2d")]
-    #[doc(alias = "friction_force")]
-    pub fn tangent_force(&self, delta_time: Scalar) -> Scalar {
-        self.tangent_impulse / delta_time
-    }
-
-    /// The force corresponding to the tangent impulse applied over `delta_time`.
-    ///
-    /// Because contacts are solved over several substeps, `delta_time` should
-    /// typically use `Time<Substeps>::delta_secs()`.
-    #[cfg(feature = "3d")]
-    #[doc(alias = "friction_force")]
-    pub fn tangent_force(&self, delta_time: Scalar) -> Vector2 {
-        self.tangent_impulse / delta_time
-    }
-
-    /// Returns the global contact point on the first shape,
-    /// transforming the local point by the given position and rotation.
-    pub fn global_point1(&self, position: &Position, rotation: &Rotation) -> Vector {
-        position.0 + rotation * self.local_point1
-    }
-
-    /// Returns the global contact point on the second shape,
-    /// transforming the local point by the given position and rotation.
-    pub fn global_point2(&self, position: &Position, rotation: &Rotation) -> Vector {
-        position.0 + rotation * self.local_point2
-    }
-
     /// Flips the contact data, swapping the points and feature IDs,
     /// and negating the impulses.
+    #[inline]
     pub fn flip(&mut self) {
-        core::mem::swap(&mut self.local_point1, &mut self.local_point2);
+        core::mem::swap(&mut self.anchor1, &mut self.anchor2);
         core::mem::swap(&mut self.feature_id1, &mut self.feature_id2);
         self.normal_impulse = -self.normal_impulse;
-        self.tangent_impulse = -self.tangent_impulse;
+        self.warm_start_normal_impulse = -self.warm_start_normal_impulse;
+        self.warm_start_tangent_impulse = -self.warm_start_tangent_impulse;
     }
 
     /// Returns a flipped copy of the contact data, swapping the points and feature IDs,
     /// and negating the impulses.
+    #[inline]
     pub fn flipped(&self) -> Self {
         Self {
-            local_point1: self.local_point2,
-            local_point2: self.local_point1,
+            anchor1: self.anchor2,
+            anchor2: self.anchor1,
+            point: self.point,
             penetration: self.penetration,
             normal_impulse: -self.normal_impulse,
-            tangent_impulse: -self.tangent_impulse,
+            normal_speed: self.normal_speed,
+            warm_start_normal_impulse: -self.warm_start_normal_impulse,
+            warm_start_tangent_impulse: -self.warm_start_tangent_impulse,
             feature_id1: self.feature_id2,
             feature_id2: self.feature_id1,
         }
@@ -493,6 +743,7 @@ pub struct SingleContact {
 
 impl SingleContact {
     /// Creates a new [`SingleContact`]. The contact points and normals should be given in local space.
+    #[inline]
     pub fn new(
         local_point1: Vector,
         local_point2: Vector,
@@ -511,33 +762,39 @@ impl SingleContact {
 
     /// Returns the global contact point on the first shape,
     /// transforming the local point by the given position and rotation.
+    #[inline]
     pub fn global_point1(&self, position: &Position, rotation: &Rotation) -> Vector {
         position.0 + rotation * self.local_point1
     }
 
     /// Returns the global contact point on the second shape,
     /// transforming the local point by the given position and rotation.
+    #[inline]
     pub fn global_point2(&self, position: &Position, rotation: &Rotation) -> Vector {
         position.0 + rotation * self.local_point2
     }
 
     /// Returns the world-space contact normal pointing from the first shape to the second.
+    #[inline]
     pub fn global_normal1(&self, rotation: &Rotation) -> Vector {
         rotation * self.local_normal1
     }
 
     /// Returns the world-space contact normal pointing from the second shape to the first.
+    #[inline]
     pub fn global_normal2(&self, rotation: &Rotation) -> Vector {
         rotation * self.local_normal2
     }
 
     /// Flips the contact data, swapping the points and normals.
+    #[inline]
     pub fn flip(&mut self) {
         core::mem::swap(&mut self.local_point1, &mut self.local_point2);
         core::mem::swap(&mut self.local_normal1, &mut self.local_normal2);
     }
 
     /// Returns a flipped copy of the contact data, swapping the points and normals.
+    #[inline]
     pub fn flipped(&self) -> Self {
         Self {
             local_point1: self.local_point2,

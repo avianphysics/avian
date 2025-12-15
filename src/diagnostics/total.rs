@@ -7,7 +7,7 @@ use bevy::{
 
 use crate::diagnostics::impl_diagnostic_paths;
 
-use super::{AppDiagnosticsExt, PhysicsDiagnostics, PhysicsSchedule, PhysicsStepSet};
+use super::{AppDiagnosticsExt, PhysicsDiagnostics, PhysicsSchedule, PhysicsStepSystems};
 
 /// A plugin that adds diagnostics for total physics timers and counters.
 pub struct PhysicsTotalDiagnosticsPlugin;
@@ -33,10 +33,10 @@ impl Plugin for PhysicsTotalDiagnosticsPlugin {
             PhysicsSchedule,
             (
                 (update_physics_step_start, increment_physics_step_number)
-                    .in_set(PhysicsStepSet::First),
-                update_step_time.in_set(PhysicsStepSet::Last),
+                    .in_set(PhysicsStepSystems::First),
+                update_step_time.in_set(PhysicsStepSystems::Last),
                 #[cfg(feature = "bevy_diagnostic")]
-                update_miscellaneous_physics_timer.after(PhysicsStepSet::Last),
+                update_miscellaneous_physics_timer.after(PhysicsStepSystems::Last),
             ),
         );
     }

@@ -4,19 +4,20 @@
 
 use core::marker::PhantomData;
 
-#[cfg(feature = "collider-from-mesh")]
+#[cfg(all(feature = "collider-from-mesh", feature = "default-collider"))]
 use crate::collision::collider::cache::ColliderCache;
 use crate::{
-    collision::broad_phase::BroadPhaseSet, position::init_physics_transform, prelude::*,
-    prepare::PrepareSet, sync::SyncConfig,
+    collision::broad_phase::BroadPhaseSystems,
+    physics_transform::{PhysicsTransformConfig, PhysicsTransformSystems, init_physics_transform},
+    prelude::*,
 };
 #[cfg(all(feature = "bevy_scene", feature = "default-collider"))]
 use bevy::scene::SceneInstance;
 use bevy::{
-    ecs::{intern::Interned, schedule::ScheduleLabel, system::SystemId},
+    ecs::{intern::Interned, schedule::ScheduleLabel, system::StaticSystemParam},
     prelude::*,
 };
-use mass_properties::{components::RecomputeMassProperties, MassPropertySystems};
+use mass_properties::{MassPropertySystems, components::RecomputeMassProperties};
 
 /// A plugin for handling generic collider backend logic.
 ///
@@ -100,59 +101,60 @@ impl<C: ScalableCollider> Plugin for ColliderBackendPlugin<C> {
         let _ = app.try_register_required_components::<C, ColliderMassProperties>();
 
         // Make sure the necessary resources are initialized.
+        app.init_resource::<PhysicsTransformConfig>();
         app.init_resource::<NarrowPhaseConfig>();
         app.init_resource::<PhysicsLengthUnit>();
-
-        // Register the one-shot system that is run for all removed colliders.
-        if !app.world().contains_resource::<ColliderRemovalSystem>() {
-            let collider_removed_id = app.world_mut().register_system(collider_removed);
-            app.insert_resource(ColliderRemovalSystem(collider_removed_id));
-        }
 
         let hooks = app.world_mut().register_component_hooks::<C>();
 
         // Initialize missing components for colliders.
-        hooks.on_add(|mut world, ctx| {
-            // Initialize the global physics transform for the collider.
-            init_physics_transform(&mut world, &ctx);
+        hooks
+            .on_add(|mut world, ctx| {
+                // Initialize the global physics transform for the collider.
+                // Avoid doing this twice for rigid bodies added at the same time.
+                // TODO: The special case for rigid bodies is a bit of a hack here.
+                if !world.entity(ctx.entity).contains::<RigidBody>() {
+                    init_physics_transform(&mut world, &ctx);
+                }
+            })
+            .on_insert(|mut world, ctx| {
+                let scale = world
+                    .entity(ctx.entity)
+                    .get::<GlobalTransform>()
+                    .map(|gt| gt.scale())
+                    .unwrap_or_default();
+                #[cfg(feature = "2d")]
+                let scale = scale.xy();
 
-            let scale = world
-                .entity(ctx.entity)
-                .get::<GlobalTransform>()
-                .map(|gt| gt.scale())
-                .unwrap_or_default();
-            #[cfg(feature = "2d")]
-            let scale = scale.xy();
+                let mut entity_mut = world.entity_mut(ctx.entity);
 
-            let mut entity_mut = world.entity_mut(ctx.entity);
+                // Make sure the collider is initialized with the correct scale.
+                // This overwrites the scale set by the constructor, but that one is
+                // meant to be only changed after initialization.
+                entity_mut
+                    .get_mut::<C>()
+                    .unwrap()
+                    .set_scale(scale.adjust_precision(), 10);
 
-            // Make sure the collider is initialized with the correct scale.
-            // This overwrites the scale set by the constructor, but that one is
-            // meant to be only changed after initialization.
-            entity_mut
-                .get_mut::<C>()
-                .unwrap()
-                .set_scale(scale.adjust_precision(), 10);
+                let collider = entity_mut.get::<C>().unwrap();
 
-            let collider = entity_mut.get::<C>().unwrap();
+                let density = entity_mut
+                    .get::<ColliderDensity>()
+                    .copied()
+                    .unwrap_or_default();
 
-            let density = entity_mut
-                .get::<ColliderDensity>()
-                .copied()
-                .unwrap_or_default();
+                let mass_properties = if entity_mut.get::<Sensor>().is_some() {
+                    MassProperties::ZERO
+                } else {
+                    collider.mass_properties(density.0)
+                };
 
-            let mass_properties = if entity_mut.get::<Sensor>().is_some() {
-                MassProperties::ZERO
-            } else {
-                collider.mass_properties(density.0)
-            };
-
-            if let Some(mut collider_mass_properties) =
-                entity_mut.get_mut::<ColliderMassProperties>()
-            {
-                *collider_mass_properties = ColliderMassProperties::from(mass_properties);
-            }
-        });
+                if let Some(mut collider_mass_properties) =
+                    entity_mut.get_mut::<ColliderMassProperties>()
+                {
+                    *collider_mass_properties = ColliderMassProperties::from(mass_properties);
+                }
+            });
 
         // Register a component hook that removes `ColliderMarker` components
         // and updates rigid bodies when their collider is removed.
@@ -170,25 +172,24 @@ impl<C: ScalableCollider> Plugin for ColliderBackendPlugin<C> {
                 let entity_ref = world.entity_mut(ctx.entity);
 
                 // Get the rigid body entity that the collider is attached to.
-                let Some(collider_of) = entity_ref.get::<ColliderOf>().copied() else {
+                let Some(ColliderOf { body }) = entity_ref.get::<ColliderOf>().copied() else {
                     return;
                 };
 
-                // Get the ID of the one-shot system run for collider removals.
-                let ColliderRemovalSystem(system_id) =
-                    *world.resource::<ColliderRemovalSystem>().to_owned();
-
-                // Handle collider removal.
-                world.commands().run_system_with(system_id, collider_of);
+                // Queue the rigid body for a mass property update.
+                world
+                    .commands()
+                    .entity(body)
+                    .try_insert(RecomputeMassProperties);
             });
 
         // When the `Sensor` component is added to a collider, queue its rigid body for a mass property update.
         app.add_observer(
-            |trigger: Trigger<OnAdd, Sensor>,
+            |trigger: On<Add, Sensor>,
              mut commands: Commands,
              query: Query<(&ColliderMassProperties, &ColliderOf)>| {
                 if let Ok((collider_mass_properties, &ColliderOf { body })) =
-                    query.get(trigger.target())
+                    query.get(trigger.entity)
                 {
                     // If the collider mass properties are zero, there is nothing to subtract.
                     if *collider_mass_properties == ColliderMassProperties::ZERO {
@@ -205,14 +206,14 @@ impl<C: ScalableCollider> Plugin for ColliderBackendPlugin<C> {
 
         // When the `Sensor` component is removed from a collider, update its mass properties.
         app.add_observer(
-            |trigger: Trigger<OnRemove, Sensor>,
+            |trigger: On<Remove, Sensor>,
              mut collider_query: Query<(
                 Ref<C>,
                 &ColliderDensity,
                 &mut ColliderMassProperties,
             )>| {
                 if let Ok((collider, density, mut collider_mass_properties)) =
-                    collider_query.get_mut(trigger.target())
+                    collider_query.get_mut(trigger.entity)
                 {
                     // Update collider mass props.
                     *collider_mass_properties =
@@ -224,7 +225,9 @@ impl<C: ScalableCollider> Plugin for ColliderBackendPlugin<C> {
         app.add_systems(
             self.schedule,
             (
-                update_collider_scale::<C>.in_set(PrepareSet::Finalize),
+                update_collider_scale::<C>
+                    .in_set(PhysicsSystems::Prepare)
+                    .after(PhysicsTransformSystems::TransformToPosition),
                 update_collider_mass_properties::<C>
                     .in_set(MassPropertySystems::UpdateColliderMassProperties),
             )
@@ -302,6 +305,7 @@ fn init_collider_constructors(
 
         if let Some(collider) = collider {
             commands.entity(entity).insert(collider);
+            commands.trigger(ColliderConstructorReady { entity })
         } else {
             error!(
                 "Tried to add a collider to entity {name} via {constructor:#?}, \
@@ -367,9 +371,11 @@ fn init_collider_constructor_hierarchies(
                     .cloned()
                     .unwrap_or_else(default_collider)
             } else if existing_collider.is_some() {
-                warn!("Tried to add a collider to entity {pretty_name} via {collider_constructor_hierarchy:#?}, \
+                warn!(
+                    "Tried to add a collider to entity {pretty_name} via {collider_constructor_hierarchy:#?}, \
                         but that entity already holds a collider. Skipping. \
-                        If this was intentional, add the name of the collider to overwrite to `ColliderConstructorHierarchy.config`.");
+                        If this was intentional, add the name of the collider to overwrite to `ColliderConstructorHierarchy.config`."
+                );
                 continue;
             } else {
                 default_collider()
@@ -424,15 +430,19 @@ fn init_collider_constructor_hierarchies(
                 ));
             } else {
                 error!(
-                        "Tried to add a collider to entity {pretty_name} via {collider_constructor_hierarchy:#?}, \
+                    "Tried to add a collider to entity {pretty_name} via {collider_constructor_hierarchy:#?}, \
                         but the collider could not be generated. Skipping.",
-                    );
+                );
             }
         }
 
         commands
             .entity(scene_entity)
             .remove::<ColliderConstructorHierarchy>();
+
+        commands.trigger(ColliderConstructorHierarchyReady {
+            entity: scene_entity,
+        })
     }
 }
 
@@ -447,13 +457,16 @@ fn pretty_name(name: Option<&Name>, entity: Entity) -> String {
 pub fn update_collider_scale<C: ScalableCollider>(
     mut colliders: ParamSet<(
         // Root bodies
-        Query<(&Transform, &mut C), (Without<ChildOf>, Changed<Transform>)>,
+        Query<(&Transform, &mut C), (Without<ChildOf>, Or<(Changed<Transform>, Changed<C>)>)>,
         // Child colliders
-        Query<(&ColliderTransform, &mut C), (With<ChildOf>, Changed<ColliderTransform>)>,
+        Query<
+            (&ColliderTransform, &mut C),
+            (With<ChildOf>, Or<(Changed<ColliderTransform>, Changed<C>)>),
+        >,
     )>,
-    sync_config: Res<SyncConfig>,
+    config: Res<PhysicsTransformConfig>,
 ) {
-    if sync_config.transform_to_collider_scale {
+    if config.transform_to_collider_scale {
         // Update collider scale for root bodies
         for (transform, mut collider) in &mut colliders.p0() {
             #[cfg(feature = "2d")]
@@ -477,32 +490,6 @@ pub fn update_collider_scale<C: ScalableCollider>(
     }
 }
 
-/// A resource that stores the system ID for the system that reacts to collider removals.
-#[derive(Resource)]
-struct ColliderRemovalSystem(SystemId<In<ColliderOf>>);
-
-/// Updates the mass properties of bodies and wakes bodies up when an attached collider is removed.
-///
-/// Takes the removed collider's entity, rigid body entity, mass properties, and transform as input.
-fn collider_removed(
-    In(ColliderOf { body }): In<ColliderOf>,
-    mut commands: Commands,
-    mut sleep_query: Query<&mut TimeSleeping>,
-) {
-    let Ok(mut entity_commands) = commands.get_entity(body) else {
-        return;
-    };
-
-    // Queue the rigid body for mass property recomputation.
-    entity_commands.insert(RecomputeMassProperties);
-
-    if let Ok(mut time_sleeping) = sleep_query.get_mut(body) {
-        // Wake up the rigid body since removing the collider could also remove active contacts.
-        entity_commands.remove::<Sleeping>();
-        time_sleeping.0 = 0.0;
-    }
-}
-
 /// Updates the mass properties of [`Collider`].
 #[allow(clippy::type_complexity)]
 pub(crate) fn update_collider_mass_properties<C: AnyCollider>(
@@ -520,7 +507,7 @@ pub(crate) fn update_collider_mass_properties<C: AnyCollider>(
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::unnecessary_cast)]
+    #![allow(clippy::unnecessary_cast)]
 
     #[cfg(feature = "default-collider")]
     use super::*;
@@ -534,7 +521,6 @@ mod tests {
             .init_schedule(SubstepSchedule);
 
         app.add_plugins((
-            PreparePlugin::new(FixedPostUpdate),
             MassPropertyPlugin::new(FixedPostUpdate),
             ColliderHierarchyPlugin,
             ColliderTransformPlugin::default(),

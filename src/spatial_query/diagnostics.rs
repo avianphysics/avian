@@ -6,7 +6,7 @@ use bevy::{
     reflect::Reflect,
 };
 
-use crate::diagnostics::{impl_diagnostic_paths, PhysicsDiagnostics};
+use crate::diagnostics::{PhysicsDiagnostics, impl_diagnostic_paths};
 
 /// Diagnostics for spatial queries.
 #[derive(Resource, Debug, Default, Reflect)]
