@@ -170,7 +170,7 @@ impl ReadRigidBodyForces for ForcesReadOnlyItem<'_, '_> {}
 impl WriteRigidBodyForces for ForcesItem<'_, '_> {}
 impl WriteRigidBodyForces for NonWakingForcesItem<'_, '_> {}
 
-/// A trait for reading and writing properties of a dynamic [rigid body](RigidBody).
+/// A trait for reading and writing forces of a dynamic [rigid body](RigidBody).
 ///
 /// This is implemented as a shared interface for the [`ForcesItem`] and [`NonWakingForcesItem`]
 /// returned by [`Forces`].
@@ -178,7 +178,7 @@ impl WriteRigidBodyForces for NonWakingForcesItem<'_, '_> {}
 /// See the documentation of [`Forces`] for more information on how to work with forces in Avian.
 pub trait RigidBodyForces: ReadRigidBodyForces + WriteRigidBodyForces {}
 
-/// A trait for reading properties of a dynamic [rigid body](RigidBody).
+/// A trait for reading forces of a dynamic [rigid body](RigidBody).
 ///
 /// This is implemented as a shared interface for the [`ForcesItem`] and [`NonWakingForcesItem`]
 /// returned by [`Forces`].
@@ -755,11 +755,11 @@ impl ReadRigidBodyForcesInternal for ForcesReadOnlyItem<'_, '_> {
     }
     #[inline]
     fn integration_data(&self) -> &VelocityIntegrationData {
-        &self.integration
+        self.integration
     }
     #[inline]
     fn accumulated_local_acceleration(&self) -> &AccumulatedLocalAcceleration {
-        &self.accumulated_local_acceleration
+        self.accumulated_local_acceleration
     }
 }
 
