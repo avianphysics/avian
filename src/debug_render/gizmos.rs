@@ -186,19 +186,22 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
             }
             #[cfg(feature = "2d")]
             TypedShape::Cuboid(s) => {
-                self.cuboid(
-                    Transform::from_scale(Vector::from(s.half_extents).extend(0.0).f32() * 2.0)
-                        .with_translation(position.extend(0.0).f32())
-                        .with_rotation(Quaternion::from(rotation).f32()),
+                self.rect_2d(
+                    Isometry2d::new(
+                        position.f32(),
+                        Rot2::from_sin_cos(rotation.sin as f32, rotation.cos as f32),
+                    ),
+                    2.0 * Vector::from(s.half_extents).f32(),
                     color,
                 );
             }
             #[cfg(feature = "3d")]
             TypedShape::Cuboid(s) => {
-                self.cuboid(
-                    Transform::from_scale(Vector::from(s.half_extents).f32() * 2.0)
-                        .with_translation(position.f32())
-                        .with_rotation(rotation.f32()),
+                use bevy_math::bounding::Aabb3d;
+
+                self.aabb_3d(
+                    Aabb3d::new(Vec3A::ZERO, Vector::from(s.half_extents).f32()),
+                    Transform::from_translation(position.f32()).with_rotation(rotation.f32()),
                     color,
                 );
             }

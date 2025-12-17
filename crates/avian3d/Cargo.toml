@@ -1,6 +1,6 @@
 [package]
 name = "avian3d"
-version = "0.4.1"
+version = "0.5.0-rc.1"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 authors = ["Joona Aalto <jondolf.dev@gmail.com>"]
@@ -84,14 +84,16 @@ bench = false
 
 [dependencies]
 avian_derive = { path = "../avian_derive", version = "0.2" }
-bevy = { version = "0.17", default-features = false, features = [
+bevy = { version = "0.18.0-rc", default-features = false, features = [
     "std",
     "bevy_log",
 ] }
-bevy_math = { version = "0.17", features = ["approx"] }
-glam_matrix_extras = { version = "0.1", features = ["bevy_reflect"] }
-bevy_heavy = { version = "0.3" }
-bevy_transform_interpolation = { version = "0.3" }
+bevy_math = { version = "0.18.0-rc", features = ["approx"] }
+glam_matrix_extras = { git = "https://github.com/Jondolf/glam_matrix_extras", features = [
+    "bevy_reflect",
+] }
+bevy_heavy = { git = "https://github.com/avianphysics/bevy_heavy" }
+bevy_transform_interpolation = { git = "https://github.com/Jondolf/bevy_transform_interpolation" }
 libm = { version = "0.2", optional = true }
 approx = "0.5"
 parry3d = { version = "0.25", optional = true }
@@ -109,17 +111,12 @@ disqualified = { version = "1.0" }
 
 [dev-dependencies]
 examples_common_3d = { path = "../examples_common_3d" }
-bevy = { version = "0.17", default-features = false, features = [
-    "bevy_pbr",
-    "bevy_gltf",
-    "https",
-    "animation",
-    "debug",
-    "reflect_auto_register",
+bevy = { version = "0.18.0-rc", features = ["3d", "ui", "https"] }
+bevy_heavy = { git = "https://github.com/avianphysics/bevy_heavy", features = [
+    "approx",
 ] }
-bevy_heavy = { version = "0.3", features = ["approx"] }
 criterion = { version = "0.5", features = ["html_reports"] }
-bevy_mod_debugdump = { version = "0.14" }
+# bevy_mod_debugdump = { version = "0.14" }
 
 [lints]
 workspace = true
