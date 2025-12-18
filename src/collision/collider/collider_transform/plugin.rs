@@ -64,7 +64,7 @@ impl Plugin for ColliderTransformPlugin {
 }
 
 #[allow(clippy::type_complexity)]
-pub(crate) fn update_child_collider_position(
+pub fn update_child_collider_position(
     mut collider_query: Query<
         (
             &ColliderTransform,
