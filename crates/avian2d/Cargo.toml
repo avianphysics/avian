@@ -208,3 +208,7 @@ required-features = ["2d", "default-collider"]
 [[example]]
 name = "debugdump_2d"
 required-features = ["2d", "debug-plugin"]
+
+[[example]]
+name = "motor_joints_2d"
+required-features = ["2d", "default-collider"]
