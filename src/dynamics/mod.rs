@@ -79,9 +79,9 @@ pub mod prelude {
             CustomPositionIntegration, CustomVelocityIntegration, Gravity, IntegratorPlugin,
         },
         joints::{
-            AngleLimit, DistanceJoint, DistanceLimit, FixedJoint, JointAnchor, JointBasis,
-            JointCollisionDisabled, JointDamping, JointDisabled, JointForces, JointFrame,
-            JointPlugin, PrismaticJoint, RevoluteJoint,
+            AngleLimit, AngularJointMotor, DistanceJoint, DistanceLimit, FixedJoint, JointAnchor,
+            JointBasis, JointCollisionDisabled, JointDamping, JointDisabled, JointForces,
+            JointFrame, JointPlugin, LinearJointMotor, MotorModel, PrismaticJoint, RevoluteJoint,
         },
         rigid_body::{
             forces::{
