@@ -257,7 +257,6 @@ impl RevoluteJoint {
     /// Applies motor forces to drive the joint towards the target velocity and/or position.
     ///
     /// Uses a PD controller approach with optional implicit Euler integration for timestep independence.
-    #[cfg(feature = "2d")]
     pub fn apply_motor(
         &self,
         body1: &mut SolverBody,
@@ -268,13 +267,36 @@ impl RevoluteJoint {
         motor: &AngularJointMotor,
         dt: Scalar,
     ) {
+        #[cfg(feature = "2d")]
         let current_angle = solver_data.rotation_difference
             + body1.delta_rotation.angle_between(body2.delta_rotation);
-        let relative_angular_velocity = body2.angular_velocity - body1.angular_velocity;
+        #[cfg(feature = "3d")]
+        let a1 = body1.delta_rotation * solver_data.a1;
+        #[cfg(feature = "3d")]
+        let current_angle = {
+            let b1 = body1.delta_rotation * solver_data.b1;
+            let b2 = body2.delta_rotation * solver_data.b2;
+            let sin_angle = b1.cross(b2).dot(a1);
+            let cos_angle = b1.dot(b2);
+            sin_angle.atan2(cos_angle)
+        };
 
-        let w1 = inv_angular_inertia1;
-        let w2 = inv_angular_inertia2;
-        let w_sum = w1 + w2;
+        #[cfg(feature = "2d")]
+        let relative_angular_velocity = body2.angular_velocity - body1.angular_velocity;
+        #[cfg(feature = "3d")]
+        let relative_angular_velocity = (body2.angular_velocity - body1.angular_velocity).dot(a1);
+
+        #[cfg(feature = "2d")]
+        let w_sum = inv_angular_inertia1 + inv_angular_inertia2;
+        #[cfg(feature = "3d")]
+        let w_sum =
+            AngularConstraint::compute_generalized_inverse_mass(self, inv_angular_inertia1, a1)
+                + AngularConstraint::compute_generalized_inverse_mass(
+                    self,
+                    inv_angular_inertia2,
+                    a1,
+                );
+
         if w_sum <= Scalar::EPSILON {
             return;
         }
@@ -291,9 +313,17 @@ impl RevoluteJoint {
             return;
         };
 
-        solver_data.total_motor_lagrange += delta_lagrange;
+        #[cfg(feature = "2d")]
+        {
+            solver_data.total_motor_lagrange += delta_lagrange;
+        }
+        #[cfg(feature = "3d")]
+        {
+            solver_data.total_motor_lagrange += delta_lagrange * a1;
+        }
 
         // Positive delta_lagrange increases body2's angular velocity relative to body1.
+        #[cfg(feature = "2d")]
         self.apply_angular_lagrange_update(
             body1,
             body2,
@@ -301,57 +331,7 @@ impl RevoluteJoint {
             inv_angular_inertia2,
             delta_lagrange,
         );
-    }
-
-    /// Applies motor forces to drive the joint towards the target velocity and/or position.
-    ///
-    /// Uses a PD controller approach with optional implicit Euler integration for timestep independence.
-    #[cfg(feature = "3d")]
-    pub fn apply_motor(
-        &self,
-        body1: &mut SolverBody,
-        body2: &mut SolverBody,
-        inv_angular_inertia1: SymmetricTensor,
-        inv_angular_inertia2: SymmetricTensor,
-        solver_data: &mut RevoluteJointSolverData,
-        motor: &AngularJointMotor,
-        dt: Scalar,
-    ) {
-        let a1 = body1.delta_rotation * solver_data.a1;
-        let b1 = body1.delta_rotation * solver_data.b1;
-        let b2 = body2.delta_rotation * solver_data.b2;
-
-        // Angle between b1 and b2 around hinge axis a1.
-        let sin_angle = b1.cross(b2).dot(a1);
-        let cos_angle = b1.dot(b2);
-        let current_angle = sin_angle.atan2(cos_angle);
-
-        let relative_angular_velocity = (body2.angular_velocity - body1.angular_velocity).dot(a1);
-
-        let w1 =
-            AngularConstraint::compute_generalized_inverse_mass(self, inv_angular_inertia1, a1);
-        let w2 =
-            AngularConstraint::compute_generalized_inverse_mass(self, inv_angular_inertia2, a1);
-        let w_sum = w1 + w2;
-        if w_sum <= Scalar::EPSILON {
-            return;
-        }
-
-        let velocity_error = motor.target_velocity - relative_angular_velocity;
-
-        // Wrap position error to [-PI, PI] for shortest path rotation.
-        let raw_error = motor.target_position - current_angle;
-        let position_error = (raw_error + PI).rem_euclid(TAU) - PI;
-
-        let Some(delta_lagrange) =
-            Self::compute_angular_motor_lagrange(velocity_error, position_error, w_sum, motor, dt)
-        else {
-            return;
-        };
-
-        solver_data.total_motor_lagrange += delta_lagrange * a1;
-
-        // Positive delta_lagrange increases body2's angular velocity relative to body1.
+        #[cfg(feature = "3d")]
         self.apply_angular_lagrange_update(
             body1,
             body2,
