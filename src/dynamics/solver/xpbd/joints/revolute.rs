@@ -285,40 +285,10 @@ impl RevoluteJoint {
         let raw_error = motor.target_position - current_angle;
         let position_error = (raw_error + PI).rem_euclid(TAU) - PI;
 
-        let target_velocity_change = if let (Some(frequency), Some(damping_ratio)) =
-            (motor.frequency, motor.damping_ratio)
-        {
-            // Implicit Euler formulation for timestep-independent spring-damper behavior.
-            let omega = TAU * frequency;
-            let omega_sq = omega * omega;
-            let two_zeta_omega = 2.0 * damping_ratio * omega;
-            let inv_denominator = 1.0 / (1.0 + two_zeta_omega * dt + omega_sq * dt * dt);
-            (omega_sq * position_error + two_zeta_omega * velocity_error) * dt * inv_denominator
-        } else {
-            match motor.motor_model {
-                MotorModel::AccelerationBased => {
-                    motor.damping * velocity_error + motor.stiffness * position_error * dt
-                }
-                MotorModel::ForceBased => {
-                    // Velocity change = (stiffness * pos_error + damping * vel_error) * inv_inertia
-                    (motor.stiffness * position_error + motor.damping * velocity_error) * w_sum
-                }
-            }
-        };
-
-        let correction = target_velocity_change * dt;
-        if correction.abs() <= Scalar::EPSILON {
+        let Some(delta_lagrange) =
+            Self::compute_angular_motor_lagrange(velocity_error, position_error, w_sum, motor, dt)
+        else {
             return;
-        }
-
-        let delta_lagrange = correction / w_sum;
-
-        // Clamp to limit instantaneous torque per substep.
-        let delta_lagrange = if motor.max_torque < Scalar::MAX && motor.max_torque > 0.0 {
-            let max_delta = motor.max_torque * dt * dt;
-            delta_lagrange.clamp(-max_delta, max_delta)
-        } else {
-            delta_lagrange
         };
 
         solver_data.total_motor_lagrange += delta_lagrange;
@@ -373,6 +343,35 @@ impl RevoluteJoint {
         let raw_error = motor.target_position - current_angle;
         let position_error = (raw_error + PI).rem_euclid(TAU) - PI;
 
+        let Some(delta_lagrange) =
+            Self::compute_angular_motor_lagrange(velocity_error, position_error, w_sum, motor, dt)
+        else {
+            return;
+        };
+
+        solver_data.total_motor_lagrange += delta_lagrange * a1;
+
+        // Positive delta_lagrange increases body2's angular velocity relative to body1.
+        self.apply_angular_lagrange_update(
+            body1,
+            body2,
+            inv_angular_inertia1,
+            inv_angular_inertia2,
+            delta_lagrange,
+            a1,
+        );
+    }
+
+    /// Computes the Lagrange multiplier delta for an angular motor.
+    ///
+    /// Returns `None` if the correction is negligible.
+    fn compute_angular_motor_lagrange(
+        velocity_error: Scalar,
+        position_error: Scalar,
+        w_sum: Scalar,
+        motor: &AngularJointMotor,
+        dt: Scalar,
+    ) -> Option<Scalar> {
         let target_velocity_change = if let (Some(frequency), Some(damping_ratio)) =
             (motor.frequency, motor.damping_ratio)
         {
@@ -396,7 +395,7 @@ impl RevoluteJoint {
 
         let correction = target_velocity_change * dt;
         if correction.abs() <= Scalar::EPSILON {
-            return;
+            return None;
         }
 
         let delta_lagrange = correction / w_sum;
@@ -409,17 +408,7 @@ impl RevoluteJoint {
             delta_lagrange
         };
 
-        solver_data.total_motor_lagrange += delta_lagrange * a1;
-
-        // Positive delta_lagrange increases body2's angular velocity relative to body1.
-        self.apply_angular_lagrange_update(
-            body1,
-            body2,
-            inv_angular_inertia1,
-            inv_angular_inertia2,
-            delta_lagrange,
-            a1,
-        );
+        Some(delta_lagrange)
     }
 }
 
