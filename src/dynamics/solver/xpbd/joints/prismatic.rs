@@ -316,12 +316,12 @@ impl PrismaticJoint {
                 let inv_denominator = 1.0 / (1.0 + two_zeta_omega * dt + omega_sq * dt * dt);
                 (omega_sq * position_error + two_zeta_omega * velocity_error) * dt * inv_denominator
             }
-            MotorModel::AccelerationBased => {
-                motor.damping * velocity_error + motor.stiffness * position_error * dt
+            MotorModel::AccelerationBased { stiffness, damping } => {
+                damping * velocity_error + stiffness * position_error * dt
             }
-            MotorModel::ForceBased => {
+            MotorModel::ForceBased { stiffness, damping } => {
                 // Velocity change = (stiffness * pos_error + damping * vel_error) * inv_mass
-                (motor.stiffness * position_error + motor.damping * velocity_error) * w_sum
+                (stiffness * position_error + damping * velocity_error) * w_sum
             }
         };
 

@@ -89,9 +89,11 @@ fn setup(
         RevoluteJoint::new(velocity_anchor, velocity_wheel).with_hinge_axis(Vector::Z),
         AngularJointMotor {
             target_velocity: 5.0,
-            damping: 1.0,
             max_torque: 1000.0,
-            motor_model: MotorModel::AccelerationBased,
+            motor_model: MotorModel::AccelerationBased {
+                stiffness: 0.0,
+                damping: 1.0,
+            },
             ..default()
         },
         VelocityMotorJoint,

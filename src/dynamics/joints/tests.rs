@@ -73,9 +73,11 @@ fn revolute_motor_spins_body() {
             RevoluteJoint::new(anchor, dynamic),
             AngularJointMotor {
                 target_velocity: 2.0, // 2 rad/s
-                damping: 10.0,
                 max_torque: 100.0,
-                motor_model: MotorModel::AccelerationBased,
+                motor_model: MotorModel::AccelerationBased {
+                    stiffness: 0.0,
+                    damping: 10.0,
+                },
                 ..default()
             },
         ))
@@ -145,8 +147,11 @@ fn prismatic_motor_moves_body() {
             PrismaticJoint::new(anchor, dynamic).with_local_anchor1(Vector::X * 2.0),
             LinearJointMotor {
                 target_velocity: 1.0, // 1 m/s
-                damping: 10.0,
                 max_force: 100.0,
+                motor_model: MotorModel::AccelerationBased {
+                    stiffness: 0.0,
+                    damping: 10.0,
+                },
                 ..default()
             },
         ))
@@ -211,8 +216,11 @@ fn revolute_motor_respects_max_torque() {
             RevoluteJoint::new(anchor, dynamic),
             AngularJointMotor {
                 target_velocity: 10.0, // High target
-                damping: 1.0,
-                max_torque: 0.1, // Very low max torque
+                max_torque: 0.1,       // Very low max torque
+                motor_model: MotorModel::AccelerationBased {
+                    stiffness: 0.0,
+                    damping: 1.0,
+                },
                 ..default()
             },
         ))
@@ -283,9 +291,11 @@ fn revolute_motor_position_target() {
             RevoluteJoint::new(anchor, dynamic),
             AngularJointMotor {
                 target_position: target_angle,
-                stiffness: 50.0, // Moderate spring
-                damping: 20.0,   // High damping for stability
                 max_torque: Scalar::MAX,
+                motor_model: MotorModel::AccelerationBased {
+                    stiffness: 50.0, // Moderate spring
+                    damping: 20.0,   // High damping for stability
+                },
                 ..default()
             },
         ))
@@ -365,10 +375,11 @@ fn prismatic_motor_position_target() {
             PrismaticJoint::new(anchor, dynamic).with_local_anchor1(Vector::X * 2.0),
             LinearJointMotor {
                 target_position,
-                stiffness: 10.0, // Moderate stiffness
-                damping: 5.0,    // Moderate damping
                 max_force: 100.0,
-                motor_model: MotorModel::AccelerationBased,
+                motor_model: MotorModel::AccelerationBased {
+                    stiffness: 10.0, // Moderate stiffness
+                    damping: 5.0,    // Moderate damping
+                },
                 ..default()
             },
         ))

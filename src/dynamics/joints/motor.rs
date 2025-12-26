@@ -2,7 +2,7 @@ use crate::prelude::*;
 use bevy::prelude::*;
 
 /// The motor model determines how the motor force/torque is computed.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Reflect)]
+#[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, PartialEq)]
@@ -10,13 +10,28 @@ pub enum MotorModel {
     /// The motor force/torque is computed based on the acceleration required to reach the target.
     ///
     /// This model is more stable and easier to tune, but it ignores the mass of the bodies.
-    #[default]
-    AccelerationBased,
+    ///
+    /// - `stiffness`: The stiffness coefficient for position control. Set to zero for pure velocity control.
+    /// - `damping`: The damping coefficient.
+    AccelerationBased {
+        /// The stiffness coefficient for position control.
+        stiffness: Scalar,
+        /// The damping coefficient.
+        damping: Scalar,
+    },
     /// The motor force/torque is computed directly from the stiffness and damping parameters.
     ///
     /// This model takes the mass of the bodies into account, resulting in more physically
     /// accurate behavior, but it may be harder to tune.
-    ForceBased,
+    ///
+    /// - `stiffness`: The stiffness coefficient for position control. Set to zero for pure velocity control.
+    /// - `damping`: The damping coefficient.
+    ForceBased {
+        /// The stiffness coefficient for position control.
+        stiffness: Scalar,
+        /// The damping coefficient.
+        damping: Scalar,
+    },
     /// A spring-damper model using implicit Euler integration for timestep-independent behavior.
     ///
     /// This model provides stable, predictable spring-damper dynamics regardless of the
@@ -36,19 +51,25 @@ pub enum MotorModel {
     },
 }
 
+impl Default for MotorModel {
+    fn default() -> Self {
+        Self::AccelerationBased {
+            stiffness: 0.0,
+            damping: 0.0,
+        }
+    }
+}
+
 /// A motor for driving the angular motion of a [`RevoluteJoint`].
 ///
 /// When attached to a revolute joint entity, this component applies torque
 /// to drive the joint towards a target velocity and/or position.
 ///
-/// For velocity control, set [`target_velocity`](Self::target_velocity) with zero [`stiffness`](Self::stiffness).
-/// For position control, set [`target_position`](Self::target_position) with non-zero [`stiffness`](Self::stiffness).
-///
 /// # Timestep-Independent Spring-Damper
 ///
 /// For position control that behaves consistently regardless of substep count, use
-/// [`MotorModel::SpringDamper`] instead of raw `stiffness` and `damping`. This uses an implicit
-/// Euler integration that provides stable, predictable spring-damper behavior.
+/// [`MotorModel::SpringDamper`]. This uses an implicit Euler integration that provides
+/// stable, predictable spring-damper behavior.
 ///
 /// ```ignore
 /// AngularJointMotor::new(0.0)
@@ -64,14 +85,6 @@ pub struct AngularJointMotor {
     pub target_velocity: Scalar,
     /// The target angle (rad) for position control.
     pub target_position: Scalar,
-    /// The stiffness coefficient for position control (N·m/rad). Set to zero for pure velocity control.
-    ///
-    /// Only used with [`MotorModel::AccelerationBased`] and [`MotorModel::ForceBased`].
-    pub stiffness: Scalar,
-    /// The damping coefficient (N·m·s/rad).
-    ///
-    /// Only used with [`MotorModel::AccelerationBased`] and [`MotorModel::ForceBased`].
-    pub damping: Scalar,
     /// The maximum torque the motor can apply (N·m).
     pub max_torque: Scalar,
     /// The motor model used for computing the motor torque.
@@ -83,8 +96,6 @@ impl Default for AngularJointMotor {
         Self {
             target_velocity: 0.0,
             target_position: 0.0,
-            stiffness: 0.0,
-            damping: 0.0,
             max_torque: Scalar::MAX,
             motor_model: MotorModel::default(),
         }
@@ -100,25 +111,11 @@ impl AngularJointMotor {
         Self {
             target_velocity,
             target_position: 0.0,
-            stiffness: 0.0,
-            damping: 0.0,
             max_torque: Scalar::MAX,
-            motor_model: MotorModel::AccelerationBased,
-        }
-    }
-
-    /// Creates a new angular motor targeting a specific position.
-    ///
-    /// This creates a position-mode motor that acts like a spring.
-    #[inline]
-    pub const fn with_target_position(target_position: Scalar, stiffness: Scalar) -> Self {
-        Self {
-            target_velocity: 0.0,
-            target_position,
-            stiffness,
-            damping: 0.0,
-            max_torque: Scalar::MAX,
-            motor_model: MotorModel::AccelerationBased,
+            motor_model: MotorModel::AccelerationBased {
+                stiffness: 0.0,
+                damping: 0.0,
+            },
         }
     }
 
@@ -129,22 +126,10 @@ impl AngularJointMotor {
         self
     }
 
-    /// Sets the target position and stiffness for position control.
+    /// Sets the target position.
     #[inline]
-    pub const fn with_position_target(
-        mut self,
-        target_position: Scalar,
-        stiffness: Scalar,
-    ) -> Self {
+    pub const fn with_target_position_value(mut self, target_position: Scalar) -> Self {
         self.target_position = target_position;
-        self.stiffness = stiffness;
-        self
-    }
-
-    /// Sets the damping coefficient.
-    #[inline]
-    pub const fn with_damping(mut self, damping: Scalar) -> Self {
-        self.damping = damping;
         self
     }
 
@@ -193,13 +178,6 @@ impl AngularJointMotor {
         };
         self
     }
-
-    /// Sets the target position.
-    #[inline]
-    pub const fn with_target_position_value(mut self, target_position: Scalar) -> Self {
-        self.target_position = target_position;
-        self
-    }
 }
 
 /// A motor for driving the linear motion of a [`PrismaticJoint`].
@@ -207,14 +185,11 @@ impl AngularJointMotor {
 /// When attached to a prismatic joint entity, this component applies force
 /// to drive the joint towards a target velocity and/or position.
 ///
-/// For velocity control, set [`target_velocity`](Self::target_velocity) with zero [`stiffness`](Self::stiffness).
-/// For position control, set [`target_position`](Self::target_position) with non-zero [`stiffness`](Self::stiffness).
-///
 /// # Timestep-Independent Spring-Damper
 ///
 /// For position control that behaves consistently regardless of substep count, use
-/// [`MotorModel::SpringDamper`] instead of raw `stiffness` and `damping`. This uses an implicit
-/// Euler integration that provides stable, predictable spring-damper behavior.
+/// [`MotorModel::SpringDamper`]. This uses an implicit Euler integration that provides
+/// stable, predictable spring-damper behavior.
 ///
 /// ```ignore
 /// LinearJointMotor::new(0.0)
@@ -230,14 +205,6 @@ pub struct LinearJointMotor {
     pub target_velocity: Scalar,
     /// The target position (m) for position control.
     pub target_position: Scalar,
-    /// The stiffness coefficient for position control (N/m). Set to zero for pure velocity control.
-    ///
-    /// Only used with [`MotorModel::AccelerationBased`] and [`MotorModel::ForceBased`].
-    pub stiffness: Scalar,
-    /// The damping coefficient (N·s/m).
-    ///
-    /// Only used with [`MotorModel::AccelerationBased`] and [`MotorModel::ForceBased`].
-    pub damping: Scalar,
     /// The maximum force the motor can apply (N).
     pub max_force: Scalar,
     /// The motor model used for computing the motor force.
@@ -249,8 +216,6 @@ impl Default for LinearJointMotor {
         Self {
             target_velocity: 0.0,
             target_position: 0.0,
-            stiffness: 0.0,
-            damping: 0.0,
             max_force: Scalar::MAX,
             motor_model: MotorModel::default(),
         }
@@ -266,25 +231,11 @@ impl LinearJointMotor {
         Self {
             target_velocity,
             target_position: 0.0,
-            stiffness: 0.0,
-            damping: 0.0,
             max_force: Scalar::MAX,
-            motor_model: MotorModel::AccelerationBased,
-        }
-    }
-
-    /// Creates a new linear motor targeting a specific position.
-    ///
-    /// This creates a position-mode motor that acts like a spring.
-    #[inline]
-    pub const fn with_target_position(target_position: Scalar, stiffness: Scalar) -> Self {
-        Self {
-            target_velocity: 0.0,
-            target_position,
-            stiffness,
-            damping: 0.0,
-            max_force: Scalar::MAX,
-            motor_model: MotorModel::AccelerationBased,
+            motor_model: MotorModel::AccelerationBased {
+                stiffness: 0.0,
+                damping: 0.0,
+            },
         }
     }
 
@@ -295,22 +246,10 @@ impl LinearJointMotor {
         self
     }
 
-    /// Sets the target position and stiffness for position control.
+    /// Sets the target position.
     #[inline]
-    pub const fn with_position_target(
-        mut self,
-        target_position: Scalar,
-        stiffness: Scalar,
-    ) -> Self {
+    pub const fn with_target_position_value(mut self, target_position: Scalar) -> Self {
         self.target_position = target_position;
-        self.stiffness = stiffness;
-        self
-    }
-
-    /// Sets the damping coefficient.
-    #[inline]
-    pub const fn with_damping(mut self, damping: Scalar) -> Self {
-        self.damping = damping;
         self
     }
 
@@ -357,13 +296,6 @@ impl LinearJointMotor {
             frequency,
             damping_ratio,
         };
-        self
-    }
-
-    /// Sets the target position.
-    #[inline]
-    pub const fn with_target_position_value(mut self, target_position: Scalar) -> Self {
-        self.target_position = target_position;
         self
     }
 }
