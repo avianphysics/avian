@@ -124,7 +124,7 @@ fn setup(
     commands.spawn((
         RevoluteJoint::new(position_anchor, servo_arm).with_hinge_axis(Vector::Z),
         AngularJointMotor::new(0.0)
-            .with_spring_parameters(5.0, 1.0)
+            .with_spring_damper(5.0, 1.0)
             .with_target_position_value(0.0)
             .with_max_torque(Scalar::MAX),
         PositionMotorJoint,
@@ -157,7 +157,7 @@ fn setup(
     commands.spawn((
         PrismaticJoint::new(piston_base, piston).with_slider_axis(Vector::Y),
         LinearJointMotor::new(0.0)
-            .with_spring_parameters(20.0, 1.0)
+            .with_spring_damper(20.0, 1.0)
             .with_target_position_value(1.0)
             .with_max_force(Scalar::MAX),
         PrismaticMotorJoint,

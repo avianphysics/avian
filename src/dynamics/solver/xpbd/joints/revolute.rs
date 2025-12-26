@@ -352,24 +352,24 @@ impl RevoluteJoint {
         motor: &AngularJointMotor,
         dt: Scalar,
     ) -> Option<Scalar> {
-        let target_velocity_change = if let (Some(frequency), Some(damping_ratio)) =
-            (motor.frequency, motor.damping_ratio)
-        {
-            // Implicit Euler formulation for timestep-independent spring-damper behavior.
-            let omega = TAU * frequency;
-            let omega_sq = omega * omega;
-            let two_zeta_omega = 2.0 * damping_ratio * omega;
-            let inv_denominator = 1.0 / (1.0 + two_zeta_omega * dt + omega_sq * dt * dt);
-            (omega_sq * position_error + two_zeta_omega * velocity_error) * dt * inv_denominator
-        } else {
-            match motor.motor_model {
-                MotorModel::AccelerationBased => {
-                    motor.damping * velocity_error + motor.stiffness * position_error * dt
-                }
-                MotorModel::ForceBased => {
-                    // Velocity change = (stiffness * pos_error + damping * vel_error) * inv_inertia
-                    (motor.stiffness * position_error + motor.damping * velocity_error) * w_sum
-                }
+        let target_velocity_change = match motor.motor_model {
+            MotorModel::SpringDamper {
+                frequency,
+                damping_ratio,
+            } => {
+                // Implicit Euler formulation for timestep-independent spring-damper behavior.
+                let omega = TAU * frequency;
+                let omega_sq = omega * omega;
+                let two_zeta_omega = 2.0 * damping_ratio * omega;
+                let inv_denominator = 1.0 / (1.0 + two_zeta_omega * dt + omega_sq * dt * dt);
+                (omega_sq * position_error + two_zeta_omega * velocity_error) * dt * inv_denominator
+            }
+            MotorModel::AccelerationBased => {
+                motor.damping * velocity_error + motor.stiffness * position_error * dt
+            }
+            MotorModel::ForceBased => {
+                // Velocity change = (stiffness * pos_error + damping * vel_error) * inv_inertia
+                (motor.stiffness * position_error + motor.damping * velocity_error) * w_sum
             }
         };
 
