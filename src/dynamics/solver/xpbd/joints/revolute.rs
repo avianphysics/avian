@@ -189,7 +189,6 @@ impl XpbdMotorConstraint<2> for RevoluteJoint {
         );
     }
 
-    #[cfg(feature = "2d")]
     fn warm_start_motor(
         &self,
         bodies: [&mut SolverBody; 2],
@@ -209,30 +208,7 @@ impl XpbdMotorConstraint<2> for RevoluteJoint {
         body1.angular_velocity -= inv_angular_inertia1 * impulse;
         body2.angular_velocity += inv_angular_inertia2 * impulse;
 
-        solver_data.warm_start_motor_lagrange = 0.0;
-    }
-
-    #[cfg(feature = "3d")]
-    fn warm_start_motor(
-        &self,
-        bodies: [&mut SolverBody; 2],
-        inertias: [&SolverBodyInertia; 2],
-        solver_data: &mut RevoluteJointSolverData,
-        _dt: Scalar,
-        warm_start_coefficient: Scalar,
-    ) {
-        let [body1, body2] = bodies;
-        let [inertia1, inertia2] = inertias;
-
-        let inv_angular_inertia1 = inertia1.effective_inv_angular_inertia();
-        let inv_angular_inertia2 = inertia2.effective_inv_angular_inertia();
-
-        let impulse = warm_start_coefficient * solver_data.warm_start_motor_lagrange;
-
-        body1.angular_velocity -= inv_angular_inertia1 * impulse;
-        body2.angular_velocity += inv_angular_inertia2 * impulse;
-
-        solver_data.warm_start_motor_lagrange = Vector::ZERO;
+        solver_data.warm_start_motor_lagrange = AngularVector::ZERO;
     }
 }
 
