@@ -1,7 +1,7 @@
 use super::FixedAngleConstraintShared;
 use crate::{
     dynamics::{
-        joints::{LinearJointMotor, MotorModel},
+        joints::{LinearMotor, MotorModel},
         solver::{
             solver_body::{SolverBody, SolverBodyInertia},
             xpbd::{XpbdMotorConstraint, *},
@@ -111,14 +111,18 @@ impl XpbdConstraint<2> for PrismaticJoint {
 }
 
 impl XpbdMotorConstraint<2> for PrismaticJoint {
-    type Motor = LinearJointMotor;
+    type Motor = LinearMotor;
+
+    fn motor(&self) -> Option<&Self::Motor> {
+        self.motor.as_ref()
+    }
 
     fn solve_motor(
         &self,
         bodies: [&mut SolverBody; 2],
         inertias: [&SolverBodyInertia; 2],
         solver_data: &mut PrismaticJointSolverData,
-        motor: &LinearJointMotor,
+        motor: &LinearMotor,
         dt: Scalar,
     ) {
         let [body1, body2] = bodies;
@@ -263,7 +267,7 @@ impl PrismaticJoint {
         inertia1: &SolverBodyInertia,
         inertia2: &SolverBodyInertia,
         solver_data: &mut PrismaticJointSolverData,
-        motor: &LinearJointMotor,
+        motor: &LinearMotor,
         dt: Scalar,
     ) {
         let axis1 = body1.delta_rotation * solver_data.free_axis1;

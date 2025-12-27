@@ -62,8 +62,8 @@ impl Default for MotorModel {
 
 /// A motor for driving the angular motion of a [`RevoluteJoint`].
 ///
-/// When attached to a revolute joint entity, this component applies torque
-/// to drive the joint towards a target velocity and/or position.
+/// Motors are configured as part of a joint, applying torque to drive
+/// the joint towards a target velocity and/or position.
 ///
 /// # Timestep-Independent Spring-Damper
 ///
@@ -72,15 +72,18 @@ impl Default for MotorModel {
 /// stable, predictable spring-damper behavior.
 ///
 /// ```ignore
-/// AngularJointMotor::new(0.0)
-///     .with_spring_damper(2.0, 1.0) // 2 Hz, critically damped
-///     .with_target_position_value(target_angle)
+/// RevoluteJoint::new(entity1, entity2)
+///     .with_motor(
+///         AngularMotor::new(0.0)
+///             .with_spring_damper(2.0, 1.0) // 2 Hz, critically damped
+///             .with_target_position_value(target_angle)
+///     )
 /// ```
-#[derive(Component, Clone, Copy, Debug, PartialEq, Reflect)]
+#[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
-#[reflect(Component, Debug, PartialEq)]
-pub struct AngularJointMotor {
+#[reflect(Debug, PartialEq)]
+pub struct AngularMotor {
     /// The target angular velocity (rad/s).
     pub target_velocity: Scalar,
     /// The target angle (rad) for position control.
@@ -91,7 +94,7 @@ pub struct AngularJointMotor {
     pub motor_model: MotorModel,
 }
 
-impl Default for AngularJointMotor {
+impl Default for AngularMotor {
     fn default() -> Self {
         Self {
             target_velocity: 0.0,
@@ -102,7 +105,7 @@ impl Default for AngularJointMotor {
     }
 }
 
-impl AngularJointMotor {
+impl AngularMotor {
     /// Creates a new angular motor with the given target velocity.
     ///
     /// This creates a velocity-mode motor with no position control.
@@ -166,7 +169,7 @@ impl AngularJointMotor {
     ///
     /// ```ignore
     /// // Create a motor that acts like a critically damped spring at 2 Hz
-    /// let motor = AngularJointMotor::new(0.0)
+    /// let motor = AngularMotor::new(0.0)
     ///     .with_spring_damper(2.0, 1.0)
     ///     .with_target_position_value(target_angle);
     /// ```
@@ -182,8 +185,8 @@ impl AngularJointMotor {
 
 /// A motor for driving the linear motion of a [`PrismaticJoint`].
 ///
-/// When attached to a prismatic joint entity, this component applies force
-/// to drive the joint towards a target velocity and/or position.
+/// Motors are configured as part of a joint, applying force to drive
+/// the joint towards a target velocity and/or position.
 ///
 /// # Timestep-Independent Spring-Damper
 ///
@@ -192,15 +195,18 @@ impl AngularJointMotor {
 /// stable, predictable spring-damper behavior.
 ///
 /// ```ignore
-/// LinearJointMotor::new(0.0)
-///     .with_spring_damper(2.0, 1.0) // 2 Hz, critically damped
-///     .with_target_position_value(target_position)
+/// PrismaticJoint::new(entity1, entity2)
+///     .with_motor(
+///         LinearMotor::new(0.0)
+///             .with_spring_damper(2.0, 1.0) // 2 Hz, critically damped
+///             .with_target_position_value(target_position)
+///     )
 /// ```
-#[derive(Component, Clone, Copy, Debug, PartialEq, Reflect)]
+#[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
-#[reflect(Component, Debug, PartialEq)]
-pub struct LinearJointMotor {
+#[reflect(Debug, PartialEq)]
+pub struct LinearMotor {
     /// The target linear velocity (m/s).
     pub target_velocity: Scalar,
     /// The target position (m) for position control.
@@ -211,7 +217,7 @@ pub struct LinearJointMotor {
     pub motor_model: MotorModel,
 }
 
-impl Default for LinearJointMotor {
+impl Default for LinearMotor {
     fn default() -> Self {
         Self {
             target_velocity: 0.0,
@@ -222,7 +228,7 @@ impl Default for LinearJointMotor {
     }
 }
 
-impl LinearJointMotor {
+impl LinearMotor {
     /// Creates a new linear motor with the given target velocity.
     ///
     /// This creates a velocity-mode motor with no position control.
@@ -286,7 +292,7 @@ impl LinearJointMotor {
     ///
     /// ```ignore
     /// // Create a motor that acts like a critically damped spring at 2 Hz
-    /// let motor = LinearJointMotor::new(0.0)
+    /// let motor = LinearMotor::new(0.0)
     ///     .with_spring_damper(2.0, 1.0)
     ///     .with_target_position_value(target_position);
     /// ```

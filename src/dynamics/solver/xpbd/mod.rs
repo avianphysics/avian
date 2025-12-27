@@ -361,12 +361,16 @@ pub trait XpbdConstraint<const ENTITY_COUNT: usize> {
 /// This extends [`XpbdConstraint`] to add motor solving capability.
 /// Motors are solved in the same pass as other constraints for better coupling.
 pub trait XpbdMotorConstraint<const ENTITY_COUNT: usize>: XpbdConstraint<ENTITY_COUNT> {
-    /// The motor component type for this constraint.
-    type Motor: bevy::prelude::Component;
+    /// The motor type for this constraint.
+    type Motor;
+
+    /// Returns a reference to the motor, if one is configured.
+    fn motor(&self) -> Option<&Self::Motor>;
 
     /// Solves the motor constraint.
     ///
     /// This method is called after `solve` to apply motor forces/torques.
+    /// It is only called if `motor()` returns `Some`.
     fn solve_motor(
         &self,
         bodies: [&mut SolverBody; ENTITY_COUNT],

@@ -77,8 +77,7 @@ fn setup(mut commands: Commands) {
     // Revolute joint with velocity-controlled motor
     // Default anchors are at body centers (Vector::ZERO)
     commands.spawn((
-        RevoluteJoint::new(velocity_anchor, velocity_wheel),
-        AngularJointMotor {
+        RevoluteJoint::new(velocity_anchor, velocity_wheel).with_motor(AngularMotor {
             target_velocity: 5.0,
             max_torque: 1000.0,
             motor_model: MotorModel::AccelerationBased {
@@ -86,7 +85,7 @@ fn setup(mut commands: Commands) {
                 damping: 1.0,
             },
             ..default()
-        },
+        }),
         VelocityMotorJoint,
     ));
 
@@ -127,11 +126,12 @@ fn setup(mut commands: Commands) {
     // - frequency: 5 Hz = fairly stiff spring
     // - damping_ratio: 1.0 = critically damped (fastest approach without overshoot)
     commands.spawn((
-        RevoluteJoint::new(position_anchor, servo_arm),
-        AngularJointMotor::new(0.0)
-            .with_spring_damper(5.0, 1.0)
-            .with_target_position_value(0.0)
-            .with_max_torque(Scalar::MAX),
+        RevoluteJoint::new(position_anchor, servo_arm).with_motor(
+            AngularMotor::new(0.0)
+                .with_spring_damper(5.0, 1.0)
+                .with_target_position_value(0.0)
+                .with_max_torque(Scalar::MAX),
+        ),
         PositionMotorJoint,
     ));
 
@@ -173,11 +173,14 @@ fn setup(mut commands: Commands) {
 
     // frequency = 20 Hz, damping_ratio = 1.0 (critically damped)
     commands.spawn((
-        PrismaticJoint::new(piston_base, piston).with_slider_axis(Vector::Y),
-        LinearJointMotor::new(0.0)
-            .with_spring_damper(20.0, 1.0)
-            .with_target_position_value(50.0)
-            .with_max_force(Scalar::MAX),
+        PrismaticJoint::new(piston_base, piston)
+            .with_slider_axis(Vector::Y)
+            .with_motor(
+                LinearMotor::new(0.0)
+                    .with_spring_damper(20.0, 1.0)
+                    .with_target_position_value(50.0)
+                    .with_max_force(Scalar::MAX),
+            ),
         PrismaticMotorJoint,
     ));
 
@@ -200,14 +203,17 @@ fn setup(mut commands: Commands) {
 
 fn control_motors(
     keyboard: Res<ButtonInput<KeyCode>>,
-    mut velocity_motors: Query<&mut AngularJointMotor, With<VelocityMotorJoint>>,
+    mut velocity_motors: Query<&mut RevoluteJoint, With<VelocityMotorJoint>>,
     mut position_motors: Query<
-        &mut AngularJointMotor,
+        &mut RevoluteJoint,
         (With<PositionMotorJoint>, Without<VelocityMotorJoint>),
     >,
-    mut prismatic_motors: Query<&mut LinearJointMotor, With<PrismaticMotorJoint>>,
+    mut prismatic_motors: Query<&mut PrismaticJoint, With<PrismaticMotorJoint>>,
 ) {
-    for mut motor in velocity_motors.iter_mut() {
+    for mut joint in velocity_motors.iter_mut() {
+        let Some(motor) = joint.motor.as_mut() else {
+            continue;
+        };
         if keyboard.just_pressed(KeyCode::ArrowUp) {
             motor.target_velocity += 1.0;
         }
@@ -223,7 +229,10 @@ fn control_motors(
         }
     }
 
-    for mut motor in position_motors.iter_mut() {
+    for mut joint in position_motors.iter_mut() {
+        let Some(motor) = joint.motor.as_mut() else {
+            continue;
+        };
         if keyboard.just_pressed(KeyCode::KeyA) {
             motor.target_position += 0.5;
         }
@@ -235,7 +244,10 @@ fn control_motors(
         }
     }
 
-    for mut motor in prismatic_motors.iter_mut() {
+    for mut joint in prismatic_motors.iter_mut() {
+        let Some(motor) = joint.motor.as_mut() else {
+            continue;
+        };
         if keyboard.just_pressed(KeyCode::KeyW) {
             motor.target_position += 25.0;
         }
@@ -253,24 +265,27 @@ fn control_motors(
 }
 
 fn update_ui(
-    velocity_motors: Query<&AngularJointMotor, With<VelocityMotorJoint>>,
-    position_motors: Query<&AngularJointMotor, With<PositionMotorJoint>>,
-    prismatic_motors: Query<&LinearJointMotor, With<PrismaticMotorJoint>>,
+    velocity_motors: Query<&RevoluteJoint, With<VelocityMotorJoint>>,
+    position_motors: Query<&RevoluteJoint, With<PositionMotorJoint>>,
+    prismatic_motors: Query<&PrismaticJoint, With<PrismaticMotorJoint>>,
     mut ui_text: Query<&mut Text, With<UiText>>,
 ) {
     let velocity_target = velocity_motors
         .iter()
         .next()
+        .and_then(|j| j.motor.as_ref())
         .map(|m| m.target_velocity)
         .unwrap_or(0.0);
     let position_target = position_motors
         .iter()
         .next()
+        .and_then(|j| j.motor.as_ref())
         .map(|m| m.target_position)
         .unwrap_or(0.0);
     let prismatic_pos = prismatic_motors
         .iter()
         .next()
+        .and_then(|j| j.motor.as_ref())
         .map(|m| m.target_position)
         .unwrap_or(0.0);
 

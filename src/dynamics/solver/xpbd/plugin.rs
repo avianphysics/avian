@@ -210,10 +210,7 @@ pub fn solve_xpbd_joint_with_motor<
     C: Component<Mutability = Mutable> + EntityConstraint<2> + XpbdMotorConstraint<2>,
 >(
     bodies: Query<(&mut SolverBody, &SolverBodyInertia), Without<RigidBodyDisabled>>,
-    mut joints: Query<
-        (&mut C, &mut C::SolverData, Option<&C::Motor>),
-        (Without<RigidBody>, Without<JointDisabled>),
-    >,
+    mut joints: Query<(&mut C, &mut C::SolverData), (Without<RigidBody>, Without<JointDisabled>)>,
     time: Res<Time>,
 ) where
     C::SolverData: Component<Mutability = Mutable>,
@@ -223,7 +220,7 @@ pub fn solve_xpbd_joint_with_motor<
     let mut dummy_body1 = SolverBody::default();
     let mut dummy_body2 = SolverBody::default();
 
-    for (mut joint, mut solver_data, motor) in &mut joints {
+    for (mut joint, mut solver_data) in &mut joints {
         let [entity1, entity2] = joint.entities();
 
         let (mut body1, mut inertia1) = (&mut dummy_body1, &SolverBodyInertia::DUMMY);
@@ -253,7 +250,7 @@ pub fn solve_xpbd_joint_with_motor<
             delta_secs,
         );
 
-        if let Some(motor) = motor {
+        if let Some(motor) = joint.motor() {
             joint.solve_motor(
                 [body1, body2],
                 [inertia1, inertia2],

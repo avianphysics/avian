@@ -1,5 +1,5 @@
 use crate::{
-    dynamics::joints::{EntityConstraint, JointSystems},
+    dynamics::joints::{EntityConstraint, JointSystems, motor::LinearMotor},
     prelude::*,
 };
 use bevy::{
@@ -47,6 +47,8 @@ pub struct PrismaticJoint {
     pub angle_compliance: Scalar,
     /// The compliance of the distance limit (inverse of stiffness, m / N).
     pub limit_compliance: Scalar,
+    /// An optional motor for driving the joint.
+    pub motor: Option<LinearMotor>,
 }
 
 impl EntityConstraint<2> for PrismaticJoint {
@@ -72,6 +74,7 @@ impl PrismaticJoint {
             align_compliance: 0.0,
             angle_compliance: 0.0,
             limit_compliance: 0.0,
+            motor: None,
         }
     }
 
@@ -304,6 +307,13 @@ impl PrismaticJoint {
     #[inline]
     pub const fn with_limit_compliance(mut self, compliance: Scalar) -> Self {
         self.limit_compliance = compliance;
+        self
+    }
+
+    /// Sets the motor for the joint.
+    #[inline]
+    pub const fn with_motor(mut self, motor: LinearMotor) -> Self {
+        self.motor = Some(motor);
         self
     }
 }

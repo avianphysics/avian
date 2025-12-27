@@ -1,7 +1,7 @@
 use super::PointConstraintShared;
 use crate::{
     dynamics::{
-        joints::{AngularJointMotor, MotorModel},
+        joints::{AngularMotor, MotorModel},
         solver::{
             solver_body::{SolverBody, SolverBodyInertia},
             xpbd::{XpbdMotorConstraint, *},
@@ -162,14 +162,18 @@ impl XpbdConstraint<2> for RevoluteJoint {
 }
 
 impl XpbdMotorConstraint<2> for RevoluteJoint {
-    type Motor = AngularJointMotor;
+    type Motor = AngularMotor;
+
+    fn motor(&self) -> Option<&Self::Motor> {
+        self.motor.as_ref()
+    }
 
     fn solve_motor(
         &self,
         bodies: [&mut SolverBody; 2],
         inertias: [&SolverBodyInertia; 2],
         solver_data: &mut RevoluteJointSolverData,
-        motor: &AngularJointMotor,
+        motor: &AngularMotor,
         dt: Scalar,
     ) {
         let [body1, body2] = bodies;
@@ -264,7 +268,7 @@ impl RevoluteJoint {
         inv_angular_inertia1: SymmetricTensor,
         inv_angular_inertia2: SymmetricTensor,
         solver_data: &mut RevoluteJointSolverData,
-        motor: &AngularJointMotor,
+        motor: &AngularMotor,
         dt: Scalar,
     ) {
         #[cfg(feature = "2d")]
@@ -349,7 +353,7 @@ impl RevoluteJoint {
         velocity_error: Scalar,
         position_error: Scalar,
         w_sum: Scalar,
-        motor: &AngularJointMotor,
+        motor: &AngularMotor,
         dt: Scalar,
     ) -> Option<Scalar> {
         let target_velocity_change = match motor.motor_model {

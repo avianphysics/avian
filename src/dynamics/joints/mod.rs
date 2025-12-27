@@ -224,7 +224,7 @@ mod tests;
 
 pub use distance::DistanceJoint;
 pub use fixed::FixedJoint;
-pub use motor::{AngularJointMotor, LinearJointMotor, MotorModel};
+pub use motor::{AngularMotor, LinearMotor, MotorModel};
 pub use prismatic::PrismaticJoint;
 pub use revolute::RevoluteJoint;
 #[cfg(feature = "3d")]
@@ -692,8 +692,8 @@ impl JointForces {
 
     /// Returns the force or torque applied by the motor, if any.
     ///
-    /// For angular motors ([`AngularJointMotor`]), this is the torque in N·m.
-    /// For linear motors ([`LinearJointMotor`]), this is the force in N.
+    /// For angular motors ([`AngularMotor`]), this is the torque in N·m.
+    /// For linear motors ([`LinearMotor`]), this is the force in N.
     #[inline]
     pub const fn motor_force(&self) -> Scalar {
         self.motor_force
