@@ -127,10 +127,12 @@ fn setup(mut commands: Commands) {
     // - damping_ratio: 1.0 = critically damped (fastest approach without overshoot)
     commands.spawn((
         RevoluteJoint::new(position_anchor, servo_arm).with_motor(
-            AngularMotor::new(0.0)
-                .with_spring_damper(5.0, 1.0)
-                .with_target_position_value(0.0)
-                .with_max_torque(Scalar::MAX),
+            AngularMotor::new(MotorModel::SpringDamper {
+                frequency: 5.0,
+                damping_ratio: 1.0,
+            })
+            .with_target_position(0.0)
+            .with_max_torque(Scalar::MAX),
         ),
         PositionMotorJoint,
     ));
@@ -176,10 +178,12 @@ fn setup(mut commands: Commands) {
         PrismaticJoint::new(piston_base, piston)
             .with_slider_axis(Vector::Y)
             .with_motor(
-                LinearMotor::new(0.0)
-                    .with_spring_damper(20.0, 1.0)
-                    .with_target_position_value(50.0)
-                    .with_max_force(Scalar::MAX),
+                LinearMotor::new(MotorModel::SpringDamper {
+                    frequency: 20.0,
+                    damping_ratio: 1.0,
+                })
+                .with_target_position(50.0)
+                .with_max_force(Scalar::MAX),
             ),
         PrismaticMotorJoint,
     ));

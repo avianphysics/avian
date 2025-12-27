@@ -7,17 +7,22 @@ use bevy::prelude::*;
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, PartialEq)]
 pub enum MotorModel {
-    /// The motor force/torque is computed based on the acceleration required to reach the target.
+    /// A spring-damper model using implicit Euler integration for timestep-independent behavior.
     ///
-    /// This model is more stable and easier to tune, but it ignores the mass of the bodies.
+    /// This model provides stable, predictable spring-damper dynamics regardless of the
+    /// physics substep count. Ignores the mass of the bodies.
     ///
-    /// - `stiffness`: The stiffness coefficient for position control. Set to zero for pure velocity control.
-    /// - `damping`: The damping coefficient.
-    AccelerationBased {
-        /// The stiffness coefficient for position control.
-        stiffness: Scalar,
-        /// The damping coefficient.
-        damping: Scalar,
+    /// - `frequency`: The natural frequency of the spring in Hz. Higher values create stiffer springs.
+    /// - `damping_ratio`: The damping ratio.
+    ///   - 0.0 = no damping (oscillates forever)
+    ///   - 1.0 = critically damped (fastest approach without overshoot)
+    ///   - \> 1.0 = overdamped (slower approach without overshoot)
+    ///   - < 1.0 = underdamped (overshoots and oscillates)
+    SpringDamper {
+        /// The natural frequency of the spring in Hz.
+        frequency: Scalar,
+        /// The damping ratio.
+        damping_ratio: Scalar,
     },
     /// The motor force/torque is computed directly from the stiffness and damping parameters.
     ///
@@ -32,30 +37,26 @@ pub enum MotorModel {
         /// The damping coefficient.
         damping: Scalar,
     },
-    /// A spring-damper model using implicit Euler integration for timestep-independent behavior.
+    /// The motor force/torque is computed based on the acceleration required to reach the target.
     ///
-    /// This model provides stable, predictable spring-damper dynamics regardless of the
-    /// physics substep count.
+    /// This model is more stable than the `ForceBased` model and easier to tune, but it ignores the mass of the bodies.
+    /// Prefer the `SpringDamper` model if it's an option.
     ///
-    /// - `frequency`: The natural frequency of the spring in Hz. Higher values create stiffer springs.
-    /// - `damping_ratio`: The damping ratio.
-    ///   - 0.0 = no damping (oscillates forever)
-    ///   - 1.0 = critically damped (fastest approach without overshoot)
-    ///   - \> 1.0 = overdamped (slower approach without overshoot)
-    ///   - < 1.0 = underdamped (overshoots and oscillates)
-    SpringDamper {
-        /// The natural frequency of the spring in Hz.
-        frequency: Scalar,
-        /// The damping ratio.
-        damping_ratio: Scalar,
+    /// - `stiffness`: The stiffness coefficient for position control. Set to zero for pure velocity control.
+    /// - `damping`: The damping coefficient.
+    AccelerationBased {
+        /// The stiffness coefficient for position control.
+        stiffness: Scalar,
+        /// The damping coefficient.
+        damping: Scalar,
     },
 }
 
 impl Default for MotorModel {
     fn default() -> Self {
-        Self::AccelerationBased {
-            stiffness: 0.0,
-            damping: 0.0,
+        Self::SpringDamper {
+            frequency: 5.,
+            damping_ratio: 1.,
         }
     }
 }
@@ -74,9 +75,11 @@ impl Default for MotorModel {
 /// ```ignore
 /// RevoluteJoint::new(entity1, entity2)
 ///     .with_motor(
-///         AngularMotor::new(0.0)
-///             .with_spring_damper(2.0, 1.0) // 2 Hz, critically damped
-///             .with_target_position_value(target_angle)
+///         AngularMotor::new(MotorModel::SpringDamper {
+///             frequency: 2.0,
+///             damping_ratio: 1.0,
+///         })
+///         .with_target_position(target_angle)
 ///     )
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
@@ -106,19 +109,14 @@ impl Default for AngularMotor {
 }
 
 impl AngularMotor {
-    /// Creates a new angular motor with the given target velocity.
-    ///
-    /// This creates a velocity-mode motor with no position control.
+    /// Creates a new angular motor with the given motor model.
     #[inline]
-    pub const fn new(target_velocity: Scalar) -> Self {
+    pub const fn new(motor_model: MotorModel) -> Self {
         Self {
-            target_velocity,
+            target_velocity: 0.0,
             target_position: 0.0,
             max_torque: Scalar::MAX,
-            motor_model: MotorModel::AccelerationBased {
-                stiffness: 0.0,
-                damping: 0.0,
-            },
+            motor_model,
         }
     }
 
@@ -131,7 +129,7 @@ impl AngularMotor {
 
     /// Sets the target position.
     #[inline]
-    pub const fn with_target_position_value(mut self, target_position: Scalar) -> Self {
+    pub const fn with_target_position(mut self, target_position: Scalar) -> Self {
         self.target_position = target_position;
         self
     }
@@ -140,45 +138,6 @@ impl AngularMotor {
     #[inline]
     pub const fn with_max_torque(mut self, max_torque: Scalar) -> Self {
         self.max_torque = max_torque;
-        self
-    }
-
-    /// Sets the motor model.
-    #[inline]
-    pub const fn with_motor_model(mut self, model: MotorModel) -> Self {
-        self.motor_model = model;
-        self
-    }
-
-    /// Sets the motor to use a spring-damper model for timestep-independent position control.
-    ///
-    /// This uses an implicit Euler integration formula that provides stable, predictable
-    /// spring-damper behavior regardless of the physics substep count.
-    ///
-    /// # Parameters
-    ///
-    /// - `frequency`: The natural frequency of the spring in Hz. Higher values create stiffer springs.
-    ///   A frequency of 1.0 Hz means the spring completes one oscillation per second (if underdamped).
-    /// - `damping_ratio`: The damping ratio.
-    ///   - 0.0 = no damping (oscillates forever)
-    ///   - 1.0 = critically damped (fastest approach without overshoot)
-    ///   - \> 1.0 = overdamped (slower approach without overshoot)
-    ///   - < 1.0 = underdamped (overshoots and oscillates)
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// // Create a motor that acts like a critically damped spring at 2 Hz
-    /// let motor = AngularMotor::new(0.0)
-    ///     .with_spring_damper(2.0, 1.0)
-    ///     .with_target_position_value(target_angle);
-    /// ```
-    #[inline]
-    pub const fn with_spring_damper(mut self, frequency: Scalar, damping_ratio: Scalar) -> Self {
-        self.motor_model = MotorModel::SpringDamper {
-            frequency,
-            damping_ratio,
-        };
         self
     }
 }
@@ -197,9 +156,11 @@ impl AngularMotor {
 /// ```ignore
 /// PrismaticJoint::new(entity1, entity2)
 ///     .with_motor(
-///         LinearMotor::new(0.0)
-///             .with_spring_damper(2.0, 1.0) // 2 Hz, critically damped
-///             .with_target_position_value(target_position)
+///         LinearMotor::new(MotorModel::SpringDamper {
+///             frequency: 2.0,
+///             damping_ratio: 1.0,
+///         })
+///         .with_target_position(target_position)
 ///     )
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
@@ -229,19 +190,14 @@ impl Default for LinearMotor {
 }
 
 impl LinearMotor {
-    /// Creates a new linear motor with the given target velocity.
-    ///
-    /// This creates a velocity-mode motor with no position control.
+    /// Creates a new linear motor with the given motor model.
     #[inline]
-    pub const fn new(target_velocity: Scalar) -> Self {
+    pub const fn new(motor_model: MotorModel) -> Self {
         Self {
-            target_velocity,
+            target_velocity: 0.0,
             target_position: 0.0,
             max_force: Scalar::MAX,
-            motor_model: MotorModel::AccelerationBased {
-                stiffness: 0.0,
-                damping: 0.0,
-            },
+            motor_model,
         }
     }
 
@@ -254,7 +210,7 @@ impl LinearMotor {
 
     /// Sets the target position.
     #[inline]
-    pub const fn with_target_position_value(mut self, target_position: Scalar) -> Self {
+    pub const fn with_target_position(mut self, target_position: Scalar) -> Self {
         self.target_position = target_position;
         self
     }
@@ -263,45 +219,6 @@ impl LinearMotor {
     #[inline]
     pub const fn with_max_force(mut self, max_force: Scalar) -> Self {
         self.max_force = max_force;
-        self
-    }
-
-    /// Sets the motor model.
-    #[inline]
-    pub const fn with_motor_model(mut self, model: MotorModel) -> Self {
-        self.motor_model = model;
-        self
-    }
-
-    /// Sets the motor to use a spring-damper model for timestep-independent position control.
-    ///
-    /// This uses an implicit Euler integration formula that provides stable, predictable
-    /// spring-damper behavior regardless of the physics substep count.
-    ///
-    /// # Parameters
-    ///
-    /// - `frequency`: The natural frequency of the spring in Hz. Higher values create stiffer springs.
-    ///   A frequency of 1.0 Hz means the spring completes one oscillation per second (if underdamped).
-    /// - `damping_ratio`: The damping ratio.
-    ///   - 0.0 = no damping (oscillates forever)
-    ///   - 1.0 = critically damped (fastest approach without overshoot)
-    ///   - \> 1.0 = overdamped (slower approach without overshoot)
-    ///   - < 1.0 = underdamped (overshoots and oscillates)
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// // Create a motor that acts like a critically damped spring at 2 Hz
-    /// let motor = LinearMotor::new(0.0)
-    ///     .with_spring_damper(2.0, 1.0)
-    ///     .with_target_position_value(target_position);
-    /// ```
-    #[inline]
-    pub const fn with_spring_damper(mut self, frequency: Scalar, damping_ratio: Scalar) -> Self {
-        self.motor_model = MotorModel::SpringDamper {
-            frequency,
-            damping_ratio,
-        };
         self
     }
 }
