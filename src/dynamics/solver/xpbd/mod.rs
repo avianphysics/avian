@@ -279,7 +279,10 @@
 //! attachment position.
 
 mod plugin;
-pub use plugin::{XpbdSolverPlugin, XpbdSolverSystems, prepare_xpbd_joint, solve_xpbd_joint};
+pub use plugin::{
+    XpbdSolverPlugin, XpbdSolverSystems, prepare_xpbd_joint, solve_xpbd_joint,
+    solve_xpbd_joint_with_motor, warm_start_xpbd_motor,
+};
 
 pub mod joints;
 
@@ -306,6 +309,11 @@ pub trait XpbdConstraintSolverData {
     /// Returns the total Lagrange multiplier update applied to satisfy the rotation constraint.
     fn total_rotation_lagrange(&self) -> AngularVector {
         AngularVector::ZERO
+    }
+
+    /// Returns the total Lagrange multiplier accumulated by the motor, if any.
+    fn total_motor_lagrange(&self) -> Scalar {
+        0.0
     }
 }
 
@@ -345,6 +353,47 @@ pub trait XpbdConstraint<const ENTITY_COUNT: usize> {
         inertias: [&SolverBodyInertia; ENTITY_COUNT],
         solver_data: &mut Self::SolverData,
         dt: Scalar,
+    );
+}
+
+/// A trait for XPBD constraints that support motors.
+///
+/// This extends [`XpbdConstraint`] to add motor solving capability.
+/// Motors are solved in the same pass as other constraints for better coupling.
+pub trait XpbdMotorConstraint<const ENTITY_COUNT: usize>: XpbdConstraint<ENTITY_COUNT> {
+    /// The motor type for this constraint.
+    type Motor;
+
+    /// Returns a reference to the motor, if one is configured.
+    fn motor(&self) -> Option<&Self::Motor>;
+
+    /// Solves the motor constraint.
+    ///
+    /// This method is called after `solve` to apply motor forces/torques.
+    /// It is only called if `motor()` returns `Some`.
+    fn solve_motor(
+        &self,
+        bodies: [&mut SolverBody; ENTITY_COUNT],
+        inertias: [&SolverBodyInertia; ENTITY_COUNT],
+        solver_data: &mut Self::SolverData,
+        motor: &Self::Motor,
+        dt: Scalar,
+    );
+
+    /// Warm starts the motor constraint by applying the impulse from the previous frame.
+    ///
+    /// This is called once at the beginning of the first substep. After applying,
+    /// the stored warm start impulse should be zeroed to prevent re-application
+    /// in subsequent substeps.
+    ///
+    /// The `warm_start_coefficient` scales the applied impulse (typically 1.0).
+    fn warm_start_motor(
+        &self,
+        bodies: [&mut SolverBody; ENTITY_COUNT],
+        inertias: [&SolverBodyInertia; ENTITY_COUNT],
+        solver_data: &mut Self::SolverData,
+        dt: Scalar,
+        warm_start_coefficient: Scalar,
     );
 }
 
