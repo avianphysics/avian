@@ -69,9 +69,8 @@ fn revolute_motor_spins_body() {
     // Use AccelerationBased model for velocity control.
     let _joint = app
         .world_mut()
-        .spawn((
-            RevoluteJoint::new(anchor, dynamic),
-            AngularJointMotor {
+        .spawn(
+            RevoluteJoint::new(anchor, dynamic).with_motor(AngularMotor {
                 target_velocity: 2.0, // 2 rad/s
                 max_torque: 100.0,
                 motor_model: MotorModel::AccelerationBased {
@@ -79,8 +78,8 @@ fn revolute_motor_spins_body() {
                     damping: 10.0,
                 },
                 ..default()
-            },
-        ))
+            }),
+        )
         .id();
 
     // Initialize the app.
@@ -143,18 +142,19 @@ fn prismatic_motor_moves_body() {
     // Create a prismatic joint with a linear motor along the X axis.
     let _joint = app
         .world_mut()
-        .spawn((
-            PrismaticJoint::new(anchor, dynamic).with_local_anchor1(Vector::X * 2.0),
-            LinearJointMotor {
-                target_velocity: 1.0, // 1 m/s
-                max_force: 100.0,
-                motor_model: MotorModel::AccelerationBased {
-                    stiffness: 0.0,
-                    damping: 10.0,
-                },
-                ..default()
-            },
-        ))
+        .spawn(
+            PrismaticJoint::new(anchor, dynamic)
+                .with_local_anchor1(Vector::X * 2.0)
+                .with_motor(LinearMotor {
+                    target_velocity: 1.0, // 1 m/s
+                    max_force: 100.0,
+                    motor_model: MotorModel::AccelerationBased {
+                        stiffness: 0.0,
+                        damping: 10.0,
+                    },
+                    ..default()
+                }),
+        )
         .id();
 
     // Initialize the app.
@@ -212,9 +212,8 @@ fn revolute_motor_respects_max_torque() {
     // Create a revolute joint with a very limited motor torque.
     let _joint = app
         .world_mut()
-        .spawn((
-            RevoluteJoint::new(anchor, dynamic),
-            AngularJointMotor {
+        .spawn(
+            RevoluteJoint::new(anchor, dynamic).with_motor(AngularMotor {
                 target_velocity: 10.0, // High target
                 max_torque: 0.1,       // Very low max torque
                 motor_model: MotorModel::AccelerationBased {
@@ -222,8 +221,8 @@ fn revolute_motor_respects_max_torque() {
                     damping: 1.0,
                 },
                 ..default()
-            },
-        ))
+            }),
+        )
         .id();
 
     // Initialize the app.
@@ -287,9 +286,8 @@ fn revolute_motor_position_target() {
     let target_angle = 1.0; // 1 radian
     let _joint = app
         .world_mut()
-        .spawn((
-            RevoluteJoint::new(anchor, dynamic),
-            AngularJointMotor {
+        .spawn(
+            RevoluteJoint::new(anchor, dynamic).with_motor(AngularMotor {
                 target_position: target_angle,
                 max_torque: Scalar::MAX,
                 motor_model: MotorModel::AccelerationBased {
@@ -297,8 +295,8 @@ fn revolute_motor_position_target() {
                     damping: 20.0,   // High damping for stability
                 },
                 ..default()
-            },
-        ))
+            }),
+        )
         .id();
 
     // Initialize the app.
@@ -371,18 +369,19 @@ fn prismatic_motor_position_target() {
     let target_position = 1.0; // Target is 1 meter along the slider axis
     let _joint = app
         .world_mut()
-        .spawn((
-            PrismaticJoint::new(anchor, dynamic).with_local_anchor1(Vector::X * 2.0),
-            LinearJointMotor {
-                target_position,
-                max_force: 100.0,
-                motor_model: MotorModel::AccelerationBased {
-                    stiffness: 10.0, // Moderate stiffness
-                    damping: 5.0,    // Moderate damping
-                },
-                ..default()
-            },
-        ))
+        .spawn(
+            PrismaticJoint::new(anchor, dynamic)
+                .with_local_anchor1(Vector::X * 2.0)
+                .with_motor(LinearMotor {
+                    target_position,
+                    max_force: 100.0,
+                    motor_model: MotorModel::AccelerationBased {
+                        stiffness: 10.0, // Moderate stiffness
+                        damping: 5.0,    // Moderate damping
+                    },
+                    ..default()
+                }),
+        )
         .id();
 
     // Initialize the app.
