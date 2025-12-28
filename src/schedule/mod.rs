@@ -290,13 +290,13 @@ fn update_last_physics_tick(
     last_physics_tick.0 = system_change_tick.this_run();
 }
 
-#[cfg(debug_assertions)]
 /// Debug system that checks for NaNs and infinities in Avian components and
 /// reports the last location they were written to.
-pub fn assert_components_finite(
+#[cfg(debug_assertions)]
+fn assert_components_finite(
     pos_query: Query<(Entity, Ref<Position>)>,
-    vel_query: Query<(Entity, Ref<LinearVelocity>)>,
-    ang_query: Query<(Entity, Ref<AngularVelocity>)>,
+    lin_vel_query: Query<(Entity, Ref<LinearVelocity>)>,
+    ang_vel_query: Query<(Entity, Ref<AngularVelocity>)>,
 ) {
     macro_rules! assert_finite {
         ($ent:expr, $val:ident, $ty:ty) => {
@@ -312,10 +312,10 @@ pub fn assert_components_finite(
     for (entity, position) in pos_query {
         assert_finite!(entity, position, Position);
     }
-    for (entity, velocity) in vel_query {
+    for (entity, velocity) in lin_vel_query {
         assert_finite!(entity, velocity, LinearVelocity);
     }
-    for (entity, angular_velocity) in ang_query {
-        assert_finite!(entity, angular_velocity, AngularVelocity);
+    for (entity, velocity) in ang_vel_query {
+        assert_finite!(entity, velocity, AngularVelocity);
     }
 }
