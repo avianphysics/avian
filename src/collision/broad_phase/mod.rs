@@ -3,8 +3,10 @@
 //!
 //! See [`BroadPhasePlugin`].
 
+mod diagnostics;
+pub use diagnostics::BroadPhaseDiagnostics;
+
 mod tree;
-use obvhs::{aabb::Aabb, heapstack::HeapStack};
 pub use tree::*;
 
 use core::marker::PhantomData;
@@ -13,8 +15,7 @@ use crate::{
     data_structures::pair_key::PairKey, dynamics::solver::solver_body::SolverBody, prelude::*,
 };
 use bevy::{ecs::system::SystemParamItem, prelude::*, utils::Parallel};
-
-use super::CollisionDiagnostics;
+use obvhs::aabb::Aabb;
 
 /// Finds pairs of entities with overlapping [`ColliderAabb`]s to reduce
 /// the number of potential contacts for the [narrow phase](crate::narrow_phase).
@@ -22,7 +23,7 @@ use super::CollisionDiagnostics;
 /// A contact pair is created in the [`Collisions`] resource for each pair found.
 /// Removing and updating these pairs is left to the [narrow phase](crate::narrow_phase).
 ///
-/// The broad phase systems run in [`PhysicsStepSet::BroadPhase`].
+/// The broad phase systems run in [`PhysicsStepSystems::BroadPhase`].
 ///
 /// [`CollisionHooks`] can be provided with generics to apply custom filtering for collision pairs.
 pub struct BroadPhasePlugin<H: CollisionHooks = ()>(PhantomData<H>);
@@ -40,41 +41,52 @@ where
     fn build(&self, app: &mut App) {
         app.add_plugins(ColliderTreePlugin::<Collider>::default());
 
+        app.init_resource::<ContactGraph>();
+
         app.configure_sets(
             PhysicsSchedule,
             (
-                BroadPhaseSet::First,
-                BroadPhaseSet::UpdateStructures,
-                BroadPhaseSet::CollectCollisions,
-                BroadPhaseSet::Last,
+                BroadPhaseSystems::First,
+                BroadPhaseSystems::CollectCollisions,
+                BroadPhaseSystems::Last,
             )
                 .chain()
-                .in_set(PhysicsStepSet::BroadPhase),
+                .in_set(PhysicsStepSystems::BroadPhase),
         );
 
-        let physics_schedule = app
-            .get_schedule_mut(PhysicsSchedule)
-            .expect("add PhysicsSchedule first");
+        app.configure_sets(
+            PhysicsSchedule,
+            BroadPhaseSystems::BeginOptimize.in_set(NarrowPhaseSystems::Update),
+        );
 
-        physics_schedule.add_systems(find_collision_pairs.in_set(BroadPhaseSet::CollectCollisions));
+        app.add_systems(
+            PhysicsSchedule,
+            find_collision_pairs.in_set(BroadPhaseSystems::CollectCollisions),
+        );
     }
 
     fn finish(&self, app: &mut App) {
-        // Register timer and counter diagnostics for collision detection.
-        app.register_physics_diagnostics::<CollisionDiagnostics>();
+        // Register timer diagnostics for the broad phase.
+        app.register_physics_diagnostics::<BroadPhaseDiagnostics>();
     }
 }
 
-/// System sets for systems running in [`PhysicsStepSet::BroadPhase`].
+/// System sets for systems running in [`PhysicsStepSystems::BroadPhase`].
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum BroadPhaseSet {
+pub enum BroadPhaseSystems {
     /// Runs at the start of the broad phase. Empty by default.
     First,
-    /// Updates acceleration structures and other data needed for broad phase collision detection.
-    UpdateStructures,
+    /// Begins optimizing acceleration structures to keep their query performance good.
+    ///
+    /// This runs concurrently with the simulation step as an async task.
+    BeginOptimize,
     /// Finds pairs of entities with overlapping [`ColliderAabb`]s
     /// and creates contact pairs for them in [`Collisions`].
     CollectCollisions,
+    /// Completes the optimization of acceleration structures started in [`BroadPhaseSystems::BeginOptimize`].
+    ///
+    /// This runs at the end of the simulation step.
+    EndOptimize,
     /// Runs at the end of the broad phase. Empty by default.
     Last,
 }
@@ -88,12 +100,11 @@ fn find_collision_pairs(
             &ColliderAabb,
             Option<&CollisionLayers>,
         ),
-        With<SolverBody>,
+        (With<SolverBody>, With<MovedProxy>),
     >,
-    aabb_query: Query<&ColliderAabb>,
     collider_of_query: Query<&ColliderOf>,
     mut collisions: ResMut<ContactGraph>,
-    mut diagnostics: ResMut<CollisionDiagnostics>,
+    mut diagnostics: ResMut<BroadPhaseDiagnostics>,
 ) {
     let start = crate::utils::Instant::now();
 
@@ -102,18 +113,15 @@ fn find_collision_pairs(
     let mut parallel = Parallel::<Vec<(Entity, Entity)>>::default();
 
     // Perform tree queries for all moving proxies.
-
     body_query.par_iter().for_each_init(
         || parallel.borrow_local_mut(),
         |pairs, (entity, &BroadPhaseProxyIndex(query_proxy_index), aabb, layers)| {
             let layers = layers.map_or(CollisionLayers::default(), |layers| *layers);
 
             // Find potential collisions against moving proxies.
-            let mut stack = HeapStack::new_with_capacity(256);
-            tree.dynamic_tree.bvh.aabb_traverse(
-                &mut stack,
-                Aabb::from(*aabb),
-                |bvh, node_index| {
+            tree.dynamic_tree
+                .bvh
+                .aabb_traverse(Aabb::from(*aabb), |bvh, node_index| {
                     let node = bvh.nodes[node_index as usize];
                     let start = node.first_index as usize;
                     let end = start + node.prim_count as usize;
@@ -122,7 +130,13 @@ fn find_collision_pairs(
                         let proxy_index =
                             tree.dynamic_tree.bvh.primitive_indices[node_primitive_index] as usize;
 
-                        let Some(Some(proxy)) = tree.dynamic_tree.proxies.get(proxy_index) else {
+                        // Avoid duplicate pairs for moving proxies.
+                        if (proxy_index as u32) < query_proxy_index {
+                            // TODO: Check move set first.
+                            continue;
+                        }
+
+                        let Some(proxy) = tree.dynamic_tree.proxies.get(proxy_index) else {
                             error!(
                                 "Proxy index {} exceeds the number of proxies {}",
                                 node.first_index,
@@ -130,6 +144,11 @@ fn find_collision_pairs(
                             );
                             continue;
                         };
+
+                        // Check if the AABBs intersect.
+                        if !Aabb::from(*aabb).intersect_aabb(&Aabb::from(proxy.aabb)) {
+                            continue;
+                        }
 
                         let entity1 = entity;
                         let entity2 = proxy.entity;
@@ -139,22 +158,8 @@ fn find_collision_pairs(
                             continue;
                         }
 
-                        let Ok(proxy_aabb) = aabb_query.get(proxy.entity) else {
-                            continue;
-                        };
-
-                        // Check if the AABBs intersect.
-                        if !Aabb::from(*aabb).intersect_aabb(&Aabb::from(*proxy_aabb)) {
-                            continue;
-                        }
-
                         // Check if the layers interact.
                         if !layers.interacts_with(proxy.layers) {
-                            continue;
-                        }
-
-                        // Avoid duplicate pairs for moving proxies.
-                        if (proxy_index as u32) < query_proxy_index {
                             continue;
                         }
 
@@ -212,13 +217,12 @@ fn find_collision_pairs(
                     }
 
                     true
-                },
-            );
+                });
 
             // Find potential collisions against static or sleeping proxies.
             tree.static_tree
                 .bvh
-                .aabb_traverse(&mut stack, Aabb::from(*aabb), |bvh, node_index| {
+                .aabb_traverse(Aabb::from(*aabb), |bvh, node_index| {
                     let node = bvh.nodes[node_index as usize];
                     let start = node.first_index as usize;
                     let end = start + node.prim_count as usize;
@@ -227,7 +231,7 @@ fn find_collision_pairs(
                         let proxy_index =
                             tree.static_tree.bvh.primitive_indices[node_primitive_index] as usize;
 
-                        let Some(Some(proxy)) = tree.static_tree.proxies.get(proxy_index) else {
+                        let Some(proxy) = tree.static_tree.proxies.get(proxy_index) else {
                             error!(
                                 "Proxy index {} exceeds the number of proxies {}",
                                 proxy_index,
@@ -236,12 +240,8 @@ fn find_collision_pairs(
                             continue;
                         };
 
-                        let Ok(proxy_aabb) = aabb_query.get(proxy.entity) else {
-                            continue;
-                        };
-
                         // Check if the AABBs intersect.
-                        if !Aabb::from(*aabb).intersect_aabb(&Aabb::from(*proxy_aabb)) {
+                        if !Aabb::from(*aabb).intersect_aabb(&Aabb::from(proxy.aabb)) {
                             continue;
                         }
 
@@ -280,28 +280,29 @@ fn find_collision_pairs(
         },
     );
 
+    diagnostics.find_pairs += start.elapsed();
+
     parallel.drain_into(&mut broad_collision_pairs);
 
     for (entity1, entity2) in broad_collision_pairs {
-        let pair_key = PairKey::new(entity1.index(), entity2.index());
-
-        // Create a new contact pair as non-touching.
-        // The narrow phase will determine if the entities are touching and compute contact data.
-        let mut contacts = ContactPair::new(entity1, entity2);
+        let mut contact_edge = ContactEdge::new(entity1, entity2);
 
         if let (Ok(collider_of1), Ok(collider_of2)) = (
             collider_of_query.get(entity1),
             collider_of_query.get(entity2),
         ) {
-            contacts.body1 = Some(collider_of1.body);
-            contacts.body2 = Some(collider_of2.body);
+            contact_edge.body1 = Some(collider_of1.body);
+            contact_edge.body2 = Some(collider_of2.body);
         }
 
-        // Initialize flags and other data for the contact pair.
-
-        // Add the contact pair to the contact graph.
-        collisions.add_pair_with_key(contacts, pair_key);
+        collisions.add_edge_with(contact_edge, |contact_pair| {
+            if let (Ok(collider_of1), Ok(collider_of2)) = (
+                collider_of_query.get(entity1),
+                collider_of_query.get(entity2),
+            ) {
+                contact_pair.body1 = Some(collider_of1.body);
+                contact_pair.body2 = Some(collider_of2.body);
+            }
+        });
     }
-
-    diagnostics.broad_phase += start.elapsed();
 }

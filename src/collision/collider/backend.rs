@@ -7,14 +7,13 @@ use core::marker::PhantomData;
 #[cfg(all(feature = "collider-from-mesh", feature = "default-collider"))]
 use crate::collision::collider::cache::ColliderCache;
 use crate::{
-    collision::broad_phase::BroadPhaseSystems,
     physics_transform::{PhysicsTransformConfig, PhysicsTransformSystems, init_physics_transform},
     prelude::*,
 };
 #[cfg(all(feature = "bevy_scene", feature = "default-collider"))]
 use bevy::scene::SceneInstance;
 use bevy::{
-    ecs::{intern::Interned, schedule::ScheduleLabel, system::StaticSystemParam},
+    ecs::{intern::Interned, schedule::ScheduleLabel},
     prelude::*,
 };
 use mass_properties::{MassPropertySystems, components::RecomputeMassProperties};
