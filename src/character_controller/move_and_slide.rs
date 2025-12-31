@@ -2,6 +2,8 @@
 //!
 //! See the documentation of [`MoveAndSlide`] for more information.
 
+pub use super::velocity_project::*;
+
 use crate::{collision::collider::contact_query::contact_manifolds, prelude::*};
 use bevy::{ecs::system::SystemParam, prelude::*};
 use core::time::Duration;
@@ -1082,97 +1084,6 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// does not try to continue moving into colliding geometry.
     #[must_use]
     pub fn project_velocity(v: Vector, normals: &[Dir]) -> Vector {
-        if normals.is_empty() {
-            return v;
-        }
-
-        // The halfspaces defined by the contact normals form a polyhedral cone.
-        // We want to find the closest point to v that lies inside this cone.
-        //
-        // There are three cases to consider:
-        // 1. v is already inside the cone -> return v
-        // 2. v is outside the cone
-        //    a. Project v onto each plane and check if the projection is inside the cone
-        //    b. Project v onto each edge (intersection of two planes) and check if the projection is inside the cone
-        // 3. If no valid projection is found, return the apex of the cone (the origin)
-
-        // Case 1: Check if v is inside the cone
-        if normals
-            .iter()
-            .all(|normal| normal.adjust_precision().dot(v) >= -DOT_EPSILON)
-        {
-            return v;
-        }
-
-        // Best candidate so far
-        let mut best_projection = Vector::ZERO;
-        let mut best_distance_sq = Scalar::INFINITY;
-
-        // Helper to test halfspace validity
-        let is_valid = |projection: Vector| {
-            normals
-                .iter()
-                .all(|n| projection.dot(n.adjust_precision()) >= -DOT_EPSILON)
-        };
-
-        // Case 2a: Face projections (single-plane active set)
-        for n in normals {
-            let n = n.adjust_precision();
-            let n_dot_v = n.dot(v);
-            if n_dot_v < -DOT_EPSILON {
-                // Project v onto the plane defined by n:
-                // projection = v - (v · n) n
-                let projection = v - n_dot_v * n;
-
-                // Check if better than previous best and valid
-                let distance_sq = v.distance_squared(projection);
-                if distance_sq < best_distance_sq && is_valid(projection) {
-                    best_distance_sq = distance_sq;
-                    best_projection = projection;
-                }
-            }
-        }
-
-        // Case 2b: Edge projections (two-plane active set)
-        // TODO: Can we optimize this from O(n^3) to O(n^2)?
-        #[cfg(feature = "3d")]
-        {
-            let n = normals.len();
-            for i in 0..n {
-                let ni = normals[i].adjust_precision();
-                for nj in normals
-                    .iter()
-                    .take(n)
-                    .skip(i + 1)
-                    .map(|n| n.adjust_precision())
-                {
-                    // Compute edge direction e = ni x nj
-                    let e = ni.cross(nj);
-                    let e_length_sq = e.length_squared();
-                    if e_length_sq < DOT_EPSILON {
-                        // Nearly parallel edge
-                        continue;
-                    }
-
-                    // Project v onto the line spanned by e:
-                    // projection = ((v · e) / |e|²) e
-                    let projection = e * (v.dot(e) / e_length_sq);
-
-                    // Check if better than previous best and valid
-                    let distance_sq = v.distance_squared(projection);
-                    if distance_sq < best_distance_sq && is_valid(projection) {
-                        best_distance_sq = distance_sq;
-                        best_projection = projection;
-                    }
-                }
-            }
-        }
-
-        // Case 3: If no candidate is found, the projection is at the apex (the origin)
-        if best_distance_sq.is_infinite() {
-            Vector::ZERO
-        } else {
-            best_projection
-        }
+        project_velocity(v, normals)
     }
 }
