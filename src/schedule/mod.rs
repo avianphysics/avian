@@ -268,13 +268,11 @@ fn run_physics_schedule(world: &mut World, mut is_first_run: Local<IsFirstRun>) 
             schedule.run(world);
         }
 
-        // If physics is paused, reset delta time to stop the simulation
-        // unless users manually advance `Time<Physics>`.
-        if is_paused {
-            world
-                .resource_mut::<Time<Physics>>()
-                .advance_by(Duration::ZERO);
-        }
+        // Reset delta time, to continue the simulation `Time<Physics>`
+        // must be unpaused or manually advanced by users.
+        world
+            .resource_mut::<Time<Physics>>()
+            .advance_by(Duration::ZERO);
 
         // Set the generic `Time` resource back to the clock that was active before physics.
         *world.resource_mut::<Time>() = old_clock;
