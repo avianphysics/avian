@@ -550,6 +550,21 @@ impl ColliderAabb {
     }
 }
 
+impl From<ColliderAabb> for obvhs::aabb::Aabb {
+    fn from(value: ColliderAabb) -> Self {
+        Self {
+            #[cfg(feature = "3d")]
+            min: value.min.into(),
+            #[cfg(feature = "3d")]
+            max: value.max.into(),
+            #[cfg(feature = "2d")]
+            min: value.min.extend(0.0).into(),
+            #[cfg(feature = "2d")]
+            max: value.max.extend(0.0).into(),
+        }
+    }
+}
+
 /// An Axis-Aligned Bounding Box that contains the [`ColliderAabb`] with an additional margin.
 ///
 /// This is used to avoid updating the Bounding Volume Hierarchy acceleration structure

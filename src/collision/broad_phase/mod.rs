@@ -11,11 +11,12 @@ pub use tree::*;
 
 use core::marker::PhantomData;
 
-use crate::{
-    data_structures::pair_key::PairKey, dynamics::solver::solver_body::SolverBody, prelude::*,
+use crate::{data_structures::pair_key::PairKey, prelude::*};
+use bevy::{
+    ecs::system::SystemParamItem,
+    prelude::*,
+    tasks::{ComputeTaskPool, ParallelSlice},
 };
-use bevy::{ecs::system::SystemParamItem, prelude::*, utils::Parallel};
-use obvhs::aabb::Aabb;
 
 /// Finds pairs of entities with overlapping [`ColliderAabb`]s to reduce
 /// the number of potential contacts for the [narrow phase](crate::narrow_phase).
@@ -59,6 +60,13 @@ where
             BroadPhaseSystems::BeginOptimize.in_set(NarrowPhaseSystems::Update),
         );
 
+        app.configure_sets(
+            PhysicsSchedule,
+            BroadPhaseSystems::EndOptimize
+                .after(PhysicsStepSystems::Solver)
+                .before(PhysicsStepSystems::Sleeping),
+        );
+
         app.add_systems(
             PhysicsSchedule,
             find_collision_pairs.in_set(BroadPhaseSystems::CollectCollisions),
@@ -93,15 +101,7 @@ pub enum BroadPhaseSystems {
 
 fn find_collision_pairs(
     tree: ResMut<ColliderTrees>,
-    body_query: Query<
-        (
-            Entity,
-            &BroadPhaseProxyIndex,
-            &ColliderAabb,
-            Option<&CollisionLayers>,
-        ),
-        (With<SolverBody>, With<MovedProxy>),
-    >,
+    moved_proxies: Res<MovedProxies>,
     collider_of_query: Query<&ColliderOf>,
     mut collisions: ResMut<ContactGraph>,
     mut diagnostics: ResMut<BroadPhaseDiagnostics>,
@@ -110,179 +110,187 @@ fn find_collision_pairs(
 
     let mut broad_collision_pairs = Vec::new();
 
-    let mut parallel = Parallel::<Vec<(Entity, Entity)>>::default();
-
     // Perform tree queries for all moving proxies.
-    body_query.par_iter().for_each_init(
-        || parallel.borrow_local_mut(),
-        |pairs, (entity, &BroadPhaseProxyIndex(query_proxy_index), aabb, layers)| {
-            let layers = layers.map_or(CollisionLayers::default(), |layers| *layers);
+    let pairs = moved_proxies.proxies().par_splat_map(
+        ComputeTaskPool::get(),
+        None,
+        |_chunk_index, proxies| {
+            let mut pairs = Vec::new();
 
-            // Find potential collisions against moving proxies.
-            tree.dynamic_tree
-                .bvh
-                .aabb_traverse(Aabb::from(*aabb), |bvh, node_index| {
-                    let node = bvh.nodes[node_index as usize];
-                    let start = node.first_index as usize;
-                    let end = start + node.prim_count as usize;
+            for &proxy_index1 in proxies {
+                let proxy1 = tree
+                    .dynamic_tree
+                    .proxies
+                    .get(proxy_index1 as usize)
+                    .unwrap();
 
-                    for node_primitive_index in start..end {
-                        let proxy_index =
-                            tree.dynamic_tree.bvh.primitive_indices[node_primitive_index] as usize;
+                // Find potential collisions against moving proxies.
+                tree.dynamic_tree
+                    .bvh
+                    .aabb_traverse(proxy1.aabb, |bvh, node_index| {
+                        let node = bvh.nodes[node_index as usize];
+                        let start = node.first_index as usize;
+                        let end = start + node.prim_count as usize;
 
-                        // Avoid duplicate pairs for moving proxies.
-                        if (proxy_index as u32) < query_proxy_index {
-                            // TODO: Check move set first.
-                            continue;
-                        }
+                        for node_primitive_index in start..end {
+                            let proxy_index2 =
+                                tree.dynamic_tree.bvh.primitive_indices[node_primitive_index];
 
-                        let Some(proxy) = tree.dynamic_tree.proxies.get(proxy_index) else {
-                            error!(
-                                "Proxy index {} exceeds the number of proxies {}",
-                                node.first_index,
-                                tree.dynamic_tree.proxies.len()
-                            );
-                            continue;
-                        };
+                            // Avoid duplicate pairs for moving proxies.
+                            if proxy_index2 < proxy_index1 {
+                                // TODO: Check move set first.
+                                continue;
+                            }
 
-                        // Check if the AABBs intersect.
-                        if !Aabb::from(*aabb).intersect_aabb(&Aabb::from(proxy.aabb)) {
-                            continue;
-                        }
+                            let proxy2 = tree
+                                .dynamic_tree
+                                .proxies
+                                .get(proxy_index2 as usize)
+                                .unwrap();
 
-                        let entity1 = entity;
-                        let entity2 = proxy.entity;
+                            // Check if the AABBs intersect.
+                            if !proxy1.aabb.intersect_aabb(&proxy2.aabb) {
+                                continue;
+                            }
 
-                        // A proxy cannot collide with itself.
-                        if proxy.entity == entity {
-                            continue;
-                        }
+                            let entity1 = proxy1.entity;
+                            let entity2 = proxy2.entity;
 
-                        // Check if the layers interact.
-                        if !layers.interacts_with(proxy.layers) {
-                            continue;
-                        }
+                            // A proxy cannot collide with itself.
+                            if entity1 == entity2 {
+                                continue;
+                            }
 
-                        // No collisions between bodies that haven't moved or colliders with incompatible layers
-                        // or colliders with the same parent.
-                        /*if flags1
+                            // Check if the layers interact.
+                            if !proxy1.layers.interacts_with(proxy2.layers) {
+                                continue;
+                            }
+
+                            // No collisions between bodies that haven't moved or colliders with incompatible layers
+                            // or colliders with the same parent.
+                            /*if flags1
                             .intersection(*flags2)
                             .contains(AabbIntervalFlags::IS_INACTIVE)
                             || !layers1.interacts_with(*layers2)
                             || parent1 == parent2
-                        {
+                            {
                             continue;
-                        }*/
+                            }*/
 
-                        // Avoid duplicate pairs.
-                        let pair_key = PairKey::new(entity1.index(), entity2.index());
-                        if collisions.contains_key(&pair_key) {
-                            continue;
-                        }
+                            // Avoid duplicate pairs.
+                            let pair_key = PairKey::new(entity1.index(), entity2.index());
+                            if collisions.contains_key(&pair_key) {
+                                continue;
+                            }
 
-                        pairs.push((entity1, entity2));
+                            pairs.push((entity1, entity2));
 
-                        // Apply user-defined filter.
-                        /*if flags1
+                            // Apply user-defined filter.
+                            /*if flags1
                             .union(*flags2)
                             .contains(AabbIntervalFlags::CUSTOM_FILTER)
-                        {
+                            {
                             let should_collide = hooks.filter_pairs(*entity1, *entity2, commands);
                             if !should_collide {
                                 continue;
-                            }
-                        }*/
+                                }
+                            }*/
 
-                        /*contacts.flags.set(
+                            /*contacts.flags.set(
                             ContactPairFlags::SENSOR,
                             flags1.union(*flags2).contains(AabbIntervalFlags::IS_SENSOR),
-                        );
-                        contacts.flags.set(
-                            ContactPairFlags::CONTACT_EVENTS,
-                            flags1
+                            );
+                            contacts.flags.set(
+                                ContactPairFlags::CONTACT_EVENTS,
+                                flags1
                                 .union(*flags2)
                                 .contains(AabbIntervalFlags::CONTACT_EVENTS),
-                        );
-                        contacts.flags.set(
-                            ContactPairFlags::MODIFY_CONTACTS,
-                            flags1
+                                );
+                            contacts.flags.set(
+                                ContactPairFlags::MODIFY_CONTACTS,
+                                flags1
                                 .union(*flags2)
                                 .contains(AabbIntervalFlags::MODIFY_CONTACTS),
-                        );*/
+                                );*/
 
-                        // TODO: On the same body?
-                        // TODO: Both sensors?
-                        // TODO: Joint disables collision?
-                        // TODO: Custom collision filter using hook defined in `BroadPhasePlugin`
-                    }
-
-                    true
-                });
-
-            // Find potential collisions against static or sleeping proxies.
-            tree.static_tree
-                .bvh
-                .aabb_traverse(Aabb::from(*aabb), |bvh, node_index| {
-                    let node = bvh.nodes[node_index as usize];
-                    let start = node.first_index as usize;
-                    let end = start + node.prim_count as usize;
-
-                    for node_primitive_index in start..end {
-                        let proxy_index =
-                            tree.static_tree.bvh.primitive_indices[node_primitive_index] as usize;
-
-                        let Some(proxy) = tree.static_tree.proxies.get(proxy_index) else {
-                            error!(
-                                "Proxy index {} exceeds the number of proxies {}",
-                                proxy_index,
-                                tree.static_tree.proxies.len()
-                            );
-                            continue;
-                        };
-
-                        // Check if the AABBs intersect.
-                        if !Aabb::from(*aabb).intersect_aabb(&Aabb::from(proxy.aabb)) {
-                            continue;
+                            // TODO: On the same body?
+                            // TODO: Both sensors?
+                            // TODO: Joint disables collision?
+                            // TODO: Custom collision filter using hook defined in `BroadPhasePlugin`
                         }
 
-                        let entity1 = entity;
-                        let entity2 = proxy.entity;
+                        true
+                    });
 
-                        // Note: Unlike with the dynamic tree, we don't need to check for self-collision or duplicate pairs.
+                // Find potential collisions against static or sleeping proxies.
+                tree.static_tree
+                    .bvh
+                    .aabb_traverse(proxy1.aabb, |bvh, node_index| {
+                        let node = bvh.nodes[node_index as usize];
+                        let start = node.first_index as usize;
+                        let end = start + node.prim_count as usize;
 
-                        // Check if the layers interact.
-                        if !layers.interacts_with(proxy.layers) {
-                            return true;
-                        }
+                        for node_primitive_index in start..end {
+                            let proxy_index2 =
+                                tree.static_tree.bvh.primitive_indices[node_primitive_index];
 
-                        // No collisions between bodies that haven't moved or colliders with incompatible layers
-                        // or colliders with the same parent.
-                        /*if flags1
+                            let Some(proxy2) = tree.static_tree.proxies.get(proxy_index2 as usize)
+                            else {
+                                error!(
+                                    "Proxy index {} exceeds the number of proxies {}",
+                                    proxy_index2,
+                                    tree.static_tree.proxies.len()
+                                );
+                                continue;
+                            };
+
+                            // Check if the AABBs intersect.
+                            if !proxy1.aabb.intersect_aabb(&proxy2.aabb) {
+                                continue;
+                            }
+
+                            let entity1 = proxy1.entity;
+                            let entity2 = proxy2.entity;
+
+                            // Note: Unlike with the dynamic tree, we don't need to check for self-collision or duplicate pairs.
+
+                            // Check if the layers interact.
+                            if !proxy1.layers.interacts_with(proxy2.layers) {
+                                return true;
+                            }
+
+                            // No collisions between bodies that haven't moved or colliders with incompatible layers
+                            // or colliders with the same parent.
+                            /*if flags1
                             .intersection(*flags2)
                             .contains(AabbIntervalFlags::IS_INACTIVE)
                             || !layers1.interacts_with(*layers2)
                             || parent1 == parent2
-                        {
+                            {
                             return;
-                        }*/
+                            }*/
 
-                        // Avoid duplicate pairs.
-                        let pair_key = PairKey::new(entity1.index(), entity2.index());
-                        if collisions.contains_key(&pair_key) {
-                            return true;
+                            // Avoid duplicate pairs.
+                            let pair_key = PairKey::new(entity1.index(), entity2.index());
+                            if collisions.contains_key(&pair_key) {
+                                return true;
+                            }
+
+                            pairs.push((entity1, entity2));
                         }
 
-                        pairs.push((entity1, entity2));
-                    }
+                        true
+                    });
+            }
 
-                    true
-                });
+            pairs
         },
     );
 
-    diagnostics.find_pairs += start.elapsed();
-
-    parallel.drain_into(&mut broad_collision_pairs);
+    // Drain the pairs into a single vector.
+    for mut chunk in pairs {
+        broad_collision_pairs.append(&mut chunk);
+    }
 
     for (entity1, entity2) in broad_collision_pairs {
         let mut contact_edge = ContactEdge::new(entity1, entity2);
@@ -305,4 +313,6 @@ fn find_collision_pairs(
             }
         });
     }
+
+    diagnostics.find_pairs += start.elapsed();
 }

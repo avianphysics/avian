@@ -1,31 +1,33 @@
-use core::marker::PhantomData;
 #[cfg(feature = "parallel")]
-use std::cell::RefCell;
+use core::cell::RefCell;
+use core::marker::PhantomData;
 
 use crate::{
-    collision::collider::EnlargedAabb, data_structures::bit_vec::BitVec,
-    dynamics::solver::solver_body::SolverBody, prelude::*,
+    collision::{
+        broad_phase::{BroadPhaseDiagnostics, BvhProxy, ColliderTree, ColliderTreeWorkspace},
+        collider::EnlargedAabb,
+    },
+    data_structures::bit_vec::BitVec,
+    dynamics::solver::solver_body::SolverBody,
+    prelude::*,
 };
 use bevy::{
     ecs::{system::StaticSystemParam, world::CommandQueue},
     prelude::*,
-    tasks::{AsyncComputeTaskPool, Task, block_on, poll_once},
+    tasks::{AsyncComputeTaskPool, Task, block_on},
 };
 use obvhs::{
     aabb::Aabb,
-    bvh2::{
-        Bvh2, insertion_removal::SiblingInsertionCandidate, node::Bvh2Node,
-        reinsertion::ReinsertionOptimizer,
-    },
+    bvh2::{Bvh2, reinsertion::ReinsertionOptimizer},
     faststack::HeapStack,
-    ploc::{PlocBuilder, PlocSearchDistance, SortPrecision},
+    ploc::PlocBuilder,
 };
 use slab::Slab;
 #[cfg(feature = "parallel")]
 use thread_local::ThreadLocal;
 
-use super::BroadPhaseDiagnostics;
-
+/// A plugin that manages [`ColliderTrees`] for broad phase collision detection
+/// and spatial queries.
 pub struct ColliderTreePlugin<C: AnyCollider>(PhantomData<C>);
 
 impl<C: AnyCollider> Default for ColliderTreePlugin<C> {
@@ -38,8 +40,7 @@ impl<C: AnyCollider> Plugin for ColliderTreePlugin<C> {
     fn build(&self, app: &mut App) {
         app.init_resource::<ColliderTrees>()
             .init_resource::<ColliderTreeRebuild>()
-            .init_resource::<MovedProxies>()
-            .init_resource::<ThreadLocalMovedProxies>();
+            .init_resource::<MovedProxies>();
 
         // Allowing ambiguities is required so that it's possible
         // to have multiple collision backends at the same time.
@@ -60,7 +61,7 @@ impl<C: AnyCollider> Plugin for ColliderTreePlugin<C> {
 
         app.add_systems(
             PhysicsSchedule,
-            block_on_tree_rebuild.in_set(PhysicsStepSet::Finalize),
+            block_on_tree_rebuild.in_set(BroadPhaseSystems::EndOptimize),
         );
 
         // Initialize `ColliderAabb` for colliders.
@@ -108,85 +109,22 @@ impl<C: AnyCollider> Plugin for ColliderTreePlugin<C> {
                     return;
                 };
 
+                let aabb = Aabb::from(*collider_aabb);
+                let enlarged_aabb = Aabb::from(enlarged_aabb.get());
+
                 let proxy = BvhProxy {
                     entity,
                     layers: layers.copied().unwrap_or_default(),
-                    aabb: *collider_aabb,
+                    aabb,
                     flags: 0,
                 };
 
                 match *rb {
                     RigidBody::Dynamic | RigidBody::Kinematic => {
-                        proxy_index.0 = trees
-                            .dynamic_tree
-                            .add_proxy(Aabb::from(enlarged_aabb.get()), proxy);
+                        proxy_index.0 = trees.dynamic_tree.add_proxy(enlarged_aabb, proxy);
                     }
                     RigidBody::Static => {
-                        proxy_index.0 = trees
-                            .static_tree
-                            .add_proxy(Aabb::from(enlarged_aabb.get()), proxy);
-                    }
-                }
-            },
-        );
-
-        app.add_observer(
-            |trigger: On<Add, Sleeping>,
-             body_query: Query<&RigidBodyColliders>,
-             mut collider_query: Query<&mut BroadPhaseProxyIndex>,
-             mut trees: ResMut<ColliderTrees>| {
-                let entity = trigger.entity;
-
-                let Ok(body_colliders) = body_query.get(entity) else {
-                    return;
-                };
-
-                let mut iter = collider_query.iter_many_mut(body_colliders.iter());
-                for mut proxy_index in iter.fetch_next() {
-                    let proxy_index_value = proxy_index.0;
-
-                    // Remove from dynamic tree and insert into static tree.
-                    if let Some(proxy) = trees
-                        .dynamic_tree
-                        .proxies
-                        .try_remove(proxy_index_value as usize)
-                    {
-                        trees.dynamic_tree.bvh.remove_primitive(proxy_index_value);
-
-                        let new_index = trees.static_tree.add_proxy(Aabb::from(proxy.aabb), proxy);
-
-                        proxy_index.0 = new_index;
-                    }
-                }
-            },
-        );
-
-        app.add_observer(
-            |trigger: On<Remove, Sleeping>,
-             body_query: Query<&RigidBodyColliders>,
-             mut collider_query: Query<&mut BroadPhaseProxyIndex>,
-             mut trees: ResMut<ColliderTrees>| {
-                let entity = trigger.entity;
-
-                let Ok(body_colliders) = body_query.get(entity) else {
-                    return;
-                };
-
-                let mut iter = collider_query.iter_many_mut(body_colliders.iter());
-                for mut proxy_index in iter.fetch_next() {
-                    let proxy_index_value = proxy_index.0;
-
-                    // Remove from static tree and insert into dynamic tree.
-                    if let Some(proxy) = trees
-                        .static_tree
-                        .proxies
-                        .try_remove(proxy_index_value as usize)
-                    {
-                        trees.static_tree.bvh.remove_primitive(proxy_index_value);
-
-                        let new_index = trees.dynamic_tree.add_proxy(Aabb::from(proxy.aabb), proxy);
-
-                        proxy_index.0 = new_index;
+                        proxy_index.0 = trees.static_tree.add_proxy(enlarged_aabb, proxy);
                     }
                 }
             },
@@ -251,41 +189,6 @@ impl Default for ColliderTreeRebuild {
     }
 }
 
-/// A workspace for performing operations on a [`ColliderTree`].
-///
-/// This stores temporary data structures and working memory used when modifying the tree.
-/// It is recommended to reuse a single instance of this struct for all operations on a tree
-/// to avoid unnecessary allocations.
-#[derive(Resource)]
-pub struct ColliderTreeWorkspace {
-    /// Builds the tree using PLOC (*Parallel, Locally Ordered Clustering*).
-    pub ploc_builder: PlocBuilder,
-    /// Restructures the BVH, optimizing node locations within the BVH hierarchy per SAH cost.
-    pub reinsertion_optimizer: ReinsertionOptimizer,
-    /// A stack for tracking insertion candidates during proxy insertions.
-    pub insertion_stack: HeapStack<SiblingInsertionCandidate>,
-}
-
-impl Clone for ColliderTreeWorkspace {
-    fn clone(&self) -> Self {
-        Self {
-            ploc_builder: self.ploc_builder.clone(),
-            reinsertion_optimizer: ReinsertionOptimizer::default(),
-            insertion_stack: self.insertion_stack.clone(),
-        }
-    }
-}
-
-impl Default for ColliderTreeWorkspace {
-    fn default() -> Self {
-        Self {
-            ploc_builder: PlocBuilder::default(),
-            reinsertion_optimizer: ReinsertionOptimizer::default(),
-            insertion_stack: HeapStack::new_with_capacity(2000),
-        }
-    }
-}
-
 /// The index of a proxy in the broad phase.
 #[derive(Component, Clone, Copy, Debug, Default, Reflect)]
 pub struct BroadPhaseProxyIndex(pub u32);
@@ -301,198 +204,21 @@ pub struct ColliderTrees {
 
 impl Default for ColliderTrees {
     fn default() -> Self {
-        let mut proxies = Slab::with_capacity(2000);
-        proxies.insert(BvhProxy {
-            entity: Entity::PLACEHOLDER,
-            layers: CollisionLayers::ALL,
-            aabb: ColliderAabb::default(),
-            flags: 0,
-        });
+        let tree = ColliderTree {
+            bvh: Bvh2::default(),
+            proxies: Slab::with_capacity(2000),
+            workspace: ColliderTreeWorkspace::default(),
+        };
+
         Self {
-            dynamic_tree: ColliderTree {
-                bvh: Bvh2 {
-                    nodes: vec![Bvh2Node::new(default(), 1, 0)],
-                    primitive_indices: vec![0],
-                    ..default()
-                },
-                proxies: proxies.clone(),
-                workspace: ColliderTreeWorkspace::default(),
-            },
-            static_tree: ColliderTree {
-                bvh: Bvh2 {
-                    nodes: vec![Bvh2Node::new(default(), 1, 0)],
-                    primitive_indices: vec![0],
-                    ..default()
-                },
-                proxies,
-                workspace: ColliderTreeWorkspace::default(),
-            },
-        }
-    }
-}
-
-/// A Bounding Volume Hierarchy for accelerating queries on a set of colliders.
-///
-/// Add the [`BroadPhasePairs`] component to use this tree for broad phase collision detection.
-#[derive(Default)]
-pub struct ColliderTree {
-    /// The underlying BVH structure.
-    pub bvh: Bvh2,
-    /// The proxies stored in the tree.
-    pub proxies: Slab<BvhProxy>,
-    /// A workspace for reusing allocations across tree operations.
-    pub workspace: ColliderTreeWorkspace,
-}
-
-/// A component that stores pairs of entities with overlapping AABBs for a [`ColliderTree`].
-#[derive(Component, Clone, Debug, Default)]
-pub struct BroadPhasePairs(pub Vec<(Entity, Entity)>);
-
-impl ColliderTree {
-    /// Adds a proxy to the tree, returning its index.
-    #[inline]
-    pub fn add_proxy(&mut self, aabb: Aabb, proxy: BvhProxy) -> u32 {
-        let id = self.proxies.insert(proxy) as u32;
-        self.bvh
-            .insert_primitive(aabb, id, &mut self.workspace.insertion_stack);
-        id
-    }
-
-    /// Removes a proxy from the tree.
-    #[inline]
-    pub fn remove_proxy(&mut self, proxy_index: u32) {
-        if self.proxies.try_remove(proxy_index as usize).is_none() {
-            return;
-        }
-        self.bvh.remove_primitive(proxy_index);
-    }
-
-    /// Moves a proxy to a new position in the tree.
-    ///
-    /// Returns the new index of the proxy.
-    #[inline]
-    pub fn move_proxy(&mut self, proxy_index: u32, aabb: Aabb) -> u32 {
-        self.bvh.remove_primitive(proxy_index);
-        self.bvh
-            .insert_primitive(aabb, proxy_index, &mut self.workspace.insertion_stack) as u32
-    }
-
-    /// Fully rebuilds the tree from the given list of AABBs.
-    #[inline]
-    pub fn rebuild_full(&mut self) {
-        let mut aabbs: Vec<Aabb> = Vec::with_capacity(self.proxies.len());
-        let mut indices: Vec<u32> = Vec::with_capacity(self.proxies.len());
-
-        aabbs.push(Aabb::default());
-        indices.push(0);
-
-        for (i, proxy) in self.proxies.iter() {
-            aabbs.push(Aabb::from(proxy.aabb));
-            indices.push(i as u32);
-        }
-
-        self.workspace.ploc_builder.build_with_bvh(
-            &mut self.bvh,
-            PlocSearchDistance::Minimum,
-            &aabbs,
-            indices,
-            SortPrecision::U64,
-            0,
-        );
-    }
-
-    /// Restructures the tree using parallel reinsertion, optimizing node locations based on SAH cost.
-    ///
-    /// This can be used to improve query performance after the tree quality has degraded,
-    /// for example after many proxy insertions and removals.
-    #[inline]
-    pub fn optimize(&mut self, batch_size_ratio: f32) {
-        self.workspace
-            .reinsertion_optimizer
-            .run(&mut self.bvh, batch_size_ratio, None);
-    }
-
-    /// Updates the AABB of a proxy and reinserts it at an optimal place in the tree.
-    #[inline]
-    pub fn reinsert_proxy(&mut self, proxy_index: u32, aabb: ColliderAabb) {
-        // Update the static tree with the new AABB.
-        self.proxies[proxy_index as usize].aabb = aabb;
-
-        // Reinsert the node into the BVH.
-        let node_id = self.bvh.primitives_to_nodes[proxy_index as usize];
-        self.bvh.resize_node(node_id as usize, Aabb::from(aabb));
-        self.bvh.reinsert_node(node_id as usize);
-    }
-
-    /// Updates the AABB of a proxy in the tree and refits the BVH, resizing parent nodes as necessary.
-    ///
-    /// Unlike [`reinsert_proxy`](Self::reinsert_proxy), this does not change the position of the proxy in the tree.
-    /// Enlarging proxies withoujt optimizing the tree can degrade query performance over time,
-    /// so it is recommended to periodically call [`rebuild_full`](Self::rebuild_full) or [`optimize`](Self::optimize).
-    #[inline]
-    pub fn enlarge_proxy(&mut self, proxy_index: u32, aabb: Aabb) {
-        // Get the node index for the proxy.
-        let node_index = self.bvh.primitives_to_nodes[proxy_index as usize] as usize;
-
-        // Update the proxy's AABB in the BVH.
-        self.bvh.nodes[node_index].aabb = aabb;
-
-        // Compute the parent indices if they haven't been initialized yet.
-        self.bvh.init_parents_if_uninit();
-
-        let mut index = self.bvh.parents[node_index] as usize;
-
-        // Refit the BVH working up the tree.
-        // Stop when a parent node's AABB is not changed.
-        loop {
-            let parent_node = &mut self.bvh.nodes[index];
-            let new_aabb = parent_node.aabb.union(&aabb);
-
-            if parent_node.aabb == new_aabb {
-                break;
-            }
-
-            parent_node.aabb = new_aabb;
-
-            if index == 0 {
-                break;
-            }
-
-            index = self.bvh.parents[index] as usize;
-        }
-    }
-}
-
-/// A proxy representing a collider in the [`ColliderTree`].
-#[derive(Clone, Debug)]
-pub struct BvhProxy {
-    /// The entity this proxy represents.
-    pub entity: Entity,
-    /// The collision layers of the collider.
-    pub layers: CollisionLayers,
-    /// The tight AABB of the collider.
-    pub aabb: ColliderAabb,
-    /// Flags for the proxy.
-    pub flags: u32,
-}
-
-impl From<ColliderAabb> for Aabb {
-    fn from(value: ColliderAabb) -> Self {
-        Self {
-            #[cfg(feature = "3d")]
-            min: value.min.into(),
-            #[cfg(feature = "3d")]
-            max: value.max.into(),
-            #[cfg(feature = "2d")]
-            min: value.min.extend(0.0).into(),
-            #[cfg(feature = "2d")]
-            max: value.max.extend(0.0).into(),
+            dynamic_tree: tree.clone(),
+            static_tree: tree,
         }
     }
 }
 
 fn update_static_aabbs<C: AnyCollider>(
-    bodies: Query<&RigidBodyColliders, Without<SolverBody>>,
+    static_bodies: Query<&RigidBodyColliders, (Without<SolverBody>, Without<Sleeping>)>,
     mut colliders: Query<
         (
             Entity,
@@ -520,7 +246,7 @@ fn update_static_aabbs<C: AnyCollider>(
         .bvh
         .init_primitives_to_nodes_if_uninit();
 
-    for body_colliders in &bodies {
+    for body_colliders in &static_bodies {
         let mut iter = colliders.iter_many_mut(body_colliders.iter());
         while let Some((
             entity,
@@ -544,26 +270,68 @@ fn update_static_aabbs<C: AnyCollider>(
             // Reinsert the proxy into the BVH.
             collider_trees
                 .static_tree
-                .reinsert_proxy(proxy_index.0, *aabb);
+                .reinsert_proxy(proxy_index.0, Aabb::from(*aabb));
         }
     }
 
     diagnostics.update += start.elapsed();
 }
 
-/// A bit vector for tracking moved proxies in the broad phase.
+/// A resource for tracking moved proxies in the broad phase.
 ///
-/// Set bits correspond to colliders whose [`ColliderAabb`] has moved
+/// A moved proxy is one whose [`ColliderAabb`] has moved
 /// outside of the previous [`EnlargedAabb`].
-#[derive(Resource, Default, Deref, DerefMut)]
-struct MovedProxies(BitVec);
+#[derive(Resource, Default)]
+pub struct MovedProxies {
+    /// A bit vector tracking moved proxies.
+    ///
+    /// Set bits indicate moved proxy indices.
+    bit_vec: BitVec,
+    /// Thread-local bit vectors for tracking moved proxies in parallel.
+    /// These are combined into [`bit_vec`](Self::bit_vec) after parallel processing.
+    thread_local_bit_vec: ThreadLocal<RefCell<BitVec>>,
+    /// A vector of moved proxy indices.
+    ///
+    /// The broad phase iterates over these proxies to find new contact pairs.
+    proxies: Vec<u32>,
+}
 
-/// A resource storing thread-local bit vectors for tracking moved proxies in the broad phase.
-#[derive(Resource, Default, Deref, DerefMut)]
-struct ThreadLocalMovedProxies(ThreadLocal<RefCell<BitVec>>);
+impl MovedProxies {
+    /// Returns the moved proxy indices.
+    #[inline]
+    pub fn proxies(&self) -> &[u32] {
+        &self.proxies
+    }
+
+    /// Clears the moved proxies and sets the capacity of the internal structures.
+    #[inline]
+    pub fn clear_and_set_capacity(&mut self, capacity: usize) {
+        self.bit_vec.set_bit_count_and_clear(capacity);
+
+        self.thread_local_bit_vec.iter_mut().for_each(|context| {
+            let bit_vec_mut = &mut context.borrow_mut();
+            bit_vec_mut.set_bit_count_and_clear(capacity);
+        });
+
+        self.proxies.clear();
+
+        if self.proxies.capacity() < capacity {
+            self.proxies.reserve(capacity - self.proxies.capacity());
+        }
+    }
+
+    /// Combines the thread-local moved proxy bit vectors into the main one.
+    #[inline]
+    pub fn combine_thread_local(&mut self) {
+        let bit_vec = &mut self.bit_vec;
+        self.thread_local_bit_vec.iter_mut().for_each(|context| {
+            let thread_local_bit_vec = context.borrow();
+            bit_vec.or(&thread_local_bit_vec);
+        });
+    }
+}
 
 fn update_dynamic_aabbs<C: AnyCollider>(
-    mut commands: Commands,
     mut colliders: ParamSet<(
         Query<(
             Entity,
@@ -593,7 +361,6 @@ fn update_dynamic_aabbs<C: AnyCollider>(
     length_unit: Res<PhysicsLengthUnit>,
     mut collider_trees: ResMut<ColliderTrees>,
     mut moved_proxies: ResMut<MovedProxies>,
-    mut thread_local_moved_proxies: ResMut<ThreadLocalMovedProxies>,
     time: Res<Time>,
     collider_context: StaticSystemParam<C::Context>,
     mut diagnostics: ResMut<BroadPhaseDiagnostics>,
@@ -604,20 +371,13 @@ fn update_dynamic_aabbs<C: AnyCollider>(
     // TODO: Use a better way to track the number of proxies.
     let max_num_dynamic_proxies = collider_trees.dynamic_tree.proxies.capacity();
 
-    // Clear the bit vector used to track status changes for each contact pair.
-    moved_proxies.set_bit_count_and_clear(max_num_dynamic_proxies);
-
-    thread_local_moved_proxies.iter_mut().for_each(|context| {
-        let bit_vec_mut = &mut context.borrow_mut();
-        bit_vec_mut.set_bit_count_and_clear(max_num_dynamic_proxies);
-    });
+    // Clear and resize the moved proxy structures.
+    moved_proxies.clear_and_set_capacity(max_num_dynamic_proxies);
 
     let delta_secs = time.delta_seconds_adjusted();
     let default_speculative_margin = length_unit.0 * narrow_phase_config.default_speculative_margin;
     let contact_tolerance = length_unit.0 * narrow_phase_config.contact_tolerance;
     let margin = length_unit.0 * 0.05;
-
-    let mut insertion_buffer = Vec::new();
 
     collider_trees
         .dynamic_tree
@@ -643,6 +403,7 @@ fn update_dynamic_aabbs<C: AnyCollider>(
                 else {
                     continue;
                 };
+
                 let collision_margin = collision_margin.map_or(0.0, |margin| margin.0);
                 let speculative_margin = if has_swept_ccd {
                     Scalar::MAX
@@ -695,7 +456,8 @@ fn update_dynamic_aabbs<C: AnyCollider>(
                 let moved = enlarged_aabb.update(&aabb, margin);
 
                 if moved {
-                    let mut thread_local_bit_vec = thread_local_moved_proxies
+                    let mut thread_local_bit_vec = moved_proxies
+                        .thread_local_bit_vec
                         .get_or(|| {
                             let mut bit_vec = BitVec::default();
                             bit_vec.set_bit_count_and_clear(max_num_dynamic_proxies);
@@ -709,59 +471,55 @@ fn update_dynamic_aabbs<C: AnyCollider>(
     );
 
     // Combine thread-local moved proxy bit vectors into the main one.
-    thread_local_moved_proxies.iter_mut().for_each(|context| {
-        let thread_local_bit_vec = context.borrow();
-        moved_proxies.or(&thread_local_bit_vec);
-    });
+    moved_proxies.combine_thread_local();
 
     // Serially enlarge moved proxies in the dynamic tree.
-    let enlarged_colliders = colliders.p1();
-    for (i, mut bits) in moved_proxies.blocks().enumerate() {
+    let tree = &mut collider_trees.dynamic_tree;
+    let aabbs = colliders.p1();
+
+    let MovedProxies {
+        bit_vec,
+        proxies: moved_proxies,
+        ..
+    } = &mut *moved_proxies;
+
+    for (i, mut bits) in bit_vec.blocks().enumerate() {
         while bits != 0 {
             let trailing_zeros = bits.trailing_zeros();
             let proxy_index = i as u32 * 64 + trailing_zeros;
-            let proxy = &mut collider_trees.dynamic_tree.proxies[proxy_index as usize];
+            let proxy = &mut tree.proxies[proxy_index as usize];
             let entity = proxy.entity;
-            let (aabb, enlarged_aabb) = enlarged_colliders.get(entity).unwrap_or_else(|_| {
+            let (aabb, enlarged_aabb) = aabbs.get(entity).unwrap_or_else(|_| {
                 panic!(
                     "EnlargedAabb missing for moved collider entity {:?}",
                     entity
                 )
             });
 
-            proxy.aabb = *aabb;
-            collider_trees
-                .dynamic_tree
-                .enlarge_proxy(proxy_index, Aabb::from(enlarged_aabb.get()));
+            let aabb = Aabb::from(*aabb);
+            let enlarged_aabb = Aabb::from(enlarged_aabb.get());
 
-            insertion_buffer.push(entity);
+            // Update the proxy's AABB and enlarge it in the tree.
+            proxy.aabb = aabb;
+            tree.enlarge_proxy(proxy_index, enlarged_aabb);
+
+            // Record the moved proxy.
+            moved_proxies.push(proxy_index);
 
             // Clear the least significant set bit
             bits &= bits - 1;
         }
     }
 
-    // Insert `MovedProxy` components for moved colliders.
-    commands.insert_batch(
-        insertion_buffer
-            .into_iter()
-            .map(|entity| (entity, MovedProxy)),
-    );
-
     diagnostics.update += start.elapsed();
 }
-
-/// A marker component for a collider whose [`ColliderAabb`] has moved
-/// outside of the previous [`EnlargedAabb`] and needs to be updated in the [`ColliderTree`].
-#[derive(Component, Default)]
-pub struct MovedProxy;
 
 /// Begins an async full rebuild of the dynamic [`ColliderTree`] to optimize its structure.
 ///
 /// This spawns an async task that performs the rebuild concurrently with the simulation step.
 fn full_rebuild(
     mut collider_trees: ResMut<ColliderTrees>,
-    mut rebuild_task: ResMut<ColliderTreeRebuild>,
+    mut tree_rebuild: ResMut<ColliderTreeRebuild>,
     mut diagnostics: ResMut<BroadPhaseDiagnostics>,
 ) {
     let start = crate::utils::Instant::now();
@@ -772,10 +530,10 @@ fn full_rebuild(
     // It will be swapped back when the rebuild is done.
     core::mem::swap(
         &mut collider_trees.dynamic_tree.workspace,
-        &mut rebuild_task.tree.workspace,
+        &mut tree_rebuild.tree.workspace,
     );
 
-    let mut tree = core::mem::take(&mut rebuild_task.tree);
+    let mut tree = core::mem::take(&mut tree_rebuild.tree);
 
     // Update the proxies in the tree to match the current dynamic tree.
     // TODO: Try to avoid this clone.
@@ -797,7 +555,7 @@ fn full_rebuild(
         command_queue
     });
 
-    rebuild_task.task = Some(task);
+    tree_rebuild.task = Some(task);
 
     diagnostics.optimize += start.elapsed();
 }
@@ -809,15 +567,15 @@ fn block_on_tree_rebuild(
     mut tree_rebuild: ResMut<ColliderTreeRebuild>,
     mut diagnostics: ResMut<BroadPhaseDiagnostics>,
 ) {
-    if let Some(task) = &mut tree_rebuild.task
-        && let Some(mut command_queue) = block_on(poll_once(task))
-    {
+    let start = crate::utils::Instant::now();
+
+    if let Some(task) = &mut tree_rebuild.task {
+        let mut command_queue = block_on(task);
         commands.append(&mut command_queue);
     }
 
     tree_rebuild.task = None;
 
-    let start = crate::utils::Instant::now();
     // Swap back the workspace to the dynamic tree.
     core::mem::swap(
         &mut collider_trees.dynamic_tree.workspace,
