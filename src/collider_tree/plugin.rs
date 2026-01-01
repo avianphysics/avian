@@ -3,10 +3,7 @@ use core::cell::RefCell;
 use core::marker::PhantomData;
 
 use crate::{
-    collision::{
-        broad_phase::{BroadPhaseDiagnostics, BvhProxy, ColliderTree, ColliderTreeWorkspace},
-        collider::EnlargedAabb,
-    },
+    collision::{broad_phase::BroadPhaseDiagnostics, collider::EnlargedAabb},
     data_structures::{bit_vec::BitVec, stable_vec::StableVec},
     dynamics::solver::solver_body::SolverBody,
     prelude::*,
@@ -25,8 +22,7 @@ use obvhs::{
 #[cfg(feature = "parallel")]
 use thread_local::ThreadLocal;
 
-/// A plugin that manages [`ColliderTrees`] for broad phase collision detection
-/// and spatial queries.
+/// A plugin that manages [`ColliderTrees`] for a collider type `C`.
 pub struct ColliderTreePlugin<C: AnyCollider>(PhantomData<C>);
 
 impl<C: AnyCollider> Default for ColliderTreePlugin<C> {
@@ -41,26 +37,42 @@ impl<C: AnyCollider> Plugin for ColliderTreePlugin<C> {
             .init_resource::<ColliderTreeRebuild>()
             .init_resource::<MovedProxies>();
 
+        app.configure_sets(
+            PhysicsSchedule,
+            (ColliderTreeSystems::UpdateAabbs
+                .in_set(PhysicsStepSystems::BroadPhase)
+                .after(BroadPhaseSystems::First)
+                .before(BroadPhaseSystems::CollectCollisions),),
+        );
+
+        app.configure_sets(
+            PhysicsSchedule,
+            ColliderTreeSystems::BeginOptimize.in_set(NarrowPhaseSystems::Update),
+        );
+
+        app.configure_sets(
+            PhysicsSchedule,
+            ColliderTreeSystems::EndOptimize.in_set(PhysicsStepSystems::Finalize),
+        );
+
         // Allowing ambiguities is required so that it's possible
         // to have multiple collision backends at the same time.
         app.add_systems(
             PhysicsSchedule,
             (update_dynamic_aabbs::<C>, update_static_aabbs::<C>)
                 .chain()
-                .in_set(PhysicsStepSystems::BroadPhase)
-                .after(BroadPhaseSystems::First)
-                .before(BroadPhaseSystems::CollectCollisions)
+                .in_set(ColliderTreeSystems::UpdateAabbs)
                 .ambiguous_with_all(),
         );
 
         app.add_systems(
             PhysicsSchedule,
-            full_rebuild.in_set(BroadPhaseSystems::BeginOptimize),
+            full_rebuild.in_set(ColliderTreeSystems::BeginOptimize),
         );
 
         app.add_systems(
             PhysicsSchedule,
-            block_on_tree_rebuild.in_set(BroadPhaseSystems::EndOptimize),
+            block_on_tree_rebuild.in_set(ColliderTreeSystems::EndOptimize),
         );
 
         // Initialize `ColliderAabb` for colliders.
@@ -96,7 +108,7 @@ impl<C: AnyCollider> Plugin for ColliderTreePlugin<C> {
                 &RigidBody,
                 &ColliderAabb,
                 &EnlargedAabb,
-                &mut BroadPhaseProxyIndex,
+                &mut ColliderTreeProxyIndex,
                 Option<&CollisionLayers>,
             )>,
              mut trees: ResMut<ColliderTrees>| {
@@ -111,7 +123,7 @@ impl<C: AnyCollider> Plugin for ColliderTreePlugin<C> {
                 let aabb = Aabb::from(*collider_aabb);
                 let enlarged_aabb = Aabb::from(enlarged_aabb.get());
 
-                let proxy = BvhProxy {
+                let proxy = ColliderTreeProxy {
                     entity,
                     layers: layers.copied().unwrap_or_default(),
                     aabb,
@@ -132,7 +144,7 @@ impl<C: AnyCollider> Plugin for ColliderTreePlugin<C> {
         // TODO: Remove proxies when colliders are removed or disabled.
         app.add_observer(
             |trigger: On<Remove, EnlargedAabb>,
-             collider_query: Query<(&BroadPhaseProxyIndex, &ColliderOf)>,
+             collider_query: Query<(&ColliderTreeProxyIndex, &ColliderOf)>,
              body_query: Query<&RigidBody>,
              mut trees: ResMut<ColliderTrees>| {
                 let entity = trigger.entity;
@@ -156,6 +168,21 @@ impl<C: AnyCollider> Plugin for ColliderTreePlugin<C> {
             },
         );
     }
+}
+
+/// System sets for managing [`ColliderTrees`].
+#[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ColliderTreeSystems {
+    /// Updates the AABBs of colliders.
+    UpdateAabbs,
+    /// Begins optimizing acceleration structures to keep their query performance good.
+    ///
+    /// This runs concurrently with the simulation step as an async task.
+    BeginOptimize,
+    /// Completes the optimization of acceleration structures started in [`ColliderTreeSystems::BeginOptimize`].
+    ///
+    /// This runs at the end of the simulation step.
+    EndOptimize,
 }
 
 /// A resource representing an ongoing async rebuild of a collider tree.
@@ -188,10 +215,6 @@ impl Default for ColliderTreeRebuild {
     }
 }
 
-/// The index of a proxy in the broad phase.
-#[derive(Component, Clone, Copy, Debug, Default, Reflect)]
-pub struct BroadPhaseProxyIndex(pub u32);
-
 /// Trees for accelerating queries on a set of colliders.
 #[derive(Resource)]
 pub struct ColliderTrees {
@@ -216,6 +239,10 @@ impl Default for ColliderTrees {
     }
 }
 
+/// The index of a [`ColliderTreeProxy`] in a [`ColliderTree`].
+#[derive(Component, Clone, Copy, Debug, Default, Reflect)]
+pub struct ColliderTreeProxyIndex(pub u32);
+
 fn update_static_aabbs<C: AnyCollider>(
     static_bodies: Query<&RigidBodyColliders, (Without<SolverBody>, Without<Sleeping>)>,
     mut colliders: Query<
@@ -226,7 +253,7 @@ fn update_static_aabbs<C: AnyCollider>(
             &mut ColliderAabb,
             &C,
             Option<&CollisionMargin>,
-            &BroadPhaseProxyIndex,
+            &ColliderTreeProxyIndex,
         ),
         Or<(Changed<Position>, Changed<Rotation>, Changed<C>)>,
     >,
@@ -276,9 +303,7 @@ fn update_static_aabbs<C: AnyCollider>(
     diagnostics.update += start.elapsed();
 }
 
-/// A resource for tracking moved proxies in the broad phase.
-///
-/// A moved proxy is one whose [`ColliderAabb`] has moved
+/// A resource for tracking proxies whose [`ColliderAabb`] has moved
 /// outside of the previous [`EnlargedAabb`].
 #[derive(Resource, Default)]
 pub struct MovedProxies {
@@ -290,8 +315,6 @@ pub struct MovedProxies {
     /// These are combined into [`bit_vec`](Self::bit_vec) after parallel processing.
     thread_local_bit_vec: ThreadLocal<RefCell<BitVec>>,
     /// A vector of moved proxy indices.
-    ///
-    /// The broad phase iterates over these proxies to find new contact pairs.
     proxies: Vec<u32>,
 }
 
@@ -337,7 +360,7 @@ fn update_dynamic_aabbs<C: AnyCollider>(
             &C,
             &mut ColliderAabb,
             &mut EnlargedAabb,
-            &BroadPhaseProxyIndex,
+            &ColliderTreeProxyIndex,
             &Position,
             &Rotation,
             Option<&CollisionMargin>,

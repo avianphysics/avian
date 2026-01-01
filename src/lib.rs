@@ -509,6 +509,7 @@ pub extern crate parry3d_f64 as parry;
     any(feature = "parry-f32", feature = "parry-f64")
 ))]
 pub mod character_controller;
+pub mod collider_tree;
 pub mod collision;
 #[cfg(feature = "debug-plugin")]
 pub mod debug_render;
@@ -544,6 +545,7 @@ pub mod prelude {
     #[expect(deprecated)]
     pub use crate::{
         PhysicsPlugins,
+        collider_tree::*,
         collision::prelude::*,
         dynamics::{self, ccd::SpeculativeMargin, prelude::*},
         interpolation::*,
@@ -598,7 +600,9 @@ use prelude::*;
     all(feature = "collider-from-mesh", feature = "default-collider"),
     doc = "| [`ColliderCachePlugin`]           | Caches colliders created from meshes. Requires `collider-from-mesh` and `default-collider` features.                                                       |"
 )]
-/// | [`BroadPhasePlugin`]              | Finds pairs of entities with overlapping [AABBs](ColliderAabb) to reduce the number of potential contacts for the [narrow phase](collision::narrow_phase). |
+/// | [`ColliderTreePlugin`]            | Manages [`ColliderTrees`] for broad phase collision detection and spatial queries.                                                                         |
+/// | [`BroadPhaseCorePlugin`]          | The core [broad phase] plugin that sets up the required resources, system sets, and diagnostics.                                                           |
+/// | [`BvhBroadPhasePlugin`]           | A [broad phase] plugin that uses a [Bounding Volume Hierarchy (BVH)][BVH] to efficiently find pairs of colliders with overlapping AABBs.                   |
 /// | [`NarrowPhasePlugin`]             | Manages contacts and generates contact constraints.                                                                                                        |
 /// | [`SolverPlugins`]                 | A plugin group for the physics solver's plugins. See the plugin group's documentation for more information.                                                |
 /// | [`JointPlugin`]                   | A plugin for managing and initializing [joints](dynamics::joints). Does *not* include the actual joint solver.                                             |
@@ -617,6 +621,8 @@ use prelude::*;
 /// | [`PhysicsDiagnosticsPlugin`]      | Writes [physics diagnostics](diagnostics) to the [`DiagnosticsStore`] (only with `bevy_diagnostic` feature enabled).                                       |
 /// | [`PhysicsDiagnosticsUiPlugin`]    | Displays [physics diagnostics](diagnostics) with a debug UI overlay (only with `diagnostic_ui` feature enabled).                                           |
 ///
+/// [broad phase]: collision::broad_phase
+/// [BVH]: https://en.wikipedia.org/wiki/Bounding_volume_hierarchy
 /// [`DiagnosticsStore`]: bevy::diagnostic::DiagnosticsStore
 ///
 /// Refer to the documentation of the plugins for more information about their responsibilities and implementations.
@@ -670,70 +676,6 @@ use prelude::*;
 ///         .run();
 /// }
 /// ```
-///
-/// # Custom Plugins
-///
-/// First, create a new plugin. If you want to run your systems in the engine's schedules, get either the [`PhysicsSchedule`]
-/// or the [`SubstepSchedule`]. Then you can add your systems to that schedule and control system ordering with system sets like
-/// [`PhysicsStepSystems`], [`SolverSystems`], or [`SubstepSolverSystems`](dynamics::solver::schedule::SubstepSolverSystems).
-///
-/// Here we will create a custom broad phase plugin that will replace the default [`BroadPhasePlugin`]:
-///
-/// ```
-#[cfg_attr(feature = "2d", doc = "use avian2d::prelude::*;")]
-#[cfg_attr(feature = "3d", doc = "use avian3d::prelude::*;")]
-/// use bevy::prelude::*;
-///
-/// pub struct CustomBroadPhasePlugin;
-///
-/// impl Plugin for CustomBroadPhasePlugin {
-///     fn build(&self, app: &mut App) {
-///         // Make sure the PhysicsSchedule is available
-///         let physics_schedule = app
-///             .get_schedule_mut(PhysicsSchedule)
-///             .expect("add PhysicsSchedule first");
-///
-///         // Add the system into the broad phase system set
-///         physics_schedule.add_systems(collect_collision_pairs.in_set(PhysicsStepSystems::BroadPhase));
-///     }
-/// }
-///
-/// fn collect_collision_pairs() {
-///     // Implementation goes here
-/// }
-/// ```
-///
-/// Next, when creating your app, simply disable the default [`BroadPhasePlugin`] and add your custom plugin:
-///
-/// ```no_run
-#[cfg_attr(feature = "2d", doc = "use avian2d::prelude::*;")]
-#[cfg_attr(feature = "3d", doc = "use avian3d::prelude::*;")]
-/// use bevy::prelude::*;
-///
-/// # struct CustomBroadPhasePlugin;
-/// # impl Plugin for CustomBroadPhasePlugin {
-/// #     fn build(&self, app: &mut App) {}
-/// # }
-/// #
-/// fn main() {
-///     let mut app = App::new();
-///
-///     app.add_plugins(DefaultPlugins);
-///
-///     // Add PhysicsPlugins and replace default broad phase with our custom broad phase
-///     app.add_plugins(
-///         PhysicsPlugins::default()
-///             .build()
-///             .disable::<BroadPhasePlugin>()
-///             .add(CustomBroadPhasePlugin),
-///     );
-///
-///     app.run();
-/// }
-/// ```
-///
-/// You can find a full working example
-/// [here](https://github.com/avianphysics/avian/blob/main/crates/avian3d/examples/custom_broad_phase.rs).
 pub struct PhysicsPlugins {
     schedule: Interned<dyn ScheduleLabel>,
     length_unit: Scalar,
@@ -828,13 +770,15 @@ impl PluginGroup for PhysicsPlugins {
         ))]
         let builder = builder
             .add(ColliderBackendPlugin::<Collider>::new(self.schedule))
+            .add(ColliderTreePlugin::<Collider>::default())
             .add(NarrowPhasePlugin::<Collider>::default());
 
         // Add solver plugins.
         let builder = builder.add_group(SolverPlugins::new_with_length_unit(self.length_unit));
 
         builder
-            .add(BroadPhasePlugin::<()>::default())
+            .add(BroadPhaseCorePlugin)
+            .add(BvhBroadPhasePlugin::<()>::default())
             .add(JointPlugin)
             .add(SpatialQueryPlugin)
             .add(PhysicsTransformPlugin::new(self.schedule))
@@ -890,8 +834,9 @@ where
         let builder = self
             .plugins
             .build()
-            .disable::<BroadPhasePlugin>()
-            .add(BroadPhasePlugin::<H>::default());
+            .disable::<BroadPhaseCorePlugin>()
+            .add(BroadPhaseCorePlugin)
+            .add(BvhBroadPhasePlugin::<H>::default());
 
         #[cfg(all(
             feature = "default-collider",

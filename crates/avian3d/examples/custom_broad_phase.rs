@@ -11,7 +11,7 @@ fn main() {
     app.add_plugins(
         PhysicsPlugins::default()
             .build()
-            .disable::<BroadPhasePlugin>()
+            .disable::<BvhBroadPhasePlugin>()
             .add(BruteForceBroadPhasePlugin),
     );
 
@@ -67,7 +67,7 @@ impl Plugin for BruteForceBroadPhasePlugin {
         // Add the broad phase system into the broad phase set.
         app.add_systems(
             PhysicsSchedule,
-            collect_collision_pairs.in_set(PhysicsStepSystems::BroadPhase),
+            collect_collision_pairs.in_set(BroadPhaseSystems::CollectCollisions),
         );
     }
 }
@@ -110,13 +110,10 @@ fn collect_collision_pairs(
             continue;
         }
 
-        // Create a contact pair as non-touching by adding an edge between the entities in the contact graph.
+        // Create a contact in the contact graph.
         let mut contact_edge = ContactEdge::new(collider1, collider2);
         contact_edge.body1 = Some(collider_of1.body);
         contact_edge.body2 = Some(collider_of2.body);
-        contact_graph.add_edge_with(contact_edge, |contact_pair| {
-            contact_pair.body1 = Some(collider_of1.body);
-            contact_pair.body2 = Some(collider_of2.body);
-        });
+        contact_graph.add_edge(contact_edge);
     }
 }

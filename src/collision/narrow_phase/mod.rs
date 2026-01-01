@@ -1,6 +1,21 @@
-//! Manages contacts and generates contact constraints.
+//! Updates and manages contact pairs between colliders.
 //!
-//! See [`NarrowPhasePlugin`].
+//! # Overview
+//!
+//! Before the narrow phase, the [broad phase](super::broad_phase) creates a contact pair
+//! in the [`ContactGraph`] resource for each pair of intersecting [`ColliderAabb`]s.
+//!
+//! The narrow phase then determines which contact pairs found in the [`ContactGraph`] are touching,
+//! and computes updated contact points and normals in a parallel loop.
+//!
+//! Afterwards, the narrow phase removes contact pairs whose AABBs no longer overlap,
+//! and writes collision events for colliders that started or stopped touching.
+//! This is done in a fast serial loop to preserve determinism.
+//!
+//! The [solver](dynamics::solver) then generates a [`ContactConstraint`]
+//! for each contact pair that is touching or expected to touch during the time step.
+//!
+//! [`ContactConstraint`]: dynamics::solver::contact::ContactConstraint
 
 mod system_param;
 use system_param::ContactStatusBits;
@@ -31,25 +46,10 @@ use bevy::{
 
 use super::{CollisionDiagnostics, contact_types::ContactEdgeFlags};
 
-/// Manages contacts and generates contact constraints.
+/// A [narrow phase](crate::collision::narrow_phase) plugin for updating and managing contact pairs
+/// between colliders of type `C`.
 ///
-/// # Overview
-///
-/// Before the narrow phase, the [broad phase](super::broad_phase) creates a contact pair
-/// in the [`ContactGraph`] resource for each pair of intersecting [`ColliderAabb`]s.
-///
-/// The narrow phase then determines which contact pairs found in the [`ContactGraph`] are touching,
-/// and computes updated contact points and normals in a parallel loop.
-///
-/// Afterwards, the narrow phase removes contact pairs whose AABBs no longer overlap,
-/// and writes collision events for colliders that started or stopped touching.
-/// This is done in a fast serial loop to preserve determinism.
-///
-/// Finally, a [`ContactConstraint`] is generated for each contact pair that is touching
-/// or expected to touch during the time step. These constraints are added to the [`ContactConstraints`]
-/// resource, and are later used by the [`SolverPlugin`] to solve contacts.
-///
-/// [`ContactConstraint`]: dynamics::solver::contact::ContactConstraint
+/// See the [module-level documentation](crate::collision::narrow_phase) for more information.
 ///
 /// # Collider Types
 ///
@@ -108,6 +108,8 @@ where
 
         app.init_resource::<NarrowPhaseConfig>()
             .init_resource::<ContactGraph>()
+            .init_resource::<ConstraintGraph>()
+            .init_resource::<JointGraph>()
             .init_resource::<ContactStatusBits>()
             .init_resource::<DefaultFriction>()
             .init_resource::<DefaultRestitution>();

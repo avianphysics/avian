@@ -102,7 +102,7 @@ use bevy::{ecs::system::ReadOnlySystemParam, prelude::*};
 /// }
 /// ```
 ///
-/// This is equivalent to manually replacing the default [`BroadPhasePlugin`] and [`NarrowPhasePlugin`]
+/// This is equivalent to manually replacing the default [`BvhBroadPhasePlugin`] and [`NarrowPhasePlugin`]
 /// with instances that have the desired hooks provided using generics.
 ///
 /// [`SystemParam`]: bevy::ecs::system::SystemParam

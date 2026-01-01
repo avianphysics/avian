@@ -11,7 +11,7 @@ mod primitives3d;
 pub use primitives2d::{EllipseColliderShape, RegularPolygonColliderShape};
 
 use super::EnlargedAabb;
-use crate::{collision::broad_phase::BroadPhaseProxyIndex, make_isometry, prelude::*};
+use crate::{make_isometry, prelude::*};
 #[cfg(feature = "collider-from-mesh")]
 use bevy::mesh::{Indices, VertexAttributeValues};
 use bevy::{log, prelude::*};
@@ -363,7 +363,7 @@ pub type TrimeshBuilderError = parry::shape::TriMeshBuilderError;
     ColliderAabb,
     CollisionLayers,
     EnlargedAabb,
-    BroadPhaseProxyIndex(0),
+    ColliderTreeProxyIndex(0),
     ColliderDensity,
     ColliderMassProperties
 )]

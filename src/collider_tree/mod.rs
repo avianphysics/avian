@@ -1,3 +1,29 @@
+//! Tree acceleration structures for spatial queries on [colliders](crate::collision::collider::Collider).
+//!
+//! To speed up [broad phase](crate::collision::broad_phase) collision detection and [spatial queries](crate::spatial_query),
+//! Avian maintains a [`ColliderTree`] structure for all colliders in the physics world. This is implemented as
+//! a [Bounding Volume Hierarchy (BVH)][BVH], which accelerates querying for [AABB](crate::collision::collider::ColliderAabb)
+//! overlaps, ray intersections, and more.
+//!
+//! Colliders of dynamic, kinematic, and static bodies are all stored in a separate [`ColliderTree`](ColliderTree)
+//! to allow efficiently querying for specific subsets of colliders and to optimize tree updates based on body type.
+//! Trees for dynamic and kinematic bodies are rebuilt every physics step, while the static tree is incrementally updated
+//! when static colliders are added, removed, or modified. The trees are stored in the [`ColliderTrees`] resource.
+//!
+//! [BVH]: https://en.wikipedia.org/wiki/Bounding_volume_hierarchy
+//!
+//! # Usage
+//!
+//! The collider trees are fairly low-level, and not intended to be used directly.
+//! For spatial queries, consider using the higher-level [`SpatialQuery`] API instead,
+//! and for broad phase collision detection, consider using the [`BvhBroadPhasePlugin`].
+//!
+//! [`SpatialQuery`]: crate::spatial_query::SpatialQuery
+//! [`BvhBroadPhasePlugin`]: crate::collision::broad_phase::bvh::BvhBroadPhasePlugin
+
+mod plugin;
+pub use plugin::*;
+
 use bevy::ecs::{entity::Entity, resource::Resource};
 use obvhs::{
     aabb::Aabb,
@@ -8,21 +34,22 @@ use obvhs::{
 
 use crate::{data_structures::stable_vec::StableVec, prelude::CollisionLayers};
 
-/// A Bounding Volume Hierarchy for accelerating queries on a set of colliders.
+/// A [Bounding Volume Hierarchy (BVH)][BVH] for accelerating queries on a set of colliders.
 ///
-/// Add the [`BroadPhasePairs`] component to use this tree for broad phase collision detection.
+/// [BVH]: https://en.wikipedia.org/wiki/Bounding_volume_hierarchy
 #[derive(Clone, Default)]
 pub struct ColliderTree {
     /// The underlying BVH structure.
     pub bvh: Bvh2,
     /// The proxies stored in the tree.
-    pub proxies: StableVec<BvhProxy>,
+    pub proxies: StableVec<ColliderTreeProxy>,
     /// A workspace for reusing allocations across tree operations.
     pub workspace: ColliderTreeWorkspace,
 }
+
 /// A proxy representing a collider in the [`ColliderTree`].
 #[derive(Clone, Debug)]
-pub struct BvhProxy {
+pub struct ColliderTreeProxy {
     /// The entity this proxy represents.
     pub entity: Entity,
     /// The collision layers of the collider.
@@ -71,7 +98,7 @@ impl Default for ColliderTreeWorkspace {
 impl ColliderTree {
     /// Adds a proxy to the tree, returning its index.
     #[inline]
-    pub fn add_proxy(&mut self, aabb: Aabb, proxy: BvhProxy) -> u32 {
+    pub fn add_proxy(&mut self, aabb: Aabb, proxy: ColliderTreeProxy) -> u32 {
         let id = self.proxies.push(proxy) as u32;
         self.bvh
             .insert_primitive(aabb, id, &mut self.workspace.insertion_stack);

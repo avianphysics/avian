@@ -1,47 +1,176 @@
-//! Finds pairs of entities with overlapping [`ColliderAabb`]s to reduce
-//! the number of potential contacts for the [narrow phase](crate::narrow_phase).
+//! Finds pairs of entities with overlapping [`ColliderAabb`] and creates contacts
+//! for the [narrow phase].
 //!
-//! See [`BroadPhasePlugin`].
+//! [narrow phase]: crate::collision::narrow_phase
+//!
+//! # Overview
+//!
+//! To speed up collision detection, the broad phase quickly identifies pairs of entities
+//! whose [`ColliderAabb`]s overlap. These contacts are then passed to the [narrow phase]
+//! for more detailed collision checks.
+//!
+//! In Avian, the broad phase is implemented with two plugins:
+//!
+//! - [`BroadPhaseCorePlugin`]: Sets up resources, system sets, and diagnostics required for broad phase collision detection.
+//! - [`BvhBroadPhasePlugin`]: Implements a broad phase using a [Bounding Volume Hierarchy (BVH)][BVH] to efficiently find overlapping AABBs.
+//!
+//! The former is required for all broad phase implementations, while the latter is an optional plugin
+//! that can be replaced with another broad phase strategy if desired. See the following section for details.
+//!
+//! [BVH]: https://en.wikipedia.org/wiki/Bounding_volume_hierarchy
+//!
+//! # Custom Broad Phase Implementations
+//!
+//! By default, Avian uses the [`BvhBroadPhasePlugin`] for broad phase collision detection.
+//! However, it is possible to replace it with a custom broad phase strategy, such as
+//! sweep and prune (SAP) or some kind of spatial grid.
+//!
+//! For simplicity's sake, we will demonstrate how to create a simple brute-force O(n^2)
+//! broad phase plugin that checks all pairs of colliders for AABB overlaps.
+//!
+//! In short, all we need to do is add a system to [`BroadPhaseSystems::CollectCollisions`]
+//! that finds overlapping AABBs and creates contacts for them in the [`ContactGraph`] resource.
+//! However, we are responsible for handling any pair filtering that we might need. This includes:
+//!
+//! - [`CollisionLayers`]
+//! - [`CollisionHooks`]
+//! - [`JointCollisionDisabled`]
+//! - Skip collisions with parent rigid body
+//! - Skip non-dynamic vs non-dynamic pairs
+//!
+//! and so on. We will only implement a subset of these for demonstration purposes,
+//! but you can take a look at the source code of the [`BvhBroadPhasePlugin`] for a complete reference.
+//!
+//! First, we define our brute-force broad phase plugin:
+//!
+//! ```
+#![cfg_attr(feature = "2d", doc = "use avian2d::prelude::*;")]
+#![cfg_attr(not(feature = "2d"), doc = "use avian3d::prelude::*;")]
+//! use bevy::prelude::*;
+//!
+//! pub struct BruteForceBroadPhasePlugin;
+//!
+//! impl Plugin for BruteForceBroadPhasePlugin {
+//!     fn build(&self, app: &mut App) {
+//!         app.add_systems(
+//!             PhysicsSchedule,
+//!             collect_collision_pairs.in_set(BroadPhaseSystems::CollectCollisions),
+//!         );
+//!     }
+//! }
+//!
+//! # fn collect_collision_pairs() {}
+//! ```
+//!
+//! In `collect_collision_pairs`, we query all combinations of colliders,
+//! check for AABB overlaps, and create contacts for overlapping colliders:
+//!
+//! ```
+#![cfg_attr(
+    feature = "2d",
+    doc = "# use avian2d::{dynamics::solver::joint_graph::JointGraph, prelude::*};"
+)]
+#![cfg_attr(
+    not(feature = "2d"),
+    doc = "# use avian3d::{dynamics::solver::joint_graph::JointGraph, prelude::*};"
+)]
+//! # use bevy::prelude::*;
+//! #
+//! fn collect_collision_pairs(
+//!     colliders: Query<(Entity, &ColliderAabb, &CollisionLayers, &ColliderOf)>,
+//!     bodies: Query<&RigidBody>,
+//!     mut contact_graph: ResMut<ContactGraph>,
+//!     joint_graph: Res<JointGraph>,
+//! ) {
+//!     // Loop through all entity combinations and create contact pairs for overlapping AABBs.
+//!     for [
+//!         (collider1, aabb1, layers1, collider_of1),
+//!         (collider2, aabb2, layers2, collider_of2),
+//!     ] in colliders.iter_combinations()
+//!     {
+//!         // Get the rigid bodies of the colliders.
+//!         let Ok(rb1) = bodies.get(collider_of1.body) else {
+//!             continue;
+//!         };
+//!         let Ok(rb2) = bodies.get(collider_of2.body) else {
+//!             continue;
+//!         };
+//!
+//!         // Skip pairs where both bodies are non-dynamic.
+//!         if !rb1.is_dynamic() && !rb2.is_dynamic() {
+//!             continue;
+//!         }
+//!
+//!         // Check if the AABBs intersect.
+//!         if !aabb1.intersects(aabb2) {
+//!             continue;
+//!         }
+//!
+//!         // Check collision layers.
+//!         if !layers1.interacts_with(*layers2) {
+//!             continue;
+//!         }
+//!
+//!         // Check if a joint disables contacts between the two bodies.
+//!         if joint_graph
+//!             .joints_between(collider_of1.body, collider_of2.body)
+//!             .any(|edge| edge.collision_disabled)
+//!         {
+//!             continue;
+//!         }
+//!
+//!         // Create a contact in the contact graph.
+//!         let mut contact_edge = ContactEdge::new(collider1, collider2);
+//!         contact_edge.body1 = Some(collider_of1.body);
+//!         contact_edge.body2 = Some(collider_of2.body);
+//!         contact_graph.add_edge(contact_edge);
+//!     }
+//! }
+//! ```
+//!
+//! Now, we can simply replace the [`BvhBroadPhasePlugin`] with our custom
+//! `BruteForceBroadPhasePlugin` when building the app:
+//!
+//! ```
+#![cfg_attr(feature = "2d", doc = "# use avian2d::prelude::*;")]
+#![cfg_attr(not(feature = "2d"), doc = "# use avian3d::prelude::*;")]
+//! # use bevy::prelude::*;
+//! #
+//! # fn main() {
+//! #     let mut app = App::new();
+//! #
+//! app.add_plugins(
+//!     PhysicsPlugins::default()
+//!         .build()
+//!         .disable::<BvhBroadPhasePlugin>()
+//!         .add(BruteForceBroadPhasePlugin)
+//! );
+//! # }
+//! ```
 
 mod diagnostics;
 pub use diagnostics::BroadPhaseDiagnostics;
 
-mod tree;
-pub use tree::*;
+mod bvh_broad_phase;
+pub use bvh_broad_phase::BvhBroadPhasePlugin;
 
-use core::marker::PhantomData;
+use crate::prelude::*;
+use bevy::prelude::*;
 
-use crate::{data_structures::pair_key::PairKey, prelude::*};
-use bevy::{
-    ecs::system::SystemParamItem,
-    prelude::*,
-    tasks::{ComputeTaskPool, ParallelSlice},
-};
-
-/// Finds pairs of entities with overlapping [`ColliderAabb`]s to reduce
-/// the number of potential contacts for the [narrow phase](crate::narrow_phase).
+/// The core [broad phase](crate::collision::broad_phase) plugin that sets up the
+/// resources, system sets, and diagnostics required for broad phase collision detection.
 ///
-/// A contact pair is created in the [`Collisions`] resource for each pair found.
-/// Removing and updating these pairs is left to the [narrow phase](crate::narrow_phase).
+/// This does *not* implement any specific broad phase algorithm by itself,
+/// but provides the foundation for other broad phase plugins to build upon.
+/// By default, the [`BvhBroadPhasePlugin`] is used, but it can be replaced
+/// with a custom strategy if desired.
 ///
-/// The broad phase systems run in [`PhysicsStepSystems::BroadPhase`].
-///
-/// [`CollisionHooks`] can be provided with generics to apply custom filtering for collision pairs.
-pub struct BroadPhasePlugin<H: CollisionHooks = ()>(PhantomData<H>);
+/// See the [module-level documentation](crate::collision::broad_phase) for more information
+/// and an example of creating a custom broad phase plugin.
+pub struct BroadPhaseCorePlugin;
 
-impl<H: CollisionHooks> Default for BroadPhasePlugin<H> {
-    fn default() -> Self {
-        Self(PhantomData)
-    }
-}
-
-impl<H: CollisionHooks + 'static> Plugin for BroadPhasePlugin<H>
-where
-    for<'w, 's> SystemParamItem<'w, 's, H>: CollisionHooks,
-{
+impl Plugin for BroadPhaseCorePlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(ColliderTreePlugin::<Collider>::default());
-
         app.init_resource::<ContactGraph>();
 
         app.configure_sets(
@@ -53,23 +182,6 @@ where
             )
                 .chain()
                 .in_set(PhysicsStepSystems::BroadPhase),
-        );
-
-        app.configure_sets(
-            PhysicsSchedule,
-            BroadPhaseSystems::BeginOptimize.in_set(NarrowPhaseSystems::Update),
-        );
-
-        app.configure_sets(
-            PhysicsSchedule,
-            BroadPhaseSystems::EndOptimize
-                .after(PhysicsStepSystems::Solver)
-                .before(PhysicsStepSystems::Sleeping),
-        );
-
-        app.add_systems(
-            PhysicsSchedule,
-            find_collision_pairs.in_set(BroadPhaseSystems::CollectCollisions),
         );
     }
 
@@ -84,235 +196,9 @@ where
 pub enum BroadPhaseSystems {
     /// Runs at the start of the broad phase. Empty by default.
     First,
-    /// Begins optimizing acceleration structures to keep their query performance good.
-    ///
-    /// This runs concurrently with the simulation step as an async task.
-    BeginOptimize,
     /// Finds pairs of entities with overlapping [`ColliderAabb`]s
     /// and creates contact pairs for them in [`Collisions`].
     CollectCollisions,
-    /// Completes the optimization of acceleration structures started in [`BroadPhaseSystems::BeginOptimize`].
-    ///
-    /// This runs at the end of the simulation step.
-    EndOptimize,
     /// Runs at the end of the broad phase. Empty by default.
     Last,
-}
-
-fn find_collision_pairs(
-    tree: ResMut<ColliderTrees>,
-    moved_proxies: Res<MovedProxies>,
-    collider_of_query: Query<&ColliderOf>,
-    mut collisions: ResMut<ContactGraph>,
-    mut diagnostics: ResMut<BroadPhaseDiagnostics>,
-) {
-    let start = crate::utils::Instant::now();
-
-    let mut broad_collision_pairs = Vec::new();
-
-    // Perform tree queries for all moving proxies.
-    let pairs = moved_proxies.proxies().par_splat_map(
-        ComputeTaskPool::get(),
-        None,
-        |_chunk_index, proxies| {
-            let mut pairs = Vec::new();
-
-            for &proxy_index1 in proxies {
-                let proxy1 = tree
-                    .dynamic_tree
-                    .proxies
-                    .get(proxy_index1 as usize)
-                    .unwrap();
-
-                // Find potential collisions against moving proxies.
-                tree.dynamic_tree
-                    .bvh
-                    .aabb_traverse(proxy1.aabb, |bvh, node_index| {
-                        let node = bvh.nodes[node_index as usize];
-                        let start = node.first_index as usize;
-                        let end = start + node.prim_count as usize;
-
-                        for node_primitive_index in start..end {
-                            let proxy_index2 =
-                                tree.dynamic_tree.bvh.primitive_indices[node_primitive_index];
-
-                            // Avoid duplicate pairs for moving proxies.
-                            if proxy_index2 < proxy_index1 {
-                                // TODO: Check move set first.
-                                continue;
-                            }
-
-                            let proxy2 = tree
-                                .dynamic_tree
-                                .proxies
-                                .get(proxy_index2 as usize)
-                                .unwrap();
-
-                            // Check if the AABBs intersect.
-                            if !proxy1.aabb.intersect_aabb(&proxy2.aabb) {
-                                continue;
-                            }
-
-                            let entity1 = proxy1.entity;
-                            let entity2 = proxy2.entity;
-
-                            // A proxy cannot collide with itself.
-                            if entity1 == entity2 {
-                                continue;
-                            }
-
-                            // Check if the layers interact.
-                            if !proxy1.layers.interacts_with(proxy2.layers) {
-                                continue;
-                            }
-
-                            // No collisions between bodies that haven't moved or colliders with incompatible layers
-                            // or colliders with the same parent.
-                            /*if flags1
-                            .intersection(*flags2)
-                            .contains(AabbIntervalFlags::IS_INACTIVE)
-                            || !layers1.interacts_with(*layers2)
-                            || parent1 == parent2
-                            {
-                            continue;
-                            }*/
-
-                            // Avoid duplicate pairs.
-                            let pair_key = PairKey::new(entity1.index(), entity2.index());
-                            if collisions.contains_key(&pair_key) {
-                                continue;
-                            }
-
-                            pairs.push((entity1, entity2));
-
-                            // Apply user-defined filter.
-                            /*if flags1
-                            .union(*flags2)
-                            .contains(AabbIntervalFlags::CUSTOM_FILTER)
-                            {
-                            let should_collide = hooks.filter_pairs(*entity1, *entity2, commands);
-                            if !should_collide {
-                                continue;
-                                }
-                            }*/
-
-                            /*contacts.flags.set(
-                            ContactPairFlags::SENSOR,
-                            flags1.union(*flags2).contains(AabbIntervalFlags::IS_SENSOR),
-                            );
-                            contacts.flags.set(
-                                ContactPairFlags::CONTACT_EVENTS,
-                                flags1
-                                .union(*flags2)
-                                .contains(AabbIntervalFlags::CONTACT_EVENTS),
-                                );
-                            contacts.flags.set(
-                                ContactPairFlags::MODIFY_CONTACTS,
-                                flags1
-                                .union(*flags2)
-                                .contains(AabbIntervalFlags::MODIFY_CONTACTS),
-                                );*/
-
-                            // TODO: On the same body?
-                            // TODO: Both sensors?
-                            // TODO: Joint disables collision?
-                            // TODO: Custom collision filter using hook defined in `BroadPhasePlugin`
-                        }
-
-                        true
-                    });
-
-                // Find potential collisions against static or sleeping proxies.
-                tree.static_tree
-                    .bvh
-                    .aabb_traverse(proxy1.aabb, |bvh, node_index| {
-                        let node = bvh.nodes[node_index as usize];
-                        let start = node.first_index as usize;
-                        let end = start + node.prim_count as usize;
-
-                        for node_primitive_index in start..end {
-                            let proxy_index2 =
-                                tree.static_tree.bvh.primitive_indices[node_primitive_index];
-
-                            let Some(proxy2) = tree.static_tree.proxies.get(proxy_index2 as usize)
-                            else {
-                                error!(
-                                    "Proxy index {} exceeds the number of proxies {}",
-                                    proxy_index2,
-                                    tree.static_tree.proxies.len()
-                                );
-                                continue;
-                            };
-
-                            // Check if the AABBs intersect.
-                            if !proxy1.aabb.intersect_aabb(&proxy2.aabb) {
-                                continue;
-                            }
-
-                            let entity1 = proxy1.entity;
-                            let entity2 = proxy2.entity;
-
-                            // Note: Unlike with the dynamic tree, we don't need to check for self-collision or duplicate pairs.
-
-                            // Check if the layers interact.
-                            if !proxy1.layers.interacts_with(proxy2.layers) {
-                                return true;
-                            }
-
-                            // No collisions between bodies that haven't moved or colliders with incompatible layers
-                            // or colliders with the same parent.
-                            /*if flags1
-                            .intersection(*flags2)
-                            .contains(AabbIntervalFlags::IS_INACTIVE)
-                            || !layers1.interacts_with(*layers2)
-                            || parent1 == parent2
-                            {
-                            return;
-                            }*/
-
-                            // Avoid duplicate pairs.
-                            let pair_key = PairKey::new(entity1.index(), entity2.index());
-                            if collisions.contains_key(&pair_key) {
-                                return true;
-                            }
-
-                            pairs.push((entity1, entity2));
-                        }
-
-                        true
-                    });
-            }
-
-            pairs
-        },
-    );
-
-    // Drain the pairs into a single vector.
-    for mut chunk in pairs {
-        broad_collision_pairs.append(&mut chunk);
-    }
-
-    for (entity1, entity2) in broad_collision_pairs {
-        let mut contact_edge = ContactEdge::new(entity1, entity2);
-
-        if let (Ok(collider_of1), Ok(collider_of2)) = (
-            collider_of_query.get(entity1),
-            collider_of_query.get(entity2),
-        ) {
-            contact_edge.body1 = Some(collider_of1.body);
-            contact_edge.body2 = Some(collider_of2.body);
-        }
-
-        collisions.add_edge_with(contact_edge, |contact_pair| {
-            if let (Ok(collider_of1), Ok(collider_of2)) = (
-                collider_of_query.get(entity1),
-                collider_of_query.get(entity2),
-            ) {
-                contact_pair.body1 = Some(collider_of1.body);
-                contact_pair.body2 = Some(collider_of2.body);
-            }
-        });
-    }
-
-    diagnostics.find_pairs += start.elapsed();
 }

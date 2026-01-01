@@ -475,7 +475,12 @@ impl ContactGraph {
     /// or wake up the entities involved. Only use this method if you know what you are doing.
     #[inline]
     pub fn add_edge(&mut self, contact_edge: ContactEdge) -> Option<ContactId> {
-        self.add_edge_with(contact_edge, |_| {})
+        let body1 = contact_edge.body1;
+        let body2 = contact_edge.body2;
+        self.add_edge_with(contact_edge, |pair| {
+            pair.body1 = body1;
+            pair.body2 = body2;
+        })
     }
 
     /// Creates a [`ContactEdge`] between two entities, calling the provided callback
