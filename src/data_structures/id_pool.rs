@@ -66,6 +66,16 @@ impl IdPool {
         self.next_index = 0;
     }
 
+    /// Returns the next ID that will be allocated.
+    #[inline(always)]
+    pub fn next_id(&self) -> u32 {
+        if let Some(id) = self.free_ids.peek() {
+            id.0
+        } else {
+            self.next_index
+        }
+    }
+
     /// Returns the number of allocated IDs.
     #[inline(always)]
     pub fn len(&self) -> usize {

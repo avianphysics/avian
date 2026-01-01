@@ -5,9 +5,8 @@ use obvhs::{
     faststack::HeapStack,
     ploc::{PlocBuilder, PlocSearchDistance, SortPrecision},
 };
-use slab::Slab;
 
-use crate::prelude::CollisionLayers;
+use crate::{data_structures::stable_vec::StableVec, prelude::CollisionLayers};
 
 /// A Bounding Volume Hierarchy for accelerating queries on a set of colliders.
 ///
@@ -17,7 +16,7 @@ pub struct ColliderTree {
     /// The underlying BVH structure.
     pub bvh: Bvh2,
     /// The proxies stored in the tree.
-    pub proxies: Slab<BvhProxy>,
+    pub proxies: StableVec<BvhProxy>,
     /// A workspace for reusing allocations across tree operations.
     pub workspace: ColliderTreeWorkspace,
 }
@@ -73,7 +72,7 @@ impl ColliderTree {
     /// Adds a proxy to the tree, returning its index.
     #[inline]
     pub fn add_proxy(&mut self, aabb: Aabb, proxy: BvhProxy) -> u32 {
-        let id = self.proxies.insert(proxy) as u32;
+        let id = self.proxies.push(proxy) as u32;
         self.bvh
             .insert_primitive(aabb, id, &mut self.workspace.insertion_stack);
         id
@@ -128,8 +127,6 @@ impl ColliderTree {
 
         // Reinsert the node into the BVH.
         let node_id = self.bvh.primitives_to_nodes[proxy_index as usize];
-        println!("Reinserting proxy {} at node {}", proxy_index, node_id);
-        println!("Proxies: {:?}", self.proxies.iter().collect::<Vec<_>>());
         self.bvh.resize_node(node_id as usize, aabb);
         self.bvh.reinsert_node(node_id as usize);
     }

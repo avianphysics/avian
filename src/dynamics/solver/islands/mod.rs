@@ -53,10 +53,10 @@ use bevy::{
     ecs::{entity_disabling::Disabled, lifecycle::HookContext, world::DeferredWorld},
     prelude::*,
 };
-use slab::Slab;
 
 use crate::{
     collision::contact_types::{ContactGraphInternal, ContactId},
+    data_structures::stable_vec::StableVec,
     dynamics::solver::{
         joint_graph::{JointGraph, JointId},
         solver_body::SolverBody,
@@ -417,7 +417,7 @@ impl PhysicsIsland {
 #[derive(Resource, Debug, Default, Clone)]
 pub struct PhysicsIslands {
     /// The list of islands.
-    islands: Slab<PhysicsIsland>,
+    islands: StableVec<PhysicsIsland>,
     /// The current island candidate for splitting.
     ///
     /// This is chosen based on which island with one or more constraints removed
@@ -444,7 +444,7 @@ impl PhysicsIslands {
         init(&mut island);
 
         // Add the island to the list.
-        IslandId(self.islands.insert(island) as u32)
+        IslandId(self.islands.push(island) as u32)
     }
 
     /// Removes a [`PhysicsIsland`] with the given ID. The island is assumed to be empty,
@@ -465,7 +465,7 @@ impl PhysicsIslands {
     /// Returns the next available island ID.
     #[inline]
     pub fn next_id(&self) -> IslandId {
-        IslandId(self.islands.vacant_key() as u32)
+        IslandId(self.islands.next_push_index() as u32)
     }
 
     /// Returns a reference to the [`PhysicsIsland`] with the given ID.
@@ -842,7 +842,7 @@ impl PhysicsIslands {
         // Keep the bigger island to reduce cache misses.
         let [mut big, mut small] = self
             .islands
-            .get_disjoint_mut([island_id1.0 as usize, island_id2.0 as usize])
+            .get_disjoint_mut2(island_id1.0 as usize, island_id2.0 as usize)
             .unwrap();
         if big.body_count < small.body_count {
             core::mem::swap(&mut big, &mut small);
@@ -1261,7 +1261,7 @@ impl PhysicsIslands {
             }
 
             // Add the new island to the list.
-            self.islands.insert(island);
+            self.islands.push(island);
         }
     }
 }

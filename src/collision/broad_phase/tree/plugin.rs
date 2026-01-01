@@ -7,7 +7,7 @@ use crate::{
         broad_phase::{BroadPhaseDiagnostics, BvhProxy, ColliderTree, ColliderTreeWorkspace},
         collider::EnlargedAabb,
     },
-    data_structures::bit_vec::BitVec,
+    data_structures::{bit_vec::BitVec, stable_vec::StableVec},
     dynamics::solver::solver_body::SolverBody,
     prelude::*,
 };
@@ -22,7 +22,6 @@ use obvhs::{
     faststack::HeapStack,
     ploc::PlocBuilder,
 };
-use slab::Slab;
 #[cfg(feature = "parallel")]
 use thread_local::ThreadLocal;
 
@@ -206,7 +205,7 @@ impl Default for ColliderTrees {
     fn default() -> Self {
         let tree = ColliderTree {
             bvh: Bvh2::default(),
-            proxies: Slab::with_capacity(2000),
+            proxies: StableVec::with_capacity(2000),
             workspace: ColliderTreeWorkspace::default(),
         };
 
