@@ -10,6 +10,7 @@ use crate::{
 };
 use bevy::{
     ecs::{system::StaticSystemParam, world::CommandQueue},
+    platform::collections::HashSet,
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task, block_on},
 };
@@ -316,6 +317,8 @@ pub struct MovedProxies {
     thread_local_bit_vec: ThreadLocal<RefCell<BitVec>>,
     /// A vector of moved proxy indices.
     proxies: Vec<u32>,
+    /// A set of moved proxy indices for quick lookup.
+    set: HashSet<u32>,
 }
 
 impl MovedProxies {
@@ -323,6 +326,12 @@ impl MovedProxies {
     #[inline]
     pub fn proxies(&self) -> &[u32] {
         &self.proxies
+    }
+
+    /// Returns `true` if the proxy with the given index has moved.
+    #[inline]
+    pub fn contains(&self, proxy_index: u32) -> bool {
+        self.set.contains(&proxy_index)
     }
 
     /// Clears the moved proxies and sets the capacity of the internal structures.
@@ -336,9 +345,13 @@ impl MovedProxies {
         });
 
         self.proxies.clear();
+        self.set.clear();
 
         if self.proxies.capacity() < capacity {
             self.proxies.reserve(capacity - self.proxies.capacity());
+        }
+        if self.set.capacity() < capacity {
+            self.set.reserve(capacity - self.set.capacity());
         }
     }
 
@@ -502,6 +515,7 @@ fn update_dynamic_aabbs<C: AnyCollider>(
     let MovedProxies {
         bit_vec,
         proxies: moved_proxies,
+        set: moved_set,
         ..
     } = &mut *moved_proxies;
 
@@ -527,6 +541,7 @@ fn update_dynamic_aabbs<C: AnyCollider>(
 
             // Record the moved proxy.
             moved_proxies.push(proxy_index);
+            moved_set.insert(proxy_index);
 
             // Clear the least significant set bit
             bits &= bits - 1;

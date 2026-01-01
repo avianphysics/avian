@@ -78,8 +78,7 @@ fn collect_collision_pairs(
                                 tree.dynamic_tree.bvh.primitive_indices[node_primitive_index];
 
                             // Avoid duplicate pairs for moving proxies.
-                            if proxy_index2 < proxy_index1 {
-                                // TODO: Check move set first.
+                            if proxy_index2 < proxy_index1 && moved_proxies.contains(proxy_index2) {
                                 continue;
                             }
 
