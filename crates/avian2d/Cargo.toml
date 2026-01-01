@@ -31,8 +31,7 @@ simd = ["parry2d?/simd-stable", "parry2d-f64?/simd-stable"]
 parallel = [
     "dep:thread_local",
     "bevy/multi_threaded",
-    "obvhs/parallel",
-    "parry2d?/parallel",
+        "parry2d?/parallel",
     "parry2d-f64?/parallel",
 ]
 enhanced-determinism = [
