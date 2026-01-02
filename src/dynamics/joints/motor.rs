@@ -9,8 +9,10 @@ use bevy::prelude::*;
 pub enum MotorModel {
     /// A spring-damper model using implicit Euler integration for timestep-independent behavior.
     ///
-    /// This model provides stable, predictable spring-damper dynamics regardless of the
-    /// physics substep count. Ignores the mass of the bodies.
+    /// While not truly timestep-independant, this model provides stabler, more predictable 
+    /// spring-damper dynamics regardless of the physics substep count.
+    /// 
+    /// Ignores the mass of the bodies.
     ///
     /// - `frequency`: The natural frequency of the spring in Hz. Higher values create stiffer springs.
     /// - `damping_ratio`: The damping ratio.
@@ -65,12 +67,6 @@ impl Default for MotorModel {
 ///
 /// Motors are configured as part of a joint, applying torque to drive
 /// the joint towards a target velocity and/or position.
-///
-/// # Timestep-Independent Spring-Damper
-///
-/// For position control that behaves consistently regardless of substep count, use
-/// [`MotorModel::SpringDamper`]. This uses an implicit Euler integration that provides
-/// stable, predictable spring-damper behavior.
 ///
 /// ```ignore
 /// RevoluteJoint::new(entity1, entity2)
