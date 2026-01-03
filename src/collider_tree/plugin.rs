@@ -104,9 +104,10 @@ impl<C: AnyCollider> Plugin for ColliderTreePlugin<C> {
         );
 
         app.add_observer(
-            |trigger: On<Add, EnlargedAabb>,
+            |trigger: On<Add, ColliderOf>,
+             body_query: Query<&RigidBody>,
              mut collider_query: Query<(
-                &RigidBody,
+                &ColliderOf,
                 &ColliderAabb,
                 &EnlargedAabb,
                 &mut ColliderTreeProxyIndex,
@@ -115,9 +116,12 @@ impl<C: AnyCollider> Plugin for ColliderTreePlugin<C> {
              mut trees: ResMut<ColliderTrees>| {
                 let entity = trigger.entity;
 
-                let Ok((rb, collider_aabb, enlarged_aabb, mut proxy_index, layers)) =
+                let Ok((collider_of, collider_aabb, enlarged_aabb, mut proxy_index, layers)) =
                     collider_query.get_mut(entity)
                 else {
+                    return;
+                };
+                let Ok(rb) = body_query.get(collider_of.body) else {
                     return;
                 };
 
@@ -126,9 +130,10 @@ impl<C: AnyCollider> Plugin for ColliderTreePlugin<C> {
 
                 let proxy = ColliderTreeProxy {
                     entity,
+                    body: collider_of.body,
                     layers: layers.copied().unwrap_or_default(),
                     aabb,
-                    flags: 0,
+                    flags: ColliderTreeProxyFlags::empty(),
                 };
 
                 match *rb {
@@ -144,7 +149,7 @@ impl<C: AnyCollider> Plugin for ColliderTreePlugin<C> {
 
         // TODO: Remove proxies when colliders are removed or disabled.
         app.add_observer(
-            |trigger: On<Remove, EnlargedAabb>,
+            |trigger: On<Remove, ColliderOf>,
              collider_query: Query<(&ColliderTreeProxyIndex, &ColliderOf)>,
              body_query: Query<&RigidBody>,
              mut trees: ResMut<ColliderTrees>| {

@@ -24,7 +24,10 @@
 mod plugin;
 pub use plugin::*;
 
-use bevy::ecs::{entity::Entity, resource::Resource};
+use bevy::{
+    ecs::{entity::Entity, resource::Resource},
+    reflect::Reflect,
+};
 use obvhs::{
     aabb::Aabb,
     bvh2::{Bvh2, insertion_removal::SiblingInsertionCandidate, reinsertion::ReinsertionOptimizer},
@@ -52,12 +55,38 @@ pub struct ColliderTree {
 pub struct ColliderTreeProxy {
     /// The entity this proxy represents.
     pub entity: Entity,
-    /// The collision layers of the collider.
-    pub layers: CollisionLayers,
+    /// The body this collider is attached to.
+    pub body: Entity,
     /// The tight AABB of the collider.
     pub aabb: Aabb,
+    /// The collision layers of the collider.
+    pub layers: CollisionLayers,
     /// Flags for the proxy.
-    pub flags: u32,
+    pub flags: ColliderTreeProxyFlags,
+}
+
+/// Flags for a [`ColliderTreeProxy`].
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Reflect)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(Debug, PartialEq)]
+pub struct ColliderTreeProxyFlags(u32);
+
+// TODO
+bitflags::bitflags! {
+    impl ColliderTreeProxyFlags: u32 {
+        /// Set if the proxy belongs to a dynamic body.
+        const DYNAMIC = 1 << 0;
+        /// Set if the proxy belongs to a kinematic body.
+        const KINEMATIC = 1 << 1;
+        /// Set if the proxy belongs to a static body.
+        const STATIC = 1 << 2;
+        /// Set if the collider is a sensor.
+        const SENSOR = 1 << 3;
+        /// Set if custom filtering is enabled via the `filter_pairs` hook.
+        const CUSTOM_FILTER = 1 << 4;
+    }
 }
 
 /// A workspace for performing operations on a [`ColliderTree`].

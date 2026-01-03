@@ -4,7 +4,7 @@ use crate::{
     collision::broad_phase::BroadPhaseDiagnostics, data_structures::pair_key::PairKey, prelude::*,
 };
 use bevy::{
-    ecs::system::SystemParamItem,
+    ecs::system::{StaticSystemParam, SystemParamItem},
     prelude::*,
     tasks::{ComputeTaskPool, ParallelSlice},
 };
@@ -35,20 +35,25 @@ where
     fn build(&self, app: &mut App) {
         app.add_systems(
             PhysicsSchedule,
-            collect_collision_pairs.in_set(BroadPhaseSystems::CollectCollisions),
+            collect_collision_pairs::<H>.in_set(BroadPhaseSystems::CollectCollisions),
         );
     }
 }
 
-fn collect_collision_pairs(
+fn collect_collision_pairs<H: CollisionHooks>(
     tree: ResMut<ColliderTrees>,
     moved_proxies: Res<MovedProxies>,
     collider_of_query: Query<&ColliderOf>,
+    hooks: StaticSystemParam<H>,
+    par_commands: ParallelCommands,
     mut collisions: ResMut<ContactGraph>,
     mut diagnostics: ResMut<BroadPhaseDiagnostics>,
-) {
+) where
+    for<'w, 's> SystemParamItem<'w, 's, H>: CollisionHooks,
+{
     let start = crate::utils::Instant::now();
 
+    let hooks = hooks.into_inner();
     let mut broad_collision_pairs = Vec::new();
 
     // Perform tree queries for all moving proxies.
@@ -58,170 +63,174 @@ fn collect_collision_pairs(
         |_chunk_index, proxies| {
             let mut pairs = Vec::new();
 
-            for &proxy_index1 in proxies {
-                let proxy1 = tree
-                    .dynamic_tree
-                    .proxies
-                    .get(proxy_index1 as usize)
-                    .unwrap();
+            par_commands.command_scope(|mut commands| {
+                for &proxy_index1 in proxies {
+                    let proxy1 = tree
+                        .dynamic_tree
+                        .proxies
+                        .get(proxy_index1 as usize)
+                        .unwrap();
 
-                // Find potential collisions against moving proxies.
-                tree.dynamic_tree
-                    .bvh
-                    .aabb_traverse(proxy1.aabb, |bvh, node_index| {
-                        let node = bvh.nodes[node_index as usize];
-                        let start = node.first_index as usize;
-                        let end = start + node.prim_count as usize;
+                    // Find potential collisions against moving proxies.
+                    tree.dynamic_tree
+                        .bvh
+                        .aabb_traverse(proxy1.aabb, |bvh, node_index| {
+                            let node = bvh.nodes[node_index as usize];
+                            let start = node.first_index as usize;
+                            let end = start + node.prim_count as usize;
 
-                        for node_primitive_index in start..end {
-                            let proxy_index2 =
-                                tree.dynamic_tree.bvh.primitive_indices[node_primitive_index];
+                            for node_primitive_index in start..end {
+                                let proxy_index2 =
+                                    tree.dynamic_tree.bvh.primitive_indices[node_primitive_index];
 
-                            // Avoid duplicate pairs for moving proxies.
-                            if proxy_index2 < proxy_index1 && moved_proxies.contains(proxy_index2) {
-                                continue;
-                            }
-
-                            let proxy2 = tree
-                                .dynamic_tree
-                                .proxies
-                                .get(proxy_index2 as usize)
-                                .unwrap();
-
-                            // Check if the AABBs intersect.
-                            if !proxy1.aabb.intersect_aabb(&proxy2.aabb) {
-                                continue;
-                            }
-
-                            let entity1 = proxy1.entity;
-                            let entity2 = proxy2.entity;
-
-                            // A proxy cannot collide with itself.
-                            if entity1 == entity2 {
-                                continue;
-                            }
-
-                            // Check if the layers interact.
-                            if !proxy1.layers.interacts_with(proxy2.layers) {
-                                continue;
-                            }
-
-                            // No collisions between bodies that haven't moved or colliders with incompatible layers
-                            // or colliders with the same parent.
-                            /*if flags1
-                            .intersection(*flags2)
-                            .contains(AabbIntervalFlags::IS_INACTIVE)
-                            || !layers1.interacts_with(*layers2)
-                            || parent1 == parent2
-                            {
-                            continue;
-                            }*/
-
-                            // Avoid duplicate pairs.
-                            let pair_key = PairKey::new(entity1.index(), entity2.index());
-                            if collisions.contains_key(&pair_key) {
-                                continue;
-                            }
-
-                            pairs.push((entity1, entity2));
-
-                            // Apply user-defined filter.
-                            /*if flags1
-                            .union(*flags2)
-                            .contains(AabbIntervalFlags::CUSTOM_FILTER)
-                            {
-                            let should_collide = hooks.filter_pairs(*entity1, *entity2, commands);
-                            if !should_collide {
-                                continue;
+                                // Avoid duplicate pairs for moving proxies.
+                                if proxy_index2 < proxy_index1
+                                    && moved_proxies.contains(proxy_index2)
+                                {
+                                    continue;
                                 }
-                            }*/
 
-                            /*contacts.flags.set(
-                            ContactPairFlags::SENSOR,
-                            flags1.union(*flags2).contains(AabbIntervalFlags::IS_SENSOR),
-                            );
-                            contacts.flags.set(
-                                ContactPairFlags::CONTACT_EVENTS,
-                                flags1
-                                .union(*flags2)
-                                .contains(AabbIntervalFlags::CONTACT_EVENTS),
+                                let proxy2 = tree
+                                    .dynamic_tree
+                                    .proxies
+                                    .get(proxy_index2 as usize)
+                                    .unwrap();
+
+                                // Check if the AABBs intersect.
+                                if !proxy1.aabb.intersect_aabb(&proxy2.aabb) {
+                                    continue;
+                                }
+
+                                let entity1 = proxy1.entity;
+                                let entity2 = proxy2.entity;
+
+                                // A proxy cannot collide with itself.
+                                if entity1 == entity2 {
+                                    continue;
+                                }
+
+                                // Check if the layers interact.
+                                if !proxy1.layers.interacts_with(proxy2.layers) {
+                                    continue;
+                                }
+
+                                // No collisions between colliders on the same body.
+                                if proxy1.body == proxy2.body {
+                                    continue;
+                                }
+
+                                // Avoid duplicate pairs.
+                                let pair_key = PairKey::new(entity1.index(), entity2.index());
+                                if collisions.contains_key(&pair_key) {
+                                    continue;
+                                }
+
+                                pairs.push((entity1, entity2));
+
+                                // Apply user-defined filter.
+                                if proxy1
+                                    .flags
+                                    .union(proxy2.flags)
+                                    .contains(ColliderTreeProxyFlags::CUSTOM_FILTER)
+                                {
+                                    let should_collide = hooks.filter_pairs(
+                                        proxy1.entity,
+                                        proxy2.entity,
+                                        &mut commands,
+                                    );
+                                    if !should_collide {
+                                        continue;
+                                    }
+                                }
+
+                                /*contacts.flags.set(
+                                ContactPairFlags::SENSOR,
+                                flags1.union(*flags2).contains(AabbIntervalFlags::IS_SENSOR),
                                 );
-                            contacts.flags.set(
-                                ContactPairFlags::MODIFY_CONTACTS,
-                                flags1
-                                .union(*flags2)
-                                .contains(AabbIntervalFlags::MODIFY_CONTACTS),
-                                );*/
+                                contacts.flags.set(
+                                    ContactPairFlags::CONTACT_EVENTS,
+                                    flags1
+                                    .union(*flags2)
+                                    .contains(AabbIntervalFlags::CONTACT_EVENTS),
+                                    );
+                                contacts.flags.set(
+                                    ContactPairFlags::MODIFY_CONTACTS,
+                                    flags1
+                                    .union(*flags2)
+                                    .contains(AabbIntervalFlags::MODIFY_CONTACTS),
+                                    );*/
 
-                            // TODO: On the same body?
-                            // TODO: Both sensors?
-                            // TODO: Joint disables collision?
-                            // TODO: Custom collision filter using hook defined in `BroadPhasePlugin`
-                        }
-
-                        true
-                    });
-
-                // Find potential collisions against static or sleeping proxies.
-                tree.static_tree
-                    .bvh
-                    .aabb_traverse(proxy1.aabb, |bvh, node_index| {
-                        let node = bvh.nodes[node_index as usize];
-                        let start = node.first_index as usize;
-                        let end = start + node.prim_count as usize;
-
-                        for node_primitive_index in start..end {
-                            let proxy_index2 =
-                                tree.static_tree.bvh.primitive_indices[node_primitive_index];
-
-                            let Some(proxy2) = tree.static_tree.proxies.get(proxy_index2 as usize)
-                            else {
-                                error!(
-                                    "Proxy index {} exceeds the number of proxies {}",
-                                    proxy_index2,
-                                    tree.static_tree.proxies.len()
-                                );
-                                continue;
-                            };
-
-                            // Check if the AABBs intersect.
-                            if !proxy1.aabb.intersect_aabb(&proxy2.aabb) {
-                                continue;
+                                // TODO: On the same body?
+                                // TODO: Both sensors?
+                                // TODO: Joint disables collision?
+                                // TODO: Custom collision filter using hook defined in `BroadPhasePlugin`
                             }
 
-                            let entity1 = proxy1.entity;
-                            let entity2 = proxy2.entity;
+                            true
+                        });
 
-                            // Note: Unlike with the dynamic tree, we don't need to check for self-collision or duplicate pairs.
+                    // Find potential collisions against static or sleeping proxies.
+                    tree.static_tree
+                        .bvh
+                        .aabb_traverse(proxy1.aabb, |bvh, node_index| {
+                            let node = bvh.nodes[node_index as usize];
+                            let start = node.first_index as usize;
+                            let end = start + node.prim_count as usize;
 
-                            // Check if the layers interact.
-                            if !proxy1.layers.interacts_with(proxy2.layers) {
-                                return true;
+                            for node_primitive_index in start..end {
+                                let proxy_index2 =
+                                    tree.static_tree.bvh.primitive_indices[node_primitive_index];
+
+                                let Some(proxy2) =
+                                    tree.static_tree.proxies.get(proxy_index2 as usize)
+                                else {
+                                    error!(
+                                        "Proxy index {} exceeds the number of proxies {}",
+                                        proxy_index2,
+                                        tree.static_tree.proxies.len()
+                                    );
+                                    continue;
+                                };
+
+                                // Check if the AABBs intersect.
+                                if !proxy1.aabb.intersect_aabb(&proxy2.aabb) {
+                                    continue;
+                                }
+
+                                let entity1 = proxy1.entity;
+                                let entity2 = proxy2.entity;
+
+                                // Note: Unlike with the dynamic tree, we don't need to check for self-collision or duplicate pairs.
+
+                                // Check if the layers interact.
+                                if !proxy1.layers.interacts_with(proxy2.layers) {
+                                    return true;
+                                }
+
+                                // No collisions between bodies that haven't moved or colliders with incompatible layers
+                                // or colliders with the same parent.
+                                /*if flags1
+                                .intersection(*flags2)
+                                .contains(AabbIntervalFlags::IS_INACTIVE)
+                                || !layers1.interacts_with(*layers2)
+                                || parent1 == parent2
+                                {
+                                return;
+                                }*/
+
+                                // Avoid duplicate pairs.
+                                let pair_key = PairKey::new(entity1.index(), entity2.index());
+                                if collisions.contains_key(&pair_key) {
+                                    return true;
+                                }
+
+                                pairs.push((entity1, entity2));
                             }
 
-                            // No collisions between bodies that haven't moved or colliders with incompatible layers
-                            // or colliders with the same parent.
-                            /*if flags1
-                            .intersection(*flags2)
-                            .contains(AabbIntervalFlags::IS_INACTIVE)
-                            || !layers1.interacts_with(*layers2)
-                            || parent1 == parent2
-                            {
-                            return;
-                            }*/
-
-                            // Avoid duplicate pairs.
-                            let pair_key = PairKey::new(entity1.index(), entity2.index());
-                            if collisions.contains_key(&pair_key) {
-                                return true;
-                            }
-
-                            pairs.push((entity1, entity2));
-                        }
-
-                        true
-                    });
-            }
+                            true
+                        });
+                }
+            });
 
             pairs
         },
