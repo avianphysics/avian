@@ -21,10 +21,8 @@ fn create_app() -> App {
         MeshPlugin,
     ));
 
-    // Use 20 substeps.
     app.insert_resource(SubstepCount(20));
 
-    // Disable gravity for joint tests.
     app.insert_resource(Gravity(Vector::ZERO));
 
     app.insert_resource(Time::<Fixed>::from_duration(Duration::from_secs_f32(
@@ -87,7 +85,6 @@ fn revolute_motor_spins_body() {
         app.update();
     }
 
-    // Get the angular velocity of the dynamic body.
     let body_ref = app.world().entity(dynamic);
     let angular_velocity = body_ref.get::<AngularVelocity>().unwrap();
 
@@ -383,7 +380,7 @@ fn prismatic_motor_position_target() {
 /// when it reaches the angle limit.
 #[test]
 fn revolute_motor_respects_angle_limits() {
-    use core::f32::consts::PI;
+    use crate::math::PI;
 
     let mut app = create_app();
     app.finish();
