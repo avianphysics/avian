@@ -1175,7 +1175,7 @@ impl Collider {
             "Each row in `heights` must have the same amount of points"
         );
 
-        let heights = nalgebra::DMatrix::from_vec(row_count, column_count, data);
+        let heights = nalgebra::DMatrix::from_vec(column_count, row_count, data);
         SharedShape::heightfield(heights, scale.into()).into()
     }
 
