@@ -102,6 +102,8 @@ pub struct ColliderTreeWorkspace {
     pub reinsertion_optimizer: ReinsertionOptimizer,
     /// A stack for tracking insertion candidates during proxy insertions.
     pub insertion_stack: HeapStack<SiblingInsertionCandidate>,
+    /// A temporary BVH used during partial rebuilds.
+    pub temp_bvh: Bvh2,
 }
 
 impl Clone for ColliderTreeWorkspace {
@@ -110,6 +112,7 @@ impl Clone for ColliderTreeWorkspace {
             ploc_builder: self.ploc_builder.clone(),
             reinsertion_optimizer: ReinsertionOptimizer::default(),
             insertion_stack: self.insertion_stack.clone(),
+            temp_bvh: Bvh2::default(),
         }
     }
 }
@@ -120,6 +123,7 @@ impl Default for ColliderTreeWorkspace {
             ploc_builder: PlocBuilder::default(),
             reinsertion_optimizer: ReinsertionOptimizer::default(),
             insertion_stack: HeapStack::new_with_capacity(2000),
+            temp_bvh: Bvh2::default(),
         }
     }
 }
@@ -164,6 +168,19 @@ impl ColliderTree {
         );
     }
 
+    /// Rebuilds parts of the tree corresponding to the given list of leaf node indices.
+    #[inline]
+    pub fn rebuild_partial(&mut self, leaves: &[u32]) {
+        self.workspace.ploc_builder.partial_rebuild(
+            &mut self.bvh,
+            &mut self.workspace.temp_bvh,
+            leaves,
+            PlocSearchDistance::Minimum,
+            SortPrecision::U64,
+            0,
+        );
+    }
+
     /// Restructures the tree using parallel reinsertion, optimizing node locations based on SAH cost.
     ///
     /// This can be used to improve query performance after the tree quality has degraded,
@@ -198,8 +215,9 @@ impl ColliderTree {
         let node_index = self.bvh.primitives_to_nodes[proxy_index as usize] as usize;
 
         // Update the proxy's AABB in the BVH.
-        self.bvh.nodes[node_index].aabb = aabb;
+        self.bvh.nodes[node_index].set_aabb(aabb);
 
+        /*
         // Compute the parent indices if they haven't been initialized yet.
         self.bvh.init_parents_if_uninit();
 
@@ -223,5 +241,6 @@ impl ColliderTree {
 
             index = self.bvh.parents[index] as usize;
         }
+        */
     }
 }
