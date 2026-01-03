@@ -120,6 +120,7 @@ bevy = { version = "0.17", default-features = false, features = [
 bevy_heavy = { version = "0.3", features = ["approx"] }
 criterion = { version = "0.5", features = ["html_reports"] }
 bevy_mod_debugdump = { version = "0.14" }
+rand = "0.9"
 
 [lints]
 workspace = true

@@ -19,6 +19,7 @@ use crate::{
 };
 use bevy::{
     camera::visibility::VisibilitySystems,
+    color::palettes::css::WHITE,
     ecs::{
         query::Has,
         system::{StaticSystemParam, SystemParam, SystemParamItem},
@@ -106,6 +107,7 @@ impl Plugin for PhysicsDebugPlugin {
             (
                 debug_render_axes,
                 debug_render_aabbs,
+                debug_render_bvh,
                 #[cfg(all(
                     feature = "default-collider",
                     any(feature = "parry-f32", feature = "parry-f64")
@@ -243,6 +245,27 @@ fn debug_render_aabbs(
                 Transform::from_scale(Vector::from(aabb.size()).f32())
                     .with_translation(Vector::from(aabb.center()).f32()),
                 color,
+            );
+        }
+    }
+}
+
+fn debug_render_bvh(bvh: Res<ColliderTrees>, mut gizmos: Gizmos<PhysicsGizmos>) {
+    for node in bvh.dynamic_tree.bvh.nodes.iter() {
+        if node.prim_count == 0 {
+            gizmos.cuboid(
+                Transform::from_scale(node.aabb.diagonal().into())
+                    .with_translation(node.aabb.center().into()),
+                WHITE,
+            );
+        }
+    }
+    for node in bvh.static_tree.bvh.nodes.iter() {
+        if node.prim_count == 0 {
+            gizmos.cuboid(
+                Transform::from_scale(node.aabb.diagonal().into())
+                    .with_translation(node.aabb.center().into()),
+                WHITE,
             );
         }
     }
