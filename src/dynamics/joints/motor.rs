@@ -9,9 +9,9 @@ use bevy::prelude::*;
 pub enum MotorModel {
     /// A spring-damper model using implicit Euler integration for timestep-independent behavior.
     ///
-    /// While not truly timestep-independant, this model provides stabler, more predictable 
+    /// While not truly timestep-independant, this model provides stabler, more predictable
     /// spring-damper dynamics regardless of the physics substep count.
-    /// 
+    ///
     /// Ignores the mass of the bodies.
     ///
     /// - `frequency`: The natural frequency of the spring in Hz. Higher values create stiffer springs.

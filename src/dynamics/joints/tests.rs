@@ -130,21 +130,19 @@ fn prismatic_motor_moves_body() {
         ))
         .id();
 
-    app
-        .world_mut()
-        .spawn(
-            PrismaticJoint::new(anchor, dynamic)
-                .with_local_anchor1(Vector::X * 2.0)
-                .with_motor(LinearMotor {
-                    target_velocity: 1.0,
-                    max_force: 100.0,
-                    motor_model: MotorModel::AccelerationBased {
-                        stiffness: 0.0,
-                        damping: 10.0,
-                    },
-                    ..default()
-                }),
-        );
+    app.world_mut().spawn(
+        PrismaticJoint::new(anchor, dynamic)
+            .with_local_anchor1(Vector::X * 2.0)
+            .with_motor(LinearMotor {
+                target_velocity: 1.0,
+                max_force: 100.0,
+                motor_model: MotorModel::AccelerationBased {
+                    stiffness: 0.0,
+                    damping: 10.0,
+                },
+                ..default()
+            }),
+    );
 
     // Initialize the app.
     app.update();
@@ -195,19 +193,17 @@ fn revolute_motor_respects_max_torque() {
         .id();
 
     // Create a revolute joint with a very limited motor torque.
-    app
-        .world_mut()
-        .spawn(
-            RevoluteJoint::new(anchor, dynamic).with_motor(AngularMotor {
-                target_velocity: 10.0,
-                max_torque: 0.1,
-                motor_model: MotorModel::AccelerationBased {
-                    stiffness: 0.0,
-                    damping: 1.0,
-                },
-                ..default()
-            }),
-        );
+    app.world_mut().spawn(
+        RevoluteJoint::new(anchor, dynamic).with_motor(AngularMotor {
+            target_velocity: 10.0,
+            max_torque: 0.1,
+            motor_model: MotorModel::AccelerationBased {
+                stiffness: 0.0,
+                damping: 1.0,
+            },
+            ..default()
+        }),
+    );
 
     // Initialize the app.
     app.update();
@@ -263,19 +259,17 @@ fn revolute_motor_position_target() {
 
     // Create a revolute joint with a position-targeting motor.
     let target_angle = 1.0;
-    app
-        .world_mut()
-        .spawn(
-            RevoluteJoint::new(anchor, dynamic).with_motor(AngularMotor {
-                target_position: target_angle,
-                max_torque: Scalar::MAX,
-                motor_model: MotorModel::AccelerationBased {
-                    stiffness: 50.0,
-                    damping: 20.0,
-                },
-                ..default()
-            }),
-        );
+    app.world_mut().spawn(
+        RevoluteJoint::new(anchor, dynamic).with_motor(AngularMotor {
+            target_position: target_angle,
+            max_torque: Scalar::MAX,
+            motor_model: MotorModel::AccelerationBased {
+                stiffness: 50.0,
+                damping: 20.0,
+            },
+            ..default()
+        }),
+    );
 
     // Initialize the app.
     app.update();
@@ -340,21 +334,19 @@ fn prismatic_motor_position_target() {
     // Create a prismatic joint with a position-targeting motor.
     // Use AccelerationBased model for stable position targeting.
     let target_position = 1.0; // Target is 1 meter along the slider axis
-    app
-        .world_mut()
-        .spawn(
-            PrismaticJoint::new(anchor, dynamic)
-                .with_local_anchor1(Vector::X * 2.0)
-                .with_motor(LinearMotor {
-                    target_position,
-                    max_force: 100.0,
-                    motor_model: MotorModel::AccelerationBased {
-                        stiffness: 10.0,
-                        damping: 5.0,
-                    },
-                    ..default()
-                }),
-        );
+    app.world_mut().spawn(
+        PrismaticJoint::new(anchor, dynamic)
+            .with_local_anchor1(Vector::X * 2.0)
+            .with_motor(LinearMotor {
+                target_position,
+                max_force: 100.0,
+                motor_model: MotorModel::AccelerationBased {
+                    stiffness: 10.0,
+                    damping: 5.0,
+                },
+                ..default()
+            }),
+    );
 
     // Initialize the app.
     app.update();
@@ -591,19 +583,17 @@ fn revolute_motor_force_based() {
         .id();
 
     // Use ForceBased motor model with velocity control.
-    app
-        .world_mut()
-        .spawn(
-            RevoluteJoint::new(anchor, dynamic).with_motor(AngularMotor {
-                target_velocity: 2.0,
-                max_torque: 100.0,
-                motor_model: MotorModel::ForceBased {
-                    stiffness: 0.0,
-                    damping: 10.0,
-                },
-                ..default()
-            }),
-        );
+    app.world_mut().spawn(
+        RevoluteJoint::new(anchor, dynamic).with_motor(AngularMotor {
+            target_velocity: 2.0,
+            max_torque: 100.0,
+            motor_model: MotorModel::ForceBased {
+                stiffness: 0.0,
+                damping: 10.0,
+            },
+            ..default()
+        }),
+    );
 
     app.update();
 
@@ -678,19 +668,17 @@ fn revolute_motor_spring_damper() {
         .id();
 
     let target_angle = 1.0;
-    app
-        .world_mut()
-        .spawn(
-            RevoluteJoint::new(anchor, dynamic).with_motor(AngularMotor {
-                target_position: target_angle,
-                max_torque: Scalar::MAX,
-                motor_model: MotorModel::SpringDamper {
-                    frequency: 2.0,
-                    damping_ratio: 1.0,
-                },
-                ..default()
-            }),
-        );
+    app.world_mut().spawn(
+        RevoluteJoint::new(anchor, dynamic).with_motor(AngularMotor {
+            target_position: target_angle,
+            max_torque: Scalar::MAX,
+            motor_model: MotorModel::SpringDamper {
+                frequency: 2.0,
+                damping_ratio: 1.0,
+            },
+            ..default()
+        }),
+    );
 
     app.update();
 
@@ -758,18 +746,19 @@ fn revolute_motor_combined_position_velocity() {
     // Motor with both position and velocity targeting.
     // The velocity adds a constant offset to the spring behavior.
     let target_angle = 0.5;
-    let _joint = app.world_mut().spawn(
-        RevoluteJoint::new(anchor, dynamic).with_motor(AngularMotor {
-            target_position: target_angle,
-            target_velocity: 0.5,
-            max_torque: 100.0,
-            motor_model: MotorModel::AccelerationBased {
-                stiffness: 30.0,
-                damping: 15.0,
-            },
-            ..default()
-        }),
-    );
+    let _joint =
+        app.world_mut().spawn(
+            RevoluteJoint::new(anchor, dynamic).with_motor(AngularMotor {
+                target_position: target_angle,
+                target_velocity: 0.5,
+                max_torque: 100.0,
+                motor_model: MotorModel::AccelerationBased {
+                    stiffness: 30.0,
+                    damping: 15.0,
+                },
+                ..default()
+            }),
+        );
 
     app.update();
 
