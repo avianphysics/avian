@@ -553,7 +553,7 @@ fn prismatic_motor_respects_limits() {
     );
 }
 
-/// Tests that ForceBased motor model works for revolute joints.
+/// Tests that `ForceBased` motor model works for revolute joints.
 ///
 /// This is the physically accurate motor model that takes mass into account.
 #[test]
@@ -638,9 +638,9 @@ fn revolute_motor_force_based() {
     }
 }
 
-/// Tests that the default SpringDamper motor model works.
+/// Tests that the default `SpringDamper` motor model works.
 ///
-/// SpringDamper is timestep-independent and uses frequency/damping_ratio.
+/// `SpringDamper` is timestep-independent and uses `frequency`/`damping_ratio`.
 #[test]
 fn revolute_motor_spring_damper() {
     let mut app = create_app();
@@ -753,7 +753,6 @@ fn revolute_motor_combined_position_velocity() {
                     stiffness: 30.0,
                     damping: 15.0,
                 },
-                ..default()
             }),
         );
 
@@ -828,7 +827,6 @@ fn prismatic_motor_combined_position_velocity() {
                     stiffness: 20.0,
                     damping: 10.0,
                 },
-                ..default()
             }),
     );
 
