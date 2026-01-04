@@ -4,7 +4,7 @@ use crate::{
         joints::{LinearMotor, MotorModel},
         solver::{
             solver_body::{SolverBody, SolverBodyInertia},
-            xpbd::{XpbdMotorConstraint, *},
+            xpbd::*,
         },
     },
     prelude::*,
@@ -108,30 +108,25 @@ impl XpbdConstraint<2> for PrismaticJoint {
         // Constrain the relative positions of the bodies, only allowing translation along one free axis.
         self.constrain_positions(body1, body2, inertias[0], inertias[1], solver_data, dt);
     }
-}
 
-impl XpbdMotorConstraint<2> for PrismaticJoint {
-    type Motor = LinearMotor;
-
-    fn motor(&self) -> Option<&Self::Motor> {
-        self.motor.as_ref()
-    }
-
-    fn solve_motor(
+    fn solve_motors(
         &self,
         bodies: [&mut SolverBody; 2],
         inertias: [&SolverBodyInertia; 2],
         solver_data: &mut PrismaticJointSolverData,
-        motor: &LinearMotor,
         dt: Scalar,
     ) {
+        let Some(motor) = &self.motor else {
+            return;
+        };
+
         let [body1, body2] = bodies;
         let [inertia1, inertia2] = inertias;
 
         self.apply_motor(body1, body2, inertia1, inertia2, solver_data, motor, dt);
     }
 
-    fn warm_start_motor(
+    fn warm_start_motors(
         &self,
         bodies: [&mut SolverBody; 2],
         inertias: [&SolverBodyInertia; 2],
@@ -139,6 +134,10 @@ impl XpbdMotorConstraint<2> for PrismaticJoint {
         _dt: Scalar,
         warm_start_coefficient: Scalar,
     ) {
+        if self.motor.is_none() {
+            return;
+        }
+
         let [body1, body2] = bodies;
         let [inertia1, inertia2] = inertias;
 

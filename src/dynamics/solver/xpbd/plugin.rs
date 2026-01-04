@@ -8,7 +8,7 @@ use crate::{
             SolverConfig,
             schedule::SubstepSolverSystems,
             solver_body::{SolverBody, SolverBodyInertia},
-            xpbd::{XpbdConstraint, XpbdConstraintSolverData, XpbdMotorConstraint},
+            xpbd::{XpbdConstraint, XpbdConstraintSolverData},
         },
     },
     prelude::*,
@@ -62,8 +62,8 @@ impl Plugin for XpbdSolverPlugin {
         app.add_systems(
             SubstepSchedule,
             (
-                warm_start_xpbd_motor::<RevoluteJoint>,
-                warm_start_xpbd_motor::<PrismaticJoint>,
+                warm_start_xpbd_motors::<RevoluteJoint>,
+                warm_start_xpbd_motors::<PrismaticJoint>,
             )
                 .chain()
                 .ambiguous_with_all()
@@ -91,10 +91,10 @@ impl Plugin for XpbdSolverPlugin {
                     }
                 },
                 solve_xpbd_joint::<FixedJoint>,
-                solve_xpbd_joint_with_motor::<RevoluteJoint>,
+                solve_xpbd_joint::<RevoluteJoint>,
                 #[cfg(feature = "3d")]
                 solve_xpbd_joint::<SphericalJoint>,
-                solve_xpbd_joint_with_motor::<PrismaticJoint>,
+                solve_xpbd_joint::<PrismaticJoint>,
                 solve_xpbd_joint::<DistanceJoint>,
             )
                 .chain()
@@ -201,64 +201,13 @@ pub fn solve_xpbd_joint<
             &mut solver_data,
             delta_secs,
         );
-    }
-}
 
-/// Iterates through the XPBD joints of a given type and solves them,
-/// including motor constraints if present.
-pub fn solve_xpbd_joint_with_motor<
-    C: Component<Mutability = Mutable> + EntityConstraint<2> + XpbdMotorConstraint<2>,
->(
-    bodies: Query<(&mut SolverBody, &SolverBodyInertia), Without<RigidBodyDisabled>>,
-    mut joints: Query<(&mut C, &mut C::SolverData), (Without<RigidBody>, Without<JointDisabled>)>,
-    time: Res<Time>,
-) where
-    C::SolverData: Component<Mutability = Mutable>,
-{
-    let delta_secs = time.delta_seconds_adjusted();
-
-    let mut dummy_body1 = SolverBody::default();
-    let mut dummy_body2 = SolverBody::default();
-
-    for (mut joint, mut solver_data) in &mut joints {
-        let [entity1, entity2] = joint.entities();
-
-        let (mut body1, mut inertia1) = (&mut dummy_body1, &SolverBodyInertia::DUMMY);
-        let (mut body2, mut inertia2) = (&mut dummy_body2, &SolverBodyInertia::DUMMY);
-
-        // Get the solver bodies for the two colliding entities.
-        if let Ok((body, inertia)) = unsafe { bodies.get_unchecked(entity1) } {
-            body1 = body.into_inner();
-            inertia1 = inertia;
-        }
-        if let Ok((body, inertia)) = unsafe { bodies.get_unchecked(entity2) } {
-            body2 = body.into_inner();
-            inertia2 = inertia;
-        }
-
-        // If a body has a higher dominance, it is treated as a static or kinematic body.
-        match (inertia1.dominance() - inertia2.dominance()).cmp(&0) {
-            Ordering::Greater => inertia1 = &SolverBodyInertia::DUMMY,
-            Ordering::Less => inertia2 = &SolverBodyInertia::DUMMY,
-            _ => {}
-        }
-
-        joint.solve(
+        joint.solve_motors(
             [body1, body2],
             [inertia1, inertia2],
             &mut solver_data,
             delta_secs,
         );
-
-        if let Some(motor) = joint.motor() {
-            joint.solve_motor(
-                [body1, body2],
-                [inertia1, inertia2],
-                &mut solver_data,
-                motor,
-                delta_secs,
-            );
-        }
     }
 }
 
@@ -266,8 +215,8 @@ pub fn solve_xpbd_joint_with_motor<
 ///
 /// This applies the motor impulses from the previous frame as velocity changes,
 /// improving convergence for motors that need to maintain steady forces.
-pub fn warm_start_xpbd_motor<
-    C: Component<Mutability = Mutable> + EntityConstraint<2> + XpbdMotorConstraint<2>,
+pub fn warm_start_xpbd_motors<
+    C: Component<Mutability = Mutable> + EntityConstraint<2> + XpbdConstraint<2>,
 >(
     bodies: Query<(&mut SolverBody, &SolverBodyInertia), Without<RigidBodyDisabled>>,
     mut joints: Query<(&C, &mut C::SolverData), (Without<RigidBody>, Without<JointDisabled>)>,
@@ -287,7 +236,6 @@ pub fn warm_start_xpbd_motor<
         let (mut body1, mut inertia1) = (&mut dummy_body1, &SolverBodyInertia::DUMMY);
         let (mut body2, mut inertia2) = (&mut dummy_body2, &SolverBodyInertia::DUMMY);
 
-        // Get the solver bodies for the two entities.
         if let Ok((body, inertia)) = unsafe { bodies.get_unchecked(entity1) } {
             body1 = body.into_inner();
             inertia1 = inertia;
@@ -304,7 +252,7 @@ pub fn warm_start_xpbd_motor<
             _ => {}
         }
 
-        joint.warm_start_motor(
+        joint.warm_start_motors(
             [body1, body2],
             [inertia1, inertia2],
             &mut solver_data,

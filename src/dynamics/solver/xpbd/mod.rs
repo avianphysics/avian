@@ -281,7 +281,7 @@
 mod plugin;
 pub use plugin::{
     XpbdSolverPlugin, XpbdSolverSystems, prepare_xpbd_joint, solve_xpbd_joint,
-    solve_xpbd_joint_with_motor, warm_start_xpbd_motor,
+    warm_start_xpbd_motors,
 };
 
 pub mod joints;
@@ -354,47 +354,44 @@ pub trait XpbdConstraint<const ENTITY_COUNT: usize> {
         solver_data: &mut Self::SolverData,
         dt: Scalar,
     );
-}
 
-/// A trait for XPBD constraints that support motors.
-///
-/// This extends [`XpbdConstraint`] to add motor solving capability.
-/// Motors are solved in the same pass as other constraints for better coupling.
-pub trait XpbdMotorConstraint<const ENTITY_COUNT: usize>: XpbdConstraint<ENTITY_COUNT> {
-    /// The motor type for this constraint.
-    type Motor;
-
-    /// Returns a reference to the motor, if one is configured.
-    fn motor(&self) -> Option<&Self::Motor>;
-
-    /// Solves the motor constraint.
+    /// Solves the motor constraints for this joint.
     ///
-    /// This method is called after `solve` to apply motor forces/torques.
-    /// It is only called if `motor()` returns `Some`.
-    fn solve_motor(
+    /// This method is called after [`Self::solve`] to apply motor forces/torques.
+    /// The default implementation does nothing, allowing joints without motors
+    /// to use this trait without additional boilerplate.
+    ///
+    /// For joints with motors, override this method to apply motor forces.
+    /// Multi-axis joints can iterate over their configured motors internally.
+    #[allow(unused_variables)]
+    fn solve_motors(
         &self,
         bodies: [&mut SolverBody; ENTITY_COUNT],
         inertias: [&SolverBodyInertia; ENTITY_COUNT],
         solver_data: &mut Self::SolverData,
-        motor: &Self::Motor,
         dt: Scalar,
-    );
+    ) {
+    }
 
-    /// Warm starts the motor constraint by applying the impulse from the previous frame.
+    /// Warm starts the motor constraints by applying impulses from the previous frame.
     ///
     /// This is called once at the beginning of the first substep. After applying,
-    /// the stored warm start impulse should be zeroed to prevent re-application
+    /// the stored warm start impulses should be zeroed to prevent re-application
     /// in subsequent substeps.
     ///
     /// The `warm_start_coefficient` scales the applied impulse (typically 1.0).
-    fn warm_start_motor(
+    ///
+    /// The default implementation does nothing.
+    #[allow(unused_variables)]
+    fn warm_start_motors(
         &self,
         bodies: [&mut SolverBody; ENTITY_COUNT],
         inertias: [&SolverBodyInertia; ENTITY_COUNT],
         solver_data: &mut Self::SolverData,
         dt: Scalar,
         warm_start_coefficient: Scalar,
-    );
+    ) {
+    }
 }
 
 /// Computes how much a constraint's [Lagrange multiplier](self#lagrange-multipliers) changes when projecting
