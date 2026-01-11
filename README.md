@@ -6,6 +6,7 @@
 [![2D docs.rs](https://img.shields.io/docsrs/avian2d?label=2D%20docs.rs)](https://docs.rs/avian2d)
 [![3D crates.io](https://img.shields.io/crates/v/avian3d?label=3D%20crates.io)](https://crates.io/crates/avian3d)
 [![3D docs.rs](https://img.shields.io/docsrs/avian3d?label=3D%20docs.rs)](https://docs.rs/avian3d)
+[![Bevy version](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Favianphysics%2Favian%2Frefs%2Fheads%2Fmain%2Fcrates%2Favian2d%2FCargo.toml&query=%24.dependencies.bevy.version&prefix=v&label=bevy)](#version-table)
 
 **Avian** is an ECS-driven 2D and 3D physics engine for the [Bevy game engine](https://bevyengine.org/).
 
