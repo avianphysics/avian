@@ -107,6 +107,7 @@ use itertools::Either;
 ///     ));
 /// }
 /// ```
+/// Note that this example needs the default feature `bevy_scene`.
 #[derive(Component, Clone, Debug, Default, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
