@@ -216,7 +216,7 @@ fn debug_render_aabbs(
                 }
             }
 
-            gizmos.cuboid(
+            gizmos.cube(
                 Transform::from_scale(Vector::from(aabb.size()).extend(0.0).f32())
                     .with_translation(Vector::from(aabb.center()).extend(0.0).f32()),
                 color,
@@ -239,7 +239,7 @@ fn debug_render_aabbs(
                 }
             }
 
-            gizmos.cuboid(
+            gizmos.cube(
                 Transform::from_scale(Vector::from(aabb.size()).f32())
                     .with_translation(Vector::from(aabb.center()).f32()),
                 color,
@@ -500,7 +500,7 @@ fn debug_render_islands(
             // Render the island's AABB.
             #[cfg(feature = "2d")]
             {
-                gizmos.cuboid(
+                gizmos.cube(
                     Transform::from_scale(Vector::from(aabb.size()).extend(0.0).f32())
                         .with_translation(Vector::from(aabb.center()).extend(0.0).f32()),
                     color,
@@ -508,7 +508,7 @@ fn debug_render_islands(
             }
             #[cfg(feature = "3d")]
             {
-                gizmos.cuboid(
+                gizmos.cube(
                     Transform::from_scale(Vector::from(aabb.size()).f32())
                         .with_translation(Vector::from(aabb.center()).f32()),
                     color,

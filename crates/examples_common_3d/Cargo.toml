@@ -7,7 +7,7 @@ edition = "2024"
 use-debug-plugin = []
 
 [dependencies]
-bevy = { version = "0.17", default-features = false, features = [
+bevy = { version = "0.18.0", default-features = false, features = [
     "bevy_core_pipeline",
     "bevy_state",
     "bevy_text",
@@ -20,7 +20,6 @@ bevy = { version = "0.17", default-features = false, features = [
     "bevy_pbr",
     "bevy_gizmos",
     "bevy_gltf",
-    "animation",
     "default_font",
     "tonemapping_luts",
     "ktx2",

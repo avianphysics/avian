@@ -290,7 +290,7 @@ fn on_disable_joint_collision(
         }
 
         // Remove the contact from the contact graph.
-        let pair_key = PairKey::new(body1.index(), body2.index());
+        let pair_key = PairKey::new(body1.index().index(), body2.index().index());
         contact_graph.remove_edge_by_id(&pair_key, contact_id);
     }
 }

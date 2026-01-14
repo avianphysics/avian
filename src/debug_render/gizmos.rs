@@ -186,7 +186,7 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
             }
             #[cfg(feature = "2d")]
             TypedShape::Cuboid(s) => {
-                self.cuboid(
+                self.cube(
                     Transform::from_scale(Vector::from(s.half_extents).extend(0.0).f32() * 2.0)
                         .with_translation(position.extend(0.0).f32())
                         .with_rotation(Quaternion::from(rotation).f32()),
@@ -195,7 +195,7 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
             }
             #[cfg(feature = "3d")]
             TypedShape::Cuboid(s) => {
-                self.cuboid(
+                self.cube(
                     Transform::from_scale(Vector::from(s.half_extents).f32() * 2.0)
                         .with_translation(position.f32())
                         .with_rotation(rotation.f32()),

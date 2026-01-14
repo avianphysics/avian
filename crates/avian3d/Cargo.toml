@@ -84,11 +84,11 @@ bench = false
 
 [dependencies]
 avian_derive = { path = "../avian_derive", version = "0.2" }
-bevy = { version = "0.17", default-features = false, features = [
+bevy = { version = "0.18.0", default-features = false, features = [
     "std",
     "bevy_log",
 ] }
-bevy_math = { version = "0.17", features = ["approx"] }
+bevy_math = { version = "0.18.0", features = ["approx"] }
 glam_matrix_extras = { version = "0.1", features = ["bevy_reflect"] }
 bevy_heavy = { version = "0.3" }
 bevy_transform_interpolation = { version = "0.3" }
@@ -109,11 +109,10 @@ disqualified = { version = "1.0" }
 
 [dev-dependencies]
 examples_common_3d = { path = "../examples_common_3d" }
-bevy = { version = "0.17", default-features = false, features = [
+bevy = { version = "0.18.0", default-features = false, features = [
     "bevy_pbr",
     "bevy_gltf",
     "https",
-    "animation",
     "debug",
     "reflect_auto_register",
 ] }

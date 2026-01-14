@@ -174,8 +174,8 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     );
 
                     let pair_key = PairKey::new(
-                        contact_pair.collider1.index(),
-                        contact_pair.collider2.index(),
+                        contact_pair.collider1.index().index(),
+                        contact_pair.collider2.index().index(),
                     );
 
                     if contact_pair.generates_constraints()

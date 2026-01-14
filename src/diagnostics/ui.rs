@@ -156,10 +156,10 @@ fn setup_diagnostics_ui(mut commands: Commands, settings: Res<PhysicsDiagnostics
                 },
                 flex_direction: FlexDirection::Column,
                 row_gap: Val::Px(10.0),
+                border_radius: BorderRadius::all(Val::Px(5.0)),
                 ..default()
             },
             BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
-            BorderRadius::all(Val::Px(5.0)),
         ))
         .with_children(build_diagnostic_texts);
 }

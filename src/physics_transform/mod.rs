@@ -19,7 +19,9 @@ use crate::{
 };
 use approx::AbsDiffEq;
 use bevy::{
-    ecs::{component::Tick, intern::Interned, schedule::ScheduleLabel, system::SystemChangeTick},
+    ecs::{
+        change_detection::Tick, intern::Interned, schedule::ScheduleLabel, system::SystemChangeTick,
+    },
     prelude::*,
     transform::systems::{mark_dirty_trees, propagate_parent_transforms, sync_simple_transforms},
 };

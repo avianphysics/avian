@@ -288,7 +288,7 @@ impl ContactGraph {
     /// even if the shapes themselves are not yet touching.
     #[inline]
     pub fn contains(&self, entity1: Entity, entity2: Entity) -> bool {
-        self.contains_key(&PairKey::new(entity1.index(), entity2.index()))
+        self.contains_key(&PairKey::new(entity1.index().index(), entity2.index().index()))
     }
 
     /// Returns `true` if the given pair key is in the contact graph.
@@ -497,8 +497,8 @@ impl ContactGraph {
         F: FnMut(&mut ContactPair),
     {
         let pair_key = PairKey::new(
-            contact_edge.collider1.index(),
-            contact_edge.collider2.index(),
+            contact_edge.collider1.index().index(),
+            contact_edge.collider2.index().index(),
         );
         self.add_edge_and_key_with(contact_edge, pair_key, pair_callback)
     }
@@ -582,7 +582,7 @@ impl ContactGraph {
 
         // Remove the edge from the graph.
         self.edges.find_edge(index1, index2).and_then(|edge_id| {
-            let pair_key = PairKey::new(entity1.index(), entity2.index());
+            let pair_key = PairKey::new(entity1.index().index(), entity2.index().index());
             self.remove_edge_by_id(&pair_key, edge_id.into())
         })
     }
@@ -655,8 +655,8 @@ impl ContactGraph {
                 panic!("contact edge {contact_id:?} not found in contact graph")
             });
             let pair_key = PairKey::new(
-                contact_edge.collider1.index(),
-                contact_edge.collider2.index(),
+                contact_edge.collider1.index().index(),
+                contact_edge.collider2.index().index(),
             );
             let pair_index = contact_edge.pair_index;
             let contact_pairs = if contact_edge.is_sleeping() {

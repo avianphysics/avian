@@ -64,8 +64,8 @@ impl PhysicsTransformHelper<'_, '_> {
             .compute_global_transform(entity)
             .map_err(|err| match err {
                 MissingTransform(e) => UpdatePhysicsTransformError::MissingTransform(e),
-                NoSuchEntity(e) => UpdatePhysicsTransformError::NoSuchEntity(e),
-                MalformedHierarchy(e) => UpdatePhysicsTransformError::MalformedHierarchy(e),
+                NoSuchEntity(e) => UpdatePhysicsTransformError::NoSuchEntity(e.entity()),
+                MalformedHierarchy(e) => UpdatePhysicsTransformError::MalformedHierarchy(e.entity()),
             })?;
 
         // Update the physics transform components.

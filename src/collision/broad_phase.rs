@@ -414,7 +414,7 @@ fn sweep_and_prune<H: CollisionHooks>(
             }
 
             // Avoid duplicate pairs.
-            let pair_key = PairKey::new(entity1.index(), entity2.index());
+            let pair_key = PairKey::new(entity1.index().index(), entity2.index().index());
             if contact_graph.contains_key(&pair_key) {
                 continue;
             }
