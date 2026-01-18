@@ -6,12 +6,11 @@ use core::f32::consts::FRAC_PI_2;
 
 use avian3d::{math::*, prelude::*};
 use bevy::{
-    asset::io::web::WebAssetPlugin,
     color::palettes::tailwind,
     ecs::entity::EntityHashSet,
-    gltf::GltfLoaderSettings,
+    gltf::{GltfLoaderSettings, convert_coordinates::GltfConvertCoordinates},
     input::{common_conditions::input_just_pressed, mouse::AccumulatedMouseMotion},
-    pbr::Atmosphere,
+    pbr::{Atmosphere, ScatteringMedium},
     prelude::*,
     window::{CursorGrabMode, CursorOptions},
 };
@@ -20,9 +19,7 @@ use examples_common_3d::ExampleCommonPlugin;
 fn main() {
     App::new()
         .add_plugins((
-            DefaultPlugins.set(WebAssetPlugin {
-                silence_startup_warning: true,
-            }),
+            DefaultPlugins,
             ExampleCommonPlugin,
             PhysicsPlugins::default(),
         ))
@@ -54,6 +51,7 @@ fn setup(
     mut commands: Commands,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
+    mut scattering_media: ResMut<Assets<ScatteringMedium>>,
     assets: ResMut<AssetServer>,
 ) {
     // Character
@@ -77,7 +75,10 @@ fn setup(
         SceneRoot(assets.load_with_settings(
             "https://github.com/avianphysics/avian_asset_files/raw/08f82a1031c4fbdf1a461600468d2a37593a804a/move_and_slide_level/move_and_slide_level.glb#Scene0",
             |settings: &mut GltfLoaderSettings| {
-                settings.use_model_forward_direction = Some(true);
+                settings.convert_coordinates = Some(GltfConvertCoordinates {
+                    rotate_scene_entity: true,
+                    rotate_meshes: true,
+                });
             },
         )),
         ColliderConstructorHierarchy::new(ColliderConstructor::TrimeshFromMesh),
@@ -118,7 +119,7 @@ fn setup(
     commands.spawn((
         Camera3d::default(),
         Transform::from_xyz(-5.0, 3.5, 5.5).looking_at(Vec3::ZERO, Vec3::Y),
-        Atmosphere::EARTH,
+        Atmosphere::earthlike(scattering_media.add(ScatteringMedium::default())),
         EnvironmentMapLight {
             diffuse_map: assets.load("https://github.com/avianphysics/avian_asset_files/raw/08f82a1031c4fbdf1a461600468d2a37593a804a/voortrekker_interior/voortrekker_interior_1k_diffuse.ktx2"),
             specular_map: assets.load("https://github.com/avianphysics/avian_asset_files/raw/08f82a1031c4fbdf1a461600468d2a37593a804a/voortrekker_interior/voortrekker_interior_1k_specular.ktx2"),

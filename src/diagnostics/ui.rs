@@ -149,6 +149,7 @@ fn setup_diagnostics_ui(mut commands: Commands, settings: Res<PhysicsDiagnostics
                 left: Val::Px(5.0),
                 width: Val::Px(270.0),
                 padding: UiRect::all(Val::Px(10.0)),
+                border_radius: BorderRadius::all(Val::Px(5.0)),
                 display: if settings.enabled {
                     Display::Flex
                 } else {
@@ -159,7 +160,6 @@ fn setup_diagnostics_ui(mut commands: Commands, settings: Res<PhysicsDiagnostics
                 ..default()
             },
             BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
-            BorderRadius::all(Val::Px(5.0)),
         ))
         .with_children(build_diagnostic_texts);
 }

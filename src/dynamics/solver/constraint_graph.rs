@@ -181,14 +181,14 @@ impl ConstraintGraph {
             // static geometry by solving static contacts last.
             for i in 0..DYNAMIC_COLOR_COUNT {
                 let color = &mut self.colors[i];
-                if color.body_set.get(body1.index() as usize)
-                    || color.body_set.get(body2.index() as usize)
+                if color.body_set.get(body1.index_u32() as usize)
+                    || color.body_set.get(body2.index_u32() as usize)
                 {
                     continue;
                 }
 
-                color.body_set.set_and_grow(body1.index() as usize);
-                color.body_set.set_and_grow(body2.index() as usize);
+                color.body_set.set_and_grow(body1.index_u32() as usize);
+                color.body_set.set_and_grow(body2.index_u32() as usize);
                 color_index = i;
                 break;
             }
@@ -196,11 +196,11 @@ impl ConstraintGraph {
             // Build static colors from the end to give them higher priority.
             for i in (1..COLOR_OVERFLOW_INDEX).rev() {
                 let color = &mut self.colors[i];
-                if color.body_set.get(body1.index() as usize) {
+                if color.body_set.get(body1.index_u32() as usize) {
                     continue;
                 }
 
-                color.body_set.set_and_grow(body1.index() as usize);
+                color.body_set.set_and_grow(body1.index_u32() as usize);
                 color_index = i;
                 break;
             }
@@ -208,11 +208,11 @@ impl ConstraintGraph {
             // Build static colors from the end to give them higher priority.
             for i in (1..COLOR_OVERFLOW_INDEX).rev() {
                 let color = &mut self.colors[i];
-                if color.body_set.get(body2.index() as usize) {
+                if color.body_set.get(body2.index_u32() as usize) {
                     continue;
                 }
 
-                color.body_set.set_and_grow(body2.index() as usize);
+                color.body_set.set_and_grow(body2.index_u32() as usize);
                 color_index = i;
                 break;
             }
@@ -263,8 +263,8 @@ impl ConstraintGraph {
 
         if color_index != COLOR_OVERFLOW_INDEX {
             // Remove the bodies from the color's body set.
-            color.body_set.unset(body1.index() as usize);
-            color.body_set.unset(body2.index() as usize);
+            color.body_set.unset(body1.index_u32() as usize);
+            color.body_set.unset(body2.index_u32() as usize);
         }
 
         // Remove the manifold handle from the color.

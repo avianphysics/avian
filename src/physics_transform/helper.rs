@@ -1,6 +1,6 @@
 use bevy::{
     ecs::{
-        entity::Entity,
+        entity::{Entity, EntityNotSpawnedError},
         system::{Query, SystemParam, lifetimeless::Write},
         world::Mut,
     },
@@ -98,10 +98,10 @@ pub enum UpdatePhysicsTransformError {
     )]
     MissingTransform(Entity),
     /// The entity does not exist.
-    #[error("The entity {0:?} does not exist")]
-    NoSuchEntity(Entity),
+    #[error("{0}")]
+    NoSuchEntity(EntityNotSpawnedError),
     /// An ancestor is missing.
     /// This probably means that your hierarchy has been improperly maintained.
-    #[error("The ancestor {0:?} is missing")]
-    MalformedHierarchy(Entity),
+    #[error("{0}")]
+    MalformedHierarchy(EntityNotSpawnedError),
 }

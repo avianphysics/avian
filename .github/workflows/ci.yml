@@ -23,6 +23,8 @@ jobs:
                 save-if: ${{ github.ref == 'refs/heads/main' }}
                 cache-all-crates: true
                 shared-key: lints
+            - name: Install Linux dependencies
+              run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev libx264-164 libx264-dev
             - name: Run cargo check
               run: cargo check --locked --all-targets --no-default-features --features 2d,3d,f32
 
@@ -37,6 +39,8 @@ jobs:
                 save-if: ${{ github.ref == 'refs/heads/main' }}
                 cache-all-crates: true
                 shared-key: lints
+            - name: Install Linux dependencies
+              run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev libx264-164 libx264-dev
             - name: Run cargo doc
               run: cargo doc --locked --workspace --no-deps --document-private-items --keep-going
 
@@ -55,6 +59,9 @@ jobs:
               with:
                 components: llvm-tools-preview
             - uses: cargo-bins/cargo-binstall@main
+            - name: Install Linux dependencies
+              run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev libx264-164 libx264-dev
+              if: ${{ matrix.os == 'ubuntu-latest' }}
             - name: Install nextest
               run: cargo binstall cargo-nextest --force
             - name: Install LLD
@@ -112,6 +119,8 @@ jobs:
                 save-if: ${{ github.ref == 'refs/heads/main' }}
                 cache-all-crates: true
                 shared-key: lints
+            - name: Install Linux dependencies
+              run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev libx264-164 libx264-dev
             - name: Run cargo fmt
               run: cargo fmt --all -- --check
             - name: Run cargo clippy

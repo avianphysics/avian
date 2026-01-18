@@ -1,6 +1,6 @@
 [package]
 name = "avian2d"
-version = "0.4.1"
+version = "0.5.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 authors = ["Joona Aalto <jondolf.dev@gmail.com>"]
@@ -82,14 +82,14 @@ bench = false
 
 [dependencies]
 avian_derive = { path = "../avian_derive", version = "0.2" }
-bevy = { version = "0.17", default-features = false, features = [
+bevy = { version = "0.18.0", default-features = false, features = [
     "std",
     "bevy_log",
 ] }
-bevy_math = { version = "0.17", features = ["approx"] }
-glam_matrix_extras = { version = "0.1", features = ["bevy_reflect"] }
-bevy_heavy = { version = "0.3" }
-bevy_transform_interpolation = { version = "0.3" }
+bevy_math = { version = "0.18.0", features = ["approx"] }
+glam_matrix_extras = { version = "0.2", features = ["bevy_reflect"] }
+bevy_heavy = { version = "0.4" }
+bevy_transform_interpolation = { version = "0.4" }
 libm = { version = "0.2", optional = true }
 approx = "0.5"
 parry2d = { version = "0.25", optional = true }
@@ -108,15 +108,12 @@ disqualified = { version = "1.0" }
 
 [dev-dependencies]
 examples_common_2d = { path = "../examples_common_2d" }
-bevy = { version = "0.17", default-features = false, features = [
-    "debug",
-    "reflect_auto_register",
-] }
-bevy_heavy = { version = "0.3", features = ["approx"] }
+bevy = { version = "0.18.0", default-features = false, features = ["2d", "ui"] }
+bevy_heavy = { version = "0.4", features = ["approx"] }
 glam = { version = "0.30", features = ["bytemuck"] }
 bytemuck = "1.19"
 criterion = { version = "0.5", features = ["html_reports"] }
-bevy_mod_debugdump = { version = "0.14" }
+bevy_mod_debugdump = { version = "0.15" }
 
 [lints]
 workspace = true

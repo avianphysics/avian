@@ -216,17 +216,15 @@ fn debug_render_aabbs(
                 }
             }
 
-            gizmos.cuboid(
-                Transform::from_scale(Vector::from(aabb.size()).extend(0.0).f32())
-                    .with_translation(Vector::from(aabb.center()).extend(0.0).f32()),
-                color,
-            );
+            gizmos.rect_2d(aabb.center().f32(), aabb.size().f32(), color);
         }
     }
 
     #[cfg(feature = "3d")]
     for (entity, aabb, collider_rb, render_config) in &aabbs {
         if let Some(mut color) = render_config.map_or(config.aabb_color, |c| c.aabb_color) {
+            use bevy_math::bounding::Aabb3d;
+
             let collider_rb = collider_rb.map_or(entity, |c| c.body);
 
             // If the body is sleeping, multiply the color by the sleeping color multiplier
@@ -239,9 +237,12 @@ fn debug_render_aabbs(
                 }
             }
 
-            gizmos.cuboid(
-                Transform::from_scale(Vector::from(aabb.size()).f32())
-                    .with_translation(Vector::from(aabb.center()).f32()),
+            gizmos.aabb_3d(
+                Aabb3d {
+                    min: Vec3A::from(aabb.min.f32()),
+                    max: Vec3A::from(aabb.max.f32()),
+                },
+                Transform::IDENTITY,
                 color,
             );
         }
@@ -500,17 +501,18 @@ fn debug_render_islands(
             // Render the island's AABB.
             #[cfg(feature = "2d")]
             {
-                gizmos.cuboid(
-                    Transform::from_scale(Vector::from(aabb.size()).extend(0.0).f32())
-                        .with_translation(Vector::from(aabb.center()).extend(0.0).f32()),
-                    color,
-                );
+                gizmos.rect_2d(aabb.center().f32(), aabb.size().f32(), color);
             }
             #[cfg(feature = "3d")]
             {
-                gizmos.cuboid(
-                    Transform::from_scale(Vector::from(aabb.size()).f32())
-                        .with_translation(Vector::from(aabb.center()).f32()),
+                use bevy_math::bounding::Aabb3d;
+
+                gizmos.aabb_3d(
+                    Aabb3d {
+                        min: Vec3A::from(aabb.min.f32()),
+                        max: Vec3A::from(aabb.max.f32()),
+                    },
+                    Transform::IDENTITY,
                     color,
                 );
             }
