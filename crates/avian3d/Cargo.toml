@@ -1,6 +1,6 @@
 [package]
 name = "avian3d"
-version = "0.5.0"
+version = "0.6.0-dev"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 authors = ["Joona Aalto <jondolf.dev@gmail.com>"]
