@@ -22,8 +22,7 @@ fn main() {
             PhysicsPlugins::default(),
         ))
         .insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.1)))
-        .insert_resource(SubstepCount(50))
-        .insert_resource(Gravity(Vector::ZERO)) // No gravity for clearer motor demo
+        .insert_resource(Gravity(Vector::NEG_Y * 1000.0))
         .add_systems(Startup, setup)
         .add_systems(Update, (control_motors, update_ui))
         .run();
@@ -177,6 +176,7 @@ fn setup(mut commands: Commands) {
     commands.spawn((
         PrismaticJoint::new(piston_base, piston)
             .with_slider_axis(Vector::Y)
+            .with_limits(-100.0, 100.0)
             .with_motor(
                 LinearMotor::new(MotorModel::SpringDamper {
                     frequency: 20.0,
@@ -222,11 +222,7 @@ fn control_motors(
             joint.motor.target_velocity -= 1.0;
         }
         if keyboard.just_pressed(KeyCode::Space) {
-            if joint.motor.target_velocity != 0.0 {
-                joint.motor.target_velocity = 0.0;
-            } else {
-                joint.motor.target_velocity = 5.0;
-            }
+            joint.motor.enabled = !joint.motor.enabled;
         }
     }
 
@@ -238,7 +234,7 @@ fn control_motors(
             joint.motor.target_position -= 0.5;
         }
         if keyboard.just_pressed(KeyCode::Space) {
-            joint.motor.target_position = 0.0;
+            joint.motor.enabled = !joint.motor.enabled;
         }
     }
 
@@ -250,11 +246,7 @@ fn control_motors(
             joint.motor.target_position -= 25.0;
         }
         if keyboard.just_pressed(KeyCode::Space) {
-            if joint.motor.target_position != 0.0 {
-                joint.motor.target_position = 0.0;
-            } else {
-                joint.motor.target_position = 50.0;
-            }
+            joint.motor.enabled = !joint.motor.enabled;
         }
     }
 }
@@ -270,12 +262,15 @@ fn update_ui(
              Arrow Up/Down: Velocity motor speed\n\
              A/D: Position motor angle\n\
              W/S: Prismatic motor position\n\
-             Space: Reset motors\n\n\
+             Space: Toggle motors\n\n\
              Velocity: {:.1} rad/s\n\
              Position: {:.2} rad\n\
-             Prismatic: {:.1} units",
+             Prismatic: {:.1} units\n\
+             Enabled: {}",
         velocity_motor.motor.target_velocity,
         position_motor.motor.target_position,
         prismatic_motor.motor.target_position,
+        // We can pick any of the motors here since they are toggled together
+        velocity_motor.motor.enabled
     );
 }

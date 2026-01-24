@@ -105,25 +105,11 @@ impl XpbdConstraint<2> for PrismaticJoint {
             .angle_constraint
             .solve([body1, body2], inertias, self.angle_compliance, dt);
 
+        // Solve motors before limits to give limits higher priority.
+        self.apply_motor(body1, body2, inertias[0], inertias[1], solver_data, dt);
+
         // Constrain the relative positions of the bodies, only allowing translation along one free axis.
         self.constrain_positions(body1, body2, inertias[0], inertias[1], solver_data, dt);
-    }
-
-    fn solve_motors(
-        &self,
-        bodies: [&mut SolverBody; 2],
-        inertias: [&SolverBodyInertia; 2],
-        solver_data: &mut PrismaticJointSolverData,
-        dt: Scalar,
-    ) {
-        if !self.motor.enabled {
-            return;
-        }
-
-        let [body1, body2] = bodies;
-        let [inertia1, inertia2] = inertias;
-
-        self.apply_motor(body1, body2, inertia1, inertia2, solver_data, dt);
     }
 
     fn warm_start_motors(
@@ -269,6 +255,10 @@ impl PrismaticJoint {
         dt: Scalar,
     ) {
         let motor = &self.motor;
+
+        if !motor.enabled {
+            return;
+        }
 
         let axis1 = body1.delta_rotation * solver_data.free_axis1;
         let world_r1 = body1.delta_rotation * solver_data.world_r1;

@@ -355,24 +355,6 @@ pub trait XpbdConstraint<const ENTITY_COUNT: usize> {
         dt: Scalar,
     );
 
-    /// Solves the motor constraints for this joint.
-    ///
-    /// This method is called after [`Self::solve`] to apply motor forces/torques.
-    /// The default implementation does nothing, allowing joints without motors
-    /// to use this trait without additional boilerplate.
-    ///
-    /// For joints with motors, override this method to apply motor forces.
-    /// Multi-axis joints can iterate over their configured motors internally.
-    #[allow(unused_variables)]
-    fn solve_motors(
-        &self,
-        bodies: [&mut SolverBody; ENTITY_COUNT],
-        inertias: [&SolverBodyInertia; ENTITY_COUNT],
-        solver_data: &mut Self::SolverData,
-        dt: Scalar,
-    ) {
-    }
-
     /// Warm starts the motor constraints by applying impulses from the previous frame.
     ///
     /// This is called once at the beginning of the first substep. After applying,

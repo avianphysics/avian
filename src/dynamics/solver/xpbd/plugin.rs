@@ -201,13 +201,6 @@ pub fn solve_xpbd_joint<
             &mut solver_data,
             delta_secs,
         );
-
-        joint.solve_motors(
-            [body1, body2],
-            [inertia1, inertia2],
-            &mut solver_data,
-            delta_secs,
-        );
     }
 }
 
