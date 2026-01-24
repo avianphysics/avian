@@ -16,9 +16,13 @@ use bevy::{
 /// This can be useful for things like elevators, pistons, sliding doors and moving platforms.
 ///
 /// Each prismatic joint is defined by a [`JointFrame`] on each body, a [`slider_axis`](Self::slider_axis)
-/// along which the bodies can translate, and an optional [`DistanceLimit`] that defines the extents of the allowed translation.
+/// along which the bodies can translate, and an optional [`DistanceLimit`] that defines the extents
+/// of the allowed translation.
 ///
 #[doc = include_str!("./images/prismatic_joint.svg")]
+///
+/// The joint can also include a [`LinearMotor`] for driving the translation along the [`slider_axis`](Self::slider_axis).
+/// Use this to create pistons, elevators, or other linear motion mechanisms.
 #[derive(Component, Clone, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]

@@ -208,7 +208,7 @@ Therefore, they have 3 translational DOF and 3 rotational DOF, a total of 6 DOF.
 //! ## Other Configuration
 //!
 //! Different joints may have different configuration options. They may allow you to change the axis of allowed
-//! translation or rotation, and can have distance or angle limits for those axes.
+//! translation or rotation, and apply limits or motors for those axes.
 //!
 //! Take a look at the documentation and methods of each joint to see all the different configuration options.
 

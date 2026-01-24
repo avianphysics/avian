@@ -1,7 +1,11 @@
 use crate::prelude::*;
 use bevy::prelude::*;
 
-/// The motor model determines how the motor force/torque is computed.
+/// Determines how the joint motor force/torque is computed.
+///
+/// Different models offer trade-offs between ease of tuning, physical accuracy,
+/// and timestep-independence. The default is a [`SpringDamper`](MotorModel::SpringDamper)
+/// model that provides stable, predictable behavior regardless of the timestep.
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
@@ -9,10 +13,13 @@ use bevy::prelude::*;
 pub enum MotorModel {
     /// A spring-damper model using implicit Euler integration for timestep-independent behavior.
     ///
-    /// While not truly timestep-independant, this model provides stabler, more predictable
-    /// spring-damper dynamics regardless of the physics substep count.
+    /// While not truly timestep-independent, this model provides stable and predictable
+    /// spring-damper behavior regardless of the physics substep count or mass configuration.
+    /// This makes it easier to achieve the desired behavior without extensive tuning.
     ///
-    /// Ignores the mass of the bodies.
+    /// This is the recommended model for most use cases.
+    ///
+    /// # Parameters
     ///
     /// - `frequency`: The natural frequency of the spring in Hz. Higher values create stiffer springs.
     /// - `damping_ratio`: The damping ratio.
@@ -26,30 +33,56 @@ pub enum MotorModel {
         /// The damping ratio.
         damping_ratio: Scalar,
     },
+
     /// The motor force/torque is computed directly from the stiffness and damping parameters.
     ///
-    /// This model takes the mass of the bodies into account, resulting in more physically
-    /// accurate behavior, but it may be harder to tune.
+    /// The model can be described by the following formula:
+    ///
+    /// ```text
+    /// force = (stiffness * position_error) + (damping * velocity_error)
+    /// ```
+    ///
+    /// This produces physically accurate forces/torques, but requires careful tuning of the
+    /// stiffness and damping parameters based on the masses of the connected bodies.
+    /// As a result, it can be more difficult to achieve the desired behavior compared to
+    /// the [`AccelerationBased`](MotorModel::AccelerationBased) model or the
+    /// [`SpringDamper`](MotorModel::SpringDamper) model.
+    ///
+    /// # Parameters
     ///
     /// - `stiffness`: The stiffness coefficient for position control. Set to zero for pure velocity control.
-    /// - `damping`: The damping coefficient.
+    /// - `damping`: The damping coefficient for velocity control.
     ForceBased {
         /// The stiffness coefficient for position control.
         stiffness: Scalar,
-        /// The damping coefficient.
+        /// The damping coefficient for velocity control.
         damping: Scalar,
     },
+
     /// The motor force/torque is computed based on the acceleration required to reach the target.
     ///
-    /// This model is more stable than the `ForceBased` model and easier to tune, but it ignores the mass of the bodies.
-    /// Prefer the `SpringDamper` model if it's an option.
+    /// The model can be described by the following formula:
+    ///
+    /// ```text
+    /// acceleration = (stiffness * position_error) + (damping * velocity_error)
+    /// ```
+    ///
+    /// This automatically scales the motor force/torque based on the masses of the bodies,
+    /// resulting in consistent behavior across different mass configurations.
+    /// It is therefore easier to tune compared to the [`ForceBased`](MotorModel::ForceBased) model,
+    /// which requires manual adjustment of stiffness and damping based on mass.
+    ///
+    /// For more timestep-independent spring-damper behavior, consider using
+    /// the [`SpringDamper`](MotorModel::SpringDamper) model instead.
+    ///
+    /// # Parameters
     ///
     /// - `stiffness`: The stiffness coefficient for position control. Set to zero for pure velocity control.
-    /// - `damping`: The damping coefficient.
+    /// - `damping`: The damping coefficient for velocity control.
     AccelerationBased {
         /// The stiffness coefficient for position control.
         stiffness: Scalar,
-        /// The damping coefficient.
+        /// The damping coefficient for velocity control.
         damping: Scalar,
     },
 }

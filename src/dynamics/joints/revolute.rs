@@ -37,6 +37,9 @@ use bevy::{
 )]
 ///
 #[doc = include_str!("./images/revolute_joint.svg")]
+///
+/// The joint can also include an [`AngularMotor`] for driving the rotation about the pivot point.
+/// Use this to create wheels, fans, servos, or other rotating mechanisms.
 #[derive(Component, Clone, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
