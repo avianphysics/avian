@@ -167,9 +167,9 @@ impl XpbdConstraint<2> for RevoluteJoint {
         solver_data: &mut RevoluteJointSolverData,
         dt: Scalar,
     ) {
-        let Some(motor) = &self.motor else {
+        if !self.motor.enabled {
             return;
-        };
+        }
 
         let [body1, body2] = bodies;
         let [inertia1, inertia2] = inertias;
@@ -183,7 +183,6 @@ impl XpbdConstraint<2> for RevoluteJoint {
             inv_angular_inertia1,
             inv_angular_inertia2,
             solver_data,
-            motor,
             dt,
         );
     }
@@ -196,7 +195,7 @@ impl XpbdConstraint<2> for RevoluteJoint {
         _dt: Scalar,
         warm_start_coefficient: Scalar,
     ) {
-        if self.motor.is_none() {
+        if !self.motor.enabled {
             return;
         }
 
@@ -260,16 +259,17 @@ impl RevoluteJoint {
     /// Applies motor forces to drive the joint towards the target velocity and/or position.
     ///
     /// Uses a PD controller approach with optional implicit Euler integration for timestep independence.
-    pub fn apply_motor(
+    fn apply_motor(
         &self,
         body1: &mut SolverBody,
         body2: &mut SolverBody,
         inv_angular_inertia1: SymmetricTensor,
         inv_angular_inertia2: SymmetricTensor,
         solver_data: &mut RevoluteJointSolverData,
-        motor: &AngularMotor,
         dt: Scalar,
     ) {
+        let motor = &self.motor;
+
         #[cfg(feature = "2d")]
         let current_angle = solver_data.rotation_difference
             + body1.delta_rotation.angle_between(body2.delta_rotation);

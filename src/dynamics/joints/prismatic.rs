@@ -47,8 +47,8 @@ pub struct PrismaticJoint {
     pub angle_compliance: Scalar,
     /// The compliance of the distance limit (inverse of stiffness, m / N).
     pub limit_compliance: Scalar,
-    /// An optional motor for driving the joint.
-    pub motor: Option<LinearMotor>,
+    /// A motor for driving the joint.
+    pub motor: LinearMotor,
 }
 
 impl EntityConstraint<2> for PrismaticJoint {
@@ -74,7 +74,7 @@ impl PrismaticJoint {
             align_compliance: 0.0,
             angle_compliance: 0.0,
             limit_compliance: 0.0,
-            motor: None,
+            motor: LinearMotor::new_disabled(MotorModel::DEFAULT),
         }
     }
 
@@ -313,7 +313,7 @@ impl PrismaticJoint {
     /// Sets the motor for the joint.
     #[inline]
     pub const fn with_motor(mut self, motor: LinearMotor) -> Self {
-        self.motor = Some(motor);
+        self.motor = motor;
         self
     }
 }

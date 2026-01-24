@@ -742,6 +742,7 @@ fn revolute_motor_combined_position_velocity() {
     let target_angle = 0.5;
     app.world_mut().spawn(
         RevoluteJoint::new(anchor, dynamic).with_motor(AngularMotor {
+            enabled: true,
             target_position: target_angle,
             target_velocity: 0.5,
             max_torque: 100.0,
@@ -816,6 +817,7 @@ fn prismatic_motor_combined_position_velocity() {
         PrismaticJoint::new(anchor, dynamic)
             .with_local_anchor1(Vector::X * 2.0)
             .with_motor(LinearMotor {
+                enabled: true,
                 target_position: 1.0,
                 target_velocity: 0.5,
                 max_force: 100.0,

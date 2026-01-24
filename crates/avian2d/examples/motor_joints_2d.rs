@@ -215,87 +215,58 @@ fn control_motors(
     mut prismatic_motors: Query<&mut PrismaticJoint, With<PrismaticMotorJoint>>,
 ) {
     for mut joint in velocity_motors.iter_mut() {
-        let Some(motor) = joint.motor.as_mut() else {
-            continue;
-        };
         if keyboard.just_pressed(KeyCode::ArrowUp) {
-            motor.target_velocity += 1.0;
+            joint.motor.target_velocity += 1.0;
         }
         if keyboard.just_pressed(KeyCode::ArrowDown) {
-            motor.target_velocity -= 1.0;
+            joint.motor.target_velocity -= 1.0;
         }
         if keyboard.just_pressed(KeyCode::Space) {
-            if motor.target_velocity != 0.0 {
-                motor.target_velocity = 0.0;
+            if joint.motor.target_velocity != 0.0 {
+                joint.motor.target_velocity = 0.0;
             } else {
-                motor.target_velocity = 5.0;
+                joint.motor.target_velocity = 5.0;
             }
         }
     }
 
     for mut joint in position_motors.iter_mut() {
-        let Some(motor) = joint.motor.as_mut() else {
-            continue;
-        };
         if keyboard.just_pressed(KeyCode::KeyA) {
-            motor.target_position += 0.5;
+            joint.motor.target_position += 0.5;
         }
         if keyboard.just_pressed(KeyCode::KeyD) {
-            motor.target_position -= 0.5;
+            joint.motor.target_position -= 0.5;
         }
         if keyboard.just_pressed(KeyCode::Space) {
-            motor.target_position = 0.0;
+            joint.motor.target_position = 0.0;
         }
     }
 
     for mut joint in prismatic_motors.iter_mut() {
-        let Some(motor) = joint.motor.as_mut() else {
-            continue;
-        };
         if keyboard.just_pressed(KeyCode::KeyW) {
-            motor.target_position += 25.0;
+            joint.motor.target_position += 25.0;
         }
         if keyboard.just_pressed(KeyCode::KeyS) {
-            motor.target_position -= 25.0;
+            joint.motor.target_position -= 25.0;
         }
         if keyboard.just_pressed(KeyCode::Space) {
-            if motor.target_position != 0.0 {
-                motor.target_position = 0.0;
+            if joint.motor.target_position != 0.0 {
+                joint.motor.target_position = 0.0;
             } else {
-                motor.target_position = 50.0;
+                joint.motor.target_position = 50.0;
             }
         }
     }
 }
 
 fn update_ui(
-    velocity_motors: Query<&RevoluteJoint, With<VelocityMotorJoint>>,
-    position_motors: Query<&RevoluteJoint, With<PositionMotorJoint>>,
-    prismatic_motors: Query<&PrismaticJoint, With<PrismaticMotorJoint>>,
-    mut ui_text: Query<&mut Text, With<UiText>>,
+    velocity_motor: Single<&RevoluteJoint, With<VelocityMotorJoint>>,
+    position_motor: Single<&RevoluteJoint, With<PositionMotorJoint>>,
+    prismatic_motor: Single<&PrismaticJoint, With<PrismaticMotorJoint>>,
+    mut ui_text: Single<&mut Text, With<UiText>>,
 ) {
-    let velocity_target = velocity_motors
-        .iter()
-        .next()
-        .and_then(|j| j.motor.as_ref())
-        .map(|m| m.target_velocity)
-        .unwrap_or(0.0);
-    let position_target = position_motors
-        .iter()
-        .next()
-        .and_then(|j| j.motor.as_ref())
-        .map(|m| m.target_position)
-        .unwrap_or(0.0);
-    let prismatic_pos = prismatic_motors
-        .iter()
-        .next()
-        .and_then(|j| j.motor.as_ref())
-        .map(|m| m.target_position)
-        .unwrap_or(0.0);
-
-    for mut text in ui_text.iter_mut() {
-        text.0 = format!(
-            "Motor Joints Demo\n\n\
+    ui_text.0 = format!(
+        "Motor Joints Demo\n\n\
              Arrow Up/Down: Velocity motor speed\n\
              A/D: Position motor angle\n\
              W/S: Prismatic motor position\n\
@@ -303,7 +274,8 @@ fn update_ui(
              Velocity: {:.1} rad/s\n\
              Position: {:.2} rad\n\
              Prismatic: {:.1} units",
-            velocity_target, position_target, prismatic_pos
-        );
-    }
+        velocity_motor.motor.target_velocity,
+        position_motor.motor.target_position,
+        prismatic_motor.motor.target_position,
+    );
 }

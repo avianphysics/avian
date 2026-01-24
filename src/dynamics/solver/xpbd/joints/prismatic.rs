@@ -1,7 +1,7 @@
 use super::FixedAngleConstraintShared;
 use crate::{
     dynamics::{
-        joints::{LinearMotor, MotorModel},
+        joints::MotorModel,
         solver::{
             solver_body::{SolverBody, SolverBodyInertia},
             xpbd::*,
@@ -116,14 +116,14 @@ impl XpbdConstraint<2> for PrismaticJoint {
         solver_data: &mut PrismaticJointSolverData,
         dt: Scalar,
     ) {
-        let Some(motor) = &self.motor else {
+        if !self.motor.enabled {
             return;
-        };
+        }
 
         let [body1, body2] = bodies;
         let [inertia1, inertia2] = inertias;
 
-        self.apply_motor(body1, body2, inertia1, inertia2, solver_data, motor, dt);
+        self.apply_motor(body1, body2, inertia1, inertia2, solver_data, dt);
     }
 
     fn warm_start_motors(
@@ -134,7 +134,7 @@ impl XpbdConstraint<2> for PrismaticJoint {
         _dt: Scalar,
         warm_start_coefficient: Scalar,
     ) {
-        if self.motor.is_none() {
+        if !self.motor.enabled {
             return;
         }
 
@@ -259,16 +259,17 @@ impl PrismaticJoint {
 
 impl PrismaticJoint {
     /// Applies motor forces to drive the joint towards the target velocity and/or position.
-    pub fn apply_motor(
+    fn apply_motor(
         &self,
         body1: &mut SolverBody,
         body2: &mut SolverBody,
         inertia1: &SolverBodyInertia,
         inertia2: &SolverBodyInertia,
         solver_data: &mut PrismaticJointSolverData,
-        motor: &LinearMotor,
         dt: Scalar,
     ) {
+        let motor = &self.motor;
+
         let axis1 = body1.delta_rotation * solver_data.free_axis1;
         let world_r1 = body1.delta_rotation * solver_data.world_r1;
         let world_r2 = body2.delta_rotation * solver_data.world_r2;

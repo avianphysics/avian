@@ -67,8 +67,8 @@ pub struct RevoluteJoint {
     pub align_compliance: Scalar,
     /// The compliance of the angle limit (inverse of stiffness, N * m / rad).
     pub limit_compliance: Scalar,
-    /// An optional motor for driving the joint.
-    pub motor: Option<AngularMotor>,
+    /// A motor for driving the joint.
+    pub motor: AngularMotor,
 }
 
 impl EntityConstraint<2> for RevoluteJoint {
@@ -97,7 +97,7 @@ impl RevoluteJoint {
             #[cfg(feature = "3d")]
             align_compliance: 0.0,
             limit_compliance: 0.0,
-            motor: None,
+            motor: AngularMotor::new_disabled(MotorModel::DEFAULT),
         }
     }
 
@@ -344,7 +344,7 @@ impl RevoluteJoint {
     /// Sets the motor for the joint.
     #[inline]
     pub const fn with_motor(mut self, motor: AngularMotor) -> Self {
-        self.motor = Some(motor);
+        self.motor = motor;
         self
     }
 }

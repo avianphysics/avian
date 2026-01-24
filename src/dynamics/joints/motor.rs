@@ -55,12 +55,18 @@ pub enum MotorModel {
 }
 
 impl Default for MotorModel {
+    /// The default motor model: a critically damped spring-damper with 5 Hz frequency.
     fn default() -> Self {
-        Self::SpringDamper {
-            frequency: 5.,
-            damping_ratio: 1.,
-        }
+        Self::DEFAULT
     }
+}
+
+impl MotorModel {
+    /// The default motor model: a critically damped spring-damper with 5 Hz frequency.
+    pub const DEFAULT: Self = Self::SpringDamper {
+        frequency: 5.0,
+        damping_ratio: 1.0,
+    };
 }
 
 /// A motor for driving the angular motion of a [`RevoluteJoint`].
@@ -83,6 +89,8 @@ impl Default for MotorModel {
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, PartialEq)]
 pub struct AngularMotor {
+    /// Whether the motor is enabled.
+    pub enabled: bool,
     /// The target angular velocity (rad/s).
     pub target_velocity: Scalar,
     /// The target angle (rad) for position control.
@@ -95,12 +103,7 @@ pub struct AngularMotor {
 
 impl Default for AngularMotor {
     fn default() -> Self {
-        Self {
-            target_velocity: 0.0,
-            target_position: 0.0,
-            max_torque: Scalar::MAX,
-            motor_model: MotorModel::default(),
-        }
+        Self::new(MotorModel::DEFAULT)
     }
 }
 
@@ -109,11 +112,30 @@ impl AngularMotor {
     #[inline]
     pub const fn new(motor_model: MotorModel) -> Self {
         Self {
+            enabled: true,
             target_velocity: 0.0,
             target_position: 0.0,
             max_torque: Scalar::MAX,
             motor_model,
         }
+    }
+
+    /// Creates a new disabled angular motor with the given motor model.
+    ///
+    /// To enable the motor later, use [`set_enabled`](Self::set_enabled).
+    #[inline]
+    pub const fn new_disabled(motor_model: MotorModel) -> Self {
+        Self {
+            enabled: false,
+            ..Self::new(motor_model)
+        }
+    }
+
+    /// Enables or disables the motor.
+    #[inline]
+    pub const fn set_enabled(&mut self, enabled: bool) -> &mut Self {
+        self.enabled = enabled;
+        self
     }
 
     /// Sets the target angular velocity in radians per second.
@@ -134,6 +156,13 @@ impl AngularMotor {
     #[inline]
     pub const fn with_max_torque(mut self, max_torque: Scalar) -> Self {
         self.max_torque = max_torque;
+        self
+    }
+
+    /// Sets the motor model used for computing the motor torque.
+    #[inline]
+    pub const fn with_motor_model(mut self, motor_model: MotorModel) -> Self {
+        self.motor_model = motor_model;
         self
     }
 }
@@ -164,6 +193,8 @@ impl AngularMotor {
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, PartialEq)]
 pub struct LinearMotor {
+    /// Whether the motor is enabled.
+    pub enabled: bool,
     /// The target linear velocity (m/s).
     pub target_velocity: Scalar,
     /// The target position (m) for position control.
@@ -176,12 +207,7 @@ pub struct LinearMotor {
 
 impl Default for LinearMotor {
     fn default() -> Self {
-        Self {
-            target_velocity: 0.0,
-            target_position: 0.0,
-            max_force: Scalar::MAX,
-            motor_model: MotorModel::default(),
-        }
+        Self::new(MotorModel::DEFAULT)
     }
 }
 
@@ -190,11 +216,30 @@ impl LinearMotor {
     #[inline]
     pub const fn new(motor_model: MotorModel) -> Self {
         Self {
+            enabled: true,
             target_velocity: 0.0,
             target_position: 0.0,
             max_force: Scalar::MAX,
             motor_model,
         }
+    }
+
+    /// Creates a new disabled linear motor with the given motor model.
+    ///
+    /// To enable the motor later, use [`set_enabled`](Self::set_enabled).
+    #[inline]
+    pub const fn new_disabled(motor_model: MotorModel) -> Self {
+        Self {
+            enabled: false,
+            ..Self::new(motor_model)
+        }
+    }
+
+    /// Enables or disables the motor.
+    #[inline]
+    pub const fn set_enabled(&mut self, enabled: bool) -> &mut Self {
+        self.enabled = enabled;
+        self
     }
 
     /// Sets the target linear velocity in meters per second.
@@ -215,6 +260,13 @@ impl LinearMotor {
     #[inline]
     pub const fn with_max_force(mut self, max_force: Scalar) -> Self {
         self.max_force = max_force;
+        self
+    }
+
+    /// Sets the motor model used for computing the motor force.
+    #[inline]
+    pub const fn with_motor_model(mut self, motor_model: MotorModel) -> Self {
+        self.motor_model = motor_model;
         self
     }
 }
