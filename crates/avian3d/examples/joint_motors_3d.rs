@@ -211,47 +211,42 @@ fn setup(
 
 fn control_motors(
     keyboard: Res<ButtonInput<KeyCode>>,
-    mut velocity_motors: Query<&mut RevoluteJoint, With<VelocityMotorJoint>>,
-    mut position_motors: Query<
+    mut velocity_motors: Single<&mut RevoluteJoint, With<VelocityMotorJoint>>,
+    mut position_motors: Single<
         &mut RevoluteJoint,
         (With<PositionMotorJoint>, Without<VelocityMotorJoint>),
     >,
-    mut prismatic_motors: Query<&mut PrismaticJoint, With<PrismaticMotorJoint>>,
+    mut prismatic_motors: Single<&mut PrismaticJoint, With<PrismaticMotorJoint>>,
 ) {
-    for mut joint in velocity_motors.iter_mut() {
-        if keyboard.just_pressed(KeyCode::ArrowUp) {
-            joint.motor.target_velocity += 1.0;
-        }
-        if keyboard.just_pressed(KeyCode::ArrowDown) {
-            joint.motor.target_velocity -= 1.0;
-        }
-        if keyboard.just_pressed(KeyCode::Space) {
-            joint.motor.enabled = !joint.motor.enabled;
-        }
+    // Velocity-controlled revolute joint motor
+    if keyboard.just_pressed(KeyCode::ArrowUp) {
+        velocity_motors.motor.target_velocity += 1.0;
+    }
+    if keyboard.just_pressed(KeyCode::ArrowDown) {
+        velocity_motors.motor.target_velocity -= 1.0;
     }
 
-    for mut joint in position_motors.iter_mut() {
-        if keyboard.just_pressed(KeyCode::KeyA) {
-            joint.motor.target_position += 0.5;
-        }
-        if keyboard.just_pressed(KeyCode::KeyD) {
-            joint.motor.target_position -= 0.5;
-        }
-        if keyboard.just_pressed(KeyCode::Space) {
-            joint.motor.enabled = !joint.motor.enabled;
-        }
+    // Position-controlled revolute joint motor
+    if keyboard.just_pressed(KeyCode::KeyA) {
+        position_motors.motor.target_position += 0.5;
+    }
+    if keyboard.just_pressed(KeyCode::KeyD) {
+        position_motors.motor.target_position -= 0.5;
     }
 
-    for mut joint in prismatic_motors.iter_mut() {
-        if keyboard.just_pressed(KeyCode::KeyW) {
-            joint.motor.target_position += 0.5;
-        }
-        if keyboard.just_pressed(KeyCode::KeyS) {
-            joint.motor.target_position -= 0.5;
-        }
-        if keyboard.just_pressed(KeyCode::Space) {
-            joint.motor.enabled = !joint.motor.enabled;
-        }
+    // Position-controlled prismatic joint motor
+    if keyboard.just_pressed(KeyCode::KeyW) {
+        prismatic_motors.motor.target_position += 25.0;
+    }
+    if keyboard.just_pressed(KeyCode::KeyS) {
+        prismatic_motors.motor.target_position -= 25.0;
+    }
+
+    // Toggle motors on/off
+    if keyboard.just_pressed(KeyCode::Space) {
+        velocity_motors.motor.enabled = !velocity_motors.motor.enabled;
+        position_motors.motor.enabled = !position_motors.motor.enabled;
+        prismatic_motors.motor.enabled = !prismatic_motors.motor.enabled;
     }
 }
 
