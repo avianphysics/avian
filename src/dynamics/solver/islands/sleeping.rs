@@ -7,6 +7,7 @@ use bevy::{
     ecs::{
         entity::Entity,
         entity_disabling::Disabled,
+        error::Result,
         lifecycle::{HookContext, Insert, Replace},
         observer::On,
         query::{Changed, Has, Or, With, Without},
@@ -21,7 +22,6 @@ use bevy::{
         },
         world::{DeferredWorld, Mut, Ref, World},
     },
-    log::warn,
     prelude::{Deref, DerefMut},
     time::Time,
 };
@@ -100,7 +100,7 @@ fn sleep_on_add_sleeping(mut world: DeferredWorld, ctx: HookContext) {
         return;
     }
 
-    world.commands().queue(SleepBody(ctx.entity));
+    world.commands().queue_silenced(SleepBody(ctx.entity));
 }
 
 fn wake_on_remove_sleeping(mut world: DeferredWorld, ctx: HookContext) {
@@ -119,7 +119,7 @@ fn wake_on_remove_sleeping(mut world: DeferredWorld, ctx: HookContext) {
         return;
     }
 
-    world.commands().queue(WakeBody(ctx.entity));
+    world.commands().queue_silenced(WakeBody(ctx.entity));
 }
 
 fn wake_on_replace_rigid_body(
@@ -293,46 +293,52 @@ struct CachedBodySleepingSystemState(
 /// A [`Command`] that forces a [`RigidBody`] and its [`PhysicsIsland`][super::PhysicsIsland] to be [`Sleeping`].
 pub struct SleepBody(pub Entity);
 
-impl Command for SleepBody {
-    fn apply(self, world: &mut World) {
-        if let Some(island_id) = world
-            .get::<BodyIslandNode>(self.0)
-            .map(|node| node.island_id)
-        {
-            world.try_resource_scope(|world, mut state: Mut<CachedBodySleepingSystemState>| {
-                let (
-                    mut body_islands,
-                    body_colliders,
-                    mut islands,
-                    mut contact_graph,
-                    mut joint_graph,
-                ) = state.0.get_mut(world);
+impl Command<Result> for SleepBody {
+    fn apply(self, world: &mut World) -> Result {
+        if let Ok(entity) = world.get_entity(self.0) {
+            if let Some(island_id) = entity.get::<BodyIslandNode>().map(|node| node.island_id) {
+                world.try_resource_scope(|world, mut state: Mut<CachedBodySleepingSystemState>| {
+                    let (
+                        mut body_islands,
+                        body_colliders,
+                        mut islands,
+                        mut contact_graph,
+                        mut joint_graph,
+                    ) = state.0.get_mut(world);
 
-                let Some(island) = islands.get_mut(island_id) else {
-                    return;
-                };
+                    let Some(island) = islands.get_mut(island_id) else {
+                        return;
+                    };
 
-                // The island must be split before it can be woken up.
-                // Note that this is expensive.
-                if island.constraints_removed > 0 {
-                    islands.split_island(
-                        island_id,
-                        &mut body_islands,
-                        &body_colliders,
-                        &mut contact_graph,
-                        &mut joint_graph,
-                    );
-                }
+                    // The island must be split before it can be woken up.
+                    // Note that this is expensive.
+                    if island.constraints_removed > 0 {
+                        islands.split_island(
+                            island_id,
+                            &mut body_islands,
+                            &body_colliders,
+                            &mut contact_graph,
+                            &mut joint_graph,
+                        );
+                    }
 
-                // The ID of the body's island might have changed due to the split,
-                // so we need to retrieve it again.
-                let island_id = body_islands.get(self.0).map(|node| node.island_id).unwrap();
+                    // The ID of the body's island might have changed due to the split,
+                    // so we need to retrieve it again.
+                    let island_id = body_islands.get(self.0).map(|node| node.island_id).unwrap();
 
-                // Sleep the island.
-                SleepIslands(vec![island_id]).apply(world);
-            });
+                    // Sleep the island.
+                    SleepIslands(vec![island_id]).apply(world);
+                });
+                Ok(())
+            } else {
+                Err(format!(
+                    "Tried to sleep entity {:?} that is not a body or does not belong to an island",
+                    self.0
+                )
+                .into())
+            }
         } else {
-            warn!("Tried to sleep body {:?} that does not exist", self.0);
+            Err(format!("Tried to sleep entity {:?} that does not exist", self.0).into())
         }
     }
 }
@@ -442,24 +448,22 @@ struct CachedIslandWakingSystemState(
 /// A [`Command`] that wakes up a [`RigidBody`] and its [`PhysicsIsland`](super::PhysicsIsland) if it is [`Sleeping`].
 pub struct WakeBody(pub Entity);
 
-impl Command for WakeBody {
-    fn apply(self, world: &mut World) {
-        if let Some(body_island) = world.get::<BodyIslandNode>(self.0) {
-            WakeIslands(vec![body_island.island_id]).apply(world);
+impl Command<Result> for WakeBody {
+    fn apply(self, world: &mut World) -> Result {
+        if let Ok(entity) = world.get_entity(self.0) {
+            if let Some(body_island) = entity.get::<BodyIslandNode>() {
+                WakeIslands(vec![body_island.island_id]).apply(world);
+                Ok(())
+            } else {
+                Err(format!(
+                    "Tried to wake entity {:?} that is not a body or does not belong to an island",
+                    self.0
+                )
+                .into())
+            }
         } else {
-            warn!("Tried to wake body {:?} that does not exist", self.0);
+            Err(format!("Tried to wake entity {:?} that does not exist", self.0).into())
         }
-    }
-}
-
-/// A deprecated alias for [`WakeBody`].
-#[deprecated(since = "0.4.0", note = "Renamed to `WakeBody`.")]
-pub struct WakeUpBody(pub Entity);
-
-#[expect(deprecated)]
-impl Command for WakeUpBody {
-    fn apply(self, world: &mut World) {
-        WakeBody(self.0).apply(world);
     }
 }
 
