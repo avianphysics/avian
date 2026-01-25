@@ -3,19 +3,20 @@ use bevy::prelude::*;
 
 /// Determines how the joint motor force/torque is computed.
 ///
-/// Different models offer trade-offs between ease of tuning, physical accuracy,
-/// and timestep-independence. The default is a [`SpringDamper`](MotorModel::SpringDamper)
-/// model that provides stable, predictable behavior regardless of the timestep.
+/// Different models offer trade-offs between ease of tuning and physical accuracy.
+/// The default is a [`SpringDamper`](MotorModel::SpringDamper) model that provides
+/// stable, predictable behavior across different configurations.
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, PartialEq)]
 pub enum MotorModel {
-    /// A spring-damper model using implicit Euler integration for timestep-independent behavior.
+    /// A spring-damper model using implicit Euler integration.
     ///
-    /// While not truly timestep-independent, this model provides stable and predictable
-    /// spring-damper behavior regardless of the physics substep count or mass configuration.
-    /// This makes it easier to achieve the desired behavior without extensive tuning.
+    /// Unlike the other models, this is unconditionally stable: the implicit formulation
+    /// naturally limits the response as frequency increases, preventing overshoot and
+    /// oscillation even with aggressive parameters. This makes it easier to tune than
+    /// the other models, which can become unstable with high stiffness values.
     ///
     /// This is the recommended model for most use cases.
     ///
@@ -44,9 +45,8 @@ pub enum MotorModel {
     ///
     /// This produces physically accurate forces/torques, but requires careful tuning of the
     /// stiffness and damping parameters based on the masses of the connected bodies.
-    /// As a result, it can be more difficult to achieve the desired behavior compared to
-    /// the [`AccelerationBased`](MotorModel::AccelerationBased) model or the
-    /// [`SpringDamper`](MotorModel::SpringDamper) model.
+    /// High stiffness values can cause instability (overshoot, oscillation, or divergence),
+    /// so parameters must be chosen appropriately for your timestep and mass configuration.
     ///
     /// # Parameters
     ///
@@ -72,8 +72,8 @@ pub enum MotorModel {
     /// It is therefore easier to tune compared to the [`ForceBased`](MotorModel::ForceBased) model,
     /// which requires manual adjustment of stiffness and damping based on mass.
     ///
-    /// For more timestep-independent spring-damper behavior, consider using
-    /// the [`SpringDamper`](MotorModel::SpringDamper) model instead.
+    /// Note that high stiffness values can still cause instability. For unconditionally
+    /// stable behavior, use the [`SpringDamper`](MotorModel::SpringDamper) model instead.
     ///
     /// # Parameters
     ///
@@ -205,11 +205,11 @@ impl AngularMotor {
 /// Motors are configured as part of a joint, applying force to drive
 /// the joint towards a target velocity and/or position.
 ///
-/// # Timestep-Independent Spring-Damper
+/// # Spring-Damper Model
 ///
-/// For position control that behaves consistently regardless of substep count, use
-/// [`MotorModel::SpringDamper`]. This uses an implicit Euler integration that provides
-/// stable, predictable spring-damper behavior.
+/// For stable position control that behaves consistently across different configurations,
+/// use [`MotorModel::SpringDamper`]. This uses implicit Euler integration for
+/// unconditional stability.
 ///
 /// ```ignore
 /// PrismaticJoint::new(entity1, entity2)

@@ -637,7 +637,7 @@ fn revolute_motor_force_based() {
 
 /// Tests that the default `SpringDamper` motor model works.
 ///
-/// `SpringDamper` is timestep-independent and uses `frequency`/`damping_ratio`.
+/// `SpringDamper` is unconditionally stable and uses `frequency`/`damping_ratio`.
 #[test]
 fn revolute_motor_spring_damper() {
     let mut app = create_app();

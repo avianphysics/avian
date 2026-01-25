@@ -241,7 +241,7 @@ impl RevoluteJoint {
 
     /// Applies motor forces to drive the joint towards the target velocity and/or position.
     ///
-    /// Uses a PD controller approach with optional implicit Euler integration for timestep independence.
+    /// Uses a PD controller approach with optional implicit Euler integration improved stability.
     fn apply_motor(
         &self,
         body1: &mut SolverBody,
@@ -347,7 +347,7 @@ impl RevoluteJoint {
                 frequency,
                 damping_ratio,
             } => {
-                // Implicit Euler formulation for timestep-independent spring-damper behavior.
+                // Implicit Euler formulation for stable spring-damper behavior.
                 let omega = TAU * frequency;
                 let omega_sq = omega * omega;
                 let two_zeta_omega = 2.0 * damping_ratio * omega;

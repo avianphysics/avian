@@ -120,8 +120,8 @@ fn setup(mut commands: Commands) {
 
     // Revolute joint with position-controlled motor (servo behavior)
     //
-    // Using spring parameters (frequency, damping_ratio) for timestep-independent behavior.
-    // This provides predictable spring-damper dynamics regardless of substep count.
+    // Using spring parameters (frequency, damping_ratio) for stable behavior.
+    // This provides predictable spring-damper dynamics across different configurations.
     // - frequency: 5 Hz = fairly stiff spring
     // - damping_ratio: 1.0 = critically damped (fastest approach without overshoot)
     commands.spawn((
