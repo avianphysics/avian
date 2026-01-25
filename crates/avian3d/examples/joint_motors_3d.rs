@@ -236,10 +236,10 @@ fn control_motors(
 
     // Position-controlled prismatic joint motor
     if keyboard.just_pressed(KeyCode::KeyW) {
-        prismatic_motors.motor.target_position += 25.0;
+        prismatic_motors.motor.target_position += 0.5;
     }
     if keyboard.just_pressed(KeyCode::KeyS) {
-        prismatic_motors.motor.target_position -= 25.0;
+        prismatic_motors.motor.target_position -= 0.5;
     }
 
     // Toggle motors on/off
