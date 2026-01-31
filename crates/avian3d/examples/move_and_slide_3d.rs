@@ -243,7 +243,7 @@ fn run_move_and_slide(
                     );
                 }
                 touched.insert(hit.entity);
-                true
+                MoveAndSlideHitResponse::Accept
             },
         );
 
