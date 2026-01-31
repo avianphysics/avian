@@ -63,9 +63,9 @@ jobs:
               run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev libx264-164 libx264-dev
               if: ${{ matrix.os == 'ubuntu-latest' }}
             - name: Install nextest
-              run: cargo binstall cargo-nextest --force
+              run: cargo binstall cargo-nextest --force --locked
             - name: Install LLD
-              run: cargo binstall cargo-binutils --force
+              run: cargo binstall cargo-binutils --force --locked
             - name: Activate CI cargo config
               run: mv .cargo/config_ci.toml .cargo/config.toml
             - name: set LD_LIBRARY_PATH on unix
