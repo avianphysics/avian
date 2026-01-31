@@ -7,29 +7,7 @@ edition = "2024"
 use-debug-plugin = []
 
 [dependencies]
-bevy = { version = "0.17", default-features = false, features = [
-    "bevy_core_pipeline",
-    "bevy_state",
-    "bevy_text",
-    "bevy_ui",
-    "bevy_ui_render",
-    "bevy_asset",
-    "bevy_render",
-    "bevy_sprite",
-    "bevy_sprite_render",
-    "bevy_pbr",
-    "bevy_gizmos",
-    "bevy_gltf",
-    "animation",
-    "default_font",
-    "tonemapping_luts",
-    "ktx2",
-    "png",
-    "zstd_rust",
-    "bevy_winit",
-    "bevy_window",
-    "x11",                # github actions runners don't have libxkbcommon installed, so can't use wayland
-] }
+bevy = { version = "0.18.0", default-features = false, features = ["3d", "ui"] }
 avian3d = { path = "../avian3d", default-features = false, features = [
     "diagnostic_ui",
 ] }

@@ -31,7 +31,7 @@ avian3d = { path = "../crates/avian3d", default-features = false, features = [
 ], optional = true }
 
 # Bevy
-bevy = { version = "0.17", default-features = false }
+bevy = { version = "0.18.0", default-features = false }
 
 # CLI
 clap = { version = "4.5", features = ["derive"] }

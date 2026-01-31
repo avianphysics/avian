@@ -43,11 +43,7 @@
 // https://github.com/erincatto/box2d/blob/df9787b59e4480135fbd73d275f007b5d931a83f/src/island.c#L57
 
 mod sleeping;
-
-#[expect(deprecated)]
-pub use sleeping::{
-    IslandSleepingPlugin, SleepBody, SleepIslands, WakeBody, WakeIslands, WakeUpBody,
-};
+pub use sleeping::{IslandSleepingPlugin, SleepBody, SleepIslands, WakeBody, WakeIslands};
 
 use bevy::{
     ecs::{entity_disabling::Disabled, lifecycle::HookContext, world::DeferredWorld},

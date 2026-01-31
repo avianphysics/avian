@@ -288,12 +288,12 @@ impl ContactGraph {
     /// even if the shapes themselves are not yet touching.
     #[inline]
     pub fn contains(&self, entity1: Entity, entity2: Entity) -> bool {
-        self.contains_key(&PairKey::new(entity1.index(), entity2.index()))
+        self.contains_key(&PairKey::new(entity1.index_u32(), entity2.index_u32()))
     }
 
     /// Returns `true` if the given pair key is in the contact graph.
     ///
-    /// The pair key should be equivalent to `PairKey::new(entity1.index(), entity2.index())`.
+    /// The pair key should be equivalent to `PairKey::new(entity1.index_u32(), entity2.index_u32())`.
     ///
     /// This method can be useful to avoid constructing a new `PairKey` when the key is already known.
     /// If the key is not available, consider using [`contains`](Self::contains) instead.
@@ -497,8 +497,8 @@ impl ContactGraph {
         F: FnMut(&mut ContactPair),
     {
         let pair_key = PairKey::new(
-            contact_edge.collider1.index(),
-            contact_edge.collider2.index(),
+            contact_edge.collider1.index_u32(),
+            contact_edge.collider2.index_u32(),
         );
         self.add_edge_and_key_with(contact_edge, pair_key, pair_callback)
     }
@@ -506,7 +506,7 @@ impl ContactGraph {
     /// Creates a [`ContactEdge`] between two entities with the given pair key, calling the provided callback
     /// to initialize the associated [`ContactPair`] in the list of active pairs.
     ///
-    /// The key must be equivalent to `PairKey::new(contacts.entity1.index(), contacts.entity2.index())`.
+    /// The key must be equivalent to `PairKey::new(contacts.entity1.index_u32(), contacts.entity2.index_u32())`.
     ///
     /// Returns the ID of the contact edge if it was created, or `None` if the edge already exists.
     ///
@@ -582,7 +582,7 @@ impl ContactGraph {
 
         // Remove the edge from the graph.
         self.edges.find_edge(index1, index2).and_then(|edge_id| {
-            let pair_key = PairKey::new(entity1.index(), entity2.index());
+            let pair_key = PairKey::new(entity1.index_u32(), entity2.index_u32());
             self.remove_edge_by_id(&pair_key, edge_id.into())
         })
     }
@@ -655,8 +655,8 @@ impl ContactGraph {
                 panic!("contact edge {contact_id:?} not found in contact graph")
             });
             let pair_key = PairKey::new(
-                contact_edge.collider1.index(),
-                contact_edge.collider2.index(),
+                contact_edge.collider1.index_u32(),
+                contact_edge.collider2.index_u32(),
             );
             let pair_index = contact_edge.pair_index;
             let contact_pairs = if contact_edge.is_sleeping() {

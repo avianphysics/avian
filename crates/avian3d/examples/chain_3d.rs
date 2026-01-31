@@ -12,7 +12,7 @@ fn main() {
             PhysicsPlugins::default(),
         ))
         .insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.1)))
-        .insert_resource(AmbientLight {
+        .insert_resource(GlobalAmbientLight {
             brightness: 2.0,
             ..default()
         })

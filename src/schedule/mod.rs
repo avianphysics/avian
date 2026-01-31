@@ -14,7 +14,7 @@ use crate::prelude::*;
 
 use bevy::{
     ecs::{
-        component::Tick,
+        change_detection::Tick,
         intern::Interned,
         schedule::{ExecutorKind, LogLevel, ScheduleBuildSettings, ScheduleLabel},
         system::SystemChangeTick,
