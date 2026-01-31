@@ -464,7 +464,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///         &filter,
     ///         |hit| {
     ///             collisions.insert(hit.entity);
-    ///             true
+    ///             MoveAndSlideHitResponse::Accept
     ///         },
     ///     );
     #[cfg_attr(
