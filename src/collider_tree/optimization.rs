@@ -29,7 +29,8 @@ impl Plugin for ColliderTreeOptimizationPlugin {
     }
 }
 
-/// Settings for optimizing the dynamic [`ColliderTree`].
+/// Settings for optimizing each [`ColliderTree`].
+// TODO: Per-tree settings could be useful.
 #[derive(Resource, Debug, Default, PartialEq, Reflect)]
 pub struct ColliderTreeOptimization {
     /// If `true`, tree optimization will be performed in-place with minimal allocations.
@@ -55,7 +56,7 @@ pub struct ColliderTreeOptimization {
     pub optimization_mode: TreeOptimizationMode,
 }
 
-/// The optimization mode for a dynamic [`ColliderTree`].
+/// The optimization mode for a [`ColliderTree`].
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 pub enum TreeOptimizationMode {
     /// The tree is optimized by reinserting proxies whose AABB in the tree has changed.
@@ -153,15 +154,21 @@ fn optimize_trees(
 
     let task_pool = AsyncComputeTaskPool::get();
 
-    // Spawn optimization tasks for dynamic and kinematic trees.
-    // For now, we do not optimize static or standalone trees,
-    // as their colliders are not expected to move much.
-    for tree_type in [ColliderTreeType::Dynamic, ColliderTreeType::Kinematic] {
+    // Spawn optimization tasks for each tree.
+    for tree_type in ColliderTreeType::ALL {
         let tree = collider_trees.tree_for_type_mut(tree_type);
 
         let moved_ratio = tree.moved_proxies.len() as f32 / tree.proxies.len() as f32;
+        let optimization_strategy = optimization_settings.optimization_mode.resolve(moved_ratio);
+
+        if moved_ratio == 0.0 && optimization_strategy != TreeOptimizationMode::FullRebuild {
+            // No moved proxies, no need to optimize.
+            continue;
+        }
 
         // Take or clone the BVH for the optimization task.
+        // TODO: For small changes to large trees, the cost of cloning can exceed the cost of the async task.
+        //       We could have a threshold for cloning vs in-place optimization based on tree size and moved ratio.
         let bvh = if optimization_settings.optimize_in_place {
             core::mem::take(&mut tree.bvh)
         } else {
@@ -178,26 +185,26 @@ fn optimize_trees(
             workspace: core::mem::take(&mut tree.workspace),
         };
 
-        let task = match optimization_settings.optimization_mode.resolve(moved_ratio) {
+        let task = match optimization_strategy {
             TreeOptimizationMode::Reinsert => {
-                let moved_leaves = new_tree
-                    .moved_proxies
-                    .iter()
-                    .map(|key| new_tree.bvh.primitives_to_nodes[key.index()])
-                    .collect::<Vec<u32>>();
-
                 spawn_optimization_task(task_pool, new_tree, tree_type, move |tree| {
+                    let moved_leaves = tree
+                        .moved_proxies
+                        .iter()
+                        .map(|key| tree.bvh.primitives_to_nodes[key.index()])
+                        .collect::<Vec<u32>>();
+
                     tree.optimize_candidates(&moved_leaves, 1);
                 })
             }
             TreeOptimizationMode::PartialRebuild => {
-                let moved_leaves = new_tree
-                    .moved_proxies
-                    .iter()
-                    .map(|key| new_tree.bvh.primitives_to_nodes[key.index()])
-                    .collect::<Vec<u32>>();
-
                 spawn_optimization_task(task_pool, new_tree, tree_type, move |tree| {
+                    let moved_leaves = tree
+                        .moved_proxies
+                        .iter()
+                        .map(|key| tree.bvh.primitives_to_nodes[key.index()])
+                        .collect::<Vec<u32>>();
+
                     tree.rebuild_partial(&moved_leaves);
                 })
             }

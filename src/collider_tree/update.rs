@@ -3,13 +3,15 @@ use core::marker::PhantomData;
 
 use crate::{
     collider_tree::{
-        ColliderTreeDiagnostics, ColliderTreeProxy, ColliderTreeProxyKey, ColliderTreeSystems,
-        ColliderTreeType, ColliderTrees, ProxyId, tree::ColliderTreeProxyFlags,
+        ColliderTree, ColliderTreeDiagnostics, ColliderTreeProxy, ColliderTreeProxyKey,
+        ColliderTreeSystems, ColliderTreeType, ColliderTrees, ProxyId,
+        tree::ColliderTreeProxyFlags,
     },
     collision::collider::EnlargedAabb,
     data_structures::bit_vec::BitVec,
     dynamics::solver::solver_body::SolverBody,
     prelude::*,
+    schedule::LastPhysicsTick,
 };
 use bevy::{
     ecs::{
@@ -46,12 +48,7 @@ impl<C: AnyCollider> Plugin for ColliderTreeUpdatePlugin<C> {
         // This accounts for manually moved colliders.
         app.add_systems(
             PhysicsSchedule,
-            (
-                update_dynamic_kinematic_aabbs::<C, Or<(With<SolverBody>, With<Sleeping>)>>,
-                update_static_aabbs::<C>,
-                update_standalone_aabbs::<C>,
-            )
-                .chain()
+            update_moved_collider_aabbs::<C>
                 .in_set(ColliderTreeSystems::UpdateAabbs)
                 // Allowing ambiguities is required so that it's possible
                 // to have multiple collision backends at the same time.
@@ -61,10 +58,7 @@ impl<C: AnyCollider> Plugin for ColliderTreeUpdatePlugin<C> {
         // Clear moved proxies and update dynamic and kinematic collider AABBs.
         app.add_systems(
             PhysicsSchedule,
-            (
-                clear_moved_proxies,
-                update_dynamic_kinematic_aabbs::<C, With<SolverBody>>,
-            )
+            (clear_moved_proxies, update_solver_body_aabbs::<C>)
                 .chain()
                 .after(PhysicsStepSystems::Finalize)
                 .before(PhysicsStepSystems::Last),
@@ -582,80 +576,86 @@ impl MovedProxies {
 /// Set bits indicate [`ProxyId`]s of moved proxies.
 #[derive(Resource, Default)]
 struct EnlargedProxies {
-    bit_vec: EnlargedProxiesBitVec,
-    thread_local_bit_vec: ThreadLocal<RefCell<EnlargedProxiesBitVec>>,
-}
-
-/// Bit vectors for tracking moved dynamic and kinematic proxies.
-///
-/// Set bits indicate [`ProxyId`]s of moved proxies.
-///
-/// [`ProxyId`]: crate::collider_tree::ProxyId
-#[derive(Default)]
-struct EnlargedProxiesBitVec {
     // Note: Box2D indexes by shape ID, so it only needs one bit vector.
     //       In our case, we would instead index by entity ID, but this would
     //       require a potentially huge and very sparse bit vector since not
     //       all entities are colliders. So we use separate bit vectors for
-    //       dynamic and kinematic bodies, and index by proxy ID instead.
-    dynamic: BitVec,
-    kinematic: BitVec,
+    //       different proxy types, and index by proxy ID instead.
+    dynamic_proxies: EnlargedProxiesBitVec,
+    kinematic_proxies: EnlargedProxiesBitVec,
+    static_proxies: EnlargedProxiesBitVec,
+    standalone_proxies: EnlargedProxiesBitVec,
 }
 
 impl EnlargedProxies {
+    /// Returns the bit vector for the given [`ColliderTreeType`].
+    #[inline]
+    pub const fn bit_vec_for_type(&self, tree_type: ColliderTreeType) -> &EnlargedProxiesBitVec {
+        match tree_type {
+            ColliderTreeType::Dynamic => &self.dynamic_proxies,
+            ColliderTreeType::Kinematic => &self.kinematic_proxies,
+            ColliderTreeType::Static => &self.static_proxies,
+            ColliderTreeType::Standalone => &self.standalone_proxies,
+        }
+    }
+
+    /// Returns a mutable reference to the bit vector for the given [`ColliderTreeType`].
+    #[inline]
+    pub fn bit_vec_for_type_mut(
+        &mut self,
+        tree_type: ColliderTreeType,
+    ) -> &mut EnlargedProxiesBitVec {
+        match tree_type {
+            ColliderTreeType::Dynamic => &mut self.dynamic_proxies,
+            ColliderTreeType::Kinematic => &mut self.kinematic_proxies,
+            ColliderTreeType::Static => &mut self.static_proxies,
+            ColliderTreeType::Standalone => &mut self.standalone_proxies,
+        }
+    }
+}
+
+/// Bit vectors for tracking proxies whose [`ColliderAabb`] has moved outside of the previous [`EnlargedAabb`].
+///
+/// Set bits indicate [`ProxyId`]s of moved proxies.
+///
+/// [`ProxyId`]: crate::collider_tree::ProxyId
+// TODO: We have a few of these now. We should maybe abstract this into a reusable structure.
+#[derive(Default)]
+struct EnlargedProxiesBitVec {
+    global: BitVec,
+    thread_local: ThreadLocal<RefCell<BitVec>>,
+}
+
+impl EnlargedProxiesBitVec {
     /// Clears the enlarged proxies and sets the capacity of the internal structures.
     #[inline]
-    pub fn clear_and_set_capacity(&mut self, dynamic_capacity: usize, kinematic_capacity: usize) {
-        self.bit_vec
-            .dynamic
-            .set_bit_count_and_clear(dynamic_capacity);
-        self.bit_vec
-            .kinematic
-            .set_bit_count_and_clear(kinematic_capacity);
-
-        self.thread_local_bit_vec.iter_mut().for_each(|context| {
+    pub fn clear_and_set_capacity(&mut self, capacity: usize) {
+        self.global.set_bit_count_and_clear(capacity);
+        self.thread_local.iter_mut().for_each(|context| {
             let bit_vec_mut = &mut context.borrow_mut();
-            bit_vec_mut
-                .dynamic
-                .set_bit_count_and_clear(dynamic_capacity);
-            bit_vec_mut
-                .kinematic
-                .set_bit_count_and_clear(kinematic_capacity);
+            bit_vec_mut.set_bit_count_and_clear(capacity);
         });
     }
 
-    /// Combines the thread-local enlarged proxy bit vectors into the main one.
+    /// Combines the thread-local enlarged proxy bit vectors into the global one.
     #[inline]
     pub fn combine_thread_local(&mut self) {
-        let bit_vec = &mut self.bit_vec;
-        self.thread_local_bit_vec.iter_mut().for_each(|context| {
-            let thread_local_bit_vec = context.borrow();
-            bit_vec.dynamic.or(&thread_local_bit_vec.dynamic);
-            bit_vec.kinematic.or(&thread_local_bit_vec.kinematic);
+        self.thread_local.iter_mut().for_each(|context| {
+            let thread_local = context.borrow();
+            self.global.or(&thread_local);
         });
     }
 }
 
-/// Updates the AABBs of colliders attached to dynamic or kinematic rigid bodies.
-// TODO: Optimize the change detection.
-fn update_dynamic_kinematic_aabbs<C: AnyCollider, BodyFilter: QueryFilter>(
-    mut colliders: ParamSet<(
-        Query<
-            (
-                Ref<C>,
-                &mut ColliderAabb,
-                &mut EnlargedAabb,
-                &ColliderTreeProxyKey,
-                Ref<Position>,
-                Ref<Rotation>,
-                Option<&CollisionMargin>,
-                Option<&SpeculativeMargin>,
-            ),
-            Without<ColliderDisabled>,
-        >,
-        Query<(&ColliderAabb, &EnlargedAabb), Without<ColliderDisabled>>,
-    )>,
-    rb_query: Query<
+/// Updates the AABBs of the colliders of each [`SolverBody`] (awake dynamic and kinematic bodies)
+/// after the physics step.
+// TODO: Once dynamic an kinematic bodies have their own marker components,
+//       we should use those instead of `SolverBody`. Solver bodies should
+//       be an implementation detail of the solver.
+// TODO: This approach with velocity-expanded AABBs is quite inefficient.
+//       We could switch to Box2D-style CCD with fast bodies.
+fn update_solver_body_aabbs<C: AnyCollider>(
+    body_query: Query<
         (
             &Position,
             &ComputedCenterOfMass,
@@ -664,11 +664,27 @@ fn update_dynamic_kinematic_aabbs<C: AnyCollider, BodyFilter: QueryFilter>(
             &RigidBodyColliders,
             Has<SweptCcd>,
         ),
-        BodyFilter,
+        With<SolverBody>,
     >,
+    mut colliders: ParamSet<(
+        Query<
+            (
+                Ref<C>,
+                &mut ColliderAabb,
+                &mut EnlargedAabb,
+                &ColliderTreeProxyKey,
+                &Position,
+                &Rotation,
+                Option<&CollisionMargin>,
+                Option<&SpeculativeMargin>,
+            ),
+            Without<ColliderDisabled>,
+        >,
+        Query<(&ColliderAabb, &EnlargedAabb), Without<ColliderDisabled>>,
+    )>,
     narrow_phase_config: Res<NarrowPhaseConfig>,
     length_unit: Res<PhysicsLengthUnit>,
-    mut collider_trees: ResMut<ColliderTrees>,
+    mut trees: ResMut<ColliderTrees>,
     mut moved_proxies: ResMut<MovedProxies>,
     mut enlarged_proxies: ResMut<EnlargedProxies>,
     time: Res<Time>,
@@ -683,11 +699,13 @@ fn update_dynamic_kinematic_aabbs<C: AnyCollider, BodyFilter: QueryFilter>(
 
     // An upper bound on the number of proxies, for sizing the bit vectors.
     // TODO: Use a better way to track the number of proxies.
-    let max_num_dynamic_proxies = collider_trees.dynamic_tree.proxies.capacity();
-    let max_num_kinematic_proxies = collider_trees.kinematic_tree.proxies.capacity();
+    let cap_dynamic = trees.dynamic_tree.proxies.capacity();
+    let cap_kinematic = trees.kinematic_tree.proxies.capacity();
 
     // Clear and resize the enlarged proxy structures.
-    enlarged_proxies.clear_and_set_capacity(max_num_dynamic_proxies, max_num_kinematic_proxies);
+    let e = &mut enlarged_proxies;
+    e.dynamic_proxies.clear_and_set_capacity(cap_dynamic);
+    e.kinematic_proxies.clear_and_set_capacity(cap_kinematic);
 
     let delta_secs = time.delta_seconds_adjusted();
     let default_speculative_margin = length_unit.0 * narrow_phase_config.default_speculative_margin;
@@ -696,7 +714,7 @@ fn update_dynamic_kinematic_aabbs<C: AnyCollider, BodyFilter: QueryFilter>(
 
     let collider_query = colliders.p0();
 
-    rb_query.par_iter().for_each(
+    body_query.par_iter().for_each(
         |(rb_pos, center_of_mass, lin_vel, ang_vel, body_colliders, has_swept_ccd)| {
             for collider_entity in body_colliders.iter() {
                 let Ok((
@@ -712,14 +730,6 @@ fn update_dynamic_kinematic_aabbs<C: AnyCollider, BodyFilter: QueryFilter>(
                 else {
                     continue;
                 };
-
-                // Skip if the collider's AABB can't have changed since the last physics tick.
-                if !pos.last_changed().is_newer_than(last_tick.0, this_run)
-                    && !rot.last_changed().is_newer_than(last_tick.0, this_run)
-                    && !collider.last_changed().is_newer_than(last_tick.0, this_run)
-                {
-                    continue;
-                }
 
                 let collision_margin = collision_margin.map_or(0.0, |margin| margin.0);
                 let speculative_margin = if has_swept_ccd {
@@ -773,93 +783,47 @@ fn update_dynamic_kinematic_aabbs<C: AnyCollider, BodyFilter: QueryFilter>(
                 let moved = enlarged_aabb.update(&aabb, margin);
 
                 if moved {
+                    let tree_type = proxy_key.tree_type();
                     let mut thread_local_bit_vec = enlarged_proxies
-                        .thread_local_bit_vec
+                        .bit_vec_for_type(tree_type)
+                        .thread_local
                         .get_or(|| {
-                            let mut bit_vec = EnlargedProxiesBitVec::default();
-                            bit_vec
-                                .dynamic
-                                .set_bit_count_and_clear(max_num_dynamic_proxies);
-                            bit_vec
-                                .kinematic
-                                .set_bit_count_and_clear(max_num_kinematic_proxies);
+                            let capacity = match tree_type {
+                                ColliderTreeType::Dynamic => cap_dynamic,
+                                ColliderTreeType::Kinematic => cap_kinematic,
+                                _ => unreachable!("Static or standalone proxy {proxy_key:?} moved in dynamic AABB update"),
+                            };
+                            let mut bit_vec = BitVec::new(capacity);
+                            bit_vec.set_bit_count_and_clear(capacity);
                             RefCell::new(bit_vec)
                         })
                         .borrow_mut();
-                    match proxy_key.body() {
-                        Some(RigidBody::Dynamic) => {
-                            thread_local_bit_vec.dynamic.set(proxy_key.id().index())
-                        }
-                        Some(RigidBody::Kinematic) => {
-                            thread_local_bit_vec.kinematic.set(proxy_key.id().index())
-                        }
-                        _ => {
-                            unreachable!("Static proxy {proxy_key:?} moved in dynamic AABB update")
-                        }
-                    }
+
+                    thread_local_bit_vec.set(proxy_key.id().index());
                 }
             }
         },
     );
 
-    // Combine thread-local moved proxy bit vectors into the main one.
-    enlarged_proxies.combine_thread_local();
+    // Update the AABBs of moved proxies in the dynamic and kinematic trees.
+    let aabb_query = colliders.p1();
+    for &tree_type in &[ColliderTreeType::Dynamic, ColliderTreeType::Kinematic] {
+        let tree = trees.tree_for_type_mut(tree_type);
+        let bit_vec = enlarged_proxies.bit_vec_for_type_mut(tree_type);
 
-    // Serially enlarge moved proxies in the dynamic and kinematic tree.
-    let aabbs = colliders.p1();
+        tree.bvh.init_primitives_to_nodes_if_uninit();
+        bit_vec.combine_thread_local();
 
-    let ColliderTrees {
-        dynamic_tree,
-        kinematic_tree,
-        ..
-    } = &mut *collider_trees;
-
-    dynamic_tree.bvh.init_primitives_to_nodes_if_uninit();
-    kinematic_tree.bvh.init_primitives_to_nodes_if_uninit();
-
-    // TODO: This is kind of ugly, maybe just extract the inner loop into a function?
-    for (tree_type, tree, bit_vec) in [
-        (
-            ColliderTreeType::Dynamic,
-            dynamic_tree,
-            &enlarged_proxies.bit_vec.dynamic,
-        ),
-        (
-            ColliderTreeType::Kinematic,
-            kinematic_tree,
-            &enlarged_proxies.bit_vec.kinematic,
-        ),
-    ] {
-        for (i, mut bits) in bit_vec.blocks().enumerate() {
-            while bits != 0 {
-                let trailing_zeros = bits.trailing_zeros();
-                let proxy_id = ProxyId::new(i as u32 * 64 + trailing_zeros);
-                let proxy = &mut tree.proxies[proxy_id.index()];
-                let entity = proxy.collider;
-                let (aabb, enlarged_aabb) = aabbs.get(entity).unwrap_or_else(|_| {
-                    panic!(
-                        "EnlargedAabb missing for moved collider entity {:?}",
-                        entity
-                    )
-                });
-
-                let aabb = Aabb::from(*aabb);
-                let enlarged_aabb = Aabb::from(enlarged_aabb.get());
-
-                // Update the proxy's AABB.
-                proxy.aabb = aabb;
+        update_tree(
+            tree_type,
+            tree,
+            &bit_vec.global,
+            &aabb_query,
+            &mut moved_proxies,
+            |tree, proxy_id, enlarged_aabb| {
                 tree.set_proxy_aabb(proxy_id, enlarged_aabb);
-
-                // Record the moved proxy.
-                let proxy_key = ColliderTreeProxyKey::new(proxy_id, tree_type);
-                if moved_proxies.insert(proxy_key) {
-                    tree.moved_proxies.push(proxy_id);
-                }
-
-                // Clear the least significant set bit
-                bits &= bits - 1;
-            }
-        }
+            },
+        );
 
         // Refit the BVH after enlarging proxies.
         // TODO: For a smaller number of moved proxies, it can be faster
@@ -868,154 +832,199 @@ fn update_dynamic_kinematic_aabbs<C: AnyCollider, BodyFilter: QueryFilter>(
     }
 
     // Update the last update tick.
+    // TODO: Remove this
     last_tick.0 = this_run;
 
     diagnostics.update += start.elapsed();
 }
 
-// TODO: If we tagged static colliders with their own marker component,
-//       we could avoid querying for the bodies, and merge this with the
-//       standalone collider AABB update.
-/// Updates the AABBs of colliders attached to static rigid bodies.
-fn update_static_aabbs<C: AnyCollider>(
-    static_bodies: Query<&RigidBodyColliders, (Without<SolverBody>, Without<Sleeping>)>,
-    mut colliders: Query<
-        (
-            Entity,
-            &Position,
-            &Rotation,
-            &mut ColliderAabb,
-            &mut EnlargedAabb,
-            &C,
-            Option<&CollisionMargin>,
-            &ColliderTreeProxyKey,
-        ),
-        (
+/// Updates the AABBs of colliders that have been manually moved after the previous physics step.
+fn update_moved_collider_aabbs<C: AnyCollider>(
+    mut colliders: ParamSet<(
+        Query<
+            (
+                Entity,
+                Ref<Position>,
+                Ref<Rotation>,
+                &mut ColliderAabb,
+                &mut EnlargedAabb,
+                Ref<C>,
+                Option<&CollisionMargin>,
+                &ColliderTreeProxyKey,
+            ),
             Without<ColliderDisabled>,
-            Or<(Changed<Position>, Changed<Rotation>, Changed<C>)>,
-        ),
-    >,
+        >,
+        Query<(&ColliderAabb, &EnlargedAabb), Without<ColliderDisabled>>,
+    )>,
     narrow_phase_config: Res<NarrowPhaseConfig>,
     length_unit: Res<PhysicsLengthUnit>,
-    mut collider_trees: ResMut<ColliderTrees>,
-    mut diagnostics: ResMut<ColliderTreeDiagnostics>,
+    mut trees: ResMut<ColliderTrees>,
+    mut moved_proxies: ResMut<MovedProxies>,
+    mut enlarged_proxies: ResMut<EnlargedProxies>,
     collider_context: StaticSystemParam<C::Context>,
+    mut diagnostics: ResMut<ColliderTreeDiagnostics>,
+    last_tick: Res<LastPhysicsTick>,
+    system_tick: SystemChangeTick,
 ) {
     let start = crate::utils::Instant::now();
 
+    let this_run = system_tick.this_run();
+
+    // An upper bound on the number of proxies, for sizing the bit vectors.
+    let cap_dynamic = trees.dynamic_tree.proxies.capacity();
+    let cap_kinematic = trees.kinematic_tree.proxies.capacity();
+    let cap_static = trees.static_tree.proxies.capacity();
+    let cap_standalone = trees.standalone_tree.proxies.capacity();
+
+    // Clear and resize the enlarged proxy structures.
+    let e = &mut enlarged_proxies;
+    e.dynamic_proxies.clear_and_set_capacity(cap_dynamic);
+    e.kinematic_proxies.clear_and_set_capacity(cap_kinematic);
+    e.static_proxies.clear_and_set_capacity(cap_static);
+    e.standalone_proxies.clear_and_set_capacity(cap_standalone);
+
     let contact_tolerance = length_unit.0 * narrow_phase_config.contact_tolerance;
 
-    collider_trees
-        .static_tree
-        .bvh
-        .init_primitives_to_nodes_if_uninit();
+    // TODO: This doesn't do velocity-based enlargement like the dynamic/kinematic AABB update.
+    //       We should overall rework CCD to not rely on velocity-based AABB enlargement for all bodies.
+    // TODO: par-iter over all colliders, check if they have actually changed since the `LastPhysicsTick`
+    let mut collider_query = colliders.p0();
+    collider_query.par_iter_mut().for_each(
+        |(entity, pos, rot, mut aabb, mut enlarged_aabb, collider, margin, proxy_key)| {
+            // Skip if the collider's AABB can't have changed since the last physics tick.
+            if !pos.last_changed().is_newer_than(last_tick.0, this_run)
+                && !rot.last_changed().is_newer_than(last_tick.0, this_run)
+                && !collider.last_changed().is_newer_than(last_tick.0, this_run)
+            {
+                return;
+            }
 
-    // TODO: Parallelize this and/or avoid iterating over all static bodies.
-    // TODO: Enlarged AABBs are not really needed for static colliders.
-    for body_colliders in &static_bodies {
-        let mut iter = colliders.iter_many_mut(body_colliders.iter());
-        while let Some((
-            entity,
-            collider_pos,
-            collider_rot,
-            mut aabb,
-            mut enlarged_aabb,
-            collider,
-            margin,
-            proxy_key,
-        )) = iter.fetch_next()
-        {
             let margin = margin.map_or(0.0, |margin| margin.0);
 
             let context = AabbContext::new(entity, &*collider_context);
 
             // Compute the AABB of the collider.
             *aabb = collider
-                .aabb_with_context(collider_pos.0, *collider_rot, context)
+                .aabb_with_context(pos.0, *rot, context)
                 .grow(Vector::splat(contact_tolerance + margin));
-            enlarged_aabb.update(&aabb, 0.0);
+            let moved = enlarged_aabb.update(&aabb, 1e-4);
 
-            // Reinsert the proxy into the BVH.
-            collider_trees
-                .static_tree
-                .reinsert_proxy(proxy_key.id(), Aabb::from(*aabb));
+            if moved {
+                let tree_type = proxy_key.tree_type();
+                let mut thread_local_bit_vec = enlarged_proxies
+                    .bit_vec_for_type(tree_type)
+                    .thread_local
+                    .get_or(|| {
+                        let capacity = match tree_type {
+                            ColliderTreeType::Dynamic => cap_dynamic,
+                            ColliderTreeType::Kinematic => cap_kinematic,
+                            ColliderTreeType::Static => cap_static,
+                            ColliderTreeType::Standalone => cap_standalone,
+                        };
+                        let mut bit_vec = BitVec::new(capacity);
+                        bit_vec.set_bit_count_and_clear(capacity);
+                        RefCell::new(bit_vec)
+                    })
+                    .borrow_mut();
+
+                thread_local_bit_vec.set(proxy_key.id().index());
+            }
+        },
+    );
+
+    // Reinsert moved proxies in each tree.
+    let aabb_query = colliders.p1();
+    for tree_type in ColliderTreeType::ALL {
+        let tree = trees.tree_for_type_mut(tree_type);
+        let bit_vec = enlarged_proxies.bit_vec_for_type_mut(tree_type);
+
+        tree.bvh.init_primitives_to_nodes_if_uninit();
+        bit_vec.combine_thread_local();
+
+        let moved_count = bit_vec.global.count_ones();
+        let moved_ratio = if tree.proxies.is_empty() {
+            0.0
+        } else {
+            moved_count as f32 / tree.proxies.len() as f32
+        };
+
+        // For a small number of moved proxies, it's more efficient to refit up from just those leaves.
+        // Otherwise, it's better to refit the entire tree once after updating all moved proxies.
+        // TODO: Tune the threshold ratio.
+        if moved_ratio < 0.1 {
+            update_tree(
+                tree_type,
+                tree,
+                &bit_vec.global,
+                &aabb_query,
+                &mut moved_proxies,
+                |tree, proxy_id, enlarged_aabb| {
+                    tree.resize_proxy_aabb(proxy_id, enlarged_aabb);
+                },
+            );
+        } else {
+            update_tree(
+                tree_type,
+                tree,
+                &bit_vec.global,
+                &aabb_query,
+                &mut moved_proxies,
+                |tree, proxy_id, enlarged_aabb| {
+                    tree.set_proxy_aabb(proxy_id, enlarged_aabb);
+                },
+            );
+            tree.refit_all();
         }
     }
 
     diagnostics.update += start.elapsed();
 }
 
-/// Updates the AABBs of standalone colliders that are not attached to any rigid body.
-fn update_standalone_aabbs<C: AnyCollider>(
-    mut colliders: Query<
-        (
-            Entity,
-            &Position,
-            &Rotation,
-            &mut ColliderAabb,
-            &mut EnlargedAabb,
-            &C,
-            Option<&CollisionMargin>,
-            &ColliderTreeProxyKey,
-        ),
-        (
-            Without<ColliderOf>,
-            Without<ColliderDisabled>,
-            Or<(Changed<Position>, Changed<Rotation>, Changed<C>)>,
-        ),
-    >,
-    narrow_phase_config: Res<NarrowPhaseConfig>,
-    length_unit: Res<PhysicsLengthUnit>,
-    mut collider_trees: ResMut<ColliderTrees>,
-    mut diagnostics: ResMut<ColliderTreeDiagnostics>,
-    collider_context: StaticSystemParam<C::Context>,
+/// Updates the collider tree for the moved proxies indicated in the given bit vector.
+fn update_tree(
+    tree_type: ColliderTreeType,
+    tree: &mut ColliderTree,
+    bit_vec: &BitVec,
+    aabbs: &Query<(&ColliderAabb, &EnlargedAabb), Without<ColliderDisabled>>,
+    moved_proxies: &mut MovedProxies,
+    update_proxy_fn: impl Fn(&mut ColliderTree, ProxyId, Aabb),
 ) {
-    let start = crate::utils::Instant::now();
+    for (i, mut bits) in bit_vec.blocks().enumerate() {
+        while bits != 0 {
+            let trailing_zeros = bits.trailing_zeros();
+            let proxy_id = ProxyId::new(i as u32 * 64 + trailing_zeros);
+            let proxy = &mut tree.proxies[proxy_id.index()];
+            let entity = proxy.collider;
 
-    let contact_tolerance = length_unit.0 * narrow_phase_config.contact_tolerance;
+            // TODO: Get rid of the query here. We should be able to mutably write the AABBs directly
+            //       in the parallel loop above and avoid this extra query.
+            let (aabb, enlarged_aabb) = aabbs.get(entity).unwrap_or_else(|_| {
+                panic!(
+                    "EnlargedAabb missing for moved collider entity {:?}",
+                    entity
+                )
+            });
 
-    collider_trees
-        .standalone_tree
-        .bvh
-        .init_primitives_to_nodes_if_uninit();
+            let aabb = Aabb::from(*aabb);
+            let enlarged_aabb = Aabb::from(enlarged_aabb.get());
 
-    for (
-        entity,
-        collider_pos,
-        collider_rot,
-        mut aabb,
-        mut enlarged_aabb,
-        collider,
-        margin,
-        proxy_key,
-    ) in &mut colliders
-    {
-        let margin = margin.map_or(0.0, |margin| margin.0);
+            // Update the proxy's AABB.
+            proxy.aabb = aabb;
+            update_proxy_fn(tree, proxy_id, enlarged_aabb);
 
-        let context = AabbContext::new(entity, &*collider_context);
+            // Record the moved proxy.
+            let proxy_key = ColliderTreeProxyKey::new(proxy_id, tree_type);
+            if moved_proxies.insert(proxy_key) {
+                tree.moved_proxies.push(proxy_id);
+            }
 
-        // Compute the AABB of the collider.
-        *aabb = collider
-            .aabb_with_context(collider_pos.0, *collider_rot, context)
-            .grow(Vector::splat(contact_tolerance + margin));
-        enlarged_aabb.update(&aabb, 0.0);
-
-        // Reinsert the proxy into the BVH.
-        collider_trees
-            .standalone_tree
-            .reinsert_proxy(proxy_key.id(), Aabb::from(*aabb));
+            // Clear the least significant set bit
+            bits &= bits - 1;
+        }
     }
-
-    diagnostics.update += start.elapsed();
 }
 
-fn clear_moved_proxies(
-    mut moved_proxies: ResMut<MovedProxies>,
-    mut collider_trees: ResMut<ColliderTrees>,
-) {
+fn clear_moved_proxies(mut moved_proxies: ResMut<MovedProxies>, mut trees: ResMut<ColliderTrees>) {
     moved_proxies.clear();
-    collider_trees.dynamic_tree.moved_proxies.clear();
-    collider_trees.kinematic_tree.moved_proxies.clear();
-    collider_trees.static_tree.moved_proxies.clear();
-    collider_trees.standalone_tree.moved_proxies.clear();
+    trees.iter_trees_mut().for_each(|t| t.moved_proxies.clear());
 }

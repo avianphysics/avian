@@ -174,6 +174,14 @@ pub enum ColliderTreeType {
 }
 
 impl ColliderTreeType {
+    /// An array of all possible [`ColliderTreeType`]s.
+    pub const ALL: [ColliderTreeType; 4] = [
+        ColliderTreeType::Dynamic,
+        ColliderTreeType::Kinematic,
+        ColliderTreeType::Static,
+        ColliderTreeType::Standalone,
+    ];
+
     /// Creates a new [`ColliderTreeType`] from the given optional rigid body type.
     ///
     /// `None` corresponds to standalone colliders with no body.
