@@ -32,13 +32,7 @@ fn main() {
 
     // Add plugins relevant to the example.
     app.add_plugins((
-        DefaultPlugins.build().set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "App".to_string(),
-                ..default()
-            }),
-            ..default()
-        }),
+        DefaultPlugins,
         FeathersPlugins,
         ExampleCommonPlugin,
         PhysicsDebugPlugin,
@@ -102,8 +96,8 @@ impl Default for BvhExampleSettings {
         Self {
             x_count: 100,
             y_count: 100,
-            move_fraction: 0.0,
-            delta_fraction: 0.0,
+            move_fraction: 0.25,
+            delta_fraction: 0.1,
         }
     }
 }
