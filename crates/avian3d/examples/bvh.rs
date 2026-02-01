@@ -160,8 +160,7 @@ fn move_random(mut query: Query<&mut Transform>, settings: Res<BvhExampleSetting
                         ..PARTICLE_RADIUS * settings.delta_fraction,
                 ),
                 0.0,
-            )
-            .adjust_precision();
+            );
         }
     }
 }
