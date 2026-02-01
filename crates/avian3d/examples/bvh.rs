@@ -100,10 +100,10 @@ struct BvhExampleSettings {
 impl Default for BvhExampleSettings {
     fn default() -> Self {
         Self {
-            x_count: 50,
-            y_count: 50,
-            move_fraction: 0.25,
-            delta_fraction: 0.1,
+            x_count: 100,
+            y_count: 100,
+            move_fraction: 0.0,
+            delta_fraction: 0.0,
         }
     }
 }
@@ -132,8 +132,6 @@ fn setup_scene(mut commands: Commands, settings: Res<BvhExampleSettings>) {
                     (y as f32 + 0.5) * 3.0 * PARTICLE_RADIUS,
                     0.0,
                 ),
-                RigidBody::Dynamic,
-                SleepingDisabled,
                 Collider::sphere(PARTICLE_RADIUS.adjust_precision()),
                 CollisionLayers::new(LayerMask::DEFAULT, LayerMask::NONE),
             ));
@@ -143,22 +141,22 @@ fn setup_scene(mut commands: Commands, settings: Res<BvhExampleSettings>) {
 
 /// Clears the scene of all rigid bodies and cameras.
 #[expect(clippy::type_complexity)]
-fn clear_scene(mut commands: Commands, query: Query<Entity, Or<(With<RigidBody>, With<Camera>)>>) {
+fn clear_scene(mut commands: Commands, query: Query<Entity, Or<(With<Collider>, With<Camera>)>>) {
     for entity in query.iter() {
         commands.entity(entity).despawn();
     }
 }
 
 /// Moves a fraction of the colliders randomly each frame.
-fn move_random(mut query: Query<&mut Position>, settings: Res<BvhExampleSettings>) {
+fn move_random(mut query: Query<&mut Transform>, settings: Res<BvhExampleSettings>) {
     if settings.move_fraction <= 0.0 || settings.delta_fraction <= 0.0 {
         return;
     }
 
     let mut rng = rand::rng();
-    for mut position in query.iter_mut() {
+    for mut transform in query.iter_mut() {
         if rng.random::<f32>() < settings.move_fraction {
-            position.0 += Vec3::new(
+            transform.translation += Vec3::new(
                 rng.random_range(
                     -PARTICLE_RADIUS * settings.delta_fraction
                         ..PARTICLE_RADIUS * settings.delta_fraction,
@@ -333,14 +331,14 @@ fn setup_ui(
                                 ))
                             ),
                             radio(
-                                (Checked, GridSizeRadio(50)),
+                                GridSizeRadio(50),
                                 Spawn((
                                     Text::new("50x50"),
                                     TextFont::from_font_size(13.0).with_font(regular.clone())
                                 ))
                             ),
                             radio(
-                                GridSizeRadio(100),
+                                (Checked, GridSizeRadio(100)),
                                 Spawn((
                                     Text::new("100x100"),
                                     TextFont::from_font_size(13.0).with_font(regular.clone())
