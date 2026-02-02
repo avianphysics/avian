@@ -2999,6 +2999,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "glam"
+version = "0.31.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74a4d85559e2637d3d839438b5b3d75c31e655276f9544d72475c36b92fabbed"
+dependencies = [
+ "bytemuck",
+]
+
+[[package]]
 name = "glam_matrix_extras"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4171,10 +4180,11 @@ dependencies = [
 [[package]]
 name = "obvhs"
 version = "0.3.0"
-source = "git+https://github.com/DGriffin91/obvhs?branch=insertion_removal#0c90da0866d5b417ef0dd1d0e6fb9db899a51dba"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f317a1c29744b0e63bdf1733443fad6805a86ab6db403671f945456041cc84b3"
 dependencies = [
  "bytemuck",
- "glam 0.30.10",
+ "glam 0.31.0",
  "half",
  "log",
  "rdst",
@@ -6874,6 +6884,6 @@ checksum = "b97154e67e32c85465826e8bcc1c59429aaaf107c1e4a9e53c8d8ccd5eff88d0"
 
 [[package]]
 name = "zmij"
-version = "1.0.18"
+version = "1.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1966f8ac2c1f76987d69a74d0e0f929241c10e78136434e3be70ff7f58f64214"
+checksum = "3ff05f8caa9038894637571ae6b9e29466c1f4f829d26c9b28f869a29cbe3445"

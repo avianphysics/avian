@@ -554,13 +554,13 @@ impl From<ColliderAabb> for obvhs::aabb::Aabb {
     fn from(value: ColliderAabb) -> Self {
         Self {
             #[cfg(feature = "3d")]
-            min: value.min.f32().into(),
+            min: value.min.f32().to_array().into(),
             #[cfg(feature = "3d")]
-            max: value.max.f32().into(),
+            max: value.max.f32().to_array().into(),
             #[cfg(feature = "2d")]
-            min: value.min.f32().extend(0.0).into(),
+            min: value.min.f32().extend(0.0).to_array().into(),
             #[cfg(feature = "2d")]
-            max: value.max.f32().extend(0.0).into(),
+            max: value.max.f32().extend(0.0).to_array().into(),
         }
     }
 }

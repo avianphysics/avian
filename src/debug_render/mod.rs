@@ -267,7 +267,7 @@ fn debug_render_bvh(
     for node in bvh.iter_trees().flat_map(|tree| tree.bvh.nodes.iter()) {
         if node.prim_count == 0 && node.aabb.valid() {
             gizmos.aabb_3d(
-                Aabb3d::from_min_max(node.aabb.min, node.aabb.max),
+                Aabb3d::from_min_max(node.aabb.min.to_array(), node.aabb.max.to_array()),
                 Transform::IDENTITY,
                 collider_tree_color,
             );
