@@ -23,6 +23,7 @@ impl Plugin for ColliderTreeOptimizationPlugin {
             PhysicsSchedule,
             (
                 optimize_trees.in_set(ColliderTreeSystems::BeginOptimize),
+                #[cfg(all(not(target_arch = "wasm32"), not(target_os = "unknown")))]
                 block_on_optimize_trees.in_set(ColliderTreeSystems::EndOptimize),
             ),
         );
@@ -31,8 +32,13 @@ impl Plugin for ColliderTreeOptimizationPlugin {
 
 /// Settings for optimizing each [`ColliderTree`].
 // TODO: Per-tree settings could be useful.
-#[derive(Resource, Debug, Default, PartialEq, Reflect)]
+#[derive(Resource, Debug, PartialEq, Reflect)]
 pub struct ColliderTreeOptimization {
+    /// The optimization mode for the collider tree.
+    ///
+    /// **Default**: [`TreeOptimizationMode::Adaptive`]
+    pub optimization_mode: TreeOptimizationMode,
+
     /// If `true`, tree optimization will be performed in-place with minimal allocations.
     /// This has the downside that the tree will be unavailable for [spatial queries]
     /// during the simulation step while the optimization is ongoing (ex: in [collision hooks]).
@@ -50,10 +56,24 @@ pub struct ColliderTreeOptimization {
     /// [collision hooks]: crate::collision::hooks
     pub optimize_in_place: bool,
 
-    /// The optimization mode for the collider tree.
+    /// If `true`, tree optimization will be performed in parallel
+    /// with the narrow phase and solver using async tasks.
     ///
-    /// **Default**: [`TreeOptimizationMode::Adaptive`]
-    pub optimization_mode: TreeOptimizationMode,
+    /// **Default**: `true` (on supported platforms)
+    pub use_async_tasks: bool,
+}
+
+impl Default for ColliderTreeOptimization {
+    fn default() -> Self {
+        Self {
+            optimization_mode: TreeOptimizationMode::default(),
+            optimize_in_place: false,
+            #[cfg(any(target_arch = "wasm32", target_os = "unknown"))]
+            use_async_tasks: false,
+            #[cfg(all(not(target_arch = "wasm32"), not(target_os = "unknown")))]
+            use_async_tasks: true,
+        }
+    }
 }
 
 /// The optimization mode for a [`ColliderTree`].
@@ -143,7 +163,9 @@ struct OptimizationTasks(Vec<Task<CommandQueue>>);
 
 /// Begins optimizing the dynamic and kinematic [`ColliderTree`]s to maintain good query performance.
 ///
-/// This spawns an async task that runs concurrently with the simulation step.
+/// If [`ColliderTreeOptimization::use_async_tasks`] is enabled, this spawns an async task
+/// that runs concurrently with the simulation step. Otherwise, the optimization is performed
+/// in-place on the main thread.
 fn optimize_trees(
     mut collider_trees: ResMut<ColliderTrees>,
     mut optimization_tasks: ResMut<OptimizationTasks>,
@@ -153,6 +175,12 @@ fn optimize_trees(
     let start = crate::utils::Instant::now();
 
     let task_pool = AsyncComputeTaskPool::get();
+
+    // We cannot block on wasm.
+    #[cfg(any(target_arch = "wasm32", target_os = "unknown"))]
+    let use_async_tasks = false;
+    #[cfg(all(not(target_arch = "wasm32"), not(target_os = "unknown")))]
+    let use_async_tasks = optimization_settings.use_async_tasks;
 
     // Spawn optimization tasks for each tree.
     for tree_type in ColliderTreeType::ALL {
@@ -166,65 +194,74 @@ fn optimize_trees(
             continue;
         }
 
-        // Take or clone the BVH for the optimization task.
-        // TODO: For small changes to large trees, the cost of cloning can exceed the cost of the async task.
-        //       We could have a threshold for cloning vs in-place optimization based on tree size and moved ratio.
-        let bvh = if optimization_settings.optimize_in_place {
-            core::mem::take(&mut tree.bvh)
-        } else {
-            // TODO: Can we avoid cloning the entire BVH?
-            tree.bvh.clone()
-        };
+        #[cfg(all(not(target_arch = "wasm32"), not(target_os = "unknown")))]
+        if use_async_tasks {
+            // Take or clone the BVH for the optimization task.
+            // TODO: For small changes to large trees, the cost of cloning can exceed the cost of the async task.
+            //       We could have a threshold for cloning vs in-place optimization based on tree size and moved ratio.
+            let bvh = if optimization_settings.optimize_in_place {
+                core::mem::take(&mut tree.bvh)
+            } else {
+                // TODO: Can we avoid cloning the entire BVH?
+                tree.bvh.clone()
+            };
 
-        // Create a new tree for the optimization task.
-        let new_tree = ColliderTree {
-            bvh,
-            proxies: StableVec::new(),
-            // These are not needed during the simulation step.
-            moved_proxies: core::mem::take(&mut tree.moved_proxies),
-            workspace: core::mem::take(&mut tree.workspace),
-        };
+            // Create a new tree for the optimization task.
+            let new_tree = ColliderTree {
+                bvh,
+                proxies: StableVec::new(),
+                // These are not needed during the simulation step.
+                moved_proxies: core::mem::take(&mut tree.moved_proxies),
+                workspace: core::mem::take(&mut tree.workspace),
+            };
 
-        let task = match optimization_strategy {
-            TreeOptimizationMode::Reinsert => {
-                spawn_optimization_task(task_pool, new_tree, tree_type, move |tree| {
-                    let moved_leaves = tree
-                        .moved_proxies
-                        .iter()
-                        .map(|key| tree.bvh.primitives_to_nodes[key.index()])
-                        .collect::<Vec<u32>>();
+            let task = spawn_optimization_task(task_pool, new_tree, tree_type, move |tree| {
+                optimize_tree_in_place(tree, optimization_strategy);
+            });
 
-                    tree.optimize_candidates(&moved_leaves, 1);
-                })
-            }
-            TreeOptimizationMode::PartialRebuild => {
-                spawn_optimization_task(task_pool, new_tree, tree_type, move |tree| {
-                    let moved_leaves = tree
-                        .moved_proxies
-                        .iter()
-                        .map(|key| tree.bvh.primitives_to_nodes[key.index()])
-                        .collect::<Vec<u32>>();
+            optimization_tasks.push(task);
+        }
 
-                    tree.rebuild_partial(&moved_leaves);
-                })
-            }
-            TreeOptimizationMode::FullRebuild => {
-                spawn_optimization_task(task_pool, new_tree, tree_type, move |tree| {
-                    tree.rebuild_full();
-                })
-            }
-
-            TreeOptimizationMode::Adaptive { .. } => unreachable!(),
-        };
-
-        optimization_tasks.push(task);
+        if !use_async_tasks {
+            // Optimize in place on the main thread.
+            optimize_tree_in_place(tree, optimization_strategy);
+        }
     }
 
     diagnostics.optimize += start.elapsed();
 }
 
+fn optimize_tree_in_place(tree: &mut ColliderTree, optimization_strategy: TreeOptimizationMode) {
+    match optimization_strategy {
+        TreeOptimizationMode::Reinsert => {
+            let moved_leaves = tree
+                .moved_proxies
+                .iter()
+                .map(|key| tree.bvh.primitives_to_nodes[key.index()])
+                .collect::<Vec<u32>>();
+
+            tree.optimize_candidates(&moved_leaves, 1);
+        }
+        TreeOptimizationMode::PartialRebuild => {
+            let moved_leaves = tree
+                .moved_proxies
+                .iter()
+                .map(|key| tree.bvh.primitives_to_nodes[key.index()])
+                .collect::<Vec<u32>>();
+
+            tree.rebuild_partial(&moved_leaves);
+        }
+        TreeOptimizationMode::FullRebuild => {
+            tree.rebuild_full();
+        }
+
+        TreeOptimizationMode::Adaptive { .. } => unreachable!(),
+    }
+}
+
 /// Spawns and returns an async task to optimize the given collider tree
 /// using the provided optimization function.
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "unknown")))]
 fn spawn_optimization_task(
     task_pool: &AsyncComputeTaskPool,
     mut tree: ColliderTree,
@@ -248,6 +285,7 @@ fn spawn_optimization_task(
 }
 
 /// Completes the [`ColliderTree`] optimization tasks started in [`optimize_trees`].
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "unknown")))]
 fn block_on_optimize_trees(
     mut commands: Commands,
     mut optimization: ResMut<OptimizationTasks>,
