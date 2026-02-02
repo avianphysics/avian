@@ -1,5 +1,5 @@
 use crate::{
-    dynamics::joints::{EntityConstraint, JointSystems},
+    dynamics::joints::{EntityConstraint, JointSystems, motor::LinearMotor},
     prelude::*,
 };
 use bevy::{
@@ -16,9 +16,13 @@ use bevy::{
 /// This can be useful for things like elevators, pistons, sliding doors and moving platforms.
 ///
 /// Each prismatic joint is defined by a [`JointFrame`] on each body, a [`slider_axis`](Self::slider_axis)
-/// along which the bodies can translate, and an optional [`DistanceLimit`] that defines the extents of the allowed translation.
+/// along which the bodies can translate, and an optional [`DistanceLimit`] that defines the extents
+/// of the allowed translation.
 ///
 #[doc = include_str!("./images/prismatic_joint.svg")]
+///
+/// The joint can also include a [`LinearMotor`] for driving the translation along the [`slider_axis`](Self::slider_axis).
+/// Use this to create pistons, elevators, or other linear motion mechanisms.
 #[derive(Component, Clone, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
@@ -47,6 +51,8 @@ pub struct PrismaticJoint {
     pub angle_compliance: Scalar,
     /// The compliance of the distance limit (inverse of stiffness, m / N).
     pub limit_compliance: Scalar,
+    /// A motor for driving the joint.
+    pub motor: LinearMotor,
 }
 
 impl EntityConstraint<2> for PrismaticJoint {
@@ -72,6 +78,7 @@ impl PrismaticJoint {
             align_compliance: 0.0,
             angle_compliance: 0.0,
             limit_compliance: 0.0,
+            motor: LinearMotor::new_disabled(MotorModel::DEFAULT),
         }
     }
 
@@ -304,6 +311,13 @@ impl PrismaticJoint {
     #[inline]
     pub const fn with_limit_compliance(mut self, compliance: Scalar) -> Self {
         self.limit_compliance = compliance;
+        self
+    }
+
+    /// Sets the motor for the joint.
+    #[inline]
+    pub const fn with_motor(mut self, motor: LinearMotor) -> Self {
+        self.motor = motor;
         self
     }
 }

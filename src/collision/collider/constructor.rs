@@ -12,7 +12,8 @@ use itertools::Either;
 /// In contrast to [`ColliderConstructor`], this component will *not* generate a collider on its own entity.
 ///
 /// If this component is used on a scene, such as one spawned by a [`SceneRoot`], it will
-/// wait until the scene is loaded before generating colliders.
+/// wait until the scene is loaded before generating colliders. Note that this requires
+/// the `bevy_scene` feature to be enabled.
 ///
 /// The exact configuration for each descendant can be specified using the helper methods
 /// such as [`with_constructor_for_name`](Self::with_constructor_for_name).
@@ -29,6 +30,9 @@ use itertools::Either;
 /// When a component has multiple ancestors with [`ColliderConstructorHierarchy`], the insertion order is undefined.
 ///
 /// # Example
+///
+/// Below are some examples of using [`ColliderConstructorHierarchy`] to generate colliders
+/// for a glTF scene at runtime. Note that this requires the `bevy_scene` feature to be enabled.
 ///
 /// ```
 #[cfg_attr(feature = "2d", doc = "use avian2d::prelude::*;")]

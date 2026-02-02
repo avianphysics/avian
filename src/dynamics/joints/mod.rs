@@ -208,19 +208,23 @@ Therefore, they have 3 translational DOF and 3 rotational DOF, a total of 6 DOF.
 //! ## Other Configuration
 //!
 //! Different joints may have different configuration options. They may allow you to change the axis of allowed
-//! translation or rotation, and can have distance or angle limits for those axes.
+//! translation or rotation, and apply limits or motors for those axes.
 //!
 //! Take a look at the documentation and methods of each joint to see all the different configuration options.
 
 mod distance;
 mod fixed;
+mod motor;
 mod prismatic;
 mod revolute;
 #[cfg(feature = "3d")]
 mod spherical;
+#[cfg(test)]
+mod tests;
 
 pub use distance::DistanceJoint;
 pub use fixed::FixedJoint;
+pub use motor::{AngularMotor, LinearMotor, MotorModel};
 pub use prismatic::PrismaticJoint;
 pub use revolute::RevoluteJoint;
 #[cfg(feature = "3d")]
@@ -660,6 +664,7 @@ pub struct JointDamping {
 pub struct JointForces {
     force: Vector,
     torque: AngularVector,
+    motor_force: Scalar,
 }
 
 impl JointForces {
@@ -669,6 +674,7 @@ impl JointForces {
         Self {
             force: Vector::ZERO,
             torque: AngularVector::ZERO,
+            motor_force: 0.0,
         }
     }
 
@@ -684,9 +690,18 @@ impl JointForces {
         self.torque
     }
 
+    /// Returns the force or torque applied by the motor, if any.
+    ///
+    /// For angular motors ([`AngularMotor`]), this is the torque in N·m.
+    /// For linear motors ([`LinearMotor`]), this is the force in N.
+    #[inline]
+    pub const fn motor_force(&self) -> Scalar {
+        self.motor_force
+    }
+
     /// Sets the force applied by the joint.
     ///
-    /// This should be done automatically by the joint solver,
+    /// This should be done automatically by the joint solver.
     #[inline]
     pub const fn set_force(&mut self, force: Vector) {
         self.force = force;
@@ -694,10 +709,18 @@ impl JointForces {
 
     /// Sets the torque applied by the joint.
     ///
-    /// This should be done automatically by the joint solver,
+    /// This should be done automatically by the joint solver.
     #[inline]
     pub const fn set_torque(&mut self, torque: AngularVector) {
         self.torque = torque;
+    }
+
+    /// Sets the motor force or torque.
+    ///
+    /// This should be done automatically by the joint solver.
+    #[inline]
+    pub const fn set_motor_force(&mut self, motor_force: Scalar) {
+        self.motor_force = motor_force;
     }
 }
 

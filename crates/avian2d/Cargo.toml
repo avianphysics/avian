@@ -190,6 +190,10 @@ name = "revolute_joint_2d"
 required-features = ["2d", "default-collider"]
 
 [[example]]
+name = "joint_motors_2d"
+required-features = ["2d", "default-collider"]
+
+[[example]]
 name = "sensor"
 required-features = ["2d", "default-collider"]
 

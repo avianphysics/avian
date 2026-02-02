@@ -1,5 +1,5 @@
 use crate::{
-    dynamics::joints::{EntityConstraint, JointSystems},
+    dynamics::joints::{EntityConstraint, JointSystems, motor::AngularMotor},
     prelude::*,
 };
 use bevy::{
@@ -37,6 +37,9 @@ use bevy::{
 )]
 ///
 #[doc = include_str!("./images/revolute_joint.svg")]
+///
+/// The joint can also include an [`AngularMotor`] for driving the rotation about the pivot point.
+/// Use this to create wheels, fans, servos, or other rotating mechanisms.
 #[derive(Component, Clone, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
@@ -67,6 +70,8 @@ pub struct RevoluteJoint {
     pub align_compliance: Scalar,
     /// The compliance of the angle limit (inverse of stiffness, N * m / rad).
     pub limit_compliance: Scalar,
+    /// A motor for driving the joint.
+    pub motor: AngularMotor,
 }
 
 impl EntityConstraint<2> for RevoluteJoint {
@@ -95,6 +100,7 @@ impl RevoluteJoint {
             #[cfg(feature = "3d")]
             align_compliance: 0.0,
             limit_compliance: 0.0,
+            motor: AngularMotor::new_disabled(MotorModel::DEFAULT),
         }
     }
 
@@ -335,6 +341,13 @@ impl RevoluteJoint {
     #[inline]
     pub const fn with_limit_compliance(mut self, compliance: Scalar) -> Self {
         self.limit_compliance = compliance;
+        self
+    }
+
+    /// Sets the motor for the joint.
+    #[inline]
+    pub const fn with_motor(mut self, motor: AngularMotor) -> Self {
+        self.motor = motor;
         self
     }
 }

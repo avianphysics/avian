@@ -319,6 +319,27 @@ impl<'a> MoveAndSlideHitData<'a> {
     }
 }
 
+/// Indicates how to handle a hit detected during [`MoveAndSlide::move_and_slide`].
+///
+/// This is returned by the `on_hit` callback provided to [`MoveAndSlide::move_and_slide`].
+#[derive(Debug, PartialEq)]
+pub enum MoveAndSlideHitResponse {
+    /// Accept the hit and continue the move and slide algorithm.
+    Accept,
+
+    /// Ignore the hit and continue the move and slide algorithm.
+    ///
+    /// Note that the shape will still be moved up to the point of collision,
+    /// but the velocity will not be modified to slide along the surface.
+    Ignore,
+
+    /// Ignore the hit and abort the move and slide algorithm.
+    ///
+    /// Note that the shape will still be moved up to the point of collision,
+    /// but no further movement or velocity modification will be performed.
+    Abort,
+}
+
 /// Data related to a hit during [`MoveAndSlide::cast_move`].
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
@@ -388,8 +409,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// - `config`: A [`MoveAndSlideConfig`] that determines the behavior of the move and slide. [`MoveAndSlideConfig::default()`] should be a good start for most cases.
     /// - `filter`: A [`SpatialQueryFilter`] that determines which colliders are taken into account in the query. It is highly recommended to exclude the entity holding the collider itself,
     ///   otherwise the character will collide with itself.
-    /// - `on_hit`: A callback that is called when a collider is hit as part of the move and slide iterations. Returning `false` will abort the move and slide operation.
-    ///   If you don't have any special handling per collision, you can pass `|_| true`.
+    /// - `on_hit`: A callback that is called when a collider is hit as part of the move and slide iterations. The returned [`MoveAndSlideHitResponse`] determines how to handle the hit.
+    ///   If you don't have any special handling per collision, you can pass `|_| MoveAndSlideHitResponse::Accept`.
     ///
     /// # Example
     ///
@@ -443,7 +464,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///         &filter,
     ///         |hit| {
     ///             collisions.insert(hit.entity);
-    ///             true
+    ///             MoveAndSlideHitResponse::Accept
     ///         },
     ///     );
     #[cfg_attr(
@@ -470,7 +491,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         delta_time: Duration,
         config: &MoveAndSlideConfig,
         filter: &SpatialQueryFilter,
-        mut on_hit: impl FnMut(MoveAndSlideHitData) -> bool,
+        mut on_hit: impl FnMut(MoveAndSlideHitData) -> MoveAndSlideHitResponse,
     ) -> MoveAndSlideOutput {
         let mut position = shape_position;
         let mut time_left = {
@@ -530,7 +551,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             // We need to add the sweep hit's plane explicitly, as `contact_manifolds` sometimes returns nothing
             // due to a Parry bug. Otherwise, `contact_manifolds` would pick up this normal anyways.
             // TODO: Remove this once the collision bug is fixed.
-            if on_hit(MoveAndSlideHitData {
+            let hit_response = on_hit(MoveAndSlideHitData {
                 entity: sweep_hit.entity,
                 point,
                 normal: &mut Dir::new_unchecked(sweep_hit.normal1.f32()),
@@ -538,11 +559,16 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 distance: sweep_hit.distance,
                 position: &mut position,
                 velocity: &mut velocity,
-            }) {
+            });
+
+            if hit_response == MoveAndSlideHitResponse::Accept {
                 planes.push(Dir::new_unchecked(sweep_hit.normal1.f32()));
+            } else if hit_response == MoveAndSlideHitResponse::Abort {
+                break;
             }
 
             // Collect contact planes.
+            let mut aborted = false;
             self.intersections(
                 shape,
                 position,
@@ -573,7 +599,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                     }
 
                     // Call the user-defined hit callback.
-                    if !on_hit(MoveAndSlideHitData {
+                    let hit_response = on_hit(MoveAndSlideHitData {
                         entity: sweep_hit.entity,
                         point: contact_point.point,
                         normal: &mut normal,
@@ -581,19 +607,29 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                         distance: sweep_hit.distance,
                         position: &mut position,
                         velocity: &mut velocity,
-                    }) {
-                        return false;
+                    });
+
+                    match hit_response {
+                        MoveAndSlideHitResponse::Accept => {
+                            // Add the contact plane for velocity clipping.
+                            planes.push(normal);
+                            true
+                        }
+                        MoveAndSlideHitResponse::Ignore => true,
+                        MoveAndSlideHitResponse::Abort => {
+                            aborted = true;
+                            false
+                        }
                     }
-
-                    // Add the contact plane for velocity clipping.
-                    planes.push(normal);
-
-                    true
                 },
             );
 
             // Project velocity to slide along contact planes.
             velocity = Self::project_velocity(velocity, &planes);
+
+            if aborted {
+                break;
+            }
         }
 
         // Final depenetration pass
@@ -1045,7 +1081,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             .query_pipeline
             .aabb_intersections_with_aabb(expanded_aabb);
 
-        for intersection_entity in aabb_intersections {
+        'outer: for intersection_entity in aabb_intersections {
             let Ok((intersection_collider, intersection_pos, intersection_rot, layers)) =
                 self.colliders.get(intersection_entity)
             else {
@@ -1072,7 +1108,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 };
 
                 let normal = Dir::new_unchecked(-manifold.normal.f32());
-                callback(deepest, normal);
+
+                if !callback(deepest, normal) {
+                    // Abort further processing.
+                    break 'outer;
+                }
             }
         }
     }
