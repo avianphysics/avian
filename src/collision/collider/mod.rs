@@ -438,7 +438,7 @@ pub struct Sensor;
 pub struct ColliderAabb {
     /// The minimum point of the AABB.
     pub min: Vector,
-    /// The maximum point of thr AABB.
+    /// The maximum point of the AABB.
     pub max: Vector,
 }
 
