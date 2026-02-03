@@ -169,8 +169,6 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
         let position: Position = position.into();
         let rotation: Rotation = rotation.into();
 
-        let nalgebra_to_glam =
-            |points: &[_]| points.iter().map(|p| Vector::from(*p)).collect::<Vec<_>>();
         match collider.shape_scaled().as_typed_shape() {
             #[cfg(feature = "2d")]
             TypedShape::Ball(s) => {
@@ -191,7 +189,7 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
                         position.f32(),
                         Rot2::from_sin_cos(rotation.sin as f32, rotation.cos as f32),
                     ),
-                    2.0 * Vector::from(s.half_extents).f32(),
+                    2.0 * s.half_extents.f32(),
                     color,
                 );
             }
@@ -200,46 +198,26 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
                 use bevy_math::bounding::Aabb3d;
 
                 self.aabb_3d(
-                    Aabb3d::new(Vec3A::ZERO, Vector::from(s.half_extents).f32()),
+                    Aabb3d::new(Vec3A::ZERO, s.half_extents.f32()),
                     Transform::from_translation(position.f32()).with_rotation(rotation.f32()),
                     color,
                 );
             }
             #[cfg(feature = "2d")]
             TypedShape::Capsule(s) => {
-                self.draw_line_strip(
-                    nalgebra_to_glam(&s.to_polyline(32)),
-                    position,
-                    rotation,
-                    true,
-                    color,
-                );
+                self.draw_line_strip(s.to_polyline(32), position, rotation, true, color);
             }
             #[cfg(feature = "3d")]
             TypedShape::Capsule(s) => {
                 let (vertices, indices) = s.to_outline(32);
-                self.draw_polyline(
-                    &nalgebra_to_glam(&vertices),
-                    &indices,
-                    position,
-                    rotation,
-                    color,
-                );
+                self.draw_polyline(&vertices, &indices, position, rotation, color);
             }
-            TypedShape::Segment(s) => self.draw_line_strip(
-                vec![s.a.into(), s.b.into()],
-                position,
-                rotation,
-                false,
-                color,
-            ),
-            TypedShape::Triangle(s) => self.draw_line_strip(
-                vec![s.a.into(), s.b.into(), s.c.into()],
-                position,
-                rotation,
-                true,
-                color,
-            ),
+            TypedShape::Segment(s) => {
+                self.draw_line_strip(vec![s.a, s.b], position, rotation, false, color)
+            }
+            TypedShape::Triangle(s) => {
+                self.draw_line_strip(vec![s.a, s.b, s.c], position, rotation, true, color)
+            }
             TypedShape::TriMesh(s) => {
                 for tri in s.triangles() {
                     self.draw_collider(
@@ -250,13 +228,9 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
                     );
                 }
             }
-            TypedShape::Polyline(s) => self.draw_polyline(
-                &nalgebra_to_glam(s.vertices()),
-                s.indices(),
-                position,
-                rotation,
-                color,
-            ),
+            TypedShape::Polyline(s) => {
+                self.draw_polyline(s.vertices(), s.indices(), position, rotation, color)
+            }
             #[cfg(feature = "2d")]
             TypedShape::HalfSpace(s) => {
                 let basis = Vector::new(-s.normal.y, s.normal.x);
@@ -283,13 +257,7 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
                 let (vertices, indices) = v.to_polyline();
                 #[cfg(feature = "3d")]
                 let (vertices, indices) = v.to_outline();
-                self.draw_polyline(
-                    &nalgebra_to_glam(&vertices),
-                    &indices,
-                    position,
-                    rotation,
-                    color,
-                );
+                self.draw_polyline(&vertices, &indices, position, rotation, color);
             }
             TypedShape::HeightField(s) => {
                 #[cfg(feature = "2d")]
@@ -313,84 +281,48 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
             }
             TypedShape::Compound(s) => {
                 for (sub_pos, shape) in s.shapes() {
-                    let pos = Position(position.0 + rotation * Vector::from(sub_pos.translation));
+                    let pos = Position(position.0 + rotation * sub_pos.translation);
                     #[cfg(feature = "2d")]
                     let rot = rotation * Rotation::radians(sub_pos.rotation.angle());
                     #[cfg(feature = "3d")]
-                    let rot = Rotation((rotation.mul_quat(sub_pos.rotation.into())).normalize());
+                    let rot = Rotation((rotation.mul_quat(sub_pos.rotation)).normalize());
                     self.draw_collider(&Collider::from(shape.to_owned()), pos, rot, color);
                 }
             }
             #[cfg(feature = "2d")]
             TypedShape::ConvexPolygon(s) => {
-                self.draw_line_strip(
-                    nalgebra_to_glam(s.points()),
-                    position,
-                    rotation,
-                    true,
-                    color,
-                );
+                self.draw_line_strip(s.points().to_vec(), position, rotation, true, color);
             }
             #[cfg(feature = "3d")]
             TypedShape::ConvexPolyhedron(s) => {
                 let indices = s
                     .edges()
                     .iter()
-                    .map(|e| [e.vertices.x, e.vertices.y])
+                    .map(|e| [e.vertices[0], e.vertices[1]])
                     .collect::<Vec<_>>();
-                self.draw_polyline(
-                    &nalgebra_to_glam(s.points()),
-                    &indices,
-                    position,
-                    rotation,
-                    color,
-                );
+                self.draw_polyline(s.points(), &indices, position, rotation, color);
             }
             #[cfg(feature = "3d")]
             TypedShape::Cylinder(s) => {
                 let (vertices, indices) = s.to_outline(32);
-                self.draw_polyline(
-                    &nalgebra_to_glam(&vertices),
-                    &indices,
-                    position,
-                    rotation,
-                    color,
-                );
+                self.draw_polyline(&vertices, &indices, position, rotation, color);
             }
             #[cfg(feature = "3d")]
             TypedShape::Cone(s) => {
                 let (vertices, indices) = s.to_outline(32);
-                self.draw_polyline(
-                    &nalgebra_to_glam(&vertices),
-                    &indices,
-                    position,
-                    rotation,
-                    color,
-                );
+                self.draw_polyline(&vertices, &indices, position, rotation, color);
             }
             // ------------
             // Round shapes
             // ------------
             #[cfg(feature = "2d")]
             TypedShape::RoundCuboid(s) => {
-                self.draw_line_strip(
-                    nalgebra_to_glam(&s.to_polyline(32)),
-                    position,
-                    rotation,
-                    true,
-                    color,
-                );
+                self.draw_line_strip(s.to_polyline(32), position, rotation, true, color);
             }
             #[cfg(feature = "3d")]
             TypedShape::RoundCuboid(s) => {
                 let (vertices, indices) = s.to_outline(32);
-                self.draw_polyline(
-                    &nalgebra_to_glam(&vertices),
-                    &indices,
-                    position,
-                    rotation,
-                    color,
-                );
+                self.draw_polyline(&vertices, &indices, position, rotation, color);
             }
             TypedShape::RoundTriangle(s) => {
                 // Parry doesn't have a method for the rounded outline, so we have to just use a normal triangle
@@ -404,46 +336,22 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
             }
             #[cfg(feature = "2d")]
             TypedShape::RoundConvexPolygon(s) => {
-                self.draw_line_strip(
-                    nalgebra_to_glam(&s.to_polyline(32)),
-                    position,
-                    rotation,
-                    true,
-                    color,
-                );
+                self.draw_line_strip(s.to_polyline(32), position, rotation, true, color);
             }
             #[cfg(feature = "3d")]
             TypedShape::RoundConvexPolyhedron(s) => {
                 let (vertices, indices) = s.to_outline(32);
-                self.draw_polyline(
-                    &nalgebra_to_glam(&vertices),
-                    &indices,
-                    position,
-                    rotation,
-                    color,
-                );
+                self.draw_polyline(&vertices, &indices, position, rotation, color);
             }
             #[cfg(feature = "3d")]
             TypedShape::RoundCylinder(s) => {
                 let (vertices, indices) = s.to_outline(32, 32);
-                self.draw_polyline(
-                    &nalgebra_to_glam(&vertices),
-                    &indices,
-                    position,
-                    rotation,
-                    color,
-                );
+                self.draw_polyline(&vertices, &indices, position, rotation, color);
             }
             #[cfg(feature = "3d")]
             TypedShape::RoundCone(s) => {
                 let (vertices, indices) = s.to_outline(32, 32);
-                self.draw_polyline(
-                    &nalgebra_to_glam(&vertices),
-                    &indices,
-                    position,
-                    rotation,
-                    color,
-                );
+                self.draw_polyline(&vertices, &indices, position, rotation, color);
             }
             TypedShape::Custom(_id) => {
                 #[cfg(feature = "2d")]

@@ -275,8 +275,8 @@ impl RayCaster {
             }
         } else {
             let ray = parry::query::Ray::new(
-                self.global_origin().into(),
-                self.global_direction().adjust_precision().into(),
+                self.global_origin(),
+                self.global_direction().adjust_precision(),
             );
 
             let found_hits = query_pipeline
@@ -290,7 +290,7 @@ impl RayCaster {
                     }
 
                     let hit = proxy.collider.shape_scaled().cast_ray_and_get_normal(
-                        &proxy.isometry,
+                        &proxy.pose,
                         &ray,
                         self.max_distance,
                         self.solid,
@@ -299,7 +299,7 @@ impl RayCaster {
                     Some(RayHitData {
                         entity: proxy.entity,
                         distance: hit.time_of_impact,
-                        normal: hit.normal.into(),
+                        normal: hit.normal,
                     })
                 })
                 .take(self.max_hits as usize);

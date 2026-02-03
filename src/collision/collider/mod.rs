@@ -476,8 +476,8 @@ impl ColliderAabb {
     pub fn from_shape(shape: &crate::parry::shape::SharedShape) -> Self {
         let aabb = shape.compute_local_aabb();
         Self {
-            min: aabb.mins.into(),
-            max: aabb.maxs.into(),
+            min: aabb.mins,
+            max: aabb.maxs,
         }
     }
 

@@ -259,14 +259,10 @@ impl TrimeshBuilder {
                     Trimesh::default(),
                     move |mut compound_trimesh, (sub_pos, shape)| {
                         sub_builder.shape = shape.clone();
-                        sub_builder.position = Position(
-                            self.position.0 + self.rotation * Vector::from(sub_pos.translation),
-                        );
-                        sub_builder.rotation = self
-                            .rotation
-                            .mul_quat(sub_pos.rotation.into())
-                            .normalize()
-                            .into();
+                        sub_builder.position =
+                            Position(self.position.0 + self.rotation * sub_pos.translation);
+                        sub_builder.rotation =
+                            self.rotation.mul_quat(sub_pos.rotation).normalize().into();
                         let trimesh = match sub_builder.build() {
                             Ok(trimesh) => trimesh,
                             Err(error) => {
@@ -326,7 +322,7 @@ impl TrimeshBuilder {
         Ok(Trimesh {
             vertices: vertices
                 .into_iter()
-                .map(|v| pos.0 + Vector::from(self.rotation * Vector::from(v)))
+                .map(|v| pos.0 + self.rotation * v)
                 .collect(),
             indices,
         })

@@ -72,8 +72,8 @@ pub fn contact(
 ) -> Result<Option<SingleContact>, UnsupportedShape> {
     let rotation1: Rotation = rotation1.into();
     let rotation2: Rotation = rotation2.into();
-    let isometry1 = make_isometry(position1.into(), rotation1);
-    let isometry2 = make_isometry(position2.into(), rotation2);
+    let isometry1 = make_pose(position1, rotation1);
+    let isometry2 = make_pose(position2, rotation2);
 
     parry::query::contact(
         &isometry1,
@@ -85,10 +85,10 @@ pub fn contact(
     .map(|contact| {
         if let Some(contact) = contact {
             // Transform contact data into local space
-            let point1: Vector = rotation1.inverse() * Vector::from(contact.point1);
-            let point2: Vector = rotation2.inverse() * Vector::from(contact.point2);
-            let normal1: Vector = (rotation1.inverse() * Vector::from(contact.normal1)).normalize();
-            let normal2: Vector = (rotation2.inverse() * Vector::from(contact.normal2)).normalize();
+            let point1: Vector = rotation1.inverse() * contact.point1;
+            let point2: Vector = rotation2.inverse() * contact.point2;
+            let normal1: Vector = (rotation1.inverse() * contact.normal1).normalize();
+            let normal2: Vector = (rotation2.inverse() * contact.normal2).normalize();
 
             // Make sure the normals are valid
             if !normal1.is_normalized() || !normal2.is_normalized() {
@@ -167,8 +167,8 @@ pub fn contact_manifolds(
     let position2: Position = position2.into();
     let rotation1: Rotation = rotation1.into();
     let rotation2: Rotation = rotation2.into();
-    let isometry1 = make_isometry(position1, rotation1);
-    let isometry2 = make_isometry(position2, rotation2);
+    let isometry1 = make_pose(position1, rotation1);
+    let isometry2 = make_pose(position2, rotation2);
     let isometry12 = isometry1.inv_mul(&isometry2);
 
     // TODO: Reuse manifolds from previous frame to improve performance
@@ -199,14 +199,14 @@ pub fn contact_manifolds(
             prediction_distance,
         )
     {
-        let normal = rotation1 * Vector::from(contact.normal1);
+        let normal = rotation1 * contact.normal1;
 
         // Make sure the normal is valid
         if !normal.is_normalized() {
             return;
         }
 
-        let local_point1: Vector = contact.point1.into();
+        let local_point1: Vector = contact.point1;
 
         // The contact point is the midpoint of the two points in world space.
         // The anchors are relative to the positions of the colliders.
@@ -231,11 +231,7 @@ pub fn contact_manifolds(
         }
 
         let subpos1 = manifold.subshape_pos1.unwrap_or_default();
-        let local_normal: Vector = subpos1
-            .rotation
-            .transform_vector(&manifold.local_n1)
-            .normalize()
-            .into();
+        let local_normal: Vector = (subpos1.rotation * manifold.local_n1).normalize();
         let normal = rotation1 * local_normal;
 
         // Make sure the normal is valid
@@ -246,7 +242,7 @@ pub fn contact_manifolds(
         let points = manifold.contacts().iter().map(|contact| {
             // The contact point is the midpoint of the two points in world space.
             // The anchors are relative to the positions of the colliders.
-            let point1 = rotation1 * Vector::from(subpos1.transform_point(&contact.local_p1));
+            let point1 = rotation1 * subpos1.transform_point(contact.local_p1);
             let anchor1 = point1 + normal * contact.dist * 0.5;
             let anchor2 = anchor1 + (position1.0 - position2.0);
             let world_point = position1.0 + anchor1;
@@ -355,8 +351,8 @@ pub fn closest_points(
 ) -> Result<ClosestPoints, UnsupportedShape> {
     let rotation1: Rotation = rotation1.into();
     let rotation2: Rotation = rotation2.into();
-    let isometry1 = make_isometry(position1.into(), rotation1);
-    let isometry2 = make_isometry(position2.into(), rotation2);
+    let isometry1 = make_pose(position1, rotation1);
+    let isometry2 = make_pose(position2, rotation2);
 
     parry::query::closest_points(
         &isometry1,
@@ -368,7 +364,7 @@ pub fn closest_points(
     .map(|closest_points| match closest_points {
         parry::query::ClosestPoints::Intersecting => ClosestPoints::Intersecting,
         parry::query::ClosestPoints::WithinMargin(point1, point2) => {
-            ClosestPoints::WithinMargin(point1.into(), point2.into())
+            ClosestPoints::WithinMargin(point1, point2)
         }
         parry::query::ClosestPoints::Disjoint => ClosestPoints::OutsideMargin,
     })
@@ -432,8 +428,8 @@ pub fn distance(
 ) -> Result<Scalar, UnsupportedShape> {
     let rotation1: Rotation = rotation1.into();
     let rotation2: Rotation = rotation2.into();
-    let isometry1 = make_isometry(position1.into(), rotation1);
-    let isometry2 = make_isometry(position2.into(), rotation2);
+    let isometry1 = make_pose(position1, rotation1);
+    let isometry2 = make_pose(position2, rotation2);
 
     parry::query::distance(
         &isometry1,
@@ -500,8 +496,8 @@ pub fn intersection_test(
 ) -> Result<bool, UnsupportedShape> {
     let rotation1: Rotation = rotation1.into();
     let rotation2: Rotation = rotation2.into();
-    let isometry1 = make_isometry(position1.into(), rotation1);
-    let isometry2 = make_isometry(position2.into(), rotation2);
+    let isometry1 = make_pose(position1, rotation1);
+    let isometry2 = make_pose(position2, rotation2);
 
     parry::query::intersection_test(
         &isometry1,
@@ -588,15 +584,15 @@ pub fn time_of_impact(
     let velocity1: LinearVelocity = velocity1.into();
     let velocity2: LinearVelocity = velocity2.into();
 
-    let isometry1 = make_isometry(position1.into(), rotation1);
-    let isometry2 = make_isometry(position2.into(), rotation2);
+    let isometry1 = make_pose(position1, rotation1);
+    let isometry2 = make_pose(position2, rotation2);
 
     parry::query::cast_shapes(
         &isometry1,
-        &velocity1.0.into(),
+        velocity1.0,
         collider1.shape_scaled().0.as_ref(),
         &isometry2,
-        &velocity2.0.into(),
+        velocity2.0,
         collider2.shape_scaled().0.as_ref(),
         ShapeCastOptions {
             max_time_of_impact,
@@ -607,10 +603,10 @@ pub fn time_of_impact(
     .map(|toi| {
         toi.map(|toi| TimeOfImpact {
             time_of_impact: toi.time_of_impact,
-            point1: toi.witness1.into(),
-            point2: toi.witness2.into(),
-            normal1: toi.normal1.into(),
-            normal2: toi.normal2.into(),
+            point1: toi.witness1,
+            point2: toi.witness2,
+            normal1: toi.normal1,
+            normal2: toi.normal2,
             status: toi.status,
         })
     })

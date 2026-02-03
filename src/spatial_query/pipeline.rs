@@ -4,7 +4,7 @@ use crate::prelude::*;
 use bevy::prelude::*;
 use parry::{
     bounding_volume::{Aabb, BoundingVolume},
-    math::Isometry,
+    math::Pose,
     partitioning::{Bvh, BvhBuildStrategy, BvhNode},
     query::{
         DefaultQueryDispatcher, QueryDispatcher, RayCast, ShapeCastOptions,
@@ -18,7 +18,7 @@ use parry::{
 #[derive(Clone)]
 pub(crate) struct BvhProxyData {
     pub entity: Entity,
-    pub isometry: Isometry<Scalar>,
+    pub pose: Pose,
     pub collider: Collider,
     pub layers: CollisionLayers,
 }
@@ -109,7 +109,7 @@ impl SpatialQueryPipeline {
             colliders.map(
                 |(entity, position, rotation, collider, layers)| BvhProxyData {
                     entity,
-                    isometry: make_isometry(position.0, *rotation),
+                    pose: make_pose(position.0, *rotation),
                     collider: collider.clone(),
                     layers: *layers,
                 },
@@ -122,12 +122,11 @@ impl SpatialQueryPipeline {
         self.proxies.clear();
         self.proxies.extend(proxies);
 
-        let aabbs = self.proxies.iter().enumerate().map(|(i, proxy)| {
-            (
-                i,
-                proxy.collider.shape_scaled().compute_aabb(&proxy.isometry),
-            )
-        });
+        let aabbs = self
+            .proxies
+            .iter()
+            .enumerate()
+            .map(|(i, proxy)| (i, proxy.collider.shape_scaled().compute_aabb(&proxy.pose)));
 
         self.bvh = Bvh::from_iter(BvhBuildStrategy::Binned, aabbs);
     }
@@ -199,14 +198,14 @@ impl SpatialQueryPipeline {
     ) -> Option<RayHitData> {
         let composite = self.as_composite_shape_with_predicate(filter, predicate);
         let pipeline_shape = CompositeShapeRef(&composite);
-        let ray = parry::query::Ray::new(origin.into(), direction.adjust_precision().into());
+        let ray = parry::query::Ray::new(origin, direction.adjust_precision());
 
         pipeline_shape
             .cast_local_ray_and_get_normal(&ray, max_distance, solid)
             .map(|(index, hit)| RayHitData {
                 entity: self.proxies[index as usize].entity,
                 distance: hit.time_of_impact,
-                normal: hit.normal.into(),
+                normal: hit.normal,
             })
     }
 
@@ -279,7 +278,7 @@ impl SpatialQueryPipeline {
     ) {
         let proxies = &self.proxies;
 
-        let ray = parry::query::Ray::new(origin.into(), direction.adjust_precision().into());
+        let ray = parry::query::Ray::new(origin, direction.adjust_precision());
 
         let hits = self
             .bvh
@@ -292,7 +291,7 @@ impl SpatialQueryPipeline {
                 }
 
                 let hit = proxy.collider.shape_scaled().cast_ray_and_get_normal(
-                    &proxy.isometry,
+                    &proxy.pose,
                     &ray,
                     max_distance,
                     solid,
@@ -301,7 +300,7 @@ impl SpatialQueryPipeline {
                 Some(RayHitData {
                     entity: proxy.entity,
                     distance: hit.time_of_impact,
-                    normal: hit.normal.into(),
+                    normal: hit.normal,
                 })
             });
 
@@ -393,8 +392,8 @@ impl SpatialQueryPipeline {
             rotation = Rotation::from(shape_rotation);
         }
 
-        let shape_isometry = make_isometry(origin, rotation);
-        let shape_direction = direction.adjust_precision().into();
+        let shape_isometry = make_pose(origin, rotation);
+        let shape_direction = direction.adjust_precision();
         let composite = self.as_composite_shape_with_predicate(filter, predicate);
         let pipeline_shape = CompositeShapeRef(&composite);
 
@@ -402,7 +401,7 @@ impl SpatialQueryPipeline {
             .cast_shape(
                 self.dispatcher.as_ref(),
                 &shape_isometry,
-                &shape_direction,
+                shape_direction,
                 shape.shape_scaled().as_ref(),
                 ShapeCastOptions {
                     max_time_of_impact: config.max_distance,
@@ -414,10 +413,10 @@ impl SpatialQueryPipeline {
             .map(|(index, hit)| ShapeHitData {
                 entity: self.proxies[index as usize].entity,
                 distance: hit.time_of_impact,
-                point1: hit.witness1.into(),
-                point2: hit.witness2.into(),
-                normal1: hit.normal1.into(),
-                normal2: hit.normal2.into(),
+                point1: hit.witness1,
+                point2: hit.witness2,
+                normal1: hit.normal1,
+                normal2: hit.normal2,
             })
     }
 
@@ -518,8 +517,8 @@ impl SpatialQueryPipeline {
             rotation = Rotation::from(shape_rotation);
         }
 
-        let shape_isometry = make_isometry(origin, rotation);
-        let shape_direction = direction.adjust_precision().into();
+        let shape_isometry = make_pose(origin, rotation);
+        let shape_direction = direction.adjust_precision();
 
         loop {
             let composite = self.as_composite_shape_internal(&query_filter);
@@ -529,17 +528,17 @@ impl SpatialQueryPipeline {
                 .cast_shape(
                     self.dispatcher.as_ref(),
                     &shape_isometry,
-                    &shape_direction,
+                    shape_direction,
                     shape.shape_scaled().as_ref(),
                     shape_cast_options,
                 )
                 .map(|(index, hit)| ShapeHitData {
                     entity: self.proxies[index as usize].entity,
                     distance: hit.time_of_impact,
-                    point1: hit.witness1.into(),
-                    point2: hit.witness2.into(),
-                    normal1: hit.normal1.into(),
-                    normal2: hit.normal2.into(),
+                    point1: hit.witness1,
+                    point2: hit.witness2,
+                    normal1: hit.normal1,
+                    normal2: hit.normal2,
                 });
 
             if let Some(hit) = hit {
@@ -601,15 +600,14 @@ impl SpatialQueryPipeline {
             return None;
         }
 
-        let point = point.into();
         let composite = self.as_composite_shape_with_predicate(filter, predicate);
         let pipeline_shape = CompositeShapeRef(&composite);
 
-        let (index, projection) = pipeline_shape.project_local_point(&point, solid);
+        let (index, projection) = pipeline_shape.project_local_point(point, solid);
 
         Some(PointProjection {
             entity: self.proxies[index as usize].entity,
-            point: projection.point.into(),
+            point: projection.point,
             is_inside: projection.is_inside,
         })
     }
@@ -655,11 +653,9 @@ impl SpatialQueryPipeline {
         filter: &SpatialQueryFilter,
         mut callback: impl FnMut(Entity) -> bool,
     ) {
-        let point = point.into();
-
         let intersecting_entities = self
             .bvh
-            .leaves(|node: &BvhNode| node.aabb().contains_local_point(&point))
+            .leaves(|node: &BvhNode| node.aabb().contains_local_point(point))
             .filter_map(move |leaf| {
                 let proxy = self.proxies.get(leaf as usize)?;
 
@@ -667,7 +663,7 @@ impl SpatialQueryPipeline {
                     && proxy
                         .collider
                         .shape_scaled()
-                        .contains_point(&proxy.isometry, &point)
+                        .contains_point(&proxy.pose, point)
                 {
                     Some(proxy.entity)
                 } else {
@@ -712,8 +708,8 @@ impl SpatialQueryPipeline {
         mut callback: impl FnMut(Entity) -> bool,
     ) {
         let aabb = Aabb {
-            mins: aabb.min.into(),
-            maxs: aabb.max.into(),
+            mins: aabb.min,
+            maxs: aabb.max,
         };
 
         let intersecting_entities = self
@@ -790,7 +786,7 @@ impl SpatialQueryPipeline {
             rotation = Rotation::from(shape_rotation);
         }
 
-        let shape_isometry = make_isometry(shape_position, rotation);
+        let shape_isometry = make_pose(shape_position, rotation);
         let inverse_shape_isometry = shape_isometry.inverse();
 
         let dispatcher = &*self.dispatcher;
@@ -806,7 +802,7 @@ impl SpatialQueryPipeline {
                     return None;
                 }
 
-                let isometry = inverse_shape_isometry * proxy.isometry;
+                let isometry = inverse_shape_isometry * proxy.pose;
                 let intersects = dispatcher
                     .intersection_test(
                         &isometry,
@@ -835,7 +831,7 @@ impl CompositeShape for QueryPipelineAsCompositeShape<'_> {
     fn map_part_at(
         &self,
         shape_id: u32,
-        f: &mut dyn FnMut(Option<&Isometry<Scalar>>, &dyn Shape, Option<&dyn NormalConstraints>),
+        f: &mut dyn FnMut(Option<&Pose>, &dyn Shape, Option<&dyn NormalConstraints>),
     ) {
         self.map_untyped_part_at(shape_id, f);
     }
@@ -852,17 +848,13 @@ impl TypedCompositeShape for QueryPipelineAsCompositeShape<'_> {
     fn map_typed_part_at<T>(
         &self,
         shape_id: u32,
-        mut f: impl FnMut(
-            Option<&Isometry<Scalar>>,
-            &Self::PartShape,
-            Option<&Self::PartNormalConstraints>,
-        ) -> T,
+        mut f: impl FnMut(Option<&Pose>, &Self::PartShape, Option<&Self::PartNormalConstraints>) -> T,
     ) -> Option<T> {
         let proxy = self.pipeline.proxies.get(shape_id as usize)?;
 
         if self.query_filter.test(proxy.entity, proxy.layers) {
             Some(f(
-                Some(&proxy.isometry),
+                Some(&proxy.pose),
                 proxy.collider.shape_scaled().as_ref(),
                 None,
             ))
@@ -874,13 +866,13 @@ impl TypedCompositeShape for QueryPipelineAsCompositeShape<'_> {
     fn map_untyped_part_at<T>(
         &self,
         shape_id: u32,
-        mut f: impl FnMut(Option<&Isometry<Scalar>>, &dyn Shape, Option<&dyn NormalConstraints>) -> T,
+        mut f: impl FnMut(Option<&Pose>, &dyn Shape, Option<&dyn NormalConstraints>) -> T,
     ) -> Option<T> {
         let proxy = self.pipeline.proxies.get(shape_id as usize)?;
 
         if self.query_filter.test(proxy.entity, proxy.layers) {
             Some(f(
-                Some(&proxy.isometry),
+                Some(&proxy.pose),
                 proxy.collider.shape_scaled().as_ref(),
                 None,
             ))
@@ -900,7 +892,7 @@ impl CompositeShape for QueryPipelineAsCompositeShapeWithPredicate<'_, '_> {
     fn map_part_at(
         &self,
         shape_id: u32,
-        f: &mut dyn FnMut(Option<&Isometry<Scalar>>, &dyn Shape, Option<&dyn NormalConstraints>),
+        f: &mut dyn FnMut(Option<&Pose>, &dyn Shape, Option<&dyn NormalConstraints>),
     ) {
         self.map_untyped_part_at(shape_id, f);
     }
@@ -917,18 +909,14 @@ impl TypedCompositeShape for QueryPipelineAsCompositeShapeWithPredicate<'_, '_> 
     fn map_typed_part_at<T>(
         &self,
         shape_id: u32,
-        mut f: impl FnMut(
-            Option<&Isometry<Scalar>>,
-            &Self::PartShape,
-            Option<&Self::PartNormalConstraints>,
-        ) -> T,
+        mut f: impl FnMut(Option<&Pose>, &Self::PartShape, Option<&Self::PartNormalConstraints>) -> T,
     ) -> Option<T> {
         if let Some(proxy) = self.pipeline.proxies.get(shape_id as usize)
             && self.query_filter.test(proxy.entity, proxy.layers)
             && (self.predicate)(proxy.entity)
         {
             Some(f(
-                Some(&proxy.isometry),
+                Some(&proxy.pose),
                 proxy.collider.shape_scaled().as_ref(),
                 None,
             ))
@@ -940,14 +928,14 @@ impl TypedCompositeShape for QueryPipelineAsCompositeShapeWithPredicate<'_, '_> 
     fn map_untyped_part_at<T>(
         &self,
         shape_id: u32,
-        mut f: impl FnMut(Option<&Isometry<Scalar>>, &dyn Shape, Option<&dyn NormalConstraints>) -> T,
+        mut f: impl FnMut(Option<&Pose>, &dyn Shape, Option<&dyn NormalConstraints>) -> T,
     ) -> Option<T> {
         if let Some(proxy) = self.pipeline.proxies.get(shape_id as usize)
             && self.query_filter.test(proxy.entity, proxy.layers)
             && (self.predicate)(proxy.entity)
         {
             Some(f(
-                Some(&proxy.isometry),
+                Some(&proxy.pose),
                 proxy.collider.shape_scaled().as_ref(),
                 None,
             ))

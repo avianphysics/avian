@@ -601,8 +601,8 @@ fn solve_swept_ccd(
                     continue;
                 }
 
-                let iso1 = make_isometry(prev_pos1, prev_rot1);
-                let iso2 = make_isometry(prev_pos2, prev_rot2);
+                let iso1 = make_pose(prev_pos1, prev_rot1);
+                let iso2 = make_pose(prev_pos2, prev_rot2);
 
                 // TODO: Support child colliders
                 let motion1 = NonlinearRigidMotion::new(
@@ -701,10 +701,10 @@ fn compute_ccd_toi(
     if mode == SweepMode::Linear {
         let hit = cast_shapes(
             &motion1.start,
-            &motion1.linvel,
+            motion1.linvel,
             collider1.shape_scaled().as_ref(),
             &motion2.start,
-            &motion2.linvel,
+            motion2.linvel,
             collider2.shape_scaled().as_ref(),
             ShapeCastOptions {
                 max_time_of_impact: min_toi,
@@ -722,10 +722,10 @@ fn compute_ccd_toi(
             // around the centroid of the first body.
             let hit = cast_shapes(
                 &motion1.start,
-                &motion1.linvel,
+                motion1.linvel,
                 collider1.shape_scaled().as_ref(),
                 &motion2.start,
-                &motion2.linvel,
+                motion2.linvel,
                 &parry::shape::Ball::new(prediction_distance),
                 ShapeCastOptions {
                     max_time_of_impact: min_toi,

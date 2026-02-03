@@ -366,8 +366,8 @@ impl ShapeCaster {
             shape_rotation = Rotation::from(self.global_shape_rotation());
         }
 
-        let shape_isometry = make_isometry(self.global_origin(), shape_rotation);
-        let shape_direction = self.global_direction().adjust_precision().into();
+        let shape_isometry = make_pose(self.global_origin(), shape_rotation);
+        let shape_direction = self.global_direction().adjust_precision();
 
         while hits.len() < self.max_hits as usize {
             let composite = query_pipeline.as_composite_shape_internal(&query_filter);
@@ -377,17 +377,17 @@ impl ShapeCaster {
                 .cast_shape(
                     query_pipeline.dispatcher.as_ref(),
                     &shape_isometry,
-                    &shape_direction,
+                    shape_direction,
                     self.shape.shape_scaled().as_ref(),
                     shape_cast_options,
                 )
                 .map(|(index, hit)| ShapeHitData {
                     entity: query_pipeline.proxies[index as usize].entity,
                     distance: hit.time_of_impact,
-                    point1: hit.witness1.into(),
-                    point2: hit.witness2.into(),
-                    normal1: hit.normal1.into(),
-                    normal2: hit.normal2.into(),
+                    point1: hit.witness1,
+                    point2: hit.witness2,
+                    normal1: hit.normal1,
+                    normal2: hit.normal2,
                 });
 
             if let Some(hit) = hit {

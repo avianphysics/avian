@@ -3,10 +3,9 @@ use crate::{AdjustPrecision, FRAC_PI_2, PI, Scalar, TAU, Vector, math};
 use super::{AsF32, Collider, IntoCollider};
 use bevy::prelude::{Deref, DerefMut};
 use bevy_math::{bounding::Bounded2d, prelude::*};
-use nalgebra::{Point2, UnitVector2, Vector2};
 use parry::{
     mass_properties::MassProperties,
-    math::Isometry,
+    math::Pose,
     query::{
         PointQuery, RayCast, details::local_ray_intersection_with_support_map_with_params,
         gjk::VoronoiSimplex, point::local_point_projection_on_support_map,
@@ -38,10 +37,10 @@ pub struct EllipseColliderShape(pub Ellipse);
 
 impl SupportMap for EllipseColliderShape {
     #[inline]
-    fn local_support_point(&self, direction: &Vector2<Scalar>) -> Point2<Scalar> {
+    fn local_support_point(&self, direction: Vector) -> Vector {
         let [a, b] = self.half_size.adjust_precision().to_array();
         let denom = (direction.x.powi(2) * a * a + direction.y.powi(2) * b * b).sqrt();
-        Point2::new(a * a * direction.x / denom, b * b * direction.y / denom)
+        Vector::new(a * a * direction.x / denom, b * b * direction.y / denom)
     }
 }
 
@@ -52,10 +51,10 @@ impl Shape for EllipseColliderShape {
 
     fn scale_dyn(
         &self,
-        scale: &parry::math::Vector<Scalar>,
+        scale: Vector,
         _num_subdivisions: u32,
     ) -> Option<Box<dyn parry::shape::Shape>> {
-        let half_size = Vector::from(*scale).f32() * self.half_size;
+        let half_size = scale.f32() * self.half_size;
         Some(Box::new(EllipseColliderShape(Ellipse::new(
             half_size.x,
             half_size.y,
@@ -64,37 +63,28 @@ impl Shape for EllipseColliderShape {
 
     fn compute_local_aabb(&self) -> parry::bounding_volume::Aabb {
         let aabb = self.aabb_2d(Isometry2d::IDENTITY);
-        parry::bounding_volume::Aabb::new(
-            aabb.min.adjust_precision().into(),
-            aabb.max.adjust_precision().into(),
-        )
+        parry::bounding_volume::Aabb::new(aabb.min.adjust_precision(), aabb.max.adjust_precision())
     }
 
-    fn compute_aabb(&self, position: &Isometry<Scalar>) -> parry::bounding_volume::Aabb {
-        let isometry = math::na_iso_to_iso(position);
+    fn compute_aabb(&self, position: &Pose) -> parry::bounding_volume::Aabb {
+        let isometry = math::pose_to_isometry(position);
         let aabb = self.aabb_2d(isometry);
-        parry::bounding_volume::Aabb::new(
-            aabb.min.adjust_precision().into(),
-            aabb.max.adjust_precision().into(),
-        )
+        parry::bounding_volume::Aabb::new(aabb.min.adjust_precision(), aabb.max.adjust_precision())
     }
 
     fn compute_local_bounding_sphere(&self) -> parry::bounding_volume::BoundingSphere {
         let sphere = self.bounding_circle(Isometry2d::IDENTITY);
         parry::bounding_volume::BoundingSphere::new(
-            sphere.center.adjust_precision().into(),
+            sphere.center.adjust_precision(),
             sphere.radius().adjust_precision(),
         )
     }
 
-    fn compute_bounding_sphere(
-        &self,
-        position: &Isometry<Scalar>,
-    ) -> parry::bounding_volume::BoundingSphere {
-        let isometry = math::na_iso_to_iso(position);
+    fn compute_bounding_sphere(&self, position: &Pose) -> parry::bounding_volume::BoundingSphere {
+        let isometry = math::pose_to_isometry(position);
         let sphere = self.bounding_circle(isometry);
         parry::bounding_volume::BoundingSphere::new(
-            sphere.center.adjust_precision().into(),
+            sphere.center.adjust_precision(),
             sphere.radius().adjust_precision(),
         )
     }
@@ -107,7 +97,7 @@ impl Shape for EllipseColliderShape {
         let volume = self.area().adjust_precision();
         let mass = volume * density;
         let inertia = mass * self.half_size.length_squared().adjust_precision() / 4.0;
-        MassProperties::new(Point2::origin(), mass, inertia)
+        MassProperties::new(Vector::ZERO, mass, inertia)
     }
 
     fn is_convex(&self) -> bool {
@@ -153,17 +143,13 @@ impl RayCast for EllipseColliderShape {
 }
 
 impl PointQuery for EllipseColliderShape {
-    fn project_local_point(
-        &self,
-        pt: &parry::math::Point<Scalar>,
-        solid: bool,
-    ) -> parry::query::PointProjection {
+    fn project_local_point(&self, pt: Vector, solid: bool) -> parry::query::PointProjection {
         local_point_projection_on_support_map(self, &mut VoronoiSimplex::new(), pt, solid)
     }
 
     fn project_local_point_and_get_feature(
         &self,
-        pt: &parry::math::Point<Scalar>,
+        pt: Vector,
     ) -> (parry::query::PointProjection, parry::shape::FeatureId) {
         (self.project_local_point(pt, false), FeatureId::Unknown)
     }
@@ -245,7 +231,7 @@ pub struct RegularPolygonColliderShape(pub RegularPolygon);
 
 impl SupportMap for RegularPolygonColliderShape {
     #[inline]
-    fn local_support_point(&self, direction: &Vector2<Scalar>) -> Point2<Scalar> {
+    fn local_support_point(&self, direction: Vector) -> Vector {
         // TODO: For polygons with a small number of sides, maybe just iterating
         //       through the vertices and comparing dot products is faster?
 
@@ -254,9 +240,9 @@ impl SupportMap for RegularPolygonColliderShape {
 
         // Counterclockwise
         let angle_from_top = if direction.x < 0.0 {
-            -Vector::from(*direction).angle_to(Vector::Y)
+            -direction.angle_to(Vector::Y)
         } else {
-            TAU - Vector::from(*direction).angle_to(Vector::Y)
+            TAU - direction.angle_to(Vector::Y)
         };
 
         // How many rotations of `external_angle` correspond to the vertex closest to the support direction.
@@ -266,25 +252,21 @@ impl SupportMap for RegularPolygonColliderShape {
         let target_angle = n * external_angle + FRAC_PI_2;
 
         // Compute the vertex corresponding to the target angle on the unit circle.
-        Point2::from(circumradius * Vector::from_angle(target_angle))
+        circumradius * Vector::from_angle(target_angle)
     }
 }
 
 impl PolygonalFeatureMap for RegularPolygonColliderShape {
     #[inline]
-    fn local_support_feature(
-        &self,
-        direction: &UnitVector2<Scalar>,
-        out_feature: &mut PolygonalFeature,
-    ) {
+    fn local_support_feature(&self, direction: Vector, out_feature: &mut PolygonalFeature) {
         let external_angle = self.external_angle_radians().adjust_precision();
         let circumradius = self.circumradius().adjust_precision();
 
         // Counterclockwise
         let angle_from_top = if direction.x < 0.0 {
-            -Vector::from(*direction).angle_to(Vector::Y)
+            -direction.angle_to(Vector::Y)
         } else {
-            TAU - Vector::from(*direction).angle_to(Vector::Y)
+            TAU - direction.angle_to(Vector::Y)
         };
 
         // How many rotations of `external_angle` correspond to the vertices.
@@ -297,8 +279,8 @@ impl PolygonalFeatureMap for RegularPolygonColliderShape {
         let target_angle2 = n2 * external_angle + FRAC_PI_2;
 
         // Compute the vertices corresponding to the target angle on the unit circle.
-        let vertex1 = Point2::from(circumradius * Vector::from_angle(target_angle1));
-        let vertex2 = Point2::from(circumradius * Vector::from_angle(target_angle2));
+        let vertex1 = circumradius * Vector::from_angle(target_angle1);
+        let vertex2 = circumradius * Vector::from_angle(target_angle2);
 
         *out_feature = PolygonalFeature {
             vertices: [vertex1, vertex2],
@@ -319,10 +301,10 @@ impl Shape for RegularPolygonColliderShape {
 
     fn scale_dyn(
         &self,
-        scale: &parry::math::Vector<Scalar>,
+        scale: Vector,
         _num_subdivisions: u32,
     ) -> Option<Box<dyn parry::shape::Shape>> {
-        let circumradius = Vector::from(*scale).f32() * self.circumradius();
+        let circumradius = scale.f32() * self.circumradius();
         Some(Box::new(RegularPolygonColliderShape(RegularPolygon::new(
             circumradius.length(),
             self.sides,
@@ -331,37 +313,28 @@ impl Shape for RegularPolygonColliderShape {
 
     fn compute_local_aabb(&self) -> parry::bounding_volume::Aabb {
         let aabb = self.aabb_2d(Isometry2d::IDENTITY);
-        parry::bounding_volume::Aabb::new(
-            aabb.min.adjust_precision().into(),
-            aabb.max.adjust_precision().into(),
-        )
+        parry::bounding_volume::Aabb::new(aabb.min.adjust_precision(), aabb.max.adjust_precision())
     }
 
-    fn compute_aabb(&self, position: &Isometry<Scalar>) -> parry::bounding_volume::Aabb {
-        let isometry = math::na_iso_to_iso(position);
+    fn compute_aabb(&self, position: &Pose) -> parry::bounding_volume::Aabb {
+        let isometry = math::pose_to_isometry(position);
         let aabb = self.aabb_2d(isometry);
-        parry::bounding_volume::Aabb::new(
-            aabb.min.adjust_precision().into(),
-            aabb.max.adjust_precision().into(),
-        )
+        parry::bounding_volume::Aabb::new(aabb.min.adjust_precision(), aabb.max.adjust_precision())
     }
 
     fn compute_local_bounding_sphere(&self) -> parry::bounding_volume::BoundingSphere {
         let sphere = self.bounding_circle(Isometry2d::IDENTITY);
         parry::bounding_volume::BoundingSphere::new(
-            sphere.center.adjust_precision().into(),
+            sphere.center.adjust_precision(),
             sphere.radius().adjust_precision(),
         )
     }
 
-    fn compute_bounding_sphere(
-        &self,
-        position: &Isometry<Scalar>,
-    ) -> parry::bounding_volume::BoundingSphere {
-        let isometry = math::na_iso_to_iso(position);
+    fn compute_bounding_sphere(&self, position: &Pose) -> parry::bounding_volume::BoundingSphere {
+        let isometry = math::pose_to_isometry(position);
         let sphere = self.bounding_circle(isometry);
         parry::bounding_volume::BoundingSphere::new(
-            sphere.center.adjust_precision().into(),
+            sphere.center.adjust_precision(),
             sphere.radius().adjust_precision(),
         )
     }
@@ -378,7 +351,7 @@ impl Shape for RegularPolygonColliderShape {
         let angular_inertia = mass * self.circumradius().adjust_precision().powi(2) / 6.0
             * (1.0 + 2.0 * half_external_angle.cos().powi(2));
 
-        MassProperties::new(Point2::origin(), mass, angular_inertia)
+        MassProperties::new(Vector::ZERO, mass, angular_inertia)
     }
 
     fn is_convex(&self) -> bool {
@@ -409,25 +382,17 @@ impl Shape for RegularPolygonColliderShape {
         Some((self as &dyn PolygonalFeatureMap, 0.0))
     }
 
-    fn feature_normal_at_point(
-        &self,
-        feature: FeatureId,
-        _point: &Point2<Scalar>,
-    ) -> Option<UnitVector2<Scalar>> {
+    fn feature_normal_at_point(&self, feature: FeatureId, _point: Vector) -> Option<Vector> {
         match feature {
             FeatureId::Face(id) => {
                 let external_angle = self.external_angle_radians().adjust_precision();
                 let normal_angle = id as Scalar * external_angle - external_angle * 0.5 + FRAC_PI_2;
-                Some(UnitVector2::new_unchecked(
-                    Vector::from_angle(normal_angle).into(),
-                ))
+                Some(Vector::from_angle(normal_angle))
             }
             FeatureId::Vertex(id) => {
                 let external_angle = self.external_angle_radians().adjust_precision();
                 let normal_angle = id as Scalar * external_angle + FRAC_PI_2;
-                Some(UnitVector2::new_unchecked(
-                    Vector::from_angle(normal_angle).into(),
-                ))
+                Some(Vector::from_angle(normal_angle))
             }
             _ => None,
         }
@@ -452,17 +417,13 @@ impl RayCast for RegularPolygonColliderShape {
 }
 
 impl PointQuery for RegularPolygonColliderShape {
-    fn project_local_point(
-        &self,
-        pt: &parry::math::Point<Scalar>,
-        solid: bool,
-    ) -> parry::query::PointProjection {
+    fn project_local_point(&self, pt: Vector, solid: bool) -> parry::query::PointProjection {
         local_point_projection_on_support_map(self, &mut VoronoiSimplex::new(), pt, solid)
     }
 
     fn project_local_point_and_get_feature(
         &self,
-        pt: &parry::math::Point<Scalar>,
+        pt: Vector,
     ) -> (parry::query::PointProjection, parry::shape::FeatureId) {
         (self.project_local_point(pt, false), FeatureId::Unknown)
     }
