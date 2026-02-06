@@ -213,7 +213,7 @@ fn query_tree(
     pairs: &mut Vec<(ColliderTreeProxyKey, ColliderTreeProxyKey)>,
 ) {
     tree.bvh.aabb_traverse(proxy1.aabb, |bvh, node_index| {
-        let node = bvh.nodes[node_index as usize];
+        let node = &bvh.nodes[node_index as usize];
         let start = node.first_index as usize;
         let end = start + node.prim_count as usize;
 

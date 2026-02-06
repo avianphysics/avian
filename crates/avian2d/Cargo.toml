@@ -90,6 +90,7 @@ approx = "0.5"
 parry2d = { version = "0.26", optional = true }
 parry2d-f64 = { version = "0.26", optional = true }
 obvhs = { version = "0.3" }
+obvhs_glam = { package = "glam", version = "0.31" }
 serde = { version = "1", features = ["derive"], optional = true }
 derive_more = "2"
 thiserror = "2"
