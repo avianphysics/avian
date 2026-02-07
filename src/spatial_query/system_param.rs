@@ -552,11 +552,14 @@ impl SpatialQuery<'_, '_> {
                         return Scalar::MAX;
                     };
 
+                    let pose1 = make_pose(position.0, *rotation);
+                    let pose2 = make_pose(origin, shape_rotation);
+
                     let Ok(Some(hit)) = parry::query::cast_shapes(
-                        &make_pose(position.0, *rotation),
+                        &pose1,
                         Vector::ZERO,
                         collider.shape_scaled().as_ref(),
-                        &make_pose(origin, shape_rotation),
+                        &pose2,
                         direction.adjust_precision(),
                         shape.shape_scaled().as_ref(),
                         ShapeCastOptions {
@@ -573,10 +576,11 @@ impl SpatialQuery<'_, '_> {
                         closest_distance = hit.time_of_impact;
                         closest_hit = Some(ShapeHitData {
                             entity: proxy.collider,
-                            point1: position.0 + rotation * hit.witness1,
-                            point2: origin + shape_rotation * hit.witness2,
-                            normal1: rotation * hit.normal1,
-                            normal2: shape_rotation * hit.normal2,
+                            point1: pose1 * hit.witness1,
+                            point2: pose2 * hit.witness2
+                                + direction.adjust_precision() * hit.time_of_impact,
+                            normal1: pose1.rotation * hit.normal1,
+                            normal2: pose2.rotation * hit.normal2,
                             distance: hit.time_of_impact,
                         });
                     }
@@ -762,11 +766,14 @@ impl SpatialQuery<'_, '_> {
                         return true;
                     };
 
+                    let pose1 = make_pose(position.0, *rotation);
+                    let pose2 = make_pose(origin, shape_rotation);
+
                     let Ok(Some(hit)) = parry::query::cast_shapes(
-                        &make_pose(position.0, *rotation),
+                        &pose1,
                         Vector::ZERO,
                         collider.shape_scaled().as_ref(),
-                        &make_pose(origin, shape_rotation),
+                        &pose2,
                         direction.adjust_precision(),
                         shape.shape_scaled().as_ref(),
                         ShapeCastOptions {
@@ -783,9 +790,10 @@ impl SpatialQuery<'_, '_> {
                     callback(ShapeHitData {
                         entity: proxy.collider,
                         point1: position.0 + rotation * hit.witness1,
-                        point2: origin + shape_rotation * hit.witness2,
-                        normal1: rotation * hit.normal1,
-                        normal2: shape_rotation * hit.normal2,
+                        point2: pose2 * hit.witness2
+                            + direction.adjust_precision() * hit.time_of_impact,
+                        normal1: pose1.rotation * hit.normal1,
+                        normal2: pose2.rotation * hit.normal2,
                         distance: hit.time_of_impact,
                     })
                 },
