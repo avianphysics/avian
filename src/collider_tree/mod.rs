@@ -35,7 +35,7 @@ pub(crate) use obvhs_ext::obvhs_ray;
 pub use optimization::{ColliderTreeOptimization, TreeOptimizationMode};
 pub use proxy_key::{ColliderTreeProxyKey, ColliderTreeType, ProxyId};
 pub use tree::{ColliderTree, ColliderTreeProxy, ColliderTreeProxyFlags, ColliderTreeWorkspace};
-pub use update::MovedProxies;
+pub use update::{MovedProxies, update_moved_collider_aabbs};
 
 use optimization::ColliderTreeOptimizationPlugin;
 use update::ColliderTreeUpdatePlugin;
