@@ -575,7 +575,7 @@ impl MovedProxies {
 ///
 /// Set bits indicate [`ProxyId`]s of moved proxies.
 #[derive(Resource, Default)]
-struct EnlargedProxies {
+pub struct EnlargedProxies {
     // Note: Box2D indexes by shape ID, so it only needs one bit vector.
     //       In our case, we would instead index by entity ID, but this would
     //       require a potentially huge and very sparse bit vector since not
@@ -621,7 +621,7 @@ impl EnlargedProxies {
 /// [`ProxyId`]: crate::collider_tree::ProxyId
 // TODO: We have a few of these now. We should maybe abstract this into a reusable structure.
 #[derive(Default)]
-struct EnlargedProxiesBitVec {
+pub struct EnlargedProxiesBitVec {
     global: BitVec,
     thread_local: ThreadLocal<RefCell<BitVec>>,
 }
@@ -839,7 +839,7 @@ fn update_solver_body_aabbs<C: AnyCollider>(
 }
 
 /// Updates the AABBs of colliders that have been manually moved after the previous physics step.
-fn update_moved_collider_aabbs<C: AnyCollider>(
+pub fn update_moved_collider_aabbs<C: AnyCollider>(
     mut colliders: ParamSet<(
         Query<
             (
