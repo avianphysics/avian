@@ -1,5 +1,6 @@
-use crate::prelude::*;
+use crate::{collider_tree::ColliderTrees, collision::collider::contact_query, prelude::*};
 use bevy::{ecs::system::SystemParam, prelude::*};
+use parry::query::ShapeCastOptions;
 
 /// A system parameter for performing [spatial queries](spatial_query).
 ///
@@ -57,30 +58,11 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 /// ```
 #[derive(SystemParam)]
 pub struct SpatialQuery<'w, 's> {
-    pub(crate) colliders: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static Position,
-            &'static Rotation,
-            &'static Collider,
-            &'static CollisionLayers,
-        ),
-        Without<ColliderDisabled>,
-    >,
-    /// The [`SpatialQueryPipeline`].
-    pub query_pipeline: ResMut<'w, SpatialQueryPipeline>,
+    colliders: Query<'w, 's, (&'static Position, &'static Rotation, &'static Collider)>,
+    collider_trees: ResMut<'w, ColliderTrees>,
 }
 
 impl SpatialQuery<'_, '_> {
-    /// Updates the colliders in the pipeline. This is done automatically once per physics frame in
-    /// [`PhysicsStepSystems::SpatialQuery`], but if you modify colliders or their positions before that, you can
-    /// call this to make sure the data is up to date when performing spatial queries using [`SpatialQuery`].
-    pub fn update_pipeline(&mut self) {
-        self.query_pipeline.update(self.colliders.iter());
-    }
-
     /// Casts a [ray](spatial_query#raycasting) and computes the closest [hit](RayHitData) with a collider.
     /// If there are no hits, `None` is returned.
     ///
@@ -133,8 +115,7 @@ impl SpatialQuery<'_, '_> {
         solid: bool,
         filter: &SpatialQueryFilter,
     ) -> Option<RayHitData> {
-        self.query_pipeline
-            .cast_ray(origin, direction, max_distance, solid, filter)
+        self.cast_ray_predicate(origin, direction, max_distance, solid, filter, &|_| true)
     }
 
     /// Casts a [ray](spatial_query#raycasting) and computes the closest [hit](RayHitData) with a collider.
@@ -195,19 +176,51 @@ impl SpatialQuery<'_, '_> {
         &self,
         origin: Vector,
         direction: Dir,
-        max_distance: Scalar,
+        mut max_distance: Scalar,
         solid: bool,
         filter: &SpatialQueryFilter,
         predicate: &dyn Fn(Entity) -> bool,
     ) -> Option<RayHitData> {
-        self.query_pipeline.cast_ray_predicate(
-            origin,
-            direction,
-            max_distance,
-            solid,
-            filter,
-            predicate,
-        )
+        let ray = Ray::new(origin.f32(), direction);
+
+        let mut closest_hit: Option<RayHitData> = None;
+
+        self.collider_trees.iter_trees().for_each(|tree| {
+            tree.ray_traverse_closest(ray, max_distance, |proxy_id| {
+                let proxy = tree.get_proxy(proxy_id).unwrap();
+                if !filter.test(proxy.collider, proxy.layers) || !predicate(proxy.collider) {
+                    return f32::MAX;
+                }
+
+                let Ok((position, rotation, collider)) = self.colliders.get(proxy.collider) else {
+                    return f32::MAX;
+                };
+
+                let Some((distance, normal)) = collider.cast_ray(
+                    position.0,
+                    *rotation,
+                    origin,
+                    direction.adjust_precision(),
+                    max_distance,
+                    solid,
+                ) else {
+                    return f32::MAX;
+                };
+
+                if distance < max_distance {
+                    max_distance = distance;
+                    closest_hit = Some(RayHitData {
+                        entity: proxy.collider,
+                        normal,
+                        distance,
+                    });
+                }
+
+                distance
+            });
+        });
+
+        closest_hit
     }
 
     /// Casts a [ray](spatial_query#raycasting) and computes all [hits](RayHitData) until `max_hits` is reached.
@@ -269,8 +282,18 @@ impl SpatialQuery<'_, '_> {
         solid: bool,
         filter: &SpatialQueryFilter,
     ) -> Vec<RayHitData> {
-        self.query_pipeline
-            .ray_hits(origin, direction, max_distance, max_hits, solid, filter)
+        let mut hits = Vec::new();
+
+        self.ray_hits_callback(origin, direction, max_distance, solid, filter, |hit| {
+            if hits.len() < max_hits as usize {
+                hits.push(hit);
+                true
+            } else {
+                false
+            }
+        });
+
+        hits
     }
 
     /// Casts a [ray](spatial_query#raycasting) and computes all [hits](RayHitData), calling the given `callback`
@@ -334,16 +357,40 @@ impl SpatialQuery<'_, '_> {
         max_distance: Scalar,
         solid: bool,
         filter: &SpatialQueryFilter,
-        callback: impl FnMut(RayHitData) -> bool,
+        mut callback: impl FnMut(RayHitData) -> bool,
     ) {
-        self.query_pipeline.ray_hits_callback(
-            origin,
-            direction,
-            max_distance,
-            solid,
-            filter,
-            callback,
-        )
+        let ray = Ray::new(origin.f32(), direction);
+
+        self.collider_trees.iter_trees().for_each(|tree| {
+            tree.ray_traverse_all(ray, max_distance, |proxy_id| {
+                let proxy = tree.get_proxy(proxy_id).unwrap();
+
+                if !filter.test(proxy.collider, proxy.layers) {
+                    return true;
+                }
+
+                let Ok((position, rotation, collider)) = self.colliders.get(proxy.collider) else {
+                    return true;
+                };
+
+                let Some((distance, normal)) = collider.cast_ray(
+                    position.0,
+                    *rotation,
+                    origin,
+                    direction.adjust_precision(),
+                    max_distance,
+                    solid,
+                ) else {
+                    return true;
+                };
+
+                callback(RayHitData {
+                    entity: proxy.collider,
+                    normal,
+                    distance,
+                })
+            });
+        });
     }
 
     /// Casts a [shape](spatial_query#shapecasting) with a given rotation and computes the closest [hit](ShapeHitData)
@@ -404,8 +451,15 @@ impl SpatialQuery<'_, '_> {
         config: &ShapeCastConfig,
         filter: &SpatialQueryFilter,
     ) -> Option<ShapeHitData> {
-        self.query_pipeline
-            .cast_shape(shape, origin, shape_rotation, direction, config, filter)
+        self.cast_shape_predicate(
+            shape,
+            origin,
+            shape_rotation,
+            direction,
+            config,
+            filter,
+            &|_| true,
+        )
     }
 
     /// Casts a [shape](spatial_query#shapecasting) with a given rotation and computes the closest [hit](ShapeHitData)
@@ -475,19 +529,71 @@ impl SpatialQuery<'_, '_> {
         filter: &SpatialQueryFilter,
         predicate: &dyn Fn(Entity) -> bool,
     ) -> Option<ShapeHitData> {
-        self.query_pipeline.cast_shape_predicate(
-            shape,
-            origin,
-            shape_rotation,
-            direction,
-            config,
-            filter,
-            predicate,
-        )
+        let mut closest_distance = config.max_distance;
+        let mut closest_hit: Option<ShapeHitData> = None;
+
+        let aabb = obvhs::aabb::Aabb::from(shape.aabb(origin, shape_rotation));
+
+        self.collider_trees.iter_trees().for_each(|tree| {
+            tree.sweep_traverse_closest(
+                aabb,
+                direction,
+                closest_distance,
+                config.target_distance,
+                |proxy_id| {
+                    let proxy = tree.get_proxy(proxy_id).unwrap();
+
+                    if !filter.test(proxy.collider, proxy.layers) || !predicate(proxy.collider) {
+                        return f32::MAX;
+                    }
+
+                    let Ok((position, rotation, collider)) = self.colliders.get(proxy.collider)
+                    else {
+                        return f32::MAX;
+                    };
+
+                    let Ok(Some(hit)) = parry::query::cast_shapes(
+                        &make_pose(position.0, *rotation),
+                        Vector::ZERO,
+                        collider.shape_scaled().as_ref(),
+                        &make_pose(origin, shape_rotation),
+                        direction.adjust_precision(),
+                        shape.shape_scaled().as_ref(),
+                        ShapeCastOptions {
+                            max_time_of_impact: config.max_distance,
+                            target_distance: config.target_distance,
+                            stop_at_penetration: !config.ignore_origin_penetration,
+                            compute_impact_geometry_on_penetration: config
+                                .compute_contact_on_penetration,
+                        },
+                    ) else {
+                        return f32::MAX;
+                    };
+                    if hit.time_of_impact < closest_distance {
+                        closest_distance = hit.time_of_impact;
+                        closest_hit = Some(ShapeHitData {
+                            entity: proxy.collider,
+                            point1: position.0 + rotation * hit.witness1,
+                            point2: origin + shape_rotation * hit.witness2,
+                            normal1: rotation * hit.normal1,
+                            normal2: shape_rotation * hit.normal2,
+                            distance: hit.time_of_impact,
+                        });
+                    }
+
+                    hit.time_of_impact
+                },
+            );
+        });
+
+        closest_hit
     }
 
     /// Casts a [shape](spatial_query#shapecasting) with a given rotation and computes computes all [hits](ShapeHitData)
     /// in the order of distance until `max_hits` is reached.
+    ///
+    /// Note that the order of the results is not guaranteed, and if there are more hits than `max_hits`,
+    /// some hits will be missed.
     ///
     /// # Arguments
     ///
@@ -547,20 +653,33 @@ impl SpatialQuery<'_, '_> {
         config: &ShapeCastConfig,
         filter: &SpatialQueryFilter,
     ) -> Vec<ShapeHitData> {
-        self.query_pipeline.shape_hits(
+        let mut hits = Vec::new();
+
+        self.shape_hits_callback(
             shape,
             origin,
             shape_rotation,
             direction,
-            max_hits,
             config,
             filter,
-        )
+            |hit| {
+                if hits.len() < max_hits as usize {
+                    hits.push(hit);
+                    true
+                } else {
+                    false
+                }
+            },
+        );
+
+        hits
     }
 
     /// Casts a [shape](spatial_query#shapecasting) with a given rotation and computes computes all [hits](ShapeHitData)
     /// in the order of distance, calling the given `callback` for each hit. The shapecast stops when
     /// `callback` returns false or all hits have been found.
+    ///
+    /// Note that the order of the results is not guaranteed.
     ///
     /// # Arguments
     ///
@@ -621,17 +740,57 @@ impl SpatialQuery<'_, '_> {
         direction: Dir,
         config: &ShapeCastConfig,
         filter: &SpatialQueryFilter,
-        callback: impl FnMut(ShapeHitData) -> bool,
+        mut callback: impl FnMut(ShapeHitData) -> bool,
     ) {
-        self.query_pipeline.shape_hits_callback(
-            shape,
-            origin,
-            shape_rotation,
-            direction,
-            config,
-            filter,
-            callback,
-        )
+        let aabb = obvhs::aabb::Aabb::from(shape.aabb(origin, shape_rotation));
+
+        self.collider_trees.iter_trees().for_each(|tree| {
+            tree.sweep_traverse_all(
+                aabb,
+                direction,
+                config.max_distance,
+                config.target_distance,
+                |proxy_id| {
+                    let proxy = tree.get_proxy(proxy_id).unwrap();
+
+                    if !filter.test(proxy.collider, proxy.layers) {
+                        return true;
+                    }
+
+                    let Ok((position, rotation, collider)) = self.colliders.get(proxy.collider)
+                    else {
+                        return true;
+                    };
+
+                    let Ok(Some(hit)) = parry::query::cast_shapes(
+                        &make_pose(position.0, *rotation),
+                        Vector::ZERO,
+                        collider.shape_scaled().as_ref(),
+                        &make_pose(origin, shape_rotation),
+                        direction.adjust_precision(),
+                        shape.shape_scaled().as_ref(),
+                        ShapeCastOptions {
+                            max_time_of_impact: config.max_distance,
+                            target_distance: config.target_distance,
+                            stop_at_penetration: !config.ignore_origin_penetration,
+                            compute_impact_geometry_on_penetration: config
+                                .compute_contact_on_penetration,
+                        },
+                    ) else {
+                        return true;
+                    };
+
+                    callback(ShapeHitData {
+                        entity: proxy.collider,
+                        point1: position.0 + rotation * hit.witness1,
+                        point2: origin + shape_rotation * hit.witness2,
+                        normal1: rotation * hit.normal1,
+                        normal2: shape_rotation * hit.normal2,
+                        distance: hit.time_of_impact,
+                    })
+                },
+            );
+        });
     }
 
     /// Finds the [projection](spatial_query#point-projection) of a given point on the closest [collider](Collider).
@@ -675,7 +834,7 @@ impl SpatialQuery<'_, '_> {
         solid: bool,
         filter: &SpatialQueryFilter,
     ) -> Option<PointProjection> {
-        self.query_pipeline.project_point(point, solid, filter)
+        self.project_point_predicate(point, solid, filter, &|_| true)
     }
 
     /// Finds the [projection](spatial_query#point-projection) of a given point on the closest [collider](Collider).
@@ -728,8 +887,38 @@ impl SpatialQuery<'_, '_> {
         filter: &SpatialQueryFilter,
         predicate: &dyn Fn(Entity) -> bool,
     ) -> Option<PointProjection> {
-        self.query_pipeline
-            .project_point_predicate(point, solid, filter, predicate)
+        let mut closest_distance_squared = Scalar::INFINITY;
+        let mut closest_projection: Option<PointProjection> = None;
+
+        self.collider_trees.iter_trees().for_each(|tree| {
+            tree.squared_distance_traverse_closest(point, Scalar::INFINITY, |proxy_id| {
+                let proxy = tree.get_proxy(proxy_id).unwrap();
+                if !filter.test(proxy.collider, proxy.layers) || !predicate(proxy.collider) {
+                    return Scalar::INFINITY;
+                }
+
+                let Ok((position, rotation, collider)) = self.colliders.get(proxy.collider) else {
+                    return Scalar::INFINITY;
+                };
+
+                let (projection, is_inside) =
+                    collider.project_point(position.0, *rotation, point, solid);
+
+                let distance_squared = (projection - point).length_squared();
+                if distance_squared < closest_distance_squared {
+                    closest_distance_squared = distance_squared;
+                    closest_projection = Some(PointProjection {
+                        entity: proxy.collider,
+                        point: projection,
+                        is_inside,
+                    });
+                }
+
+                distance_squared
+            });
+        });
+
+        closest_projection
     }
 
     /// An [intersection test](spatial_query#intersection-tests) that finds all entities with a [collider](Collider)
@@ -764,7 +953,14 @@ impl SpatialQuery<'_, '_> {
     ///
     /// - [`SpatialQuery::point_intersections_callback`]
     pub fn point_intersections(&self, point: Vector, filter: &SpatialQueryFilter) -> Vec<Entity> {
-        self.query_pipeline.point_intersections(point, filter)
+        let mut intersections = vec![];
+
+        self.point_intersections_callback(point, filter, |entity| {
+            intersections.push(entity);
+            true
+        });
+
+        intersections
     }
 
     /// An [intersection test](spatial_query#intersection-tests) that finds all entities with a [collider](Collider)
@@ -812,10 +1008,18 @@ impl SpatialQuery<'_, '_> {
         &self,
         point: Vector,
         filter: &SpatialQueryFilter,
-        callback: impl FnMut(Entity) -> bool,
+        mut callback: impl FnMut(Entity) -> bool,
     ) {
-        self.query_pipeline
-            .point_intersections_callback(point, filter, callback)
+        self.collider_trees.iter_trees().for_each(|tree| {
+            tree.point_traverse(point, |proxy_id| {
+                let proxy = tree.get_proxy(proxy_id).unwrap();
+                if filter.test(proxy.collider, proxy.layers) {
+                    callback(proxy.collider)
+                } else {
+                    true
+                }
+            });
+        });
     }
 
     /// An [intersection test](spatial_query#intersection-tests) that finds all entities with a [`ColliderAabb`]
@@ -845,7 +1049,14 @@ impl SpatialQuery<'_, '_> {
     ///
     /// - [`SpatialQuery::aabb_intersections_with_aabb_callback`]
     pub fn aabb_intersections_with_aabb(&self, aabb: ColliderAabb) -> Vec<Entity> {
-        self.query_pipeline.aabb_intersections_with_aabb(aabb)
+        let mut intersections = vec![];
+
+        self.aabb_intersections_with_aabb_callback(aabb, |entity| {
+            intersections.push(entity);
+            true
+        });
+
+        intersections
     }
 
     /// An [intersection test](spatial_query#intersection-tests) that finds all entities with a [`ColliderAabb`]
@@ -885,10 +1096,21 @@ impl SpatialQuery<'_, '_> {
     pub fn aabb_intersections_with_aabb_callback(
         &self,
         aabb: ColliderAabb,
-        callback: impl FnMut(Entity) -> bool,
+        mut callback: impl FnMut(Entity) -> bool,
     ) {
-        self.query_pipeline
-            .aabb_intersections_with_aabb_callback(aabb, callback)
+        let aabb = obvhs::aabb::Aabb::from(aabb);
+        self.collider_trees.iter_trees().for_each(|tree| {
+            tree.aabb_traverse(aabb, |proxy_id| {
+                let proxy = tree.get_proxy(proxy_id).unwrap();
+                // The proxy AABB is more tightly fitted to the collider than the AABB in the tree,
+                // so we need to do an additional AABB intersection test here.
+                if proxy.aabb.intersect_aabb(&aabb) {
+                    callback(proxy.collider)
+                } else {
+                    true
+                }
+            });
+        });
     }
 
     /// An [intersection test](spatial_query#intersection-tests) that finds all entities with a [`Collider`]
@@ -935,8 +1157,20 @@ impl SpatialQuery<'_, '_> {
         shape_rotation: RotationValue,
         filter: &SpatialQueryFilter,
     ) -> Vec<Entity> {
-        self.query_pipeline
-            .shape_intersections(shape, shape_position, shape_rotation, filter)
+        let mut intersections = vec![];
+
+        self.shape_intersections_callback(
+            shape,
+            shape_position,
+            shape_rotation,
+            filter,
+            |entity| {
+                intersections.push(entity);
+                true
+            },
+        );
+
+        intersections
     }
 
     /// An [intersection test](spatial_query#intersection-tests) that finds all entities with a [`Collider`]
@@ -990,14 +1224,50 @@ impl SpatialQuery<'_, '_> {
         shape_position: Vector,
         shape_rotation: RotationValue,
         filter: &SpatialQueryFilter,
-        callback: impl FnMut(Entity) -> bool,
+        mut callback: impl FnMut(Entity) -> bool,
     ) {
-        self.query_pipeline.shape_intersections_callback(
-            shape,
-            shape_position,
-            shape_rotation,
-            filter,
-            callback,
-        )
+        let aabb = obvhs::aabb::Aabb::from(shape.aabb(shape_position, shape_rotation));
+
+        self.collider_trees.iter_trees().for_each(|tree| {
+            tree.aabb_traverse(aabb, |proxy_id| {
+                let proxy = tree.get_proxy(proxy_id).unwrap();
+                if !filter.test(proxy.collider, proxy.layers) {
+                    return true;
+                }
+
+                let Ok((position, rotation, collider)) = self.colliders.get(proxy.collider) else {
+                    return true;
+                };
+
+                if contact_query::intersection_test(
+                    collider,
+                    position.0,
+                    *rotation,
+                    shape,
+                    shape_position,
+                    shape_rotation,
+                )
+                .is_ok_and(|intersects| intersects)
+                {
+                    callback(proxy.collider)
+                } else {
+                    true
+                }
+            });
+        });
     }
+}
+
+/// The result of a [point projection](spatial_query#point-projection) on a [collider](Collider).
+#[derive(Clone, Debug, PartialEq, Reflect)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(Debug, PartialEq)]
+pub struct PointProjection {
+    /// The entity of the collider that the point was projected onto.
+    pub entity: Entity,
+    /// The point where the point was projected.
+    pub point: Vector,
+    /// True if the point was inside of the collider.
+    pub is_inside: bool,
 }

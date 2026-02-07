@@ -7,7 +7,6 @@ use bevy::{
     },
     prelude::*,
 };
-use parry::{query::ShapeCastOptions, shape::CompositeShapeRef};
 
 /// A component used for [shapecasting](spatial_query#shapecasting).
 ///
@@ -24,6 +23,19 @@ use parry::{query::ShapeCastOptions, shape::CompositeShapeRef};
 ///
 /// The [`ShapeCaster`] is the easiest way to handle simple shapecasting. If you want more control and don't want
 /// to perform shapecasts on every frame, consider using the [`SpatialQuery`] system parameter.
+///
+/// # Hit Count and Order
+///
+/// The results of a shapecast are in an arbitrary order by default. You can iterate over them in the order of
+/// distance with the [`ShapeHits::iter_sorted`] method.
+///
+/// You can configure the maximum amount of hits for a shapecast using `max_hits`. By default this is unbounded,
+/// so you will get all hits. When the number or complexity of colliders is large, this can be very
+/// expensive computationally. Set the value to whatever works best for your case.
+///
+/// Note that when there are more hits than `max_hits`, **some hits will be missed**.
+/// To guarantee that the closest hit is included, you should set `max_hits` to one or a value that
+/// is enough to contain all hits.
 ///
 /// # Example
 ///
@@ -333,69 +345,49 @@ impl ShapeCaster {
     }
 
     pub(crate) fn cast(
-        &self,
+        &mut self,
         caster_entity: Entity,
         hits: &mut ShapeHits,
-        query_pipeline: &SpatialQueryPipeline,
+        spatial_query: &SpatialQuery,
     ) {
-        // TODO: This clone is here so that the excluded entities in the original `query_filter` aren't modified.
-        //       We could remove this if shapecasting could compute multiple hits without just doing casts in a loop.
-        //       See https://github.com/avianphysics/avian/issues/403.
-        let mut query_filter = self.query_filter.clone();
-
         if self.ignore_self {
-            query_filter.excluded_entities.insert(caster_entity);
+            self.query_filter.excluded_entities.insert(caster_entity);
+        } else {
+            self.query_filter.excluded_entities.remove(&caster_entity);
         }
 
         hits.clear();
 
-        let shape_cast_options = ShapeCastOptions {
-            max_time_of_impact: self.max_distance,
+        let config = ShapeCastConfig {
+            max_distance: self.max_distance,
             target_distance: self.target_distance,
-            stop_at_penetration: !self.ignore_origin_penetration,
-            compute_impact_geometry_on_penetration: self.compute_contact_on_penetration,
+            compute_contact_on_penetration: self.compute_contact_on_penetration,
+            ignore_origin_penetration: self.ignore_origin_penetration,
         };
 
-        let shape_rotation: Rotation;
-        #[cfg(feature = "2d")]
-        {
-            shape_rotation = Rotation::radians(self.global_shape_rotation());
-        }
-        #[cfg(feature = "3d")]
-        {
-            shape_rotation = Rotation::from(self.global_shape_rotation());
-        }
+        if self.max_hits == 1 {
+            let first_hit = spatial_query.cast_shape(
+                &self.shape,
+                self.global_origin,
+                self.global_shape_rotation,
+                self.global_direction,
+                &config,
+                &self.query_filter,
+            );
 
-        let shape_isometry = make_pose(self.global_origin(), shape_rotation);
-        let shape_direction = self.global_direction().adjust_precision();
-
-        while hits.len() < self.max_hits as usize {
-            let composite = query_pipeline.as_composite_shape_internal(&query_filter);
-            let pipeline_shape = CompositeShapeRef(&composite);
-
-            let hit = pipeline_shape
-                .cast_shape(
-                    query_pipeline.dispatcher.as_ref(),
-                    &shape_isometry,
-                    shape_direction,
-                    self.shape.shape_scaled().as_ref(),
-                    shape_cast_options,
-                )
-                .map(|(index, hit)| ShapeHitData {
-                    entity: query_pipeline.proxies[index as usize].entity,
-                    distance: hit.time_of_impact,
-                    point1: hit.witness1,
-                    point2: hit.witness2,
-                    normal1: hit.normal1,
-                    normal2: hit.normal2,
-                });
-
-            if let Some(hit) = hit {
-                query_filter.excluded_entities.insert(hit.entity);
+            if let Some(hit) = first_hit {
                 hits.push(hit);
-            } else {
-                return;
             }
+        } else {
+            hits.extend(spatial_query.shape_hits(
+                &self.shape,
+                self.global_origin,
+                self.global_shape_rotation,
+                self.global_direction,
+                self.max_hits,
+                &config,
+                &self.query_filter,
+            ));
         }
     }
 }
@@ -503,6 +495,16 @@ impl ShapeCastConfig {
 /// The maximum number of hits depends on the value of `max_hits` in [`ShapeCaster`]. By default only
 /// one hit is computed, as shapecasting for many results can be expensive.
 ///
+/// # Order
+///
+/// By default, the order of the hits is not guaranteed.
+///
+/// You can iterate the hits in the order of distance with `iter_sorted`.
+/// Note that this will create and sort a new vector instead of iterating over the existing one.
+///
+/// **Note**: When there are more hits than `max_hits`, **some hits will be missed**.
+/// If you want to guarantee that the closest hit is included, set `max_hits` to one.
+///
 /// # Example
 ///
 /// ```
@@ -512,7 +514,8 @@ impl ShapeCastConfig {
 ///
 /// fn print_hits(query: Query<&ShapeHits, With<ShapeCaster>>) {
 ///     for hits in &query {
-///         for hit in hits {
+///         // For the faster iterator that isn't sorted, use `.iter()`.
+///         for hit in hits.iter_sorted() {
 ///             println!("Hit entity {} with distance {}", hit.entity, hit.distance);
 ///         }
 ///     }
@@ -523,6 +526,17 @@ impl ShapeCastConfig {
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Component, Debug, Default, PartialEq)]
 pub struct ShapeHits(pub Vec<ShapeHitData>);
+
+impl ShapeHits {
+    /// Returns an iterator over the hits, sorted in ascending order according to the distance.
+    ///
+    /// Note that this allocates a new vector. If you don't need the hits in order, use `iter`.
+    pub fn iter_sorted(&self) -> alloc::vec::IntoIter<ShapeHitData> {
+        let mut vector = self.as_slice().to_vec();
+        vector.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
+        vector.into_iter()
+    }
+}
 
 impl IntoIterator for ShapeHits {
     type Item = ShapeHitData;

@@ -150,8 +150,6 @@
 //!
 //! To specify which colliders should be considered in the query, use a [spatial query filter](`SpatialQueryFilter`).
 
-#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
-mod pipeline;
 mod query_filter;
 mod ray_caster;
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
@@ -162,8 +160,6 @@ mod system_param;
 mod diagnostics;
 pub use diagnostics::SpatialQueryDiagnostics;
 
-#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
-pub use pipeline::*;
 pub use query_filter::*;
 pub use ray_caster::*;
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
@@ -181,12 +177,6 @@ pub struct SpatialQueryPlugin;
 
 impl Plugin for SpatialQueryPlugin {
     fn build(&self, app: &mut App) {
-        #[cfg(all(
-            feature = "default-collider",
-            any(feature = "parry-f32", feature = "parry-f64")
-        ))]
-        app.init_resource::<SpatialQueryPipeline>();
-
         let physics_schedule = app
             .get_schedule_mut(PhysicsSchedule)
             .expect("add PhysicsSchedule first");
@@ -198,13 +188,7 @@ impl Plugin for SpatialQueryPlugin {
                     feature = "default-collider",
                     any(feature = "parry-f32", feature = "parry-f64")
                 ))]
-                (
-                    update_shape_caster_positions,
-                    update_spatial_query_pipeline,
-                    raycast,
-                    shapecast,
-                )
-                    .chain(),
+                (update_shape_caster_positions, raycast, shapecast).chain(),
             )
                 .chain()
                 .in_set(PhysicsStepSystems::SpatialQuery),
@@ -215,22 +199,6 @@ impl Plugin for SpatialQueryPlugin {
         // Register timer diagnostics for spatial queries.
         app.register_physics_diagnostics::<SpatialQueryDiagnostics>();
     }
-}
-
-/// Updates the [`SpatialQueryPipeline`].
-#[cfg(all(
-    feature = "default-collider",
-    any(feature = "parry-f32", feature = "parry-f64")
-))]
-pub fn update_spatial_query_pipeline(
-    mut spatial_query: SpatialQuery,
-    mut diagnostics: ResMut<SpatialQueryDiagnostics>,
-) {
-    let start = crate::utils::Instant::now();
-
-    spatial_query.update_pipeline();
-
-    diagnostics.update_pipeline = start.elapsed();
 }
 
 type RayCasterPositionQueryComponents = (
@@ -404,9 +372,9 @@ fn raycast(
 ) {
     let start = crate::utils::Instant::now();
 
-    for (entity, mut ray, mut hits) in &mut rays {
-        if ray.enabled {
-            ray.cast(entity, &mut hits, &spatial_query.query_pipeline);
+    for (entity, mut ray_caster, mut hits) in &mut rays {
+        if ray_caster.enabled {
+            ray_caster.cast(entity, &mut hits, &spatial_query);
         } else if !hits.is_empty() {
             hits.clear();
         }
@@ -417,15 +385,15 @@ fn raycast(
 
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 fn shapecast(
-    mut shape_casters: Query<(Entity, &ShapeCaster, &mut ShapeHits)>,
+    mut shape_casters: Query<(Entity, &mut ShapeCaster, &mut ShapeHits)>,
     spatial_query: SpatialQuery,
     mut diagnostics: ResMut<SpatialQueryDiagnostics>,
 ) {
     let start = crate::utils::Instant::now();
 
-    for (entity, shape_caster, mut hits) in &mut shape_casters {
+    for (entity, mut shape_caster, mut hits) in &mut shape_casters {
         if shape_caster.enabled {
-            shape_caster.cast(entity, &mut hits, &spatial_query.query_pipeline);
+            shape_caster.cast(entity, &mut hits, &spatial_query);
         } else if !hits.is_empty() {
             hits.clear();
         }

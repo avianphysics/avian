@@ -67,8 +67,8 @@ pub const COS_5_DEGREES: Scalar = 0.99619469809;
 #[doc(alias = "CollideAndSlide")]
 #[doc(alias = "StepSlide")]
 pub struct MoveAndSlide<'w, 's> {
-    /// The [`SpatialQueryPipeline`] used to perform spatial queries.
-    pub query_pipeline: Res<'w, SpatialQueryPipeline>,
+    /// The [`SpatialQuery`] system parameter used to perform shape casts and other geometric queries.
+    pub spatial_query: SpatialQuery<'w, 's>,
     /// The [`Query`] used to query for colliders.
     pub colliders: Query<
         'w,
@@ -538,7 +538,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 position += sweep;
                 break;
             };
-            let point = sweep_hit.point2 + position;
+            let point = sweep_hit.point2;
 
             // Move up to the hit point.
             time_left -= time_left * (sweep_hit.distance / distance);
@@ -789,7 +789,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ) -> Option<MoveHitData> {
         let (direction, distance) = Dir::new_and_length(movement.f32()).unwrap_or((Dir::X, 0.0));
         let distance = distance.adjust_precision();
-        let shape_hit = self.query_pipeline.cast_shape_predicate(
+        let shape_hit = self.spatial_query.cast_shape_predicate(
             shape,
             shape_position,
             shape_rotation,
@@ -1078,7 +1078,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             .aabb(shape_position, shape_rotation)
             .grow(Vector::splat(prediction_distance));
         let aabb_intersections = self
-            .query_pipeline
+            .spatial_query
             .aabb_intersections_with_aabb(expanded_aabb);
 
         'outer: for intersection_entity in aabb_intersections {

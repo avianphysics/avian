@@ -265,7 +265,6 @@ fn build_diagnostic_texts(cmd: &mut RelatedSpawnerCommands<ChildOf>) {
     // Spatial query timers
     type Spatial = SpatialQueryDiagnostics;
     let spatial_query_timers = vec![
-        ("Spatial Query BVH", Spatial::UPDATE_PIPELINE),
         ("Ray Casters", Spatial::UPDATE_RAY_CASTERS),
         ("Shape Casters", Spatial::UPDATE_SHAPE_CASTERS),
         #[cfg(feature = "bevy_picking")]

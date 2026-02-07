@@ -614,7 +614,7 @@ pub(crate) fn make_pose(
 ) -> parry::math::Pose3 {
     let position: Position = position.into();
     let rotation: Rotation = rotation.into();
-    parry::math::Pose3::new(position.0, rotation.to_scaled_axis())
+    parry::math::Pose3::from_parts(position.0, rotation.0)
 }
 
 /// Computes the skew-symmetric matrix corresponding to the given vector.

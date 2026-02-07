@@ -110,7 +110,7 @@ pub trait Bvh2Ext {
     ///
     /// # Arguments
     /// * `sweep` - The sweep to be tested for intersection.
-    /// * `intersection_fn` - should take the given sweep and primitive index and return the distance to the intersection, if any.
+    /// * `intersection_fn` - should take the given sweep and primitive index.
     ///
     /// Note the primitive index should index first into `Bvh2::primitive_indices` then that will be index of original primitive.
     /// Various parts of the BVH building process might reorder the primitives. To avoid this indirection, reorder your
@@ -118,6 +118,19 @@ pub trait Bvh2Ext {
     fn sweep_traverse_anyhit<F: FnMut(&Sweep, usize)>(&self, sweep: Sweep, intersection_fn: F);
 
     /// Traverse the BVH by sweeping an AABB along a velocity vector.
+    ///
+    /// Terminates when no hits are found or when `intersection_fn` returns false for a hit.
+    ///
+    /// # Arguments
+    /// * `stack` - Stack for traversal state.
+    /// * `sweep` - The sweep to be tested for intersection.
+    /// * `hit` - As `sweep_traverse_dynamic` intersects primitives, it will update `hit` with the closest.
+    /// * `intersection_fn` - should test the primitives in the given node, update the ray.tmax, and hit info. Return
+    ///   false to halt traversal.
+    ///
+    /// Note the primitive index should index first into `Bvh2::primitive_indices` then that will be index of original primitive.
+    /// Various parts of the BVH building process might reorder the primitives. To avoid this indirection, reorder your
+    /// original primitives per `primitive_indices`.
     fn sweep_traverse_dynamic<
         F: FnMut(&Bvh2Node, &mut Sweep, &mut SweepHit) -> bool,
         Stack: FastStack<u32>,
@@ -130,27 +143,29 @@ pub trait Bvh2Ext {
     );
 
     /// Traverse the BVH to find the closest leaf node to a point.
-    /// Returns the primitive index and distance of the closest leaf, or `None` if no leaf is within `max_dist_sq`.
+    /// Returns the primitive index and squared distance of the closest leaf, or `None` if no leaf is within `max_dist_sq`.
     ///
     /// # Arguments
     /// * `stack` - Stack for traversal state.
     /// * `point` - The query point.
     /// * `max_dist_sq` - Maximum squared distance to search (use `f32::INFINITY` for unlimited).
     /// * `closest_leaf` - Will be updated with the closest leaf node and distance found.
-    /// * `visit_fn` - Called for each leaf node within range. Should take the given ray and primitive index and return the distance
+    /// * `visit_fn` - Called for each leaf node within range. Should take the given ray and primitive index and return the squared distance
     ///   to the primitive, if any.
     ///
     /// Note the primitive index should index first into `Bvh2::primitive_indices` then that will be index of original primitive.
     /// Various parts of the BVH building process might reorder the primitives. To avoid this indirection, reorder your
     /// original primitives per `primitive_indices`.
-    fn distance_traverse<F: FnMut(Vec3A, usize) -> f32>(
+    fn squared_distance_traverse<F: FnMut(Vec3A, usize) -> f32>(
         &self,
         point: Vec3A,
         max_dist_sq: f32,
         visit_fn: F,
     ) -> Option<(u32, f32)>;
 
-    /// Traverse the BVH to find the closest leaf node to a point
+    /// Traverse the BVH with a point, calling `visit_fn` for each leaf node within `max_dist_sq` of the point.
+    ///
+    /// Terminates when all nodes within `max_dist_sq` have been visited or when `visit_fn` returns false for a node.
     ///
     /// # Arguments
     /// * `stack` - Stack for traversal state.
@@ -160,8 +175,10 @@ pub trait Bvh2Ext {
     /// * `visit_fn` - Called for each leaf node within range. Should update `max_dist_sq` and `closest_leaf`.
     ///   Return false to halt traversal early.
     ///
-    /// Note: The primitive index should index first into `Bvh2::primitive_indices` then that will be index of original primitive.
-    fn distance_traverse_dynamic<
+    /// Note the primitive index should index first into `Bvh2::primitive_indices` then that will be index of original primitive.
+    /// Various parts of the BVH building process might reorder the primitives. To avoid this indirection, reorder your
+    /// original primitives per `primitive_indices`.
+    fn squared_distance_traverse_dynamic<
         F: FnMut(&Bvh2Node, &mut f32, &mut Option<(u32, f32)>) -> bool,
         Stack: FastStack<u32>,
     >(
@@ -329,7 +346,7 @@ impl Bvh2Ext for Bvh2 {
     }
 
     #[inline(always)]
-    fn distance_traverse<F: FnMut(Vec3A, usize) -> f32>(
+    fn squared_distance_traverse<F: FnMut(Vec3A, usize) -> f32>(
         &self,
         point: Vec3A,
         max_dist_sq: f32,
@@ -340,17 +357,17 @@ impl Bvh2Ext for Bvh2 {
         let mut visit_prims =
             |node: &Bvh2Node, max_dist_sq: &mut f32, closest_leaf: &mut Option<(u32, f32)>| {
                 (node.first_index..node.first_index + node.prim_count).for_each(|primitive_id| {
-                    let distance = visit_fn(point, primitive_id as usize);
-                    if distance < *max_dist_sq {
-                        *closest_leaf = Some((primitive_id, distance));
-                        *max_dist_sq = distance;
+                    let distance_sq = visit_fn(point, primitive_id as usize);
+                    if distance_sq < *max_dist_sq {
+                        *closest_leaf = Some((primitive_id, distance_sq));
+                        *max_dist_sq = distance_sq;
                     }
                 });
                 true
             };
 
         fast_stack!(u32, (96, 192), self.max_depth, stack, {
-            Bvh2::distance_traverse_dynamic(
+            Bvh2::squared_distance_traverse_dynamic(
                 self,
                 &mut stack,
                 point,
@@ -364,7 +381,7 @@ impl Bvh2Ext for Bvh2 {
     }
 
     #[inline(always)]
-    fn distance_traverse_dynamic<
+    fn squared_distance_traverse_dynamic<
         F: FnMut(&Bvh2Node, &mut f32, &mut Option<(u32, f32)>) -> bool,
         Stack: FastStack<u32>,
     >(
