@@ -189,11 +189,11 @@ impl SpatialQuery<'_, '_> {
             tree.ray_traverse_closest(ray, max_distance, |proxy_id| {
                 let proxy = tree.get_proxy(proxy_id).unwrap();
                 if !filter.test(proxy.collider, proxy.layers) || !predicate(proxy.collider) {
-                    return f32::MAX;
+                    return Scalar::MAX;
                 }
 
                 let Ok((position, rotation, collider)) = self.colliders.get(proxy.collider) else {
-                    return f32::MAX;
+                    return Scalar::MAX;
                 };
 
                 let Some((distance, normal)) = collider.cast_ray(
@@ -204,7 +204,7 @@ impl SpatialQuery<'_, '_> {
                     max_distance,
                     solid,
                 ) else {
-                    return f32::MAX;
+                    return Scalar::MAX;
                 };
 
                 if distance < max_distance {
@@ -544,12 +544,12 @@ impl SpatialQuery<'_, '_> {
                     let proxy = tree.get_proxy(proxy_id).unwrap();
 
                     if !filter.test(proxy.collider, proxy.layers) || !predicate(proxy.collider) {
-                        return f32::MAX;
+                        return Scalar::MAX;
                     }
 
                     let Ok((position, rotation, collider)) = self.colliders.get(proxy.collider)
                     else {
-                        return f32::MAX;
+                        return Scalar::MAX;
                     };
 
                     let Ok(Some(hit)) = parry::query::cast_shapes(
@@ -567,7 +567,7 @@ impl SpatialQuery<'_, '_> {
                                 .compute_contact_on_penetration,
                         },
                     ) else {
-                        return f32::MAX;
+                        return Scalar::MAX;
                     };
                     if hit.time_of_impact < closest_distance {
                         closest_distance = hit.time_of_impact;

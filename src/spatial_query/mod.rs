@@ -170,9 +170,8 @@ pub use system_param::*;
 use crate::prelude::*;
 use bevy::prelude::*;
 
-/// Initializes the [`SpatialQueryPipeline`] resource and handles component-based [spatial queries](spatial_query)
-/// like [raycasting](spatial_query#raycasting) and [shapecasting](spatial_query#shapecasting) with
-/// [`RayCaster`] and [`ShapeCaster`].
+/// Handles component-based [spatial queries](spatial_query) like [raycasting](spatial_query#raycasting)
+/// and [shapecasting](spatial_query#shapecasting) with [`RayCaster`] and [`ShapeCaster`].
 pub struct SpatialQueryPlugin;
 
 impl Plugin for SpatialQueryPlugin {
