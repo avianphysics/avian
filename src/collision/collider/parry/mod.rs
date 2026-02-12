@@ -968,15 +968,15 @@ impl Collider {
     /// Creates a collider shape with a compound shape obtained from the decomposition of a given polyline
     /// defined by its vertex and index buffers.
     #[cfg(feature = "2d")]
-    pub fn convex_decomposition(vertices: Vec<RVector>, indices: Vec<[u32; 2]>) -> Self {
-        SharedShape::convex_decomposition(&vertices, &indices).into()
+    pub fn convex_decomposition(vertices: &[RVector], indices: &[[u32; 2]]) -> Self {
+        SharedShape::convex_decomposition(vertices, indices).into()
     }
 
     /// Creates a collider shape with a compound shape obtained from the decomposition of a given trimesh
     /// defined by its vertex and index buffers.
     #[cfg(feature = "3d")]
-    pub fn convex_decomposition(vertices: Vec<RVector>, indices: Vec<[u32; 3]>) -> Self {
-        SharedShape::convex_decomposition(&vertices, &indices).into()
+    pub fn convex_decomposition(vertices: &[RVector], indices: &[[u32; 3]]) -> Self {
+        SharedShape::convex_decomposition(vertices, indices).into()
     }
 
     /// Creates a collider shape with a compound shape obtained from the decomposition of a given polyline
@@ -984,11 +984,11 @@ impl Collider {
     /// the decomposition process.
     #[cfg(feature = "2d")]
     pub fn convex_decomposition_with_config(
-        vertices: Vec<RVector>,
-        indices: Vec<[u32; 2]>,
+        vertices: &[RVector],
+        indices: &[[u32; 2]],
         params: &VhacdParameters,
     ) -> Self {
-        SharedShape::convex_decomposition_with_params(&vertices, &indices, &params.clone().into())
+        SharedShape::convex_decomposition_with_params(vertices, indices, &params.clone().into())
             .into()
     }
 
@@ -997,26 +997,26 @@ impl Collider {
     /// the decomposition process.
     #[cfg(feature = "3d")]
     pub fn convex_decomposition_with_config(
-        vertices: Vec<RVector>,
-        indices: Vec<[u32; 3]>,
-        params: VhacdParameters,
+        vertices: &[RVector],
+        indices: &[[u32; 3]],
+        params: &VhacdParameters,
     ) -> Self {
-        SharedShape::convex_decomposition_with_params(&vertices, &indices, &params.clone().into())
+        SharedShape::convex_decomposition_with_params(vertices, indices, &params.clone().into())
             .into()
     }
 
     /// Creates a collider with a [convex polygon](https://en.wikipedia.org/wiki/Convex_polygon) shape obtained after computing
     /// the [convex hull](https://en.wikipedia.org/wiki/Convex_hull) of the given points.
     #[cfg(feature = "2d")]
-    pub fn convex_hull(points: Vec<RVector>) -> Option<Self> {
-        SharedShape::convex_hull(&points).map(Into::into)
+    pub fn convex_hull(points: &[RVector]) -> Option<Self> {
+        SharedShape::convex_hull(points).map(Into::into)
     }
 
     /// Creates a collider with a [convex polyhedron](https://en.wikipedia.org/wiki/Convex_polytope) shape obtained after computing
     /// the [convex hull](https://en.wikipedia.org/wiki/Convex_hull) of the given points.
     #[cfg(feature = "3d")]
-    pub fn convex_hull(points: Vec<RVector>) -> Option<Self> {
-        SharedShape::convex_hull(&points).map(Into::into)
+    pub fn convex_hull(points: &[RVector]) -> Option<Self> {
+        SharedShape::convex_hull(points).map(Into::into)
     }
 
     /// Creates a collider with a [convex polygon](https://en.wikipedia.org/wiki/Convex_polygon) shape **without** computing
@@ -1420,11 +1420,11 @@ impl Collider {
             } => Some(Self::trimesh_with_config(vertices, indices, flags)),
             #[cfg(feature = "2d")]
             ColliderConstructor::ConvexDecomposition { vertices, indices } => {
-                Some(Self::convex_decomposition(vertices, indices))
+                Some(Self::convex_decomposition(&vertices, &indices))
             }
             #[cfg(feature = "3d")]
             ColliderConstructor::ConvexDecomposition { vertices, indices } => {
-                Some(Self::convex_decomposition(vertices, indices))
+                Some(Self::convex_decomposition(&vertices, &indices))
             }
             #[cfg(feature = "2d")]
             ColliderConstructor::ConvexDecompositionWithConfig {
@@ -1432,7 +1432,7 @@ impl Collider {
                 indices,
                 params,
             } => Some(Self::convex_decomposition_with_config(
-                vertices, indices, &params,
+                &vertices, &indices, &params,
             )),
             #[cfg(feature = "3d")]
             ColliderConstructor::ConvexDecompositionWithConfig {
@@ -1440,12 +1440,12 @@ impl Collider {
                 indices,
                 params,
             } => Some(Self::convex_decomposition_with_config(
-                vertices, indices, params,
+                &vertices, &indices, &params,
             )),
             #[cfg(feature = "2d")]
-            ColliderConstructor::ConvexHull { points } => Self::convex_hull(points),
+            ColliderConstructor::ConvexHull { points } => Self::convex_hull(&points),
             #[cfg(feature = "3d")]
-            ColliderConstructor::ConvexHull { points } => Self::convex_hull(points),
+            ColliderConstructor::ConvexHull { points } => Self::convex_hull(&points),
             #[cfg(feature = "2d")]
             ColliderConstructor::ConvexPolyline { points } => Self::convex_polyline(points),
             ColliderConstructor::Voxels {
