@@ -478,9 +478,13 @@ pub trait ObvhsAabbExt {
 impl ObvhsAabbExt for Aabb {
     #[inline(always)]
     fn distance_to_point_squared(&self, point: Vec3A) -> f32 {
+        let point = (self.min * 0.0)
+            .with_x(point.x)
+            .with_y(point.y)
+            .with_z(point.z);
         let point_min = self.min - point;
         let point_max = self.max - point;
-        let zero = Vec3A::ZERO;
+        let zero = self.min * 0.0;
         let dist_min = point_min.max(zero);
         let dist_max = point_max.min(zero);
         dist_min.length_squared().min(dist_max.length_squared())
@@ -489,7 +493,11 @@ impl ObvhsAabbExt for Aabb {
     #[inline(always)]
     fn intersect_sweep(&self, sweep: &Sweep) -> f32 {
         let minkowski_sum_shift = -sweep.aabb.center();
-        let minkowski_sum_margin = sweep.aabb.diagonal() * 0.5 + Vec3A::splat(sweep.tmin);
+        let mut minkowski_sum_margin = sweep.aabb.diagonal() * 0.5;
+        minkowski_sum_margin = minkowski_sum_margin
+            .with_x(minkowski_sum_margin.x + sweep.tmin)
+            .with_y(minkowski_sum_margin.y + sweep.tmin)
+            .with_z(minkowski_sum_margin.z + sweep.tmin);
 
         let msum = Aabb {
             min: self.min + minkowski_sum_shift - minkowski_sum_margin,
@@ -498,8 +506,12 @@ impl ObvhsAabbExt for Aabb {
 
         // Now, we cast a ray from the origin along the velocity,
         // and intersect it with the Minkowski sum.
-        let t1 = msum.min * sweep.inv_velocity;
-        let t2 = msum.max * sweep.inv_velocity;
+        let inv_velocity = (msum.min * 0.0)
+            .with_x(sweep.inv_velocity.x)
+            .with_y(sweep.inv_velocity.y)
+            .with_z(sweep.inv_velocity.z);
+        let t1 = msum.min * inv_velocity;
+        let t2 = msum.max * inv_velocity;
 
         let tmin = t1.min(t2);
         let tmax = t1.max(t2);
