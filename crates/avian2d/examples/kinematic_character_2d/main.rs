@@ -10,16 +10,8 @@
 //! The character controller logic is contained within the `plugin` module.
 //!
 //! For a dynamic character controller, see the `dynamic_character_2d` example.
-//!
-//! # Warning
-//!
-//! Note that this is *not* intended to be a fully featured character controller,
-//! and the collision logic is quite basic.
-//!
-//! For a better solution, consider implementing a "collide-and-slide" algorithm,
-//! or use an existing third party character controller plugin like Bevy Tnua
-//! (a dynamic character controller).
 
+#[expect(clippy::type_complexity)]
 mod plugin;
 
 use avian2d::{math::*, prelude::*};
@@ -50,11 +42,19 @@ fn setup(
 ) {
     // Player
     commands.spawn((
+        CharacterController,
+        CharacterMovementSettings::default(),
+        CharacterCollisions::default(),
+        GroundDetection {
+            // Use a slightly smaller capsule for shape casts used for ground detection
+            cast_shape: Some(Collider::capsule(12.49, 20.0)),
+            ..default()
+        },
+        Collider::capsule(12.5, 20.0),
         Mesh2d(meshes.add(Capsule2d::new(12.5, 20.0))),
         MeshMaterial2d(materials.add(Color::srgb(0.2, 0.7, 0.9))),
         Transform::from_xyz(0.0, -100.0, 0.0),
-        CharacterControllerBundle::new(Collider::capsule(12.5, 20.0), Vector::NEG_Y * 1500.0)
-            .with_movement(1250.0, 5.0, 400.0, (30.0 as Scalar).to_radians()),
+        TransformInterpolation,
     ));
 
     // A cube to move around
@@ -67,6 +67,7 @@ fn setup(
         Transform::from_xyz(50.0, -100.0, 0.0),
         RigidBody::Dynamic,
         Collider::rectangle(30.0, 30.0),
+        TransformInterpolation,
     ));
 
     // Platforms
