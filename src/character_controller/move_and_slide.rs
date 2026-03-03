@@ -788,7 +788,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         filter: &SpatialQueryFilter,
     ) -> Option<MoveHitData> {
         let (direction, distance) = Dir::new_and_length(movement.f32()).unwrap_or((Dir::X, 0.0));
-        let distance = distance.adjust_precision();
+        let distance = distance.adjust_precision() + skin_width;
         let shape_hit = self.spatial_query.cast_shape_predicate(
             shape,
             shape_position,
