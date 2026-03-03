@@ -54,7 +54,6 @@ fn setup(
         MeshMaterial3d(materials.add(Color::srgb(0.8, 0.7, 0.6))),
         Transform::from_xyz(0.0, 1.5, 0.0),
         TransformInterpolation,
-        SleepingDisabled,
     ));
 
     // A cube to move around

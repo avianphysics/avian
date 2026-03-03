@@ -60,6 +60,9 @@ pub struct CharacterMovementSettings {
     pub jump_impulse: Scalar,
     /// The gravitational acceleration used for the character.
     pub gravity: Vector,
+    /// The maximum speed that gravity can accelerate the character to.
+    /// This prevents the character from accelerating indefinitely while falling.
+    pub terminal_velocity: Scalar,
 }
 
 impl Default for CharacterMovementSettings {
@@ -69,6 +72,7 @@ impl Default for CharacterMovementSettings {
             damping: 10.0,
             jump_impulse: 7.0,
             gravity: Vector::new(0.0, -9.81 * 2.0, 0.0),
+            terminal_velocity: 50.0,
         }
     }
 }
@@ -188,7 +192,8 @@ fn update_grounded(
 
         // The character is grounded if we hit a surface that isn't too steep
         let is_grounded = hit.is_some_and(|hit| {
-            (rotation * hit.normal1).angle_between(Vector::Y).abs() <= ground_detection.max_angle
+            let up = global_transform.up().adjust_precision();
+            (rotation * hit.normal1).angle_between(up) <= ground_detection.max_angle
         });
 
         // Update grounded state
@@ -237,7 +242,24 @@ fn apply_gravity(
     let delta_secs = time.delta_secs_f64().adjust_precision();
 
     for (movement, mut linear_velocity) in &mut controllers {
-        linear_velocity.0 += movement.gravity * delta_secs;
+        let gravity_direction = movement.gravity.normalize_or_zero();
+
+        let velocity_along_gravity = linear_velocity.dot(gravity_direction);
+        if velocity_along_gravity > movement.terminal_velocity {
+            // Don't apply more gravity if we're already at terminal velocity.
+            continue;
+        }
+
+        // Calculate the new velocity after applying gravity.
+        let new_velocity = linear_velocity.0 + movement.gravity * delta_secs;
+
+        // Don't exceed terminal velocity.
+        let new_velocity_along_gravity = new_velocity.dot(gravity_direction);
+        if new_velocity_along_gravity < movement.terminal_velocity {
+            linear_velocity.0 = new_velocity;
+        } else {
+            linear_velocity.0 = gravity_direction * movement.terminal_velocity;
+        }
     }
 }
 
@@ -279,7 +301,7 @@ fn move_and_slide(
     for (entity, ground_detection, mut collisions, mut transform, mut lin_vel, collider) in
         &mut query
     {
-        let mut is_grounded = false;
+        let mut hit_ground_or_ceiling = false;
 
         if let Some(collisions) = &mut collisions {
             // Clear previous collisions
@@ -313,6 +335,7 @@ fn move_and_slide(
                 // Determine if the surface is ground based on the angle between the up-vector and the hit normal.
                 let angle = up.angle_between(**hit.normal);
                 let is_ground = angle <= ground_detection.max_angle;
+                let is_ceiling = is_ground && up.dot(**hit.normal) < 0.0;
 
                 // Decompose the original input velocity into components relative to the hit normal and the up direction,
                 // to determine how much of the velocity is contributing to climbing, slipping, and unconstrained movement.
@@ -355,9 +378,9 @@ fn move_and_slide(
                 // Update the current velocity used by the algorithm.
                 *hit.velocity = projected_velocity;
 
-                if is_ground {
-                    // We hit a ground surface!
-                    is_grounded = true;
+                if is_ground || is_ceiling {
+                    // We hit a ground or ceiling surface!
+                    hit_ground_or_ceiling = true;
                 }
 
                 if let Some(collisions) = &mut collisions {
@@ -378,10 +401,14 @@ fn move_and_slide(
         // Update position to the final position calculated by move-and-slide.
         transform.translation = new_position.f32();
 
-        // If we are grounded, we want to set the vertical velocity to the projected velocity,
-        // which will prevent us from accumulating gravity while grounded.
-        if is_grounded {
-            lin_vel.y = projected_velocity.y;
+        // If we hit the ground or a ceiling, update the velocity along the up-direction
+        // to prevent accumulating velocity along the ground normal when hitting slopes,
+        // and to prevent sticking to ceilings when jumping.
+        if hit_ground_or_ceiling {
+            let up = up.adjust_precision();
+            let velocity_along_up = lin_vel.dot(up);
+            let new_velocity_along_up = projected_velocity.dot(up);
+            lin_vel.0 += (new_velocity_along_up - velocity_along_up) * up;
         }
     }
 }
@@ -403,13 +430,11 @@ struct VelocityDecomposition {
 fn decompose_hit_velocity(velocity: Vector, normal: Dir, up: Dir) -> VelocityDecomposition {
     let normal = normal.adjust_precision();
     let normal_part = normal * normal.dot(velocity);
+    let tangent_part = velocity - normal_part;
 
-    let tangent = velocity - normal_part;
-    let horizontal_tangent_dir = normal.cross(*up);
-
-    let horizontal_tangent_dir = horizontal_tangent_dir.normalize_or_zero();
-    let horizontal_tangent = tangent.dot(horizontal_tangent_dir) * horizontal_tangent_dir;
-    let vertical_tangent = tangent - horizontal_tangent;
+    let horizontal_tangent_dir = normal.cross(*up).normalize_or_zero();
+    let horizontal_tangent = tangent_part.dot(horizontal_tangent_dir) * horizontal_tangent_dir;
+    let vertical_tangent = tangent_part - horizontal_tangent;
 
     VelocityDecomposition {
         normal_part,
