@@ -43,6 +43,7 @@ fn setup(
     commands.spawn((
         CharacterController,
         CharacterMovementSettings::default(),
+        CharacterCollisions::default(),
         GroundDetection {
             // Use a slightly smaller capsule for shape casts used for ground detection
             cast_shape: Some(Collider::capsule(0.399, 1.0)),

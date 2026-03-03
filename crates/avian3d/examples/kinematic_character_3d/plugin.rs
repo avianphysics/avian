@@ -21,6 +21,7 @@ impl Plugin for CharacterControllerPlugin {
                 movement,
                 apply_movement_damping,
                 move_and_slide,
+                apply_forces_to_dynamic_bodies,
             )
                 .chain(),
         );
@@ -103,6 +104,24 @@ impl Default for GroundDetection {
 #[derive(Component)]
 #[component(storage = "SparseSet")]
 pub struct Grounded;
+
+/// A component containing information about the current collisions for a character controller.
+///
+/// This is used to apply forces to dynamic rigid bodies hit by the character.
+#[derive(Component, Default, Deref)]
+pub struct CharacterCollisions(Vec<CharacterCollision>);
+
+/// Information about a collision between a character controller and another collider.
+pub struct CharacterCollision {
+    /// The collider that was hit by the character.
+    pub collider: Entity,
+    /// The point of contact in world space.
+    pub point: Vector,
+    /// The normal of the contact surface, pointing away from the character.
+    pub normal: Dir3,
+    /// The velocity of the character at the point of contact.
+    pub character_velocity: Vector,
+}
 
 /// Sends [`MovementAction`] events based on keyboard input.
 fn keyboard_input(
@@ -247,6 +266,7 @@ fn move_and_slide(
         (
             Entity,
             Option<&GroundDetection>,
+            Option<&mut CharacterCollisions>,
             &mut Transform,
             &mut LinearVelocity,
             &Collider,
@@ -256,8 +276,15 @@ fn move_and_slide(
     move_and_slide: MoveAndSlide,
     time: Res<Time>,
 ) {
-    for (entity, ground_detection, mut transform, mut lin_vel, collider) in &mut query {
+    for (entity, ground_detection, mut collisions, mut transform, mut lin_vel, collider) in
+        &mut query
+    {
         let mut is_grounded = false;
+
+        if let Some(collisions) = &mut collisions {
+            // Clear previous collisions
+            collisions.0.clear();
+        }
 
         let up = transform.up();
 
@@ -333,6 +360,16 @@ fn move_and_slide(
                     is_grounded = true;
                 }
 
+                if let Some(collisions) = &mut collisions {
+                    // Record the collision for use in other systems, such as applying forces to dynamic bodies.
+                    collisions.0.push(CharacterCollision {
+                        collider: hit.entity,
+                        point: hit.point,
+                        normal: *hit.normal,
+                        character_velocity: *hit.velocity,
+                    });
+                }
+
                 // Accept the hit and continue the move-and-slide algorithm with the modified velocity.
                 MoveAndSlideHitResponse::Accept
             },
@@ -387,4 +424,33 @@ fn split_into_components(v: Vector, up: Dir) -> [Vector; 2] {
     let vertical_component = vertical_dir.adjust_precision() * v.dot(vertical_dir);
     let horizontal_component = v - vertical_component;
     [horizontal_component, vertical_component]
+}
+
+/// Applies forces to dynamic rigid bodies hit by character controllers based on their collisions.
+fn apply_forces_to_dynamic_bodies(
+    characters: Query<(&ComputedMass, &CharacterCollisions)>,
+    colliders: Query<&ColliderOf>,
+    mut rigid_bodies: Query<(&RigidBody, Forces)>,
+) {
+    for (mass, collisions) in &characters {
+        let mass = mass.value();
+        for collision in &collisions.0 {
+            let Ok(collider_of) = colliders.get(collision.collider) else {
+                continue;
+            };
+            let Ok((rigid_body, mut forces)) = rigid_bodies.get_mut(collider_of.body) else {
+                continue;
+            };
+            if !rigid_body.is_dynamic() {
+                continue;
+            }
+
+            let touch_dir = -collision.normal;
+            let relative_velocity = collision.character_velocity - forces.linear_velocity();
+            let touch_velocity = touch_dir.dot(relative_velocity) * touch_dir;
+            let impulse = touch_velocity * mass;
+
+            forces.apply_linear_impulse_at_point(impulse, collision.point);
+        }
+    }
 }
