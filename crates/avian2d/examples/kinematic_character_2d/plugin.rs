@@ -298,7 +298,7 @@ fn move_and_slide(
             collisions.0.clear();
         }
 
-        let up = Dir2::new_unchecked(transform.up().xy());
+        let up = transform.up().xy().adjust_precision();
 
         // Perform move-and-slide
         let MoveAndSlideOutput {
@@ -323,7 +323,7 @@ fn move_and_slide(
                 };
 
                 // Determine if the surface is ground based on the angle between the up-vector and the hit normal.
-                let angle = up.angle_to(**hit.normal).abs();
+                let angle = up.angle_to(hit.normal.adjust_precision()).abs();
                 let is_ground = angle <= ground_detection.max_angle;
                 let is_ceiling = angle >= PI - ground_detection.max_angle;
 
@@ -425,9 +425,8 @@ fn decompose_hit_velocity(velocity: Vector, normal: Dir) -> VelocityDecompositio
 }
 
 /// Splits a vector into horizontal and vertical components relative to a given `up` direction.
-fn split_into_components(v: Vector, up: Dir) -> [Vector; 2] {
-    let vertical_dir = *up;
-    let vertical_component = vertical_dir.adjust_precision() * v.dot(vertical_dir);
+fn split_into_components(v: Vector, up: Vector) -> [Vector; 2] {
+    let vertical_component = up * v.dot(up);
     let horizontal_component = v - vertical_component;
     [horizontal_component, vertical_component]
 }
@@ -451,7 +450,7 @@ fn apply_forces_to_dynamic_bodies(
                 continue;
             }
 
-            let touch_dir = -collision.normal;
+            let touch_dir = -collision.normal.adjust_precision();
             let relative_velocity = collision.character_velocity - forces.linear_velocity();
             let touch_velocity = touch_dir.dot(relative_velocity) * touch_dir;
             let impulse = touch_velocity * mass;

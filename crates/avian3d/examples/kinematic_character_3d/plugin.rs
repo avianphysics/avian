@@ -178,12 +178,14 @@ fn update_grounded(
         let Some(collider) = &ground_detection.cast_shape else {
             continue;
         };
-        let rotation = global_transform.rotation();
+
+        let translation = global_transform.translation().adjust_precision();
+        let rotation = global_transform.rotation().adjust_precision();
 
         // Cast the shape downward to check for ground
         let hit = spatial_query.cast_shape(
             collider,
-            global_transform.translation(),
+            translation,
             rotation,
             global_transform.down(),
             &ShapeCastConfig::from_max_distance(ground_detection.max_distance),
@@ -308,7 +310,7 @@ fn move_and_slide(
             collisions.0.clear();
         }
 
-        let up = transform.up();
+        let up = transform.up().adjust_precision();
 
         // Perform move-and-slide
         let MoveAndSlideOutput {
@@ -333,9 +335,9 @@ fn move_and_slide(
                 };
 
                 // Determine if the surface is ground based on the angle between the up-vector and the hit normal.
-                let angle = up.angle_between(**hit.normal);
+                let angle = up.angle_between(hit.normal.adjust_precision());
                 let is_ground = angle <= ground_detection.max_angle;
-                let is_ceiling = is_ground && up.dot(**hit.normal) < 0.0;
+                let is_ceiling = is_ground && up.dot(hit.normal.adjust_precision()) < 0.0;
 
                 // Decompose the original input velocity into components relative to the hit normal and the up direction,
                 // to determine how much of the velocity is contributing to climbing, slipping, and unconstrained movement.
@@ -427,12 +429,12 @@ struct VelocityDecomposition {
 }
 
 /// Decomposes a velocity vector into parts relative to a collision `normal` and an `up` direction.
-fn decompose_hit_velocity(velocity: Vector, normal: Dir, up: Dir) -> VelocityDecomposition {
+fn decompose_hit_velocity(velocity: Vector, normal: Dir, up: Vector) -> VelocityDecomposition {
     let normal = normal.adjust_precision();
     let normal_part = normal * normal.dot(velocity);
     let tangent_part = velocity - normal_part;
 
-    let horizontal_tangent_dir = normal.cross(*up).normalize_or_zero();
+    let horizontal_tangent_dir = normal.cross(up).normalize_or_zero();
     let horizontal_tangent = tangent_part.dot(horizontal_tangent_dir) * horizontal_tangent_dir;
     let vertical_tangent = tangent_part - horizontal_tangent;
 
@@ -444,9 +446,8 @@ fn decompose_hit_velocity(velocity: Vector, normal: Dir, up: Dir) -> VelocityDec
 }
 
 /// Splits a vector into horizontal and vertical components relative to a given `up` direction.
-fn split_into_components(v: Vector, up: Dir) -> [Vector; 2] {
-    let vertical_dir = *up;
-    let vertical_component = vertical_dir.adjust_precision() * v.dot(vertical_dir);
+fn split_into_components(v: Vector, up: Vector) -> [Vector; 2] {
+    let vertical_component = up * v.dot(up);
     let horizontal_component = v - vertical_component;
     [horizontal_component, vertical_component]
 }
@@ -470,7 +471,7 @@ fn apply_forces_to_dynamic_bodies(
                 continue;
             }
 
-            let touch_dir = -collision.normal;
+            let touch_dir = -collision.normal.adjust_precision();
             let relative_velocity = collision.character_velocity - forces.linear_velocity();
             let touch_velocity = touch_dir.dot(relative_velocity) * touch_dir;
             let impulse = touch_velocity * mass;
