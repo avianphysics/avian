@@ -777,7 +777,7 @@ fn update_solver_body_aabbs<C: AnyCollider>(
                     // TODO: Should we expand the AABB in all directions for speculative contacts?
                     *aabb = collider
                         .swept_aabb_with_context(pos.0, *rot, end_pos, end_rot, context)
-                        .grow(Vector::splat(collision_margin));
+                        .grow(Vector::splat(contact_tolerance + collision_margin));
                 }
 
                 let moved = enlarged_aabb.update(&aabb, margin);
@@ -884,13 +884,14 @@ pub fn update_moved_collider_aabbs<C: AnyCollider>(
     e.standalone_proxies.clear_and_set_capacity(cap_standalone);
 
     let contact_tolerance = length_unit.0 * narrow_phase_config.contact_tolerance;
+    let margin = length_unit.0 * 0.05;
 
     // TODO: This doesn't do velocity-based enlargement like the dynamic/kinematic AABB update.
     //       We should overall rework CCD to not rely on velocity-based AABB enlargement for all bodies.
     // TODO: par-iter over all colliders, check if they have actually changed since the `LastPhysicsTick`
     let mut collider_query = colliders.p0();
     collider_query.par_iter_mut().for_each(
-        |(entity, pos, rot, mut aabb, mut enlarged_aabb, collider, margin, proxy_key)| {
+        |(entity, pos, rot, mut aabb, mut enlarged_aabb, collider, collision_margin, proxy_key)| {
             // Skip if the collider's AABB can't have changed since the last physics tick.
             if !pos.last_changed().is_newer_than(last_tick.0, this_run)
                 && !rot.last_changed().is_newer_than(last_tick.0, this_run)
@@ -899,15 +900,15 @@ pub fn update_moved_collider_aabbs<C: AnyCollider>(
                 return;
             }
 
-            let margin = margin.map_or(0.0, |margin| margin.0);
+            let collision_margin = collision_margin.map_or(0.0, |margin| margin.0);
 
             let context = AabbContext::new(entity, &*collider_context);
 
             // Compute the AABB of the collider.
             *aabb = collider
                 .aabb_with_context(pos.0, *rot, context)
-                .grow(Vector::splat(contact_tolerance + margin));
-            let moved = enlarged_aabb.update(&aabb, 1e-4);
+                .grow(Vector::splat(contact_tolerance + collision_margin));
+            let moved = enlarged_aabb.update(&aabb, margin);
 
             if moved {
                 let tree_type = proxy_key.tree_type();

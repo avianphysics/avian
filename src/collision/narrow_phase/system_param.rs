@@ -2,7 +2,10 @@
 use core::cell::RefCell;
 
 use crate::{
-    collision::contact_types::{ContactEdgeFlags, ContactId},
+    collision::{
+        collider::EnlargedAabb,
+        contact_types::{ContactEdgeFlags, ContactId},
+    },
     data_structures::{bit_vec::BitVec, pair_key::PairKey},
     dynamics::solver::{
         constraint_graph::ConstraintGraph,
@@ -27,7 +30,7 @@ struct ColliderQuery<C: AnyCollider> {
     entity: Entity,
     of: Option<Read<ColliderOf>>,
     shape: Read<C>,
-    aabb: Read<ColliderAabb>,
+    enlarged_aabb: Read<EnlargedAabb>,
     position: Read<Position>,
     rotation: Read<Rotation>,
     transform: Option<Read<ColliderTransform>>,
@@ -505,7 +508,7 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
             };
 
             // Check if the AABBs of the colliders still overlap and the contact pair is valid.
-            let overlap = collider1.aabb.intersects(collider2.aabb);
+            let overlap = collider1.enlarged_aabb.intersects(collider2.enlarged_aabb);
 
             // Also check if the collision layers are still compatible and the contact pair is valid.
             // TODO: Ideally, we would have fine-grained change detection for `CollisionLayers`

@@ -240,6 +240,28 @@ impl ColliderTree {
         unsafe { self.proxies.get_unchecked_mut(proxy_id.index()) }
     }
 
+    /// Gets the AABB of a proxy in the tree.
+    ///
+    /// Returns `None` if the proxy ID is invalid.
+    #[inline]
+    pub fn get_proxy_aabb(&self, proxy_id: ProxyId) -> Option<Aabb> {
+        let node_id = self.bvh.primitives_to_nodes.get(proxy_id.index())?;
+        self.bvh.nodes.get(*node_id as usize).map(|node| node.aabb)
+    }
+
+    /// Gets the AABB of a proxy in the tree without bounds checking.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that the `proxy_id` is valid.
+    #[inline]
+    pub unsafe fn get_proxy_aabb_unchecked(&self, proxy_id: ProxyId) -> Aabb {
+        unsafe {
+            let node_id = *self.bvh.primitives_to_nodes.get_unchecked(proxy_id.index()) as usize;
+            self.bvh.nodes.get_unchecked(node_id).aabb
+        }
+    }
+
     /// Updates the AABB of a proxy in the tree.
     ///
     /// If the BVH should be refitted at the same time, consider using

@@ -15,6 +15,7 @@ use bevy::{
     prelude::*,
     tasks::{ComputeTaskPool, ParallelSlice},
 };
+use obvhs::aabb::Aabb;
 
 /// A [broad phase](crate::collision::broad_phase) plugin that uses a [Bounding Volume Hierarchy (BVH)][BVH]
 /// to efficiently find pairs of colliders with overlapping AABBs.
@@ -82,6 +83,10 @@ fn collect_collision_pairs<H: CollisionHooks>(
                     let tree = trees.tree_for_type(proxy_type1);
                     let proxy1 = tree.get_proxy(proxy_key1.id()).unwrap();
 
+                    let Some(proxy_aabb1) = tree.get_proxy_aabb(proxy_id1) else {
+                        continue;
+                    };
+
                     // Query dynamic tree.
                     query_tree(
                         &trees.dynamic_tree,
@@ -89,6 +94,7 @@ fn collect_collision_pairs<H: CollisionHooks>(
                         *proxy_key1,
                         proxy_id1,
                         proxy_type1,
+                        proxy_aabb1,
                         proxy1,
                         &moved_proxies,
                         &hooks,
@@ -105,6 +111,7 @@ fn collect_collision_pairs<H: CollisionHooks>(
                         *proxy_key1,
                         proxy_id1,
                         proxy_type1,
+                        proxy_aabb1,
                         proxy1,
                         &moved_proxies,
                         &hooks,
@@ -123,6 +130,7 @@ fn collect_collision_pairs<H: CollisionHooks>(
                             *proxy_key1,
                             proxy_id1,
                             proxy_type1,
+                            proxy_aabb1,
                             proxy1,
                             &moved_proxies,
                             &hooks,
@@ -140,6 +148,7 @@ fn collect_collision_pairs<H: CollisionHooks>(
                         *proxy_key1,
                         proxy_id1,
                         proxy_type1,
+                        proxy_aabb1,
                         proxy1,
                         &moved_proxies,
                         &hooks,
@@ -204,6 +213,7 @@ fn query_tree(
     proxy_key1: ColliderTreeProxyKey,
     proxy_id1: ProxyId,
     proxy_type1: ColliderTreeType,
+    proxy_aabb1: Aabb,
     proxy1: &ColliderTreeProxy,
     moved_proxies: &MovedProxies,
     hooks: &impl CollisionHooks,
@@ -212,7 +222,7 @@ fn query_tree(
     joint_graph: &JointGraph,
     pairs: &mut Vec<(ColliderTreeProxyKey, ColliderTreeProxyKey)>,
 ) {
-    tree.bvh.aabb_traverse(proxy1.aabb, |bvh, node_index| {
+    tree.bvh.aabb_traverse(proxy_aabb1, |bvh, node_index| {
         let node = &bvh.nodes[node_index as usize];
         let start = node.first_index as usize;
         let end = start + node.prim_count as usize;
