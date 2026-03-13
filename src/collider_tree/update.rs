@@ -26,6 +26,13 @@ use bevy::{
 use obvhs::aabb::Aabb;
 use thread_local::ThreadLocal;
 
+/// An extra margin added around the [`EnlargedAabb`]. This allows proxies
+/// to move a small amount without triggering a tree update.
+///
+/// This is implicitly scaled by the [`PhysicsLengthUnit`].
+// TODO: This should probably be configurable.
+const AABB_MARGIN: Scalar = 0.05;
+
 /// A plugin for updating [`ColliderTree`]s for a collider type `C`.
 ///
 /// [`ColliderTree`]: crate::collider_tree::ColliderTree
@@ -79,17 +86,22 @@ impl<C: AnyCollider> Plugin for ColliderTreeUpdatePlugin<C> {
              length_unit: Res<PhysicsLengthUnit>,
              collider_context: StaticSystemParam<C::Context>| {
                 let contact_tolerance = length_unit.0 * narrow_phase_config.contact_tolerance;
-                let aabb_context = AabbContext::new(trigger.entity, &*collider_context);
+                let margin = length_unit.0 * AABB_MARGIN;
 
                 if let Ok((collider, pos, rot, collision_margin, mut aabb, mut enlarged_aabb)) =
                     query.get_mut(trigger.entity)
                 {
-                    // TODO: Should we instead do this in `add_to_tree_on`?
                     let collision_margin = collision_margin.map_or(0.0, |m| m.0);
+
+                    // TODO: Should we instead do this in `add_to_tree_on`?
+                    // Update tight-fitting AABB.
+                    let context = AabbContext::new(trigger.entity, &*collider_context);
+                    let growth = Vector::splat(contact_tolerance + collision_margin);
                     *aabb = collider
-                        .aabb_with_context(pos.0, *rot, aabb_context)
-                        .grow(Vector::splat(contact_tolerance + collision_margin));
-                    enlarged_aabb.update(&aabb, 0.0);
+                        .aabb_with_context(pos.0, *rot, context)
+                        .grow(growth);
+
+                    enlarged_aabb.update(&aabb, margin);
                 }
             },
         );
@@ -124,7 +136,6 @@ impl<C: AnyCollider> Plugin for ColliderTreeUpdatePlugin<C> {
              mut collider_query: Query<
                 (
                     &ColliderTreeProxyKey,
-                    &ColliderAabb,
                     &EnlargedAabb,
                     Option<&CollisionLayers>,
                     Has<Sensor>,
@@ -139,7 +150,6 @@ impl<C: AnyCollider> Plugin for ColliderTreeUpdatePlugin<C> {
 
                 let Ok((
                     proxy_key,
-                    collider_aabb,
                     enlarged_aabb,
                     layers,
                     is_sensor,
@@ -158,14 +168,10 @@ impl<C: AnyCollider> Plugin for ColliderTreeUpdatePlugin<C> {
                 moved_proxies.remove(proxy_key);
 
                 // If the collider still exists, move it to the standalone tree.
-                let aabb = Aabb::from(*collider_aabb);
-                let enlarged_aabb = Aabb::from(enlarged_aabb.get());
-
                 let proxy = ColliderTreeProxy {
                     collider: entity,
                     body: None,
                     layers: layers.copied().unwrap_or_default(),
-                    aabb,
                     flags: ColliderTreeProxyFlags::new(
                         is_sensor,
                         false,
@@ -175,7 +181,7 @@ impl<C: AnyCollider> Plugin for ColliderTreeUpdatePlugin<C> {
                 };
 
                 let standalone_tree = &mut trees.standalone_tree;
-                let proxy_id = standalone_tree.add_proxy(enlarged_aabb, proxy);
+                let proxy_id = standalone_tree.add_proxy(Aabb::from(enlarged_aabb.get()), proxy);
                 let new_proxy_key =
                     ColliderTreeProxyKey::new(proxy_id, ColliderTreeType::Standalone);
 
@@ -203,7 +209,6 @@ impl<C: AnyCollider> Plugin for ColliderTreeUpdatePlugin<C> {
              body_query: Query<(&RigidBody, &RigidBodyColliders, Has<RigidBodyDisabled>)>,
              mut collider_query: Query<
                 (
-                    &ColliderAabb,
                     &EnlargedAabb,
                     &mut ColliderTreeProxyKey,
                     Option<&CollisionLayers>,
@@ -223,7 +228,6 @@ impl<C: AnyCollider> Plugin for ColliderTreeUpdatePlugin<C> {
 
                 for collider_entity in body_colliders.iter() {
                     let Ok((
-                        collider_aabb,
                         enlarged_aabb,
                         mut proxy_key,
                         layers,
@@ -248,14 +252,12 @@ impl<C: AnyCollider> Plugin for ColliderTreeUpdatePlugin<C> {
                     moved_proxies.remove(&proxy_key);
 
                     // Insert the proxy into the new tree.
-                    let aabb = Aabb::from(*collider_aabb);
                     let enlarged_aabb = Aabb::from(enlarged_aabb.get());
 
                     let proxy = ColliderTreeProxy {
                         collider: collider_entity,
                         body: Some(entity),
                         layers: layers.copied().unwrap_or_default(),
-                        aabb,
                         flags: ColliderTreeProxyFlags::new(
                             is_sensor,
                             is_body_disabled,
@@ -405,7 +407,6 @@ fn add_to_tree_on<E: EntityEvent, B: Bundle, F: QueryFilter>(
     mut collider_query: Query<
         (
             Option<&ColliderOf>,
-            &ColliderAabb,
             &EnlargedAabb,
             &mut ColliderTreeProxyKey,
             Option<&CollisionLayers>,
@@ -422,7 +423,6 @@ fn add_to_tree_on<E: EntityEvent, B: Bundle, F: QueryFilter>(
 
     let Ok((
         collider_of,
-        collider_aabb,
         enlarged_aabb,
         mut proxy_key,
         layers,
@@ -441,14 +441,10 @@ fn add_to_tree_on<E: EntityEvent, B: Bundle, F: QueryFilter>(
             (ColliderTreeType::Standalone, false)
         };
 
-    let aabb = Aabb::from(*collider_aabb);
-    let enlarged_aabb = Aabb::from(enlarged_aabb.get());
-
     let proxy = ColliderTreeProxy {
         collider: entity,
         body: collider_of.map(|c| c.body),
         layers: layers.copied().unwrap_or_default(),
-        aabb,
         flags: ColliderTreeProxyFlags::new(
             is_sensor,
             is_body_disabled,
@@ -467,7 +463,7 @@ fn add_to_tree_on<E: EntityEvent, B: Bundle, F: QueryFilter>(
 
     // Insert the proxy into the appropriate tree.
     let tree = trees.tree_for_type_mut(tree_type);
-    let proxy_id = tree.add_proxy(enlarged_aabb, proxy);
+    let proxy_id = tree.add_proxy(Aabb::from(enlarged_aabb.get()), proxy);
 
     // Store the proxy key.
     *proxy_key = ColliderTreeProxyKey::new(proxy_id, tree_type);
@@ -680,7 +676,7 @@ fn update_solver_body_aabbs<C: AnyCollider>(
             ),
             Without<ColliderDisabled>,
         >,
-        Query<(&ColliderAabb, &EnlargedAabb), Without<ColliderDisabled>>,
+        Query<&EnlargedAabb, Without<ColliderDisabled>>,
     )>,
     narrow_phase_config: Res<NarrowPhaseConfig>,
     length_unit: Res<PhysicsLengthUnit>,
@@ -710,7 +706,7 @@ fn update_solver_body_aabbs<C: AnyCollider>(
     let delta_secs = time.delta_seconds_adjusted();
     let default_speculative_margin = length_unit.0 * narrow_phase_config.default_speculative_margin;
     let contact_tolerance = length_unit.0 * narrow_phase_config.contact_tolerance;
-    let margin = length_unit.0 * 0.05;
+    let margin = length_unit.0 * AABB_MARGIN;
 
     let collider_query = colliders.p0();
 
@@ -739,11 +735,12 @@ fn update_solver_body_aabbs<C: AnyCollider>(
                 };
 
                 let context = AabbContext::new(collider_entity, &*collider_context);
+                let growth = Vector::splat(contact_tolerance + collision_margin);
 
                 if speculative_margin <= 0.0 {
                     *aabb = collider
                         .aabb_with_context(pos.0, *rot, context)
-                        .grow(Vector::splat(contact_tolerance + collision_margin));
+                        .grow(growth);
                 } else {
                     // If the rigid body is rotating, off-center colliders will orbit around it,
                     // which affects their linear velocities. We need to compute the linear velocity
@@ -777,7 +774,7 @@ fn update_solver_body_aabbs<C: AnyCollider>(
                     // TODO: Should we expand the AABB in all directions for speculative contacts?
                     *aabb = collider
                         .swept_aabb_with_context(pos.0, *rot, end_pos, end_rot, context)
-                        .grow(Vector::splat(contact_tolerance + collision_margin));
+                        .grow(growth);
                 }
 
                 let moved = enlarged_aabb.update(&aabb, margin);
@@ -854,7 +851,7 @@ pub fn update_moved_collider_aabbs<C: AnyCollider>(
             ),
             Without<ColliderDisabled>,
         >,
-        Query<(&ColliderAabb, &EnlargedAabb), Without<ColliderDisabled>>,
+        Query<&EnlargedAabb, Without<ColliderDisabled>>,
     )>,
     narrow_phase_config: Res<NarrowPhaseConfig>,
     length_unit: Res<PhysicsLengthUnit>,
@@ -884,7 +881,7 @@ pub fn update_moved_collider_aabbs<C: AnyCollider>(
     e.standalone_proxies.clear_and_set_capacity(cap_standalone);
 
     let contact_tolerance = length_unit.0 * narrow_phase_config.contact_tolerance;
-    let margin = length_unit.0 * 0.05;
+    let margin = length_unit.0 * AABB_MARGIN;
 
     // TODO: This doesn't do velocity-based enlargement like the dynamic/kinematic AABB update.
     //       We should overall rework CCD to not rely on velocity-based AABB enlargement for all bodies.
@@ -902,12 +899,14 @@ pub fn update_moved_collider_aabbs<C: AnyCollider>(
 
             let collision_margin = collision_margin.map_or(0.0, |margin| margin.0);
 
+            // Update tight-fitting AABB.
             let context = AabbContext::new(entity, &*collider_context);
-
-            // Compute the AABB of the collider.
+            let growth = Vector::splat(contact_tolerance + collision_margin);
             *aabb = collider
                 .aabb_with_context(pos.0, *rot, context)
-                .grow(Vector::splat(contact_tolerance + collision_margin));
+                .grow(growth);
+
+            // Try to update the enlarged AABB, and if it changed, mark the proxy as moved.
             let moved = enlarged_aabb.update(&aabb, margin);
 
             if moved {
@@ -986,7 +985,7 @@ fn update_tree(
     tree_type: ColliderTreeType,
     tree: &mut ColliderTree,
     bit_vec: &BitVec,
-    aabbs: &Query<(&ColliderAabb, &EnlargedAabb), Without<ColliderDisabled>>,
+    aabbs: &Query<&EnlargedAabb, Without<ColliderDisabled>>,
     moved_proxies: &mut MovedProxies,
     update_proxy_fn: impl Fn(&mut ColliderTree, ProxyId, Aabb),
 ) {
@@ -997,21 +996,15 @@ fn update_tree(
             let proxy = &mut tree.proxies[proxy_id.index()];
             let entity = proxy.collider;
 
-            // TODO: Get rid of the query here. We should be able to mutably write the AABBs directly
-            //       in the parallel loop above and avoid this extra query.
-            let (aabb, enlarged_aabb) = aabbs.get(entity).unwrap_or_else(|_| {
+            let enlarged_aabb = aabbs.get(entity).unwrap_or_else(|_| {
                 panic!(
                     "EnlargedAabb missing for moved collider entity {:?}",
                     entity
                 )
             });
 
-            let aabb = Aabb::from(*aabb);
-            let enlarged_aabb = Aabb::from(enlarged_aabb.get());
-
             // Update the proxy's AABB.
-            proxy.aabb = aabb;
-            update_proxy_fn(tree, proxy_id, enlarged_aabb);
+            update_proxy_fn(tree, proxy_id, Aabb::from(enlarged_aabb.get()));
 
             // Record the moved proxy.
             let proxy_key = ColliderTreeProxyKey::new(proxy_id, tree_type);

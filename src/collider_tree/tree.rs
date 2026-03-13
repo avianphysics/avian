@@ -42,8 +42,6 @@ pub struct ColliderTreeProxy {
     pub collider: Entity,
     /// The body this collider is attached to.
     pub body: Option<Entity>,
-    /// The tight AABB of the collider.
-    pub aabb: Aabb,
     /// The collision layers of the collider.
     pub layers: CollisionLayers,
     /// Flags for the proxy.
@@ -294,9 +292,6 @@ impl ColliderTree {
     /// Updates the AABB of a proxy and reinserts it at an optimal place in the tree.
     #[inline]
     pub fn reinsert_proxy(&mut self, proxy_id: ProxyId, aabb: Aabb) {
-        // Update the proxy's AABB.
-        self.proxies[proxy_id.index()].aabb = aabb;
-
         // Reinsert the node into the BVH.
         let node_id = self.bvh.primitives_to_nodes[proxy_id.index()];
         self.bvh.resize_node(node_id as usize, aabb);

@@ -59,6 +59,7 @@ use parry::query::ShapeCastOptions;
 #[derive(SystemParam)]
 pub struct SpatialQuery<'w, 's> {
     colliders: Query<'w, 's, (&'static Position, &'static Rotation, &'static Collider)>,
+    aabbs: Query<'w, 's, &'static ColliderAabb>,
     collider_trees: ResMut<'w, ColliderTrees>,
 }
 
@@ -1106,13 +1107,15 @@ impl SpatialQuery<'_, '_> {
         aabb: ColliderAabb,
         mut callback: impl FnMut(Entity) -> bool,
     ) {
-        let aabb = obvhs::aabb::Aabb::from(aabb);
         self.collider_trees.iter_trees().for_each(|tree| {
-            tree.aabb_traverse(aabb, |proxy_id| {
+            tree.aabb_traverse(obvhs::aabb::Aabb::from(aabb), |proxy_id| {
                 let proxy = tree.get_proxy(proxy_id).unwrap();
+                let Ok(proxy_aabb) = self.aabbs.get(proxy.collider) else {
+                    return true;
+                };
                 // The proxy AABB is more tightly fitted to the collider than the AABB in the tree,
                 // so we need to do an additional AABB intersection test here.
-                if proxy.aabb.intersect_aabb(&aabb) {
+                if proxy_aabb.intersects(&aabb) {
                     callback(proxy.collider)
                 } else {
                     true
