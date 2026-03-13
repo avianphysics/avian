@@ -1,31 +1,30 @@
 use avian2d::{math::*, prelude::*};
 use bevy::{ecs::query::Has, prelude::*};
 
+/// A plugin that implements a basic platformer kinematic character controller using move-and-slide,
+/// with support for ground detection and configurable movement settings.
 pub struct CharacterControllerPlugin;
 
 impl Plugin for CharacterControllerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_message::<MovementAction>()
-            .add_systems(
-                Update,
-                (
-                    keyboard_input,
-                    gamepad_input,
-                    update_grounded,
-                    apply_gravity,
-                    movement,
-                    apply_movement_damping,
-                )
-                    .chain(),
+        app.add_message::<MovementAction>();
+
+        // Collect input in `PreUpdate` so that it's processed before the physics update.
+        app.add_systems(PreUpdate, (keyboard_input, gamepad_input).chain());
+
+        // Run movement logic in `FixedUpdate` to ensure consistent behavior regardless of frame rate.
+        app.add_systems(
+            FixedUpdate,
+            (
+                update_grounded,
+                apply_gravity,
+                movement,
+                apply_movement_damping,
+                move_and_slide,
+                apply_forces_to_dynamic_bodies,
             )
-            .add_systems(
-                // Run collision handling after collision detection.
-                //
-                // NOTE: The collision implementation here is very basic and a bit buggy.
-                //       A collide-and-slide algorithm would likely work better.
-                PhysicsSchedule,
-                kinematic_controller_collisions.in_set(NarrowPhaseSystems::Last),
-            );
+                .chain(),
+        );
     }
 }
 
@@ -37,106 +36,95 @@ pub enum MovementAction {
 }
 
 /// A marker component indicating that an entity is using a character controller.
+///
+/// This also requires the entity to have a `CustomPositionIntegration` component, which is used
+/// to prevent Avian from automatically applying the character's velocity to its position,
+/// since the character controller will handle movement manually using move-and-slide.
 #[derive(Component)]
+#[require(
+    RigidBody::Kinematic,
+    CustomPositionIntegration,
+    // We don't want to impart speculative collision impulses in this case
+    SpeculativeMargin(0.0)
+)]
 pub struct CharacterController;
 
-/// A marker component indicating that an entity is on the ground.
+/// Component for configuring movement settings for a character controller.
+#[derive(Component)]
+pub struct CharacterMovementSettings {
+    /// The acceleration used for character movement.
+    pub acceleration: Scalar,
+    /// The damping coefficient used for slowing down movement.
+    pub damping: Scalar,
+    /// The strength of a jump.
+    pub jump_impulse: Scalar,
+    /// The gravitational acceleration used for the character.
+    pub gravity: Vector,
+    /// The maximum speed that gravity can accelerate the character to.
+    /// This prevents the character from accelerating indefinitely while falling.
+    pub terminal_velocity: Scalar,
+}
+
+impl Default for CharacterMovementSettings {
+    fn default() -> Self {
+        Self {
+            acceleration: 3500.0,
+            damping: 15.0,
+            jump_impulse: 400.0,
+            gravity: Vector::new(0.0, -1500.0),
+            terminal_velocity: 1000.0,
+        }
+    }
+}
+
+/// Component for configuring ground detection for a character controller.
+#[derive(Component)]
+pub struct GroundDetection {
+    /// The maximum angle (in radians) where a surface is considered ground/ceiling
+    /// relative to the up-direction. Outside of this angle, surfaces are considered walls.
+    ///
+    /// **Default**: 30 degrees (π / 6 radians)
+    pub max_angle: Scalar,
+    /// The maximum distance for ground detection.
+    pub max_distance: Scalar,
+    /// The shape cast collider used for ground detection.
+    pub cast_shape: Option<Collider>,
+}
+
+impl Default for GroundDetection {
+    fn default() -> Self {
+        Self {
+            max_angle: PI / 6.0,
+            max_distance: 10.0,
+            cast_shape: None,
+        }
+    }
+}
+
+/// A marker component indicating that an entity is on a surface that is considered
+/// ground, meaning the steepness is less than [`GroundDetection::max_angle`].
+///
+/// Characters that are grounded can jump, and do not slide down slopes.
 #[derive(Component)]
 #[component(storage = "SparseSet")]
 pub struct Grounded;
 
-/// The acceleration used for character movement.
-#[derive(Component)]
-pub struct MovementAcceleration(Scalar);
+/// A component containing information about the current collisions for a character controller.
+///
+/// This is used to apply forces to dynamic rigid bodies hit by the character.
+#[derive(Component, Default, Deref)]
+pub struct CharacterCollisions(Vec<CharacterCollision>);
 
-/// The damping factor used for slowing down movement.
-#[derive(Component)]
-pub struct MovementDampingFactor(Scalar);
-
-/// The strength of a jump.
-#[derive(Component)]
-pub struct JumpImpulse(Scalar);
-
-/// The gravitational acceleration used for a character controller.
-#[derive(Component)]
-pub struct ControllerGravity(Vector);
-
-/// The maximum angle a slope can have for a character controller
-/// to be able to climb and jump. If the slope is steeper than this angle,
-/// the character will slide down.
-#[derive(Component)]
-pub struct MaxSlopeAngle(Scalar);
-
-/// A bundle that contains the components needed for a basic
-/// kinematic character controller.
-#[derive(Bundle)]
-pub struct CharacterControllerBundle {
-    character_controller: CharacterController,
-    body: RigidBody,
-    collider: Collider,
-    ground_caster: ShapeCaster,
-    gravity: ControllerGravity,
-    movement: MovementBundle,
-}
-
-/// A bundle that contains components for character movement.
-#[derive(Bundle)]
-pub struct MovementBundle {
-    acceleration: MovementAcceleration,
-    damping: MovementDampingFactor,
-    jump_impulse: JumpImpulse,
-    max_slope_angle: MaxSlopeAngle,
-}
-
-impl MovementBundle {
-    pub const fn new(
-        acceleration: Scalar,
-        damping: Scalar,
-        jump_impulse: Scalar,
-        max_slope_angle: Scalar,
-    ) -> Self {
-        Self {
-            acceleration: MovementAcceleration(acceleration),
-            damping: MovementDampingFactor(damping),
-            jump_impulse: JumpImpulse(jump_impulse),
-            max_slope_angle: MaxSlopeAngle(max_slope_angle),
-        }
-    }
-}
-
-impl Default for MovementBundle {
-    fn default() -> Self {
-        Self::new(30.0, 0.9, 7.0, PI * 0.45)
-    }
-}
-
-impl CharacterControllerBundle {
-    pub fn new(collider: Collider, gravity: Vector) -> Self {
-        // Create shape caster as a slightly smaller version of collider
-        let mut caster_shape = collider.clone();
-        caster_shape.set_scale(Vector::ONE * 0.99, 10);
-
-        Self {
-            character_controller: CharacterController,
-            body: RigidBody::Kinematic,
-            collider,
-            ground_caster: ShapeCaster::new(caster_shape, Vector::ZERO, 0.0, Dir2::NEG_Y)
-                .with_max_distance(10.0),
-            gravity: ControllerGravity(gravity),
-            movement: MovementBundle::default(),
-        }
-    }
-
-    pub fn with_movement(
-        mut self,
-        acceleration: Scalar,
-        damping: Scalar,
-        jump_impulse: Scalar,
-        max_slope_angle: Scalar,
-    ) -> Self {
-        self.movement = MovementBundle::new(acceleration, damping, jump_impulse, max_slope_angle);
-        self
-    }
+/// Information about a collision between a character controller and another collider.
+pub struct CharacterCollision {
+    /// The collider that was hit by the character.
+    pub collider: Entity,
+    /// The point of contact in world space.
+    pub point: Vector,
+    /// The normal of the contact surface, pointing away from the character.
+    pub normal: Dir2,
+    /// The velocity of the character at the point of contact.
+    pub character_velocity: Vector,
 }
 
 /// Sends [`MovementAction`] events based on keyboard input.
@@ -175,22 +163,32 @@ fn gamepad_input(mut movement_writer: MessageWriter<MovementAction>, gamepads: Q
 /// Updates the [`Grounded`] status for character controllers.
 fn update_grounded(
     mut commands: Commands,
-    mut query: Query<
-        (Entity, &ShapeHits, &Rotation, Option<&MaxSlopeAngle>),
-        With<CharacterController>,
-    >,
+    mut query: Query<(Entity, &GroundDetection, &GlobalTransform)>,
+    spatial_query: SpatialQuery,
 ) {
-    for (entity, hits, rotation, max_slope_angle) in &mut query {
-        // The character is grounded if the shape caster has a hit with a normal
-        // that isn't too steep.
-        let is_grounded = hits.iter().any(|hit| {
-            if let Some(angle) = max_slope_angle {
-                (rotation * -hit.normal2).angle_to(Vector::Y).abs() <= angle.0
-            } else {
-                true
-            }
+    for (entity, ground_detection, global_transform) in &mut query {
+        let Some(collider) = &ground_detection.cast_shape else {
+            continue;
+        };
+        let rotation = Rotation::from(global_transform.rotation());
+
+        // Cast the shape downward to check for ground
+        let hit = spatial_query.cast_shape(
+            collider,
+            global_transform.translation().xy().adjust_precision(),
+            rotation.as_radians(),
+            Dir2::new_unchecked(global_transform.down().xy()),
+            &ShapeCastConfig::from_max_distance(ground_detection.max_distance),
+            &SpatialQueryFilter::from_excluded_entities([entity]),
+        );
+
+        // The character is grounded if we hit a surface that isn't too steep
+        let is_grounded = hit.is_some_and(|hit| {
+            let up = global_transform.up().xy().adjust_precision();
+            (rotation * hit.normal1).angle_to(up).abs() <= ground_detection.max_angle
         });
 
+        // Update grounded state
         if is_grounded {
             commands.entity(entity).insert(Grounded);
         } else {
@@ -204,27 +202,22 @@ fn movement(
     time: Res<Time>,
     mut movement_reader: MessageReader<MovementAction>,
     mut controllers: Query<(
-        &MovementAcceleration,
-        &JumpImpulse,
+        &CharacterMovementSettings,
         &mut LinearVelocity,
         Has<Grounded>,
     )>,
 ) {
-    // Precision is adjusted so that the example works with
-    // both the `f32` and `f64` features. Otherwise you don't need this.
-    let delta_time = time.delta_secs_f64().adjust_precision();
+    let delta_secs = time.delta_secs_f64().adjust_precision();
 
     for event in movement_reader.read() {
-        for (movement_acceleration, jump_impulse, mut linear_velocity, is_grounded) in
-            &mut controllers
-        {
+        for (movement, mut linear_velocity, is_grounded) in &mut controllers {
             match event {
                 MovementAction::Move(direction) => {
-                    linear_velocity.x += *direction * movement_acceleration.0 * delta_time;
+                    linear_velocity.x += *direction * movement.acceleration * delta_secs;
                 }
                 MovementAction::Jump => {
                     if is_grounded {
-                        linear_velocity.y = jump_impulse.0;
+                        linear_velocity.y = movement.jump_impulse;
                     }
                 }
             }
@@ -232,188 +225,237 @@ fn movement(
     }
 }
 
-/// Applies [`ControllerGravity`] to character controllers.
+/// Applies gravity to character controllers.
 fn apply_gravity(
     time: Res<Time>,
-    mut controllers: Query<(&ControllerGravity, &mut LinearVelocity)>,
+    mut controllers: Query<(&CharacterMovementSettings, &mut LinearVelocity)>,
 ) {
-    // Precision is adjusted so that the example works with
-    // both the `f32` and `f64` features. Otherwise you don't need this.
-    let delta_time = time.delta_secs_f64().adjust_precision();
+    let delta_secs = time.delta_secs_f64().adjust_precision();
 
-    for (gravity, mut linear_velocity) in &mut controllers {
-        linear_velocity.0 += gravity.0 * delta_time;
-    }
-}
+    for (movement, mut linear_velocity) in &mut controllers {
+        let gravity_direction = movement.gravity.normalize_or_zero();
 
-/// Slows down movement in the X direction.
-fn apply_movement_damping(
-    time: Res<Time>,
-    mut query: Query<(&MovementDampingFactor, &mut LinearVelocity)>,
-) {
-    // Precision is adjusted so that the example works with
-    // both the `f32` and `f64` features. Otherwise you don't need this.
-    let delta_time = time.delta_secs_f64().adjust_precision();
-
-    for (damping_factor, mut linear_velocity) in &mut query {
-        // We could use `LinearDamping`, but we don't want to dampen movement along the Y axis
-        linear_velocity.x *= 1.0 / (1.0 + damping_factor.0 * delta_time);
-    }
-}
-
-/// Kinematic bodies do not get pushed by collisions by default,
-/// so it needs to be done manually.
-///
-/// This system handles collision response for kinematic character controllers
-/// by pushing them along their contact normals by the current penetration depth,
-/// and applying velocity corrections in order to snap to slopes, slide along walls,
-/// and predict collisions using speculative contacts.
-#[allow(clippy::type_complexity)]
-fn kinematic_controller_collisions(
-    collisions: Collisions,
-    bodies: Query<&RigidBody>,
-    collider_rbs: Query<&ColliderOf, Without<Sensor>>,
-    mut character_controllers: Query<
-        (&mut Position, &mut LinearVelocity, Option<&MaxSlopeAngle>),
-        (With<RigidBody>, With<CharacterController>),
-    >,
-    time: Res<Time>,
-) {
-    // Iterate through collisions and move the kinematic body to resolve penetration
-    for contacts in collisions.iter() {
-        // Get the rigid body entities of the colliders (colliders could be children)
-        let Ok([&ColliderOf { body: rb1 }, &ColliderOf { body: rb2 }]) =
-            collider_rbs.get_many([contacts.collider1, contacts.collider2])
-        else {
-            continue;
-        };
-
-        // Get the body of the character controller and whether it is the first
-        // or second entity in the collision.
-        let is_first: bool;
-
-        let character_rb: RigidBody;
-        let is_other_dynamic: bool;
-
-        let (mut position, mut linear_velocity, max_slope_angle) =
-            if let Ok(character) = character_controllers.get_mut(rb1) {
-                is_first = true;
-                character_rb = *bodies.get(rb1).unwrap();
-                is_other_dynamic = bodies.get(rb2).is_ok_and(|rb| rb.is_dynamic());
-                character
-            } else if let Ok(character) = character_controllers.get_mut(rb2) {
-                is_first = false;
-                character_rb = *bodies.get(rb2).unwrap();
-                is_other_dynamic = bodies.get(rb1).is_ok_and(|rb| rb.is_dynamic());
-                character
-            } else {
-                continue;
-            };
-
-        // This system only handles collision response for kinematic character controllers.
-        if !character_rb.is_kinematic() {
+        let velocity_along_gravity = linear_velocity.dot(gravity_direction);
+        if velocity_along_gravity > movement.terminal_velocity {
+            // Don't apply more gravity if we're already at terminal velocity.
             continue;
         }
 
-        // Iterate through contact manifolds and their contacts.
-        // Each contact in a single manifold shares the same contact normal.
-        for manifold in contacts.manifolds.iter() {
-            let normal = if is_first {
-                -manifold.normal
-            } else {
-                manifold.normal
-            };
+        // Calculate the new velocity after applying gravity.
+        let new_velocity = linear_velocity.0 + movement.gravity * delta_secs;
 
-            let mut deepest_penetration: Scalar = Scalar::MIN;
+        // Don't exceed terminal velocity.
+        let new_velocity_along_gravity = new_velocity.dot(gravity_direction);
+        if new_velocity_along_gravity < movement.terminal_velocity {
+            linear_velocity.0 = new_velocity;
+        } else {
+            linear_velocity.0 = gravity_direction * movement.terminal_velocity;
+        }
+    }
+}
 
-            // Solve each penetrating contact in the manifold.
-            for contact in manifold.points.iter() {
-                if contact.penetration > 0.0 {
-                    position.0 += normal * contact.penetration;
+/// Slows down movement in the X axis.
+fn apply_movement_damping(
+    mut query: Query<(&CharacterMovementSettings, &mut LinearVelocity)>,
+    time: Res<Time>,
+) {
+    let delta_secs = time.delta_secs_f64().adjust_precision();
+
+    for (movement, mut linear_velocity) in &mut query {
+        // Approximate exponential decay. We could use `LinearDamping` for this,
+        // but we don't want to dampen movement along the Y axis.
+        linear_velocity.x *= 1.0 / (1.0 + delta_secs * movement.damping);
+    }
+}
+
+/// Performs move-and-slide for character controllers, moving them according to their velocity
+/// and sliding along any contact surfaces. Also updates the [`Grounded`] state.
+///
+/// For simplicity, we assume that the character is not a child entity,
+/// and its collider is on the same entity as the `CharacterController`.
+fn move_and_slide(
+    mut query: Query<
+        (
+            Entity,
+            Option<&GroundDetection>,
+            Option<&mut CharacterCollisions>,
+            &mut Transform,
+            &mut LinearVelocity,
+            &Collider,
+        ),
+        With<CharacterController>,
+    >,
+    move_and_slide: MoveAndSlide,
+    time: Res<Time>,
+) {
+    for (entity, ground_detection, mut collisions, mut transform, mut lin_vel, collider) in
+        &mut query
+    {
+        let mut hit_ground_or_ceiling = false;
+
+        if let Some(collisions) = &mut collisions {
+            // Clear previous collisions
+            collisions.0.clear();
+        }
+
+        let up = transform.up().xy().adjust_precision();
+
+        // Perform move-and-slide
+        let MoveAndSlideOutput {
+            position: new_position,
+            projected_velocity,
+        } = move_and_slide.move_and_slide(
+            collider,
+            transform.translation.xy().adjust_precision(),
+            Rotation::from(transform.rotation).as_radians(),
+            lin_vel.0,
+            time.delta(),
+            &MoveAndSlideConfig::default(),
+            &SpatialQueryFilter::from_excluded_entities([entity]),
+            |hit| {
+                // This callback is called for each surface we collide with during move-and-slide.
+                // In this example, we use it to customize collision behavior for ground surfaces,
+                // preventing sliding down slopes when we are grounded, and preventing climbing up steep slopes.
+
+                let Some(ground_detection) = ground_detection else {
+                    // Early out if we don't have ground detection.
+                    return MoveAndSlideHitResponse::Accept;
+                };
+
+                // Determine if the surface is ground based on the angle between the up-vector and the hit normal.
+                let angle = up.angle_to(hit.normal.adjust_precision()).abs();
+                let is_ground = angle <= ground_detection.max_angle;
+                let is_ceiling = angle >= PI - ground_detection.max_angle;
+
+                // Decompose the original input velocity into components relative to the hit normal and the up direction,
+                // to determine how much of the velocity is contributing to climbing, slipping, and unconstrained movement.
+                let [horizontal_component, vertical_component] =
+                    split_into_components(lin_vel.0, up);
+
+                // Decompose the horizontal component and the current sliding velocity to determine
+                // whether the character is trying to climb or slip, and whether it is actually climbing or slipping.
+                let horizontal_velocity_decomposition =
+                    decompose_hit_velocity(horizontal_component, *hit.normal);
+                let decomposition = decompose_hit_velocity(*hit.velocity, *hit.normal);
+
+                // An object is trying to slip if the tangential movement induced by its vertical movement
+                // points downward (with a small threshold).
+                let slipping_intent =
+                    up.dot(horizontal_velocity_decomposition.tangent_part) < -0.001;
+
+                // An object is slipping if its vertical movement points downward (with a small threshold).
+                let slipping = up.dot(decomposition.tangent_part) < -0.001;
+
+                // An object is trying to climb if its vertical input motion points upward.
+                let climbing_intent = up.dot(vertical_component) > 0.0;
+
+                // An object is climbing if the tangential movement induced by its vertical movement points upward.
+                let climbing = up.dot(decomposition.tangent_part) > 0.0;
+
+                let projected_velocity = if !is_ground && climbing && !climbing_intent {
+                    // Can’t climb the slope, remove the vertical tangent motion induced by the forward motion.
+                    decomposition.normal_part
+                } else if is_ground && slipping && !slipping_intent {
+                    // Prevent the vertical movement from sliding down.
+                    decomposition.normal_part
+                } else {
+                    // Otherwise, allow full movement (including climbing and slipping)
+                    decomposition.normal_part + decomposition.tangent_part
+                };
+
+                // Update the current velocity used by the algorithm.
+                *hit.velocity = projected_velocity;
+
+                if is_ground || is_ceiling {
+                    // We hit a ground or ceiling surface!
+                    hit_ground_or_ceiling = true;
                 }
-                deepest_penetration = deepest_penetration.max(contact.penetration);
-            }
 
-            // For now, this system only handles velocity corrections for collisions against static geometry.
-            if is_other_dynamic {
+                if let Some(collisions) = &mut collisions {
+                    // Record the collision for use in other systems, such as applying forces to dynamic bodies.
+                    collisions.0.push(CharacterCollision {
+                        collider: hit.entity,
+                        point: hit.point,
+                        normal: *hit.normal,
+                        character_velocity: *hit.velocity,
+                    });
+                }
+
+                // Accept the hit and continue the move-and-slide algorithm with the modified velocity.
+                MoveAndSlideHitResponse::Accept
+            },
+        );
+
+        // Update position to the final position calculated by move-and-slide.
+        transform.translation = new_position.f32().extend(transform.translation.z);
+
+        // If we hit the ground or a ceiling, update the velocity along the up-direction
+        // to prevent accumulating velocity along the ground normal when hitting slopes,
+        // and to prevent sticking to ceilings when jumping.
+        if hit_ground_or_ceiling {
+            let up = transform.up().xy().adjust_precision();
+            let velocity_along_up = lin_vel.dot(up);
+            let new_velocity_along_up = projected_velocity.dot(up);
+            lin_vel.0 += (new_velocity_along_up - velocity_along_up) * up;
+        }
+    }
+}
+
+/// The decomposition of a velocity vector into parts relative to a collision normal.
+///
+/// This is used for determining how much of the velocity is contributing to climbing, slipping, and unconstrained movement.
+#[derive(Debug)]
+struct VelocityDecomposition {
+    /// The part of the velocity that is directly against the collision normal.
+    normal_part: Vector,
+    /// The part of the velocity that is tangent to the collision surface.
+    tangent_part: Vector,
+}
+
+/// Decomposes a velocity vector into parts relative to a collision `normal`.
+fn decompose_hit_velocity(velocity: Vector, normal: Dir) -> VelocityDecomposition {
+    let normal = normal.adjust_precision();
+    let normal_part = normal * normal.dot(velocity);
+    let tangent_part = velocity - normal_part;
+
+    VelocityDecomposition {
+        normal_part,
+        tangent_part,
+    }
+}
+
+/// Splits a vector into horizontal and vertical components relative to a given `up` direction.
+fn split_into_components(v: Vector, up: Vector) -> [Vector; 2] {
+    let vertical_component = up * v.dot(up);
+    let horizontal_component = v - vertical_component;
+    [horizontal_component, vertical_component]
+}
+
+/// Applies forces to dynamic rigid bodies hit by character controllers based on their collisions.
+fn apply_forces_to_dynamic_bodies(
+    characters: Query<(&ComputedMass, &CharacterCollisions)>,
+    colliders: Query<&ColliderOf>,
+    mut rigid_bodies: Query<(&RigidBody, Forces)>,
+) {
+    for (mass, collisions) in &characters {
+        let mass = mass.value();
+        for collision in &collisions.0 {
+            let Ok(collider_of) = colliders.get(collision.collider) else {
+                continue;
+            };
+            let Ok((rigid_body, mut forces)) = rigid_bodies.get_mut(collider_of.body) else {
+                continue;
+            };
+            if !rigid_body.is_dynamic() {
                 continue;
             }
 
-            // Determine if the slope is climbable or if it's too steep to walk on.
-            let slope_angle = normal.angle_to(Vector::Y);
-            let climbable = max_slope_angle.is_some_and(|angle| slope_angle.abs() <= angle.0);
+            let touch_dir = -collision.normal.adjust_precision();
+            let relative_velocity = collision.character_velocity - forces.linear_velocity();
+            let touch_velocity = touch_dir.dot(relative_velocity) * touch_dir;
+            let impulse = touch_velocity * mass;
 
-            if deepest_penetration > 0.0 {
-                // If the slope is climbable, snap the velocity so that the character
-                // up and down the surface smoothly.
-                if climbable {
-                    // Points either left or right depending on which side the normal is leaning on.
-                    // (This could be simplified for 2D, but this approach is dimension-agnostic)
-                    let normal_direction_x =
-                        normal.reject_from_normalized(Vector::Y).normalize_or_zero();
-
-                    // The movement speed along the direction above.
-                    let linear_velocity_x = linear_velocity.dot(normal_direction_x);
-
-                    // Snap the Y speed based on the speed at which the character is moving
-                    // up or down the slope, and how steep the slope is.
-                    //
-                    // A 2D visualization of the slope, the contact normal, and the velocity components:
-                    //
-                    //             ╱
-                    //     normal ╱
-                    // *         ╱
-                    // │   *    ╱   velocity_x
-                    // │       * - - - - - -
-                    // │           *       | velocity_y
-                    // │               *   |
-                    // *───────────────────*
-
-                    let max_y_speed = -linear_velocity_x * slope_angle.tan();
-                    linear_velocity.y = linear_velocity.y.max(max_y_speed);
-                } else {
-                    // The character is intersecting an unclimbable object, like a wall.
-                    // We want the character to slide along the surface, similarly to
-                    // a collide-and-slide algorithm.
-
-                    // Don't apply an impulse if the character is moving away from the surface.
-                    if linear_velocity.dot(normal) > 0.0 {
-                        continue;
-                    }
-
-                    // Slide along the surface, rejecting the velocity along the contact normal.
-                    let impulse = linear_velocity.reject_from_normalized(normal);
-                    linear_velocity.0 = impulse;
-                }
-            } else {
-                // The character is not yet intersecting the other object,
-                // but the narrow phase detected a speculative collision.
-                //
-                // We need to push back the part of the velocity
-                // that would cause penetration within the next frame.
-
-                let normal_speed = linear_velocity.dot(normal);
-
-                // Don't apply an impulse if the character is moving away from the surface.
-                if normal_speed > 0.0 {
-                    continue;
-                }
-
-                // Compute the impulse to apply.
-                let impulse_magnitude =
-                    normal_speed - (deepest_penetration / time.delta_secs_f64().adjust_precision());
-                let mut impulse = impulse_magnitude * normal;
-
-                // Apply the impulse differently depending on the slope angle.
-                if climbable {
-                    // Avoid sliding down slopes.
-                    linear_velocity.y -= impulse.y.min(0.0);
-                } else {
-                    // Avoid climbing up walls.
-                    impulse.y = impulse.y.max(0.0);
-                    linear_velocity.0 -= impulse;
-                }
-            }
+            forces.apply_linear_impulse_at_point(impulse, collision.point);
         }
     }
 }

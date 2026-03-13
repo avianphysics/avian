@@ -551,10 +551,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             // We need to add the sweep hit's plane explicitly, as `contact_manifolds` sometimes returns nothing
             // due to a Parry bug. Otherwise, `contact_manifolds` would pick up this normal anyways.
             // TODO: Remove this once the collision bug is fixed.
+            let mut first_normal = Dir::new_unchecked(sweep_hit.normal1.f32());
             let hit_response = on_hit(MoveAndSlideHitData {
                 entity: sweep_hit.entity,
                 point,
-                normal: &mut Dir::new_unchecked(sweep_hit.normal1.f32()),
+                normal: &mut first_normal,
                 collision_distance: sweep_hit.collision_distance,
                 distance: sweep_hit.distance,
                 position: &mut position,
@@ -562,7 +563,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             });
 
             if hit_response == MoveAndSlideHitResponse::Accept {
-                planes.push(Dir::new_unchecked(sweep_hit.normal1.f32()));
+                planes.push(first_normal);
             } else if hit_response == MoveAndSlideHitResponse::Abort {
                 break;
             }
@@ -788,7 +789,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         filter: &SpatialQueryFilter,
     ) -> Option<MoveHitData> {
         let (direction, distance) = Dir::new_and_length(movement.f32()).unwrap_or((Dir::X, 0.0));
-        let distance = distance.adjust_precision();
+        let distance = distance.adjust_precision() + skin_width;
         let shape_hit = self.spatial_query.cast_shape_predicate(
             shape,
             shape_position,

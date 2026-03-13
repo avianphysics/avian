@@ -11,19 +11,12 @@
 //! The character controller logic is contained within the `plugin` module.
 //!
 //! For a dynamic character controller, see the `dynamic_character_3d` example.
-//!
-//! # Warning
-//!
-//! Note that this is *not* intended to be a fully featured character controller,
-//! and the collision logic is quite basic.
-//!
-//! For a better solution, consider implementing a "collide-and-slide" algorithm,
-//! or use an existing third party character controller plugin like Bevy Tnua
-//! (a dynamic character controller).
+
+#![expect(clippy::type_complexity)]
 
 mod plugin;
 
-use avian3d::{math::*, prelude::*};
+use avian3d::prelude::*;
 use bevy::prelude::*;
 use examples_common_3d::ExampleCommonPlugin;
 use plugin::*;
@@ -48,11 +41,19 @@ fn setup(
 ) {
     // Player
     commands.spawn((
+        CharacterController,
+        CharacterMovementSettings::default(),
+        CharacterCollisions::default(),
+        GroundDetection {
+            // Use a slightly smaller capsule for shape casts used for ground detection
+            cast_shape: Some(Collider::capsule(0.399, 1.0)),
+            ..default()
+        },
+        Collider::capsule(0.4, 1.0),
         Mesh3d(meshes.add(Capsule3d::new(0.4, 1.0))),
         MeshMaterial3d(materials.add(Color::srgb(0.8, 0.7, 0.6))),
         Transform::from_xyz(0.0, 1.5, 0.0),
-        CharacterControllerBundle::new(Collider::capsule(0.4, 1.0), Vector::NEG_Y * 9.81 * 2.0)
-            .with_movement(30.0, 0.92, 7.0, (30.0 as Scalar).to_radians()),
+        TransformInterpolation,
     ));
 
     // A cube to move around
@@ -62,6 +63,7 @@ fn setup(
         Mesh3d(meshes.add(Cuboid::default())),
         MeshMaterial3d(materials.add(Color::srgb(0.8, 0.7, 0.6))),
         Transform::from_xyz(3.0, 2.0, 3.0),
+        TransformInterpolation,
     ));
 
     // Environment (see the `collider_constructors` example for creating colliders from scenes)
