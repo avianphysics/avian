@@ -116,8 +116,8 @@ impl<C: AnyCollider> Plugin for ColliderTreeUpdatePlugin<C> {
         // 6. On replace `RigidBody`, move attached colliders to new tree.
         // 7. On add `Sensor`, set sensor proxy flag.
         // 8. On remove `Sensor`, unset sensor proxy flag.
-        // 9. On replace `CollisionLayers`, update proxy layers.
-        // 10. On replace `ActiveCollisionHooks`, set proxy flag.
+        // 9. On insert `CollisionLayers`, update proxy layers.
+        // 10. On insert `ActiveCollisionHooks`, set proxy flag.
         // 11. On replace `RigidBodyDisabled`, set/unset proxy flag.
 
         // Case 1
