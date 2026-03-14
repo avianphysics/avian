@@ -321,7 +321,7 @@ impl<C: AnyCollider> Plugin for ColliderTreeUpdatePlugin<C> {
 
         // Case 9
         app.add_observer(
-            |trigger: On<Replace, CollisionLayers>,
+            |trigger: On<Insert, CollisionLayers>,
              mut collider_query: Query<
                 (&ColliderTreeProxyKey, Option<&CollisionLayers>),
                 Without<ColliderDisabled>,
@@ -344,7 +344,7 @@ impl<C: AnyCollider> Plugin for ColliderTreeUpdatePlugin<C> {
 
         // Case 10
         app.add_observer(
-            |trigger: On<Replace, ActiveCollisionHooks>,
+            |trigger: On<Insert, ActiveCollisionHooks>,
              mut collider_query: Query<
                 (&ColliderTreeProxyKey, Option<&ActiveCollisionHooks>),
                 Without<ColliderDisabled>,
