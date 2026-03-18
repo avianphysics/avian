@@ -133,8 +133,6 @@ pub struct ColliderTreeWorkspace {
     pub reinsertion_optimizer: ReinsertionOptimizer,
     /// A stack for tracking insertion candidates during proxy insertions.
     pub insertion_stack: HeapStack<SiblingInsertionCandidate>,
-    /// A temporary BVH used during partial rebuilds.
-    pub temp_bvh: Bvh2,
     /// Temporary flagged nodes for partial rebuilds.
     pub temp_flags: Vec<bool>,
 }
@@ -145,7 +143,6 @@ impl Clone for ColliderTreeWorkspace {
             ploc_builder: self.ploc_builder.clone(),
             reinsertion_optimizer: ReinsertionOptimizer::default(),
             insertion_stack: self.insertion_stack.clone(),
-            temp_bvh: Bvh2::default(),
             temp_flags: Vec::new(),
         }
     }
@@ -157,7 +154,6 @@ impl Default for ColliderTreeWorkspace {
             ploc_builder: PlocBuilder::default(),
             reinsertion_optimizer: ReinsertionOptimizer::default(),
             insertion_stack: HeapStack::new_with_capacity(2000),
-            temp_bvh: Bvh2::default(),
             temp_flags: Vec::new(),
         }
     }
