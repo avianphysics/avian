@@ -88,7 +88,8 @@ impl<C: AnyCollider> Plugin for ColliderTreePlugin<C> {
         );
         app.configure_sets(
             PhysicsSchedule,
-            ColliderTreeSystems::EndOptimize.in_set(PhysicsStepSystems::Finalize),
+            // TODO: What's the optimal place for this? It needs to be before spatial queries and collision events.
+            ColliderTreeSystems::EndOptimize.in_set(SolverSystems::Finalize),
         );
     }
 
