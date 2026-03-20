@@ -8,7 +8,7 @@ fn main() {
             DefaultPlugins,
             ExampleCommonPlugin,
             PhysicsPlugins::default(),
-            PhysicsPickingPlugin::default(),
+            PhysicsPickingPlugin,
         ))
         .insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.1)))
         .insert_resource(Gravity(Vector::NEG_Y))
@@ -99,7 +99,7 @@ fn setup(
         // Default anchors are at body centers (Vector::ZERO)
         commands.spawn((
             RevoluteJoint::new(velocity_anchor, velocity_wheel).with_motor(AngularMotor {
-                target_velocity: 5.0 * flip,
+                target_velocity: 5.0 * flip.adjust_precision(),
                 max_torque: 1000.0,
                 motor_model: MotorModel::AccelerationBased {
                     stiffness: 0.0,
