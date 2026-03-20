@@ -173,6 +173,10 @@ name = "one_way_platform_2d"
 required-features = ["2d", "default-collider"]
 
 [[example]]
+name = "picking_2d_in_perspective"
+required-features = ["2d", "debug-plugin", "bevy_picking"]
+
+[[example]]
 name = "prismatic_joint_2d"
 required-features = ["2d", "default-collider"]
 

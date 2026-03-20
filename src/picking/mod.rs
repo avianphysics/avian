@@ -167,9 +167,11 @@ pub fn update_hits(
         #[cfg(feature = "2d")]
         {
             let mut hits: Vec<(Entity, HitData)> = vec![];
+            // Follow the ray to its intersection with the Z axis
+            let point = ray.origin.xy() - ray.direction.xy() * ray.origin.z / ray.direction.z;
 
             spatial_query.point_intersections_callback(
-                ray.origin.truncate().adjust_precision(),
+                point.adjust_precision(),
                 &filter.0,
                 |entity| {
                     let marker_requirement =
@@ -183,7 +185,7 @@ pub fn update_hits(
                     if marker_requirement && is_pickable {
                         hits.push((
                             entity,
-                            HitData::new(ray_id.camera, 0.0, Some(ray.origin.f32()), None),
+                            HitData::new(ray_id.camera, 0.0, Some(point.extend(0.0)), None),
                         ));
                     }
 
