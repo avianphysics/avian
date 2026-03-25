@@ -270,13 +270,45 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
                     );
                 }
                 #[cfg(feature = "3d")]
-                for triangle in s.triangles() {
-                    self.draw_collider(
-                        &Collider::from(SharedShape::new(triangle)),
-                        position,
-                        rotation,
-                        color,
-                    );
+                {
+                    // Draw heightfield as a grid wireframe directly instead of
+                    // creating a SharedShape per triangle. This avoids O(rows*cols)
+                    // heap allocations per frame and is dramatically faster for
+                    // large heightfields.
+                    let nrows = s.nrows();
+                    let ncols = s.ncols();
+                    let scale = s.scale();
+                    let heights = s.heights();
+
+                    let cell_w = scale.x / ncols as Scalar;
+                    let cell_h = scale.z / nrows as Scalar;
+                    let half_x = scale.x * 0.5;
+                    let half_z = scale.z * 0.5;
+
+                    let vertex = |r: usize, c: usize| -> Vector {
+                        Vector::new(
+                            c as Scalar * cell_w - half_x,
+                            heights[(r, c)] * scale.y,
+                            r as Scalar * cell_h - half_z,
+                        )
+                    };
+
+                    // Horizontal edges (along columns)
+                    for r in 0..=nrows {
+                        for c in 0..ncols {
+                            let a = position.0 + rotation * vertex(r, c);
+                            let b = position.0 + rotation * vertex(r, c + 1);
+                            self.draw_line(a, b, color);
+                        }
+                    }
+                    // Vertical edges (along rows)
+                    for r in 0..nrows {
+                        for c in 0..=ncols {
+                            let a = position.0 + rotation * vertex(r, c);
+                            let b = position.0 + rotation * vertex(r + 1, c);
+                            self.draw_line(a, b, color);
+                        }
+                    }
                 }
             }
             TypedShape::Compound(s) => {
