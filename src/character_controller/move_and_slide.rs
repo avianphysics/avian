@@ -578,7 +578,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 // Depenetration still uses just the normal skin width.
                 skin_width * 2.0,
                 filter,
-                |contact_point, mut normal| {
+                |_, contact_point, mut normal| {
                     // Check if this plane is nearly parallel to an existing one.
                     // This can help prune redundant planes for velocity clipping.
                     for existing_normal in planes.iter_mut() {
@@ -922,7 +922,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             shape_rotation,
             self.length_unit.0 * config.skin_width,
             filter,
-            |contact_point, normal| {
+            |_, contact_point, normal| {
                 intersections.push((
                     normal,
                     contact_point.penetration + self.length_unit.0 * config.skin_width,
@@ -1073,7 +1073,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         shape_rotation: RotationValue,
         prediction_distance: Scalar,
         filter: &SpatialQueryFilter,
-        mut callback: impl FnMut(&ContactPoint, Dir) -> bool,
+        mut callback: impl FnMut(Entity, &ContactPoint, Dir) -> bool,
     ) {
         let expanded_aabb = shape
             .aabb(shape_position, shape_rotation)
@@ -1110,7 +1110,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
 
                 let normal = Dir::new_unchecked(-manifold.normal.f32());
 
-                if !callback(deepest, normal) {
+                if !callback(intersection_entity, deepest, normal) {
                     // Abort further processing.
                     break 'outer;
                 }
