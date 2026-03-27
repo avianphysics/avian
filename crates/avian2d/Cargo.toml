@@ -77,7 +77,7 @@ bench = false
 
 [dependencies]
 avian_derive = { path = "../avian_derive", version = "0.2" }
-bevy = { version = "0.18.0", default-features = false, features = [
+bevy = { git = "https://github.com/bevyengine/bevy", default-features = false, features = [
     "std",
     "bevy_log",
 ] }
@@ -102,7 +102,7 @@ disqualified = { version = "1.0" }
 
 [dev-dependencies]
 examples_common_2d = { path = "../examples_common_2d" }
-bevy = { version = "0.18.0", default-features = false, features = ["2d", "ui"] }
+bevy = { git = "https://github.com/bevyengine/bevy", default-features = false, features = ["2d", "ui"] }
 bevy_heavy = { version = "0.4", features = ["approx"] }
 glam = { version = "0.30", features = ["bytemuck"] }
 bytemuck = "1.19"

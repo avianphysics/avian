@@ -1,4 +1,4 @@
-use crate::{collider_tree::ColliderTrees, collision::collider::contact_query, prelude::*};
+use crate::{collider_tree::ColliderTrees, collision::collider::contact_query, math::parry_conv::{vec3_from_parry, vec3_to_parry}, prelude::*};
 use bevy::{ecs::system::SystemParam, prelude::*};
 use parry::query::ShapeCastOptions;
 
@@ -558,10 +558,10 @@ impl SpatialQuery<'_, '_> {
 
                     let Ok(Some(hit)) = parry::query::cast_shapes(
                         &pose1,
-                        Vector::ZERO,
+                        vec3_to_parry(Vector::ZERO),
                         collider.shape_scaled().as_ref(),
                         &pose2,
-                        direction.adjust_precision(),
+                        vec3_to_parry(direction.adjust_precision()),
                         shape.shape_scaled().as_ref(),
                         ShapeCastOptions {
                             max_time_of_impact: config.max_distance,
@@ -577,11 +577,11 @@ impl SpatialQuery<'_, '_> {
                         closest_distance = hit.time_of_impact;
                         closest_hit = Some(ShapeHitData {
                             entity: proxy.collider,
-                            point1: pose1 * hit.witness1,
-                            point2: pose2 * hit.witness2
+                            point1: vec3_from_parry(pose1 * hit.witness1),
+                            point2: vec3_from_parry(pose2 * hit.witness2)
                                 + direction.adjust_precision() * hit.time_of_impact,
-                            normal1: pose1.rotation * hit.normal1,
-                            normal2: pose2.rotation * hit.normal2,
+                            normal1: vec3_from_parry(pose1.rotation * hit.normal1),
+                            normal2: vec3_from_parry(pose2.rotation * hit.normal2),
                             distance: hit.time_of_impact,
                         });
                     }
@@ -772,10 +772,10 @@ impl SpatialQuery<'_, '_> {
 
                     let Ok(Some(hit)) = parry::query::cast_shapes(
                         &pose1,
-                        Vector::ZERO,
+                        vec3_to_parry(Vector::ZERO),
                         collider.shape_scaled().as_ref(),
                         &pose2,
-                        direction.adjust_precision(),
+                        vec3_to_parry(direction.adjust_precision()),
                         shape.shape_scaled().as_ref(),
                         ShapeCastOptions {
                             max_time_of_impact: config.max_distance,
@@ -790,11 +790,11 @@ impl SpatialQuery<'_, '_> {
 
                     callback(ShapeHitData {
                         entity: proxy.collider,
-                        point1: position.0 + rotation * hit.witness1,
-                        point2: pose2 * hit.witness2
+                        point1: position.0 + rotation * vec3_from_parry(hit.witness1),
+                        point2: vec3_from_parry(pose2 * hit.witness2)
                             + direction.adjust_precision() * hit.time_of_impact,
-                        normal1: pose1.rotation * hit.normal1,
-                        normal2: pose2.rotation * hit.normal2,
+                        normal1: vec3_from_parry(pose1.rotation * hit.normal1),
+                        normal2: vec3_from_parry(pose2.rotation * hit.normal2),
                         distance: hit.time_of_impact,
                     })
                 },

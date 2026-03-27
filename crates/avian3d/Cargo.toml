@@ -79,14 +79,14 @@ bench = false
 
 [dependencies]
 avian_derive = { path = "../avian_derive", version = "0.2" }
-bevy = { version = "0.18.0", default-features = false, features = [
+bevy = { git = "https://github.com/bevyengine/bevy", default-features = false, features = [
     "std",
     "bevy_log",
 ] }
-bevy_math = { version = "0.18.0", features = ["approx"] }
-glam_matrix_extras = { version = "0.2", features = ["bevy_reflect"] }
-bevy_heavy = { version = "0.4" }
-bevy_transform_interpolation = { version = "0.4" }
+bevy_math = { git = "https://github.com/bevyengine/bevy", features = ["approx"] }
+glam_matrix_extras = { git = "https://github.com/jbuehler23/glam_matrix_extras", branch = "bsn", features = ["bevy_reflect"] }
+bevy_heavy = { git = "https://github.com/jbuehler23/bevy_heavy", branch = "bsn" }
+bevy_transform_interpolation = { git = "https://github.com/jbuehler23/bevy_transform_interpolation", branch = "bsn" }
 libm = { version = "0.2", optional = true }
 approx = "0.5"
 parry3d = { version = "0.26", optional = true }
@@ -103,13 +103,13 @@ disqualified = { version = "1.0" }
 
 [dev-dependencies]
 examples_common_3d = { path = "../examples_common_3d" }
-bevy = { version = "0.18.0", features = [
+bevy = { git = "https://github.com/bevyengine/bevy", features = [
     "3d",
     "ui",
     "https",
     "experimental_bevy_feathers",
 ] }
-bevy_heavy = { version = "0.4", features = ["approx"] }
+bevy_heavy = { git = "https://github.com/jbuehler23/bevy_heavy", branch = "bsn", features = ["approx"] }
 criterion = { version = "0.8", features = ["html_reports"] }
 bevy_mod_debugdump = { version = "0.15" }
 rand = "0.9"
