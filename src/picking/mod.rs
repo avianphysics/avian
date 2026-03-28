@@ -112,6 +112,15 @@ pub struct PhysicsPickable;
 pub struct PhysicsPickingFilter(pub SpatialQueryFilter);
 
 impl PhysicsPickingFilter {
+    /// Creates a new [`PhysicsPickingFilter`] with the given [`CollisionLayers`] determining
+    /// which [collision layers] will be included in the [spatial query].
+    ///
+    /// [collision layers]: CollisionLayers
+    /// [spatial query]: crate::spatial_query
+    pub fn from_collision_layers(layers: impl Into<CollisionLayers>) -> Self {
+        Self(SpatialQueryFilter::from_collision_layers(layers))
+    }
+
     /// Creates a new [`PhysicsPickingFilter`] with the given [`LayerMask`] determining
     /// which [collision layers] will be pickable.
     ///
@@ -128,14 +137,22 @@ impl PhysicsPickingFilter {
         Self(SpatialQueryFilter::from_excluded_entities(entities))
     }
 
+    /// Sets the given [`CollisionLayers`] of the filter configuration, determining
+    /// which [collision layers] will be included in the [spatial query].
+    ///
+    /// [collision layers]: CollisionLayers
+    /// [spatial query]: crate::spatial_query
+    pub fn with_collision_layers(self, layers: impl Into<CollisionLayers>) -> Self {
+        Self(self.0.with_collision_layers(layers))
+    }
+
     /// Sets the [`LayerMask`] of the filter configuration. Only colliders with the corresponding
     /// [collision layer memberships] will be pickable.
     ///
     /// [collision layer memberships]: CollisionLayers
     /// [spatial query]: crate::spatial_query
-    pub fn with_mask(mut self, masks: impl Into<LayerMask>) -> Self {
-        self.0.mask = masks.into();
-        self
+    pub fn with_mask(self, masks: impl Into<LayerMask>) -> Self {
+        Self(self.0.with_mask(masks))
     }
 
     /// Excludes the given entities from physics picking.
