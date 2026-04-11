@@ -198,7 +198,11 @@ impl Default for SpatialQueryPlugin {
 
 impl Plugin for SpatialQueryPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
+        app.configure_sets(
+            self.schedule,
+            SpatialQuerySystems.after(TransformSystems::Propagate),
+        )
+        .add_systems(
             self.schedule,
             (
                 update_ray_caster_positions,
