@@ -210,6 +210,7 @@
 //!     - [`PhysicsSchedule`] and [`PhysicsStepSystems`]
 //!     - [`SubstepSchedule`]
 //!     - [`SolverSystems`] and [`SubstepSolverSystems`](dynamics::solver::schedule::SubstepSolverSystems)
+//!     - [`SpatialQuerySystems`]
 //!     - Many more internal system sets
 //! - [Configure the schedule used for running physics](PhysicsPlugins#custom-schedule)
 //! - [Pausing, resuming and stepping physics](Physics#pausing-resuming-and-stepping-physics)
@@ -781,7 +782,7 @@ impl PluginGroup for PhysicsPlugins {
             .add(BroadPhaseCorePlugin)
             .add(BvhBroadPhasePlugin::<()>::default())
             .add(JointPlugin)
-            .add(SpatialQueryPlugin)
+            .add(SpatialQueryPlugin::new(self.schedule))
             .add(PhysicsTransformPlugin::new(self.schedule))
             .add(PhysicsInterpolationPlugin::default())
     }
