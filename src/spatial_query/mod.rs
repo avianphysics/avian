@@ -58,7 +58,7 @@
 //!             println!(
 //!                 "Hit entity {} at {} with normal {}",
 //!                 hit.entity,
-//!                 ray.origin + *ray.direction * hit.distance,
+//!                 ray.get_global_point(hit.distance),
 //!                 hit.normal,
 //!             );
 //!         }
