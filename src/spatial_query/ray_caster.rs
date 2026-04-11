@@ -279,6 +279,18 @@ impl RayCaster {
             ));
         }
     }
+
+    /// Returns the point at a given distance along the ray.
+    #[must_use]
+    pub fn get_point(&self, distance: f32) -> Vector {
+        self.origin + self.direction * distance
+    }
+
+    /// Like [`Self::get_point`], but returns the point in global coordinates.
+    #[must_use]
+    pub fn get_global_point(&self, distance: f32) -> Vector {
+        self.global_origin + self.global_direction * distance
+    }
 }
 
 fn on_add_ray_caster(mut world: DeferredWorld, ctx: HookContext) {
