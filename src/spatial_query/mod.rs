@@ -201,7 +201,6 @@ impl Plugin for SpatialQueryPlugin {
         app.configure_sets(
             self.schedule,
             SpatialQuerySystems.after(TransformSystems::Propagate),
-        )
         );
 
         app.add_systems(
