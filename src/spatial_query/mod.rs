@@ -202,7 +202,9 @@ impl Plugin for SpatialQueryPlugin {
             self.schedule,
             SpatialQuerySystems.after(TransformSystems::Propagate),
         )
-        .add_systems(
+        );
+
+        app.add_systems(
             self.schedule,
             (
                 update_ray_caster_positions,
@@ -223,7 +225,7 @@ impl Plugin for SpatialQueryPlugin {
     }
 }
 
-/// Responsible for spatial queries like [raycasting](`RayCaster`) and shapecasting.
+/// Responsible for updating spatial query components like [`RayCaster`] and [`ShapeCaster`].
 ///
 /// See [`SpatialQueryPlugin`].
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]

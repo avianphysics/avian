@@ -186,7 +186,7 @@ pub type PhysicsSet = PhysicsSystems;
 /// 3. Narrow phase
 /// 4. Solver
 /// 5. Sleeping
-/// 6. Spatial queries
+/// 6. Finalize
 /// 7. Last
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PhysicsStepSystems {
