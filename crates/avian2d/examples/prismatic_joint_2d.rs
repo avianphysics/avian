@@ -29,7 +29,7 @@ fn setup(mut commands: Commands) {
         .spawn((
             square_sprite.clone(),
             RigidBody::Kinematic,
-            AngularVelocity(1.5),
+            Velocity::from_angular(1.5),
         ))
         .id();
 

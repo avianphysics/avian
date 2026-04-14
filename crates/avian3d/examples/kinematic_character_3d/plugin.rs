@@ -211,24 +211,20 @@ fn update_grounded(
 fn movement(
     time: Res<Time>,
     mut movement_reader: MessageReader<MovementAction>,
-    mut controllers: Query<(
-        &CharacterMovementSettings,
-        &mut LinearVelocity,
-        Has<Grounded>,
-    )>,
+    mut controllers: Query<(&CharacterMovementSettings, &mut Velocity, Has<Grounded>)>,
 ) {
     let delta_secs = time.delta_secs_f64().adjust_precision();
 
     for event in movement_reader.read() {
-        for (movement, mut linear_velocity, is_grounded) in &mut controllers {
+        for (movement, mut velocity, is_grounded) in &mut controllers {
             match event {
                 MovementAction::Move(direction) => {
-                    linear_velocity.x += direction.x * movement.acceleration * delta_secs;
-                    linear_velocity.z -= direction.y * movement.acceleration * delta_secs;
+                    velocity.linear.x += direction.x * movement.acceleration * delta_secs;
+                    velocity.linear.z -= direction.y * movement.acceleration * delta_secs;
                 }
                 MovementAction::Jump => {
                     if is_grounded {
-                        linear_velocity.y = movement.jump_impulse;
+                        velocity.linear.y = movement.jump_impulse;
                     }
                 }
             }
@@ -239,44 +235,44 @@ fn movement(
 /// Applies gravity to character controllers.
 fn apply_gravity(
     time: Res<Time>,
-    mut controllers: Query<(&CharacterMovementSettings, &mut LinearVelocity)>,
+    mut controllers: Query<(&CharacterMovementSettings, &mut Velocity)>,
 ) {
     let delta_secs = time.delta_secs_f64().adjust_precision();
 
-    for (movement, mut linear_velocity) in &mut controllers {
+    for (movement, mut velocity) in &mut controllers {
         let gravity_direction = movement.gravity.normalize_or_zero();
 
-        let velocity_along_gravity = linear_velocity.dot(gravity_direction);
+        let velocity_along_gravity = velocity.linear.dot(gravity_direction);
         if velocity_along_gravity > movement.terminal_velocity {
             // Don't apply more gravity if we're already at terminal velocity.
             continue;
         }
 
         // Calculate the new velocity after applying gravity.
-        let new_velocity = linear_velocity.0 + movement.gravity * delta_secs;
+        let new_velocity = velocity.linear + movement.gravity * delta_secs;
 
         // Don't exceed terminal velocity.
         let new_velocity_along_gravity = new_velocity.dot(gravity_direction);
         if new_velocity_along_gravity < movement.terminal_velocity {
-            linear_velocity.0 = new_velocity;
+            velocity.linear = new_velocity;
         } else {
-            linear_velocity.0 = gravity_direction * movement.terminal_velocity;
+            velocity.linear = gravity_direction * movement.terminal_velocity;
         }
     }
 }
 
 /// Slows down movement in the XZ plane.
 fn apply_movement_damping(
-    mut query: Query<(&CharacterMovementSettings, &mut LinearVelocity)>,
+    mut query: Query<(&CharacterMovementSettings, &mut Velocity)>,
     time: Res<Time>,
 ) {
     let delta_secs = time.delta_secs_f64().adjust_precision();
 
-    for (movement, mut linear_velocity) in &mut query {
-        // Approximate exponential decay. We could use `LinearDamping` for this,
+    for (movement, mut velocity) in &mut query {
+        // Approximate exponential decay. We could use `Damping` for this,
         // but we don't want to dampen movement along the Y axis.
-        linear_velocity.x *= 1.0 / (1.0 + delta_secs * movement.damping);
-        linear_velocity.z *= 1.0 / (1.0 + delta_secs * movement.damping);
+        velocity.linear.x *= 1.0 / (1.0 + delta_secs * movement.damping);
+        velocity.linear.z *= 1.0 / (1.0 + delta_secs * movement.damping);
     }
 }
 
@@ -292,7 +288,7 @@ fn move_and_slide(
             Option<&GroundDetection>,
             Option<&mut CharacterCollisions>,
             &mut Transform,
-            &mut LinearVelocity,
+            &mut Velocity,
             &Collider,
         ),
         With<CharacterController>,
@@ -300,7 +296,7 @@ fn move_and_slide(
     move_and_slide: MoveAndSlide,
     time: Res<Time>,
 ) {
-    for (entity, ground_detection, mut collisions, mut transform, mut lin_vel, collider) in
+    for (entity, ground_detection, mut collisions, mut transform, mut velocity, collider) in
         &mut query
     {
         let mut hit_ground_or_ceiling = false;
@@ -320,7 +316,7 @@ fn move_and_slide(
             collider,
             transform.translation.adjust_precision(),
             transform.rotation.adjust_precision(),
-            lin_vel.0,
+            velocity.linear,
             time.delta(),
             &MoveAndSlideConfig::default(),
             &SpatialQueryFilter::from_excluded_entities([entity]),
@@ -342,7 +338,7 @@ fn move_and_slide(
                 // Decompose the original input velocity into components relative to the hit normal and the up direction,
                 // to determine how much of the velocity is contributing to climbing, slipping, and unconstrained movement.
                 let [horizontal_component, vertical_component] =
-                    split_into_components(lin_vel.0, up);
+                    split_into_components(velocity.linear, up);
 
                 // Decompose the horizontal component and the current sliding velocity to determine
                 // whether the character is trying to climb or slip, and whether it is actually climbing or slipping.
@@ -408,9 +404,9 @@ fn move_and_slide(
         // and to prevent sticking to ceilings when jumping.
         if hit_ground_or_ceiling {
             let up = up.adjust_precision();
-            let velocity_along_up = lin_vel.dot(up);
+            let velocity_along_up = velocity.linear.dot(up);
             let new_velocity_along_up = projected_velocity.dot(up);
-            lin_vel.0 += (new_velocity_along_up - velocity_along_up) * up;
+            velocity.linear += (new_velocity_along_up - velocity_along_up) * up;
         }
     }
 }
@@ -472,7 +468,7 @@ fn apply_forces_to_dynamic_bodies(
             }
 
             let touch_dir = -collision.normal.adjust_precision();
-            let relative_velocity = collision.character_velocity - forces.linear_velocity();
+            let relative_velocity = collision.character_velocity - forces.velocity().linear;
             let touch_velocity = touch_dir.dot(relative_velocity) * touch_dir;
             let impulse = touch_velocity * mass;
 

@@ -14,8 +14,7 @@ pub struct RigidBodyQuery {
     pub rb: Ref<'static, RigidBody>,
     pub position: &'static mut Position,
     pub rotation: &'static mut Rotation,
-    pub linear_velocity: &'static mut LinearVelocity,
-    pub angular_velocity: &'static mut AngularVelocity,
+    pub velocity: &'static mut Velocity,
     pub mass: &'static mut ComputedMass,
     pub angular_inertia: &'static mut ComputedAngularInertia,
     pub center_of_mass: &'static mut ComputedCenterOfMass,
@@ -28,18 +27,6 @@ pub struct RigidBodyQuery {
 }
 
 impl RigidBodyQueryItem<'_, '_> {
-    /// Computes the velocity at the given `point` relative to the center of the body.
-    pub fn velocity_at_point(&self, point: Vector) -> Vector {
-        #[cfg(feature = "2d")]
-        {
-            self.linear_velocity.0 + self.angular_velocity.0 * point.perp()
-        }
-        #[cfg(feature = "3d")]
-        {
-            self.linear_velocity.0 + self.angular_velocity.cross(point)
-        }
-    }
-
     /// Computes the effective inverse mass, taking into account any translation locking.
     pub fn effective_inverse_mass(&self) -> Vector {
         if !self.rb.is_dynamic() {
@@ -96,18 +83,6 @@ impl RigidBodyQueryItem<'_, '_> {
 }
 
 impl RigidBodyQueryReadOnlyItem<'_, '_> {
-    /// Computes the velocity at the given `point` relative to the center of mass.
-    pub fn velocity_at_point(&self, point: Vector) -> Vector {
-        #[cfg(feature = "2d")]
-        {
-            self.linear_velocity.0 + self.angular_velocity.0 * point.perp()
-        }
-        #[cfg(feature = "3d")]
-        {
-            self.linear_velocity.0 + self.angular_velocity.cross(point)
-        }
-    }
-
     /// Returns the mass. If the rigid body is not dynamic, the returned mass is infinite.
     pub fn mass(&self) -> ComputedMass {
         if self.rb.is_dynamic() {

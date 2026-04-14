@@ -6,7 +6,7 @@
 //!
 //! Rigid body dynamics includes:
 //!
-//! - Motion of rigid bodies based on their [`LinearVelocity`] and [`AngularVelocity`].
+//! - Motion of rigid bodies based on their [`Velocity`].
 //! - Acceleration caused by external forces and [`Gravity`].
 //! - Collision response, preventing objects from overlapping each other,
 //!   considering properties such as [`Friction`] and [`Restitution`].

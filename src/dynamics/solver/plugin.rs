@@ -356,7 +356,7 @@ pub struct ContactConstraints(pub Vec<ContactConstraint>);
 #[derive(QueryData)]
 pub(super) struct BodyQuery {
     pub(super) rb: Read<RigidBody>,
-    pub(super) linear_velocity: Read<LinearVelocity>,
+    pub(super) velocity: Read<Velocity>,
     pub(super) inertia: Option<Read<SolverBodyInertia>>,
 }
 

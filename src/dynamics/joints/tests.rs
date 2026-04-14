@@ -83,19 +83,19 @@ fn revolute_motor_spins_body() {
     }
 
     let body_ref = app.world().entity(dynamic);
-    let angular_velocity = body_ref.get::<AngularVelocity>().unwrap();
+    let angular_velocity = body_ref.get::<Velocity>().unwrap().angular;
 
     #[cfg(feature = "2d")]
     {
         assert!(
-            angular_velocity.0.abs() > 1.0,
+            angular_velocity.abs() > 1.0,
             "Angular velocity should be significant"
         );
-        assert_relative_eq!(angular_velocity.0, 2.0, epsilon = 0.5);
+        assert_relative_eq!(angular_velocity, 2.0, epsilon = 0.5);
     }
     #[cfg(feature = "3d")]
     {
-        let speed = angular_velocity.0.length();
+        let speed = angular_velocity.length();
         assert!(speed > 1.0, "Angular velocity should be significant");
     }
 }
@@ -211,18 +211,18 @@ fn revolute_motor_respects_max_torque() {
     }
 
     let body_ref = app.world().entity(dynamic);
-    let angular_velocity = body_ref.get::<AngularVelocity>().unwrap();
+    let angular_velocity = body_ref.get::<Velocity>().unwrap().angular;
 
     #[cfg(feature = "2d")]
     {
         assert!(
-            angular_velocity.0.abs() < 5.0,
+            angular_velocity.abs() < 5.0,
             "Velocity should be limited by max torque"
         );
     }
     #[cfg(feature = "3d")]
     {
-        let speed = angular_velocity.0.length();
+        let speed = angular_velocity.length();
         assert!(speed < 5.0, "Velocity should be limited by max torque");
     }
 }
@@ -592,11 +592,11 @@ fn revolute_motor_force_based() {
     app.update();
 
     let body_ref = app.world().entity(dynamic);
-    let angular_velocity = body_ref.get::<AngularVelocity>().unwrap();
+    let angular_velocity = body_ref.get::<Velocity>().unwrap().angular;
     #[cfg(feature = "2d")]
-    let initial_speed = angular_velocity.0.abs();
+    let initial_speed = angular_velocity.abs();
     #[cfg(feature = "3d")]
-    let initial_speed = angular_velocity.0.length();
+    let initial_speed = angular_velocity.length();
 
     assert!(
         initial_speed.abs() < 0.001,
@@ -613,20 +613,20 @@ fn revolute_motor_force_based() {
     }
 
     let body_ref = app.world().entity(dynamic);
-    let angular_velocity = body_ref.get::<AngularVelocity>().unwrap();
+    let angular_velocity = body_ref.get::<Velocity>().unwrap().angular;
 
     // The body should have gained angular velocity.
     #[cfg(feature = "2d")]
     {
         assert!(
-            angular_velocity.0.abs() > 0.5,
+            angular_velocity.abs() > 0.5,
             "ForceBased motor should spin the body: {}",
-            angular_velocity.0
+            angular_velocity
         );
     }
     #[cfg(feature = "3d")]
     {
-        let speed = angular_velocity.0.length();
+        let speed = angular_velocity.length();
         assert!(
             speed > 0.5,
             "ForceBased motor should spin the body: {}",

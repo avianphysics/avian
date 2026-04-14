@@ -278,7 +278,7 @@ impl From<Scalar> for Friction {
 /// Restitution is not guaranteed to be entirely accurate, especially for fast-moving bodies or when there are multiple contact points.
 ///
 /// - Even with a coefficient of 1, some kinetic energy can be lost over long periods of time for bouncing objects.
-///   This can be caused by [friction](Friction), [damping](LinearDamping), or simulation inaccuracies.
+///   This can be caused by [friction](Friction), [damping](Damping), or simulation inaccuracies.
 ///
 /// - Collisions can have more or less bounce than expected, especially when objects are moving very fast.
 ///   This is largely due to the the sequential solver and [speculative collision](dynamics::ccd#speculative-collision).

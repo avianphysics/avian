@@ -162,9 +162,9 @@
 //!
 //! # Applying Forces vs. Modifying Velocity
 //!
-//! It is possible to achieve similar effects by directly modifying the [`LinearVelocity`]
-//! or [`AngularVelocity`] components instead of using the force APIs. For example, you could
-//! implement gravity by simply modifying the velocity of the rigid bodies in a system:
+//! It is possible to achieve similar effects by directly modifying the [`Velocity`]
+//! instead of using the force APIs. For example, you could implement gravity by simply
+//! modifying the velocity of the rigid bodies in a system:
 //!
 //! ```
 #![cfg_attr(feature = "2d", doc = "# use avian2d::prelude::*;")]
@@ -173,10 +173,10 @@
 //! #
 //! // In `FixedUpdate`
 //! # #[cfg(feature = "f32")]
-//! fn gravity(mut bodies: Query<&mut LinearVelocity>, time: Res<Time>) {
+//! fn gravity(mut bodies: Query<&mut Velocity>, time: Res<Time>) {
 //!     for mut velocity in &mut bodies {
 //!         // Apply a constant acceleration of 9.81 m/s² in the negative Y direction.
-//!         velocity.y -= 9.81 * time.delta_secs();
+//!         velocity.linear.y -= 9.81 * time.delta_secs();
 //!     }
 //! }
 //! ```

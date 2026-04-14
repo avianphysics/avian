@@ -189,11 +189,11 @@ fn setup(
 ///
 /// This only updates velocity. The actual movement is handled by the `run_move_and_slide` system.
 fn player_movement(
-    mut query: Query<&mut LinearVelocity, With<Player>>,
+    mut query: Query<&mut Velocity, With<Player>>,
     time: Res<Time>,
     input: Res<ButtonInput<KeyCode>>,
 ) {
-    for mut lin_vel in &mut query {
+    for mut velocity in &mut query {
         // Determine movement velocity from input
         let mut movement_velocity = Vec2::ZERO;
         if input.pressed(KeyCode::KeyW) {
@@ -215,12 +215,12 @@ fn player_movement(
         }
 
         // Add to current velocity
-        lin_vel.0 += movement_velocity.adjust_precision();
+        velocity.linear += movement_velocity.adjust_precision();
 
-        let current_speed = lin_vel.length();
+        let current_speed = velocity.linear.length();
         if current_speed > 0.0 {
             // Apply friction
-            lin_vel.0 = lin_vel.0 / current_speed
+            velocity.linear = velocity.linear / current_speed
                 * (current_speed - current_speed * 20.0 * time.delta_secs().adjust_precision())
                     .max(0.0)
         }
@@ -236,7 +236,7 @@ fn run_move_and_slide(
         (
             Entity,
             &mut Transform,
-            &mut LinearVelocity,
+            &mut Velocity,
             &mut TouchedEntities,
             &Collider,
         ),
@@ -246,7 +246,7 @@ fn run_move_and_slide(
     time: Res<Time>,
     mut gizmos: Gizmos,
 ) {
-    for (entity, mut transform, mut lin_vel, mut touched, collider) in &mut query {
+    for (entity, mut transform, mut velocity, mut touched, collider) in &mut query {
         touched.clear();
 
         // Perform move and slide
@@ -261,7 +261,7 @@ fn run_move_and_slide(
                 .to_euler(EulerRot::XYZ)
                 .2
                 .adjust_precision(),
-            lin_vel.0,
+            velocity.linear,
             time.delta(),
             &MoveAndSlideConfig::default(),
             &SpatialQueryFilter::from_excluded_entities([entity]),
@@ -286,20 +286,20 @@ fn run_move_and_slide(
 
         // Update transform and velocity
         transform.translation = position.extend(0.0).f32();
-        lin_vel.0 = projected_velocity;
+        velocity.linear = projected_velocity;
     }
 }
 
 fn update_debug_text(
     mut text: Single<&mut Text, With<DebugText>>,
-    player: Single<(&LinearVelocity, &TouchedEntities, &CollidingEntities), With<Player>>,
+    player: Single<(&Velocity, &TouchedEntities, &CollidingEntities), With<Player>>,
     names: Query<NameOrEntity>,
 ) {
-    let (lin_vel, touched, colliding_entities) = player.into_inner();
+    let (velocity, touched, colliding_entities) = player.into_inner();
     ***text = format!(
         "velocity: [{:.3}, {:.3}]\n{} intersections (goal is 0): {:#?}\n{} touched: {:#?}",
-        lin_vel.x,
-        lin_vel.y,
+        velocity.linear.x,
+        velocity.linear.y,
         colliding_entities.len(),
         names
             .iter_many(colliding_entities.iter())

@@ -101,13 +101,13 @@ fn setup(
 fn movement(
     time: Res<Time>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut query: Query<(&MovementAcceleration, &mut LinearVelocity)>,
+    mut query: Query<(&MovementAcceleration, &mut Velocity)>,
 ) {
     // Precision is adjusted so that the example works with
     // both the `f32` and `f64` features. Otherwise you don't need this.
     let delta_time = time.delta_secs_f64().adjust_precision();
 
-    for (movement_acceleration, mut linear_velocity) in &mut query {
+    for (movement_acceleration, mut velocity) in &mut query {
         let up = keyboard_input.any_pressed([KeyCode::KeyW, KeyCode::ArrowUp]);
         let down = keyboard_input.any_pressed([KeyCode::KeyS, KeyCode::ArrowDown]);
         let left = keyboard_input.any_pressed([KeyCode::KeyA, KeyCode::ArrowLeft]);
@@ -120,8 +120,8 @@ fn movement(
 
         // Move in input direction
         if direction != Vector::ZERO {
-            linear_velocity.x += direction.x * movement_acceleration.0 * delta_time;
-            linear_velocity.z += direction.z * movement_acceleration.0 * delta_time;
+            velocity.linear.x += direction.x * movement_acceleration.0 * delta_time;
+            velocity.linear.z += direction.z * movement_acceleration.0 * delta_time;
         }
     }
 }

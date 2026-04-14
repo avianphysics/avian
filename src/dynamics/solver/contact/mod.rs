@@ -157,8 +157,8 @@ impl ContactConstraint {
 
         let tangents = compute_tangent_directions(
             manifold.normal,
-            body1.linear_velocity.0,
-            body2.linear_velocity.0,
+            body1.velocity.linear,
+            body2.velocity.linear,
         );
 
         let mut points = Vec::with_capacity(manifold.points.len());

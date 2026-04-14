@@ -29,7 +29,7 @@ fn setup(
             Mesh3d(cube_mesh.clone()),
             MeshMaterial3d(cube_material.clone()),
             RigidBody::Kinematic,
-            AngularVelocity(Vector::Z * 1.5),
+            Velocity::from_angular(Vector::Z * 1.5),
         ))
         .id();
 

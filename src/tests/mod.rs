@@ -110,7 +110,7 @@ fn body_with_velocity_moves() {
         commands.spawn((
             Transform::default(),
             RigidBody::Dynamic,
-            LinearVelocity(Vector::X),
+            Velocity::from_linear(Vector::X),
             #[cfg(feature = "2d")]
             MassPropertiesBundle::from_shape(&Circle::new(0.5), 1.0),
             #[cfg(feature = "3d")]

@@ -152,20 +152,20 @@ fn has_movement(mut reader: MessageReader<MovementAction>) -> bool {
 fn movement(
     time: Res<Time>,
     mut movement_reader: MessageReader<MovementAction>,
-    mut controllers: Query<(&mut LinearVelocity, &mut Position), With<Character>>,
+    mut controllers: Query<(&mut Velocity, &mut Position), With<Character>>,
 ) {
     let delta_time = time.delta_secs_f64().adjust_precision();
     for event in movement_reader.read() {
-        for (mut linear_velocity, mut position) in &mut controllers {
+        for (mut velocity, mut position) in &mut controllers {
             match event {
                 MovementAction::Stop => {
-                    linear_velocity.x = 0.0;
-                    linear_velocity.y = 0.0;
+                    velocity.linear.x = 0.0;
+                    velocity.linear.y = 0.0;
                 }
                 MovementAction::Velocity(direction) => {
                     let movement_acceleration = 2000.0;
-                    linear_velocity.x += direction.x * movement_acceleration * delta_time;
-                    linear_velocity.y += direction.y * movement_acceleration * delta_time;
+                    velocity.linear.x += direction.x * movement_acceleration * delta_time;
+                    velocity.linear.y += direction.y * movement_acceleration * delta_time;
                 }
                 MovementAction::Offset(direction) => {
                     let speed = 100.0;
@@ -179,28 +179,25 @@ fn movement(
 
 #[allow(clippy::type_complexity)]
 fn apply_movement_damping(
-    mut query: Query<
-        (&mut LinearVelocity, &mut AngularVelocity),
-        (With<Character>, Without<Sleeping>),
-    >,
+    mut query: Query<&mut Velocity, (With<Character>, Without<Sleeping>)>,
     time: Res<Time<Physics>>,
 ) {
     if time.is_paused() {
         return;
     }
     let damping_factor = 0.95;
-    for (mut linear_velocity, mut angular_velocity) in &mut query {
-        linear_velocity.x *= damping_factor;
-        if linear_velocity.x.abs() < 0.001 {
-            linear_velocity.x = 0.0;
+    for mut velocity in &mut query {
+        velocity.linear.x *= damping_factor;
+        if velocity.linear.x.abs() < 0.001 {
+            velocity.linear.x = 0.0;
         }
-        linear_velocity.y *= damping_factor;
-        if linear_velocity.y.abs() < 0.001 {
-            linear_velocity.y = 0.0;
+        velocity.linear.y *= damping_factor;
+        if velocity.linear.y.abs() < 0.001 {
+            velocity.linear.y = 0.0;
         }
-        angular_velocity.0 *= damping_factor;
-        if angular_velocity.0.abs() < 0.001 {
-            angular_velocity.0 = 0.0;
+        velocity.angular *= damping_factor;
+        if velocity.angular.abs() < 0.001 {
+            velocity.angular = 0.0;
         }
     }
 }
@@ -218,7 +215,7 @@ fn apply_pressure_plate_colour(
 }
 
 fn update_velocity_text(
-    character_query: Query<(&LinearVelocity, Has<Sleeping>), With<Character>>,
+    character_query: Query<(&Velocity, Has<Sleeping>), With<Character>>,
     pressure_plate_query: Query<Has<Sleeping>, With<PressurePlate>>,
     mut text_query: Query<&mut Text, With<CharacterVelocityText>>,
 ) -> Result {
@@ -227,7 +224,7 @@ fn update_velocity_text(
     {
         text_query.single_mut()?.0 = format!(
             "Velocity: {:.4}, {:.4}\nCharacter sleeping:{}\nPressure plate sleeping: {}",
-            velocity.x, velocity.y, character_sleeping, pressure_plate_sleeping
+            velocity.linear.x, velocity.linear.y, character_sleeping, pressure_plate_sleeping
         );
     }
     Ok(())

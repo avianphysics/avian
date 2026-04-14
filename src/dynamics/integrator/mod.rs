@@ -261,8 +261,7 @@ pub fn pre_process_velocity_increments(
     mut bodies: Query<(
         &RigidBody,
         &mut VelocityIntegrationData,
-        Option<&LinearDamping>,
-        Option<&AngularDamping>,
+        Option<&Damping>,
         Option<&GravityScale>,
         Option<&LockedAxes>,
     )>,
@@ -276,7 +275,7 @@ pub fn pre_process_velocity_increments(
 
     // TODO: Do we want to skip kinematic bodies here?
     bodies.par_iter_mut().for_each(
-        |(rb, mut integration, lin_damping, ang_damping, gravity_scale, locked_axes)| {
+        |(rb, mut integration, damping, gravity_scale, locked_axes)| {
             if !rb.is_dynamic() {
                 // Skip non-dynamic bodies.
                 return;
@@ -286,8 +285,8 @@ pub fn pre_process_velocity_increments(
 
             // Update the cached right-hand side of the velocity damping equation,
             // `1 / (1 + dt * c)`, where `c` is the damping coefficient.
-            let lin_damping = lin_damping.map_or(0.0, |damping| damping.0);
-            let ang_damping = ang_damping.map_or(0.0, |damping| damping.0);
+            let (lin_damping, ang_damping) =
+                damping.map_or((0.0, 0.0), |damping| (damping.linear, damping.angular));
             integration.update_linear_damping_rhs(lin_damping, delta_secs);
             integration.update_angular_damping_rhs(ang_damping, delta_secs);
 
@@ -463,35 +462,28 @@ pub fn solve_gyroscopic_torque(
 //       to do this in `integrate_velocities` rather than in a separate system.
 //       By doing this in a separate system, we're optimizing for the assumption
 //       that only some bodies have clamped velocities.
-/// Clamps the velocities of bodies to [`MaxLinearSpeed`] and [`MaxAngularSpeed`].
+/// Clamps the velocities of bodies to [`MaxSpeed`].
 fn clamp_velocities(
-    mut bodies: ParamSet<(
-        Query<(&mut SolverBody, &MaxLinearSpeed)>,
-        Query<(&mut SolverBody, &MaxAngularSpeed)>,
-    )>,
+    mut bodies: Query<(&mut SolverBody, &MaxSpeed)>,
     mut diagnostics: ResMut<SolverDiagnostics>,
 ) {
     let start = crate::utils::Instant::now();
 
-    // Clamp linear velocity.
-    bodies.p0().iter_mut().for_each(|(mut body, max_speed)| {
+    // Clamp velocity.
+    bodies.iter_mut().for_each(|(mut body, max_speed)| {
         let linear_speed_squared = body.linear_velocity.length_squared();
-        if linear_speed_squared > max_speed.0 * max_speed.0 {
-            body.linear_velocity *= max_speed.0 / linear_speed_squared.sqrt();
+        if linear_speed_squared > max_speed.linear * max_speed.linear {
+            body.linear_velocity *= max_speed.linear / linear_speed_squared.sqrt();
         }
-    });
-
-    // Clamp angular velocity.
-    bodies.p1().iter_mut().for_each(|(mut body, max_speed)| {
         #[cfg(feature = "2d")]
-        if body.angular_velocity.abs() > max_speed.0 {
-            body.angular_velocity = max_speed.copysign(body.angular_velocity);
+        if body.angular_velocity.abs() > max_speed.angular {
+            body.angular_velocity = max_speed.angular.copysign(body.angular_velocity);
         }
         #[cfg(feature = "3d")]
         {
             let angular_speed_squared = body.angular_velocity.length_squared();
-            if angular_speed_squared > max_speed.0 * max_speed.0 {
-                body.angular_velocity *= max_speed.0 / angular_speed_squared.sqrt();
+            if angular_speed_squared > max_speed.angular * max_speed.angular {
+                body.angular_velocity *= max_speed.angular / angular_speed_squared.sqrt();
             }
         }
     });
@@ -572,14 +564,14 @@ mod tests {
                 {
                     (
                         MassPropertiesBundle::from_shape(&Rectangle::from_length(1.0), 1.0),
-                        AngularVelocity(2.0),
+                        Velocity::from_angular(2.0),
                     )
                 },
                 #[cfg(feature = "3d")]
                 {
                     (
                         MassPropertiesBundle::from_shape(&Cuboid::from_length(1.0), 1.0),
-                        AngularVelocity(Vector::Z * 2.0),
+                        Velocity::from_angular(Vector::Z * 2.0),
                     )
                 },
             ))
@@ -602,8 +594,7 @@ mod tests {
         let entity_ref = app.world_mut().entity(body_entity);
         let position = entity_ref.get::<Position>().unwrap().0;
         let rotation = *entity_ref.get::<Rotation>().unwrap();
-        let linear_velocity = entity_ref.get::<LinearVelocity>().unwrap().0;
-        let angular_velocity = entity_ref.get::<AngularVelocity>().unwrap().0;
+        let velocity = entity_ref.get::<Velocity>().unwrap();
 
         // Euler methods have some precision issues, but this seems weirdly inaccurate.
         assert_relative_eq!(position, Vector::NEG_Y * 490.5, epsilon = 10.0);
@@ -621,10 +612,10 @@ mod tests {
             epsilon = 0.01
         );
 
-        assert_relative_eq!(linear_velocity, Vector::NEG_Y * 98.1, epsilon = 0.0001);
+        assert_relative_eq!(velocity.linear, Vector::NEG_Y * 98.1, epsilon = 0.0001);
         #[cfg(feature = "2d")]
-        assert_relative_eq!(angular_velocity, 2.0, epsilon = 0.00001);
+        assert_relative_eq!(velocity.angular, 2.0, epsilon = 0.00001);
         #[cfg(feature = "3d")]
-        assert_relative_eq!(angular_velocity, Vector::Z * 2.0, epsilon = 0.00001);
+        assert_relative_eq!(velocity.angular, Vector::Z * 2.0, epsilon = 0.00001);
     }
 }

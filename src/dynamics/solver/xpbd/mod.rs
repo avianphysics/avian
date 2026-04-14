@@ -241,7 +241,7 @@
 //! ### Rigid body constraints
 //!
 //! Unlike particles, [rigid bodies](RigidBody) also have angular quantities like [rotation](Rotation),
-//! [angular velocity](AngularVelocity) and [angular inertia](AngularInertia). In addition, constraints can be applied at specific
+//! [angular velocity](Velocity::angular) and [angular inertia](AngularInertia). In addition, constraints can be applied at specific
 //! points in the body, like contact positions or joint attachment positions, which also affects the orientation.
 //!
 //! When the constraint is not applied at the center of mass, the inverse mass in the computation of `Δλ` must

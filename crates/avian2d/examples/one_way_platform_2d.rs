@@ -145,24 +145,24 @@ fn setup(
 
 fn movement(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut actors: Query<(&mut LinearVelocity, &MovementSpeed, &JumpImpulse), With<Actor>>,
+    mut actors: Query<(&mut Velocity, &MovementSpeed, &JumpImpulse), With<Actor>>,
 ) {
-    for (mut linear_velocity, movement_speed, jump_impulse) in &mut actors {
+    for (mut velocity, movement_speed, jump_impulse) in &mut actors {
         let left = keyboard_input.any_pressed([KeyCode::KeyA, KeyCode::ArrowLeft]);
         let right = keyboard_input.any_pressed([KeyCode::KeyD, KeyCode::ArrowRight]);
         let horizontal = right as i8 - left as i8;
 
         // Move in input direction
-        linear_velocity.x = horizontal as Scalar * movement_speed.0;
+        velocity.linear.x = horizontal as Scalar * movement_speed.0;
 
         // Assume "mostly stopped" to mean "grounded".
         // You should use raycasting, shapecasting or sensor colliders
         // for more robust ground detection.
-        if linear_velocity.y.abs() < 0.1
+        if velocity.linear.y.abs() < 0.1
             && !keyboard_input.pressed(KeyCode::ArrowDown)
             && keyboard_input.just_pressed(KeyCode::Space)
         {
-            linear_velocity.y = jump_impulse.0;
+            velocity.linear.y = jump_impulse.0;
         }
     }
 }

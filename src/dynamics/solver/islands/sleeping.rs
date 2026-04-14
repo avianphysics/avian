@@ -567,8 +567,7 @@ fn wake_on_changed(
             (
                 Ref<Position>,
                 Ref<Rotation>,
-                Ref<LinearVelocity>,
-                Ref<AngularVelocity>,
+                Ref<Velocity>,
                 Ref<SleepTimer>,
                 &BodyIslandNode,
             ),
@@ -577,8 +576,7 @@ fn wake_on_changed(
                 Or<(
                     Changed<Position>,
                     Changed<Rotation>,
-                    Changed<LinearVelocity>,
-                    Changed<AngularVelocity>,
+                    Changed<Velocity>,
                     Changed<SleepTimer>,
                 )>,
             ),
@@ -593,11 +591,10 @@ fn wake_on_changed(
 ) {
     let this_run = system_tick.this_run();
 
-    for (pos, rot, lin_vel, ang_vel, sleep_timer, body_island) in &query.p0() {
+    for (pos, rot, vel, sleep_timer, body_island) in &query.p0() {
         if is_changed_after_tick(pos, last_physics_tick.0, this_run)
             || is_changed_after_tick(rot, last_physics_tick.0, this_run)
-            || is_changed_after_tick(lin_vel, last_physics_tick.0, this_run)
-            || is_changed_after_tick(ang_vel, last_physics_tick.0, this_run)
+            || is_changed_after_tick(vel, last_physics_tick.0, this_run)
             || is_changed_after_tick(sleep_timer, last_physics_tick.0, this_run)
         {
             awake_island_bit_vec.set_and_grow(body_island.island_id.0 as usize);

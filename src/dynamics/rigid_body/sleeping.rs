@@ -11,8 +11,8 @@ use bevy::prelude::*;
 /// Simulating a large number of bodies can be expensive. To reduce CPU overhead, bodies that come to rest
 /// enter a low-cost "sleeping" state where they are not simulated until woken up again.
 ///
-/// To start sleeping, the [`LinearVelocity`] and [`AngularVelocity`] of a body must remain below the [`SleepThreshold`]
-/// for a time specified by the [`TimeToSleep`] resource. All bodies that are either directly or indirectly connected
+/// To start sleeping, the [`Velocity`] of a body must remain below the [`SleepThreshold`] for a time
+/// specified by the [`TimeToSleep`] resource. All bodies that are either directly or indirectly connected
 /// to the body through contacts or joints must also be allowed to sleep.
 ///
 /// A body is woken up when any of the following happens:
@@ -20,7 +20,7 @@ use bevy::prelude::*;
 /// - An awake body collides with a sleeping body.
 /// - A joint is created between an awake body and a sleeping body.
 /// - A joint or contact is removed from a sleeping body.
-/// - The [`Transform`], [`LinearVelocity`], or [`AngularVelocity`] of a sleeping body is modified.
+/// - The [`Transform`] or [`Velocity`] of a sleeping body is modified.
 /// - The [`RigidBody`] type of a body is changed.
 /// - A [constant force component](super::forces#constant-forces) of a sleeping body is modified.
 /// - A force, impulse, or acceleration is applied via [`Forces`], without using [`non_waking`].
@@ -33,8 +33,7 @@ use bevy::prelude::*;
 /// Sleeping can be disabled for an entity by adding the [`SleepingDisabled`] component.
 ///
 /// [`RigidBody`]: super::RigidBody
-/// [`LinearVelocity`]: super::LinearVelocity
-/// [`AngularVelocity`]: super::AngularVelocity
+/// [`Velocity`]: super::Velocity
 /// [`Forces`]: super::forces::Forces
 /// [`non_waking`]: super::forces::ForcesItem::non_waking
 /// [`Gravity`]: super::Gravity
@@ -69,14 +68,14 @@ pub struct Sleeping;
 #[reflect(Component, Debug, Default)]
 pub struct SleepingDisabled;
 
-/// A component for the maximum [`LinearVelocity`] and [`AngularVelocity`]
-/// for a body to be allowed to be [`Sleeping`].
+/// A component for the maximum [`Velocity`] that a [`RigidBody`] can have
+/// for it to be allowed to be [`Sleeping`].
 ///
 /// Setting a negative sleeping threshold disables sleeping entirely,
 /// similar to [`SleepingDisabled`].
 ///
-/// [`LinearVelocity`]: super::LinearVelocity
-/// [`AngularVelocity`]: super::AngularVelocity
+/// [`Velocity`]: super::Velocity
+/// [`RigidBody`]: super::RigidBody
 #[derive(Component, Clone, Copy, PartialEq, PartialOrd, Debug, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
@@ -110,13 +109,12 @@ impl Default for SleepThreshold {
 }
 
 /// A component storing the time in seconds that a [`RigidBody`] has been resting
-/// with its [`LinearVelocity`] and [`AngularVelocity`] below the [`SleepThreshold`].
+/// with its [`Velocity`] below the [`SleepThreshold`].
 ///
 /// When this time exceeds the [`TimeToSleep`], the body is allowed to be [`Sleeping`].
 ///
 /// [`RigidBody`]: super::RigidBody
-/// [`LinearVelocity`]: super::LinearVelocity
-/// [`AngularVelocity`]: super::AngularVelocity
+/// [`Velocity`]: super::Velocity
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
@@ -128,14 +126,12 @@ pub struct SleepTimer(pub f32);
 pub type TimeSleeping = SleepTimer;
 
 /// A resource that specifies the time in seconds that a [`RigidBody`] must rest
-/// with its [`LinearVelocity`] and [`AngularVelocity`] below the [`SleepThreshold`]
-/// before it is allowed to be [`Sleeping`].
+/// with its [`Velocity`] below the [`SleepThreshold`] before it is allowed to be [`Sleeping`].
 ///
 /// Default: `0.5`
 ///
 /// [`RigidBody`]: super::RigidBody
-/// [`LinearVelocity`]: super::LinearVelocity
-/// [`AngularVelocity`]: super::AngularVelocity
+/// [`Velocity`]: super::Velocity
 #[derive(Resource, Clone, Copy, Debug, PartialEq, PartialOrd, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]

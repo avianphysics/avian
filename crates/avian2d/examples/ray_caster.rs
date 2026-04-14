@@ -52,7 +52,7 @@ fn setup(
     // Spawn a rotating kinematic body with a ray caster
     commands.spawn((
         RigidBody::Kinematic,
-        AngularVelocity(0.2),
+        Velocity::from_angular(0.2),
         RayCaster::new(Vector::ZERO, Dir2::X),
     ));
 }

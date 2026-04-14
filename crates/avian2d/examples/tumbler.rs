@@ -37,7 +37,7 @@ fn spawn_tumbler(
 
     commands.spawn((
         RigidBody::Kinematic,
-        AngularVelocity((25.0 as Scalar).to_radians()),
+        Velocity::from_angular((25.0 as Scalar).to_radians()),
         Transform::default(),
         Visibility::default(),
         children![

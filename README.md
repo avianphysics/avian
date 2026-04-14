@@ -117,7 +117,7 @@ fn setup(
     commands.spawn((
         RigidBody::Dynamic,
         Collider::cuboid(1.0, 1.0, 1.0),
-        AngularVelocity(Vec3::new(2.5, 3.5, 1.5)),
+        Velocity::from_angular_xyz(2.5, 3.5, 1.5),
         Mesh3d(meshes.add(Cuboid::from_length(1.0))),
         MeshMaterial3d(materials.add(Color::srgb_u8(124, 144, 255))),
         Transform::from_xyz(0.0, 4.0, 0.0),

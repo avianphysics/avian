@@ -4,20 +4,15 @@ use bevy::{
 };
 
 use super::{SolverBody, SolverBodyInertia};
-use crate::{
-    AngularVelocity, LinearVelocity, PhysicsSchedule, Position, RigidBody, RigidBodyActiveFilter,
-    RigidBodyDisabled, Rotation, Sleeping, SolverSystems, Vector,
-    dynamics::solver::{SolverDiagnostics, solver_body::SolverBodyFlags},
-    prelude::{
-        AppDiagnosticsExt, ComputedAngularInertia, ComputedCenterOfMass, ComputedMass, Dominance,
-        LockedAxes,
-    },
-};
 #[cfg(feature = "3d")]
 use crate::{
     MatExt,
     dynamics::integrator::{IntegrationSystems, integrate_positions},
     prelude::SubstepSchedule,
+};
+use crate::{
+    dynamics::solver::{SolverDiagnostics, solver_body::SolverBodyFlags},
+    prelude::*,
 };
 
 /// A plugin for managing solver bodies.
@@ -183,8 +178,7 @@ fn prepare_solver_bodies(
         &RigidBody,
         &mut SolverBody,
         &mut SolverBodyInertia,
-        &LinearVelocity,
-        &AngularVelocity,
+        &Velocity,
         &Rotation,
         &ComputedMass,
         &ComputedAngularInertia,
@@ -198,16 +192,15 @@ fn prepare_solver_bodies(
             rb,
             mut solver_body,
             mut inertial_properties,
-            linear_velocity,
-            angular_velocity,
+            velocity,
             rotation,
             mass,
             angular_inertia,
             locked_axes,
             dominance,
         )| {
-            solver_body.linear_velocity = linear_velocity.0;
-            solver_body.angular_velocity = angular_velocity.0;
+            solver_body.linear_velocity = velocity.linear;
+            solver_body.angular_velocity = velocity.angular;
             solver_body.delta_position = Vector::ZERO;
             solver_body.delta_rotation = Rotation::IDENTITY;
 
@@ -266,15 +259,15 @@ fn writeback_solver_bodies(
         &mut Position,
         &mut Rotation,
         &ComputedCenterOfMass,
-        &mut LinearVelocity,
-        &mut AngularVelocity,
+        &mut Velocity,
     )>,
     mut diagnostics: ResMut<SolverDiagnostics>,
 ) {
     let start = bevy::platform::time::Instant::now();
 
-    query.par_iter_mut().for_each(
-        |(solver_body, mut pos, mut rot, com, mut lin_vel, mut ang_vel)| {
+    query
+        .par_iter_mut()
+        .for_each(|(solver_body, mut pos, mut rot, com, mut vel)| {
             // Write back the position and rotation deltas,
             // rotating the body around its center of mass.
             let old_world_com = *rot * com.0;
@@ -283,10 +276,9 @@ fn writeback_solver_bodies(
             pos.0 += solver_body.delta_position + old_world_com - new_world_com;
 
             // Write back velocities.
-            lin_vel.0 = solver_body.linear_velocity;
-            ang_vel.0 = solver_body.angular_velocity;
-        },
-    );
+            vel.linear = solver_body.linear_velocity;
+            vel.angular = solver_body.angular_velocity;
+        });
 
     diagnostics.finalize += start.elapsed();
 }

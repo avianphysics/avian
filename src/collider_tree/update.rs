@@ -655,8 +655,7 @@ fn update_solver_body_aabbs<C: AnyCollider>(
         (
             &Position,
             &ComputedCenterOfMass,
-            &LinearVelocity,
-            &AngularVelocity,
+            &Velocity,
             &RigidBodyColliders,
             Has<SweptCcd>,
         ),
@@ -711,7 +710,7 @@ fn update_solver_body_aabbs<C: AnyCollider>(
     let collider_query = colliders.p0();
 
     body_query.par_iter().for_each(
-        |(rb_pos, center_of_mass, lin_vel, ang_vel, body_colliders, has_swept_ccd)| {
+        |(rb_pos, center_of_mass, velocity, body_colliders, has_swept_ccd)| {
             for collider_entity in body_colliders.iter() {
                 let Ok((
                     collider,
@@ -749,24 +748,21 @@ fn update_solver_body_aabbs<C: AnyCollider>(
                     //       but because they are orbiting, the direction will change. We should take
                     //       into account the uniform circular motion.
                     let offset = pos.0 - rb_pos.0 - center_of_mass.0;
-                    #[cfg(feature = "2d")]
-                    let vel = lin_vel.0 + Vector::new(-ang_vel.0 * offset.y, ang_vel.0 * offset.x);
-                    #[cfg(feature = "3d")]
-                    let vel = lin_vel.0 + ang_vel.cross(offset);
-                    let movement = (vel * delta_secs)
+                    let point_vel = velocity.at_point(offset);
+                    let movement = (point_vel * delta_secs)
                         .clamp_length_max(speculative_margin.max(contact_tolerance));
 
                     // Current position and predicted position for next feame
                     #[cfg(feature = "2d")]
                     let (end_pos, end_rot) = (
                         pos.0 + movement,
-                        *rot * Rotation::radians(ang_vel.0 * delta_secs),
+                        *rot * Rotation::radians(velocity.angular * delta_secs),
                     );
 
                     #[cfg(feature = "3d")]
                     let (end_pos, end_rot) = (
                         pos.0 + movement,
-                        Rotation(Quaternion::from_scaled_axis(ang_vel.0 * delta_secs) * rot.0)
+                        Rotation(Quaternion::from_scaled_axis(velocity.angular * delta_secs) * rot.0)
                             .fast_renormalize(),
                     );
 

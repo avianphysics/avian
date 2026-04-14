@@ -205,7 +205,7 @@ fn movement(
     mut controllers: Query<(
         &MovementAcceleration,
         &JumpImpulse,
-        &mut LinearVelocity,
+        &mut Velocity,
         Has<Grounded>,
     )>,
 ) {
@@ -214,17 +214,15 @@ fn movement(
     let delta_time = time.delta_secs_f64().adjust_precision();
 
     for event in movement_reader.read() {
-        for (movement_acceleration, jump_impulse, mut linear_velocity, is_grounded) in
-            &mut controllers
-        {
+        for (movement_acceleration, jump_impulse, mut velocity, is_grounded) in &mut controllers {
             match event {
                 MovementAction::Move(direction) => {
-                    linear_velocity.x += direction.x * movement_acceleration.0 * delta_time;
-                    linear_velocity.z -= direction.y * movement_acceleration.0 * delta_time;
+                    velocity.linear.x += direction.x * movement_acceleration.0 * delta_time;
+                    velocity.linear.z -= direction.y * movement_acceleration.0 * delta_time;
                 }
                 MovementAction::Jump => {
                     if is_grounded {
-                        linear_velocity.y = jump_impulse.0;
+                        velocity.linear.y = jump_impulse.0;
                     }
                 }
             }
@@ -233,10 +231,10 @@ fn movement(
 }
 
 /// Slows down movement in the XZ plane.
-fn apply_movement_damping(mut query: Query<(&MovementDampingFactor, &mut LinearVelocity)>) {
-    for (damping_factor, mut linear_velocity) in &mut query {
-        // We could use `LinearDamping`, but we don't want to dampen movement along the Y axis
-        linear_velocity.x *= damping_factor.0;
-        linear_velocity.z *= damping_factor.0;
+fn apply_movement_damping(mut query: Query<(&MovementDampingFactor, &mut Velocity)>) {
+    for (damping_factor, mut velocity) in &mut query {
+        // We could use `Damping`, but we don't want to dampen movement along the Y axis
+        velocity.linear.x *= damping_factor.0;
+        velocity.linear.z *= damping_factor.0;
     }
 }

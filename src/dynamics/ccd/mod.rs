@@ -343,8 +343,14 @@ impl SpeculativeMargin {
 ///     commands.spawn((
 ///         RigidBody::Dynamic,
 ///         SweptCcd::default(),
-#[cfg_attr(feature = "2d", doc = "        LinearVelocity(Vec2::X * 100.0),")]
-#[cfg_attr(feature = "3d", doc = "        LinearVelocity(Vec3::X * 100.0),")]
+#[cfg_attr(
+    feature = "2d",
+    doc = "        Velocity::from_linear(Vec2::X * 100.0),"
+)]
+#[cfg_attr(
+    feature = "3d",
+    doc = "        Velocity::from_linear(Vec3::X * 100.0),"
+)]
 #[cfg_attr(feature = "2d", doc = "        Collider::circle(0.1),")]
 #[cfg_attr(feature = "3d", doc = "        Collider::sphere(0.1),")]
 ///         Transform::from_xyz(-10.0, 3.0, 0.0),
@@ -355,8 +361,14 @@ impl SpeculativeMargin {
 ///     commands.spawn((
 ///         RigidBody::Dynamic,
 ///         SweptCcd::LINEAR, // or `SweptCcd::new_with_mode(SweepMode::Linear)`
-#[cfg_attr(feature = "2d", doc = "        LinearVelocity(Vec2::X * 100.0),")]
-#[cfg_attr(feature = "3d", doc = "        LinearVelocity(Vec3::X * 100.0),")]
+#[cfg_attr(
+    feature = "2d",
+    doc = "        Velocity::from_linear(Vec2::X * 100.0),"
+)]
+#[cfg_attr(
+    feature = "3d",
+    doc = "        Velocity::from_linear(Vec3::X * 100.0),"
+)]
 #[cfg_attr(feature = "2d", doc = "        Collider::circle(0.1),")]
 #[cfg_attr(feature = "3d", doc = "        Collider::sphere(0.1),")]
 ///         Transform::from_xyz(-10.0, -3.0, 0.0),
@@ -368,8 +380,11 @@ impl SpeculativeMargin {
 ///     commands.spawn((
 ///         RigidBody::Dynamic,
 ///         LockedAxes::TRANSLATION_LOCKED,
-#[cfg_attr(feature = "2d", doc = "        AngularVelocity(100.0),")]
-#[cfg_attr(feature = "3d", doc = "        AngularVelocity(Vec3::Z * 100.0),")]
+#[cfg_attr(feature = "2d", doc = "        Velocity::from_angular(100.0),")]
+#[cfg_attr(
+    feature = "3d",
+    doc = "        Velocity::from_angular(Vec3::Z * 100.0),"
+)]
 #[cfg_attr(feature = "2d", doc = "        Collider::rectangle(0.2, 10.0),")]
 #[cfg_attr(feature = "3d", doc = "        Collider::cuboid(0.2, 10.0, 10.0),")]
 ///     ));

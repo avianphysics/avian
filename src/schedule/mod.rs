@@ -295,8 +295,7 @@ fn update_last_physics_tick(
 #[cfg(debug_assertions)]
 fn assert_components_finite(
     pos_query: Query<(Entity, Ref<Position>)>,
-    lin_vel_query: Query<(Entity, Ref<LinearVelocity>)>,
-    ang_vel_query: Query<(Entity, Ref<AngularVelocity>)>,
+    vel_query: Query<(Entity, Ref<Velocity>)>,
 ) {
     macro_rules! assert_finite {
         ($ent:expr, $val:ident, $ty:ty) => {
@@ -312,10 +311,7 @@ fn assert_components_finite(
     for (entity, position) in pos_query {
         assert_finite!(entity, position, Position);
     }
-    for (entity, velocity) in lin_vel_query {
-        assert_finite!(entity, velocity, LinearVelocity);
-    }
-    for (entity, velocity) in ang_vel_query {
-        assert_finite!(entity, velocity, AngularVelocity);
+    for (entity, velocity) in vel_query {
+        assert_finite!(entity, velocity, Velocity);
     }
 }

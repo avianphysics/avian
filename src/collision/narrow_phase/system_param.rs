@@ -49,8 +49,7 @@ struct RigidBodyQuery {
     position: Read<Position>,
     rotation: Read<Rotation>,
     center_of_mass: Read<ComputedCenterOfMass>,
-    linear_velocity: Read<LinearVelocity>,
-    angular_velocity: Read<AngularVelocity>,
+    velocity: Read<Velocity>,
     // TODO: We should define these as purely collider components and not query for them here.
     friction: Option<Read<Friction>>,
     restitution: Option<Read<Restitution>>,
@@ -533,8 +532,7 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     is_static1,
                     collider_offset1,
                     world_com1,
-                    mut lin_vel1,
-                    ang_vel1,
+                    mut vel1,
                     rb_friction1,
                     rb_collision_margin1,
                     rb_speculative_margin1,
@@ -545,8 +543,7 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                             body.rb.is_static(),
                             collider1.position.0 - body.position.0,
                             body.rotation * body.center_of_mass.0,
-                            body.linear_velocity.0,
-                            body.angular_velocity.0,
+                            *body.velocity,
                             body.friction,
                             body.collision_margin,
                             body.speculative_margin,
@@ -557,8 +554,7 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     is_static2,
                     collider_offset2,
                     world_com2,
-                    mut lin_vel2,
-                    ang_vel2,
+                    mut vel2,
                     rb_friction2,
                     rb_collision_margin2,
                     rb_speculative_margin2,
@@ -569,8 +565,7 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                             body.rb.is_static(),
                             collider2.position.0 - body.position.0,
                             body.rotation * body.center_of_mass.0,
-                            body.linear_velocity.0,
-                            body.angular_velocity.0,
+                            *body.velocity,
                             body.friction,
                             body.collision_margin,
                             body.speculative_margin,
@@ -672,15 +667,19 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
 
                     // Clamp velocities to the maximum speculative margins.
                     if speculative_margin1 < Scalar::MAX {
-                        lin_vel1 = lin_vel1.clamp_length_max(speculative_margin1 * inv_delta_secs);
+                        vel1.linear = vel1
+                            .linear
+                            .clamp_length_max(speculative_margin1 * inv_delta_secs);
                     }
                     if speculative_margin2 < Scalar::MAX {
-                        lin_vel2 = lin_vel2.clamp_length_max(speculative_margin2 * inv_delta_secs);
+                        vel2.linear = vel2
+                            .linear
+                            .clamp_length_max(speculative_margin2 * inv_delta_secs);
                     }
 
                     // Compute the effective margin based on how much the bodies
                     // are expected to move relative to each other.
-                    relative_linear_velocity = lin_vel2 - lin_vel1;
+                    relative_linear_velocity = vel2.linear - vel1.linear;
                     delta_secs * relative_linear_velocity.length()
                 };
 
@@ -742,12 +741,12 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                         // Compute the relative velocity along the contact normal.
                         #[cfg(feature = "2d")]
                         let relative_velocity = relative_linear_velocity
-                            + ang_vel2 * point.anchor2.perp()
-                            - ang_vel1 * point.anchor1.perp();
+                            + vel2.angular * point.anchor2.perp()
+                            - vel1.angular * point.anchor1.perp();
                         #[cfg(feature = "3d")]
                         let relative_velocity = relative_linear_velocity
-                            + ang_vel2.cross(point.anchor2)
-                            - ang_vel1.cross(point.anchor1);
+                            + vel2.angular.cross(point.anchor2)
+                            - vel1.angular.cross(point.anchor1);
                         let normal_speed = relative_velocity.dot(normal);
                         point.normal_speed = normal_speed;
 

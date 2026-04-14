@@ -305,14 +305,14 @@ struct PreviousLinearVelocity(Vector);
 
 /// The previous angular velocity of an entity indicating its rotation speed during the previous frame.
 #[derive(Component, Default, Deref, DerefMut)]
-struct PreviousAngularVelocity(AngularVelocity);
+struct PreviousAngularVelocity(AngularVector);
 
 #[derive(QueryData)]
 struct LinVelSource;
 
 impl VelocitySource for LinVelSource {
     type Previous = PreviousLinearVelocity;
-    type Current = LinearVelocity;
+    type Current = Velocity;
 
     fn previous(previous: &Self::Previous) -> Vec3 {
         #[cfg(feature = "2d")]
@@ -328,11 +328,11 @@ impl VelocitySource for LinVelSource {
     fn current(current: &Self::Current) -> Vec3 {
         #[cfg(feature = "2d")]
         {
-            current.0.f32().extend(0.0)
+            current.linear.f32().extend(0.0)
         }
         #[cfg(feature = "3d")]
         {
-            current.0.f32()
+            current.linear.f32()
         }
     }
 }
@@ -343,12 +343,12 @@ struct AngVelSource;
 #[allow(clippy::unnecessary_cast)]
 impl VelocitySource for AngVelSource {
     type Previous = PreviousAngularVelocity;
-    type Current = AngularVelocity;
+    type Current = Velocity;
 
     fn previous(previous: &Self::Previous) -> Vec3 {
         #[cfg(feature = "2d")]
         {
-            Vec3::Z * previous.0.0 as f32
+            Vec3::Z * previous.0 as f32
         }
         #[cfg(feature = "3d")]
         {
@@ -359,24 +359,24 @@ impl VelocitySource for AngVelSource {
     fn current(current: &Self::Current) -> Vec3 {
         #[cfg(feature = "2d")]
         {
-            Vec3::Z * current.0 as f32
+            Vec3::Z * current.angular as f32
         }
         #[cfg(feature = "3d")]
         {
-            current.0.f32()
+            current.angular.f32()
         }
     }
 }
 
 fn update_previous_velocity(
-    mut lin_vel_query: Query<(&LinearVelocity, &mut PreviousLinearVelocity)>,
-    mut ang_vel_query: Query<(&AngularVelocity, &mut PreviousAngularVelocity)>,
+    mut lin_vel_query: Query<(&Velocity, &mut PreviousLinearVelocity)>,
+    mut ang_vel_query: Query<(&Velocity, &mut PreviousAngularVelocity)>,
 ) {
-    for (lin_vel, mut prev_lin_vel) in &mut lin_vel_query {
-        prev_lin_vel.0 = lin_vel.0;
+    for (vel, mut prev_lin_vel) in &mut lin_vel_query {
+        prev_lin_vel.0 = vel.linear;
     }
 
-    for (ang_vel, mut prev_ang_vel) in &mut ang_vel_query {
-        prev_ang_vel.0 = *ang_vel;
+    for (vel, mut prev_ang_vel) in &mut ang_vel_query {
+        prev_ang_vel.0 = vel.angular;
     }
 }
