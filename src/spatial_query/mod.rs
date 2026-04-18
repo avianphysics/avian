@@ -152,9 +152,7 @@
 
 mod query_filter;
 mod ray_caster;
-#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 mod shape_caster;
-#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 mod system_param;
 
 mod diagnostics;
@@ -162,9 +160,7 @@ pub use diagnostics::SpatialQueryDiagnostics;
 
 pub use query_filter::*;
 pub use ray_caster::*;
-#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 pub use shape_caster::*;
-#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 pub use system_param::*;
 
 use crate::prelude::*;
@@ -396,7 +392,7 @@ fn update_shape_caster_positions(
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 fn raycast(
     mut rays: Query<(Entity, &mut RayCaster, &mut RayHits)>,
-    spatial_query: SpatialQuery,
+    spatial_query: SpatialQuery<Collider>,
     mut diagnostics: ResMut<SpatialQueryDiagnostics>,
 ) {
     let start = crate::utils::Instant::now();
@@ -415,7 +411,7 @@ fn raycast(
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 fn shapecast(
     mut shape_casters: Query<(Entity, &mut ShapeCaster, &mut ShapeHits)>,
-    spatial_query: SpatialQuery,
+    spatial_query: SpatialQuery<Collider>,
     mut diagnostics: ResMut<SpatialQueryDiagnostics>,
 ) {
     let start = crate::utils::Instant::now();

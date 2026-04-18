@@ -246,7 +246,7 @@ impl RayCaster {
         &mut self,
         caster_entity: Entity,
         hits: &mut RayHits,
-        spatial_query: &SpatialQuery,
+        spatial_query: &SpatialQuery<Collider>,
     ) {
         if self.ignore_self {
             self.query_filter.excluded_entities.insert(caster_entity);

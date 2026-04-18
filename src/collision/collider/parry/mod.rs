@@ -11,13 +11,20 @@ mod primitives3d;
 pub use primitives2d::{EllipseColliderShape, RegularPolygonColliderShape};
 
 use super::EnlargedAabb;
-use crate::{make_pose, prelude::*};
+use crate::{
+    collision::collider::{BoundedCollider, NoEntity, QueryCollider},
+    make_pose,
+    prelude::*,
+};
 #[cfg(feature = "collider-from-mesh")]
 use bevy::mesh::{Indices, VertexAttributeValues};
 use bevy::{log, prelude::*};
 use contact_query::UnsupportedShape;
 use itertools::Either;
-use parry::shape::{RoundShape, SharedShape, TypedShape, Voxels};
+use parry::{
+    query::ShapeCastOptions,
+    shape::{RoundShape, SharedShape, TypedShape, Voxels},
+};
 
 impl<T: IntoCollider<Collider>> From<T> for Collider {
     fn from(value: T) -> Self {
@@ -398,14 +405,15 @@ impl Default for Collider {
     }
 }
 
-impl AnyCollider for Collider {
+impl BoundedCollider for Collider {
     type Context = ();
+    type EntityUsage = NoEntity;
 
     fn aabb_with_context(
         &self,
         position: Vector,
         rotation: impl Into<Rotation>,
-        _: ColliderContext<Self::Context>,
+        _: ColliderContext<(), NoEntity>,
     ) -> ColliderAabb {
         let aabb = self
             .shape_scaled()
@@ -415,7 +423,9 @@ impl AnyCollider for Collider {
             max: aabb.maxs,
         }
     }
+}
 
+impl AnyCollider for Collider {
     fn contact_manifolds_with_context(
         &self,
         other: &Self,
@@ -425,7 +435,7 @@ impl AnyCollider for Collider {
         rotation2: impl Into<Rotation>,
         prediction_distance: Scalar,
         manifolds: &mut Vec<ContactManifold>,
-        _: ColliderPairContext<Self::Context>,
+        _: ColliderPairContext<(), NoEntity>,
     ) {
         contact_query::contact_manifolds(
             self,
@@ -439,22 +449,153 @@ impl AnyCollider for Collider {
         )
     }
 
-    fn ccd_thickness_with_context(&self, _context: ColliderContext<Self::Context>) -> Scalar {
+    fn ccd_thickness_with_context(&self, _context: ColliderContext<(), NoEntity>) -> Scalar {
         self.shape_scaled().ccd_thickness()
     }
 
     fn max_distance_to_point_with_context(
         &self,
         point: Vector,
-        _context: ColliderContext<Self::Context>,
+        _context: ColliderContext<(), NoEntity>,
     ) -> Scalar {
         let bounding_sphere = self.shape_scaled().compute_local_bounding_sphere();
         point.distance(bounding_sphere.center) + bounding_sphere.radius
     }
 
-    fn bounding_radius_with_context(&self, _context: ColliderContext<Self::Context>) -> Scalar {
+    fn bounding_radius_with_context(&self, _context: ColliderContext<(), NoEntity>) -> Scalar {
         let center_of_mass = self.center_of_mass().adjust_precision();
         self.max_distance_to_point(center_of_mass)
+    }
+}
+
+impl QueryCollider for Collider {
+    type CastShape = Self;
+    type IntersectionShape = Self;
+
+    fn project_point(
+        &self,
+        translation: impl Into<Position>,
+        rotation: impl Into<Rotation>,
+        point: Vector,
+        solid: bool,
+        _: ColliderContext<(), NoEntity>,
+    ) -> (Vector, bool) {
+        let projection =
+            self.shape_scaled()
+                .project_point(&make_pose(translation, rotation), point, solid);
+        (projection.point, projection.is_inside)
+    }
+
+    fn distance_to_point(
+        &self,
+        translation: impl Into<Position>,
+        rotation: impl Into<Rotation>,
+        point: Vector,
+        solid: bool,
+        _: ColliderContext<(), NoEntity>,
+    ) -> Scalar {
+        self.shape_scaled()
+            .distance_to_point(&make_pose(translation, rotation), point, solid)
+    }
+
+    fn contains_point(
+        &self,
+        translation: impl Into<Position>,
+        rotation: impl Into<Rotation>,
+        point: Vector,
+        _: ColliderContext<(), NoEntity>,
+    ) -> bool {
+        self.shape_scaled()
+            .contains_point(&make_pose(translation, rotation), point)
+    }
+
+    fn cast_ray(
+        &self,
+        translation: impl Into<Position>,
+        rotation: impl Into<Rotation>,
+        ray_origin: Vector,
+        ray_direction: Vector,
+        max_distance: Scalar,
+        solid: bool,
+        _: ColliderContext<(), NoEntity>,
+    ) -> Option<(Scalar, Vector)> {
+        let hit = self.shape_scaled().cast_ray_and_get_normal(
+            &make_pose(translation, rotation),
+            &parry::query::Ray::new(ray_origin, ray_direction),
+            max_distance,
+            solid,
+        );
+        hit.map(|hit| (hit.time_of_impact, hit.normal))
+    }
+
+    fn intersects_ray(
+        &self,
+        translation: impl Into<Position>,
+        rotation: impl Into<Rotation>,
+        ray_origin: Vector,
+        ray_direction: Vector,
+        max_distance: Scalar,
+        _: ColliderContext<(), NoEntity>,
+    ) -> bool {
+        self.shape_scaled().intersects_ray(
+            &make_pose(translation, rotation),
+            &parry::query::Ray::new(ray_origin, ray_direction),
+            max_distance,
+        )
+    }
+
+    fn intersects_shape(
+        &self,
+        translation: impl Into<Position>,
+        rotation: impl Into<Rotation>,
+        shape: &Self::IntersectionShape,
+        shape_position: impl Into<Position>,
+        shape_rotation: impl Into<Rotation>,
+        _: ColliderContext<(), NoEntity>,
+    ) -> bool {
+        _ = (translation, rotation, shape, shape_position, shape_rotation);
+        todo!()
+    }
+
+    fn intersects_cast_shape(
+        &self,
+        translation: impl Into<Position>,
+        rotation: impl Into<Rotation>,
+        shape: &Self,
+        shape_origin: Vector,
+        shape_rotation: impl Into<Rotation>,
+        shape_direction: Vector,
+        max_distance: Scalar,
+        _: ColliderContext<(), NoEntity>,
+    ) -> Option<ShapeHitData> {
+        let pose1 = make_pose(translation, rotation);
+        let pose2 = make_pose(shape_origin, shape_rotation);
+
+        parry::query::cast_shapes(
+            &pose1,
+            Vector::ZERO,
+            self.shape_scaled().as_ref(),
+            &pose2,
+            shape_direction.adjust_precision(),
+            shape.shape_scaled().as_ref(),
+            ShapeCastOptions {
+                max_time_of_impact: max_distance,
+                // target_distance: config.target_distance,
+                // stop_at_penetration: !config.ignore_origin_penetration,
+                // compute_impact_geometry_on_penetration: config.compute_contact_on_penetration,
+                ..Default::default()
+            },
+        )
+        .ok()
+        .flatten()
+        .map(|hit| ShapeHitData {
+            entity: Entity::PLACEHOLDER,
+            point1: pose1 * hit.witness1,
+            point2: pose2 * hit.witness2 + shape_direction.adjust_precision() * hit.time_of_impact,
+            normal1: pose1.rotation * hit.normal1,
+            normal2: pose2.rotation * hit.normal2,
+            distance: hit.time_of_impact,
+        })
     }
 }
 
@@ -607,103 +748,6 @@ impl Collider {
         } else {
             log::error!("Failed to create convex hull for scaled collider.");
         }
-    }
-
-    /// Projects the given `point` onto `self` transformed by `translation` and `rotation`.
-    /// The returned tuple contains the projected point and whether it is inside the collider.
-    ///
-    /// If `solid` is true and the given `point` is inside of the collider, the projection will be at the point.
-    /// Otherwise, the collider will be treated as hollow, and the projection will be at the collider's boundary.
-    pub fn project_point(
-        &self,
-        translation: impl Into<Position>,
-        rotation: impl Into<Rotation>,
-        point: Vector,
-        solid: bool,
-    ) -> (Vector, bool) {
-        let projection =
-            self.shape_scaled()
-                .project_point(&make_pose(translation, rotation), point, solid);
-        (projection.point, projection.is_inside)
-    }
-
-    /// Computes the minimum distance between the given `point` and `self` transformed by `translation` and `rotation`.
-    ///
-    /// If `solid` is true and the given `point` is inside of the collider, the returned distance will be `0.0`.
-    /// Otherwise, the collider will be treated as hollow, and the distance will be the distance
-    /// to the collider's boundary.
-    pub fn distance_to_point(
-        &self,
-        translation: impl Into<Position>,
-        rotation: impl Into<Rotation>,
-        point: Vector,
-        solid: bool,
-    ) -> Scalar {
-        self.shape_scaled()
-            .distance_to_point(&make_pose(translation, rotation), point, solid)
-    }
-
-    /// Tests whether the given `point` is inside of `self` transformed by `translation` and `rotation`.
-    pub fn contains_point(
-        &self,
-        translation: impl Into<Position>,
-        rotation: impl Into<Rotation>,
-        point: Vector,
-    ) -> bool {
-        self.shape_scaled()
-            .contains_point(&make_pose(translation, rotation), point)
-    }
-
-    /// Computes the distance and normal between the given ray and `self`
-    /// transformed by `translation` and `rotation`.
-    ///
-    /// The returned tuple is in the format `(distance, normal)`.
-    ///
-    /// # Arguments
-    ///
-    /// - `ray_origin`: Where the ray is cast from.
-    /// - `ray_direction`: What direction the ray is cast in.
-    /// - `max_distance`: The maximum distance the ray can travel.
-    /// - `solid`: If true and the ray origin is inside of a collider, the hit point will be the ray origin itself.
-    ///   Otherwise, the collider will be treated as hollow, and the hit point will be at the collider's boundary.
-    pub fn cast_ray(
-        &self,
-        translation: impl Into<Position>,
-        rotation: impl Into<Rotation>,
-        ray_origin: Vector,
-        ray_direction: Vector,
-        max_distance: Scalar,
-        solid: bool,
-    ) -> Option<(Scalar, Vector)> {
-        let hit = self.shape_scaled().cast_ray_and_get_normal(
-            &make_pose(translation, rotation),
-            &parry::query::Ray::new(ray_origin, ray_direction),
-            max_distance,
-            solid,
-        );
-        hit.map(|hit| (hit.time_of_impact, hit.normal))
-    }
-
-    /// Tests whether the given ray intersects `self` transformed by `translation` and `rotation`.
-    ///
-    /// # Arguments
-    ///
-    /// - `ray_origin`: Where the ray is cast from.
-    /// - `ray_direction`: What direction the ray is cast in.
-    /// - `max_distance`: The maximum distance the ray can travel.
-    pub fn intersects_ray(
-        &self,
-        translation: impl Into<Position>,
-        rotation: impl Into<Rotation>,
-        ray_origin: Vector,
-        ray_direction: Vector,
-        max_distance: Scalar,
-    ) -> bool {
-        self.shape_scaled().intersects_ray(
-            &make_pose(translation, rotation),
-            &parry::query::Ray::new(ray_origin, ray_direction),
-            max_distance,
-        )
     }
 
     /// Creates a collider with a compound shape defined by a given vector of colliders with a position and a rotation.

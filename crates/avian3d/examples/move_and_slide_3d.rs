@@ -269,7 +269,7 @@ fn update_camera_transform(
     accumulated_mouse_motion: Res<AccumulatedMouseMotion>,
     player: Single<(Entity, &Transform), With<TouchedEntities>>,
     mut camera: Single<&mut Transform, (With<Camera>, Without<TouchedEntities>)>,
-    spatial: SpatialQuery,
+    spatial: SpatialQuery<Collider>,
 ) {
     let (player_entity, player_transform) = player.into_inner();
     let delta = accumulated_mouse_motion.delta;

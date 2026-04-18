@@ -47,6 +47,13 @@ pub type SymmetricMatrix3 = SymmetricMat3;
 /// The quaternion type used by Avian.
 pub type Quaternion = Quat;
 
+/// Radians
+#[cfg(feature = "2d")]
+pub(crate) type RotationValue = Scalar;
+/// Quaternion
+#[cfg(feature = "3d")]
+pub(crate) type RotationValue = Quaternion;
+
 impl AdjustPrecision for f32 {
     type Adjusted = Scalar;
     fn adjust_precision(&self) -> Self::Adjusted {

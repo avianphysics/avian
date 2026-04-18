@@ -68,7 +68,7 @@ pub const COS_5_DEGREES: Scalar = 0.99619469809;
 #[doc(alias = "StepSlide")]
 pub struct MoveAndSlide<'w, 's> {
     /// The [`SpatialQuery`] system parameter used to perform shape casts and other geometric queries.
-    pub spatial_query: SpatialQuery<'w, 's>,
+    pub spatial_query: SpatialQuery<'w, 's, Collider>,
     /// The [`Query`] used to query for colliders.
     pub colliders: Query<
         'w,

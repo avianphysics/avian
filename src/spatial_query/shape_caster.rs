@@ -1,13 +1,13 @@
 use crate::prelude::*;
 use bevy::{
-    ecs::{
-        entity::{EntityMapper, MapEntities},
-        lifecycle::HookContext,
-        world::DeferredWorld,
-    },
+    ecs::entity::{EntityMapper, MapEntities},
     prelude::*,
 };
 
+#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
+use bevy::ecs::{lifecycle::HookContext, world::DeferredWorld};
+
+#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 /// A component used for [shapecasting](spatial_query#shapecasting).
 ///
 /// **Shapecasting** is a type of [spatial query](spatial_query) where a shape travels along a straight
@@ -155,6 +155,7 @@ pub struct ShapeCaster {
     pub query_filter: SpatialQueryFilter,
 }
 
+#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 impl Default for ShapeCaster {
     fn default() -> Self {
         Self {
@@ -186,6 +187,7 @@ impl Default for ShapeCaster {
     }
 }
 
+#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 impl ShapeCaster {
     /// Creates a new [`ShapeCaster`] with a given shape, origin, shape rotation and direction.
     #[cfg(feature = "2d")]
@@ -348,7 +350,7 @@ impl ShapeCaster {
         &mut self,
         caster_entity: Entity,
         hits: &mut ShapeHits,
-        spatial_query: &SpatialQuery,
+        spatial_query: &SpatialQuery<Collider>,
     ) {
         if self.ignore_self {
             self.query_filter.excluded_entities.insert(caster_entity);
@@ -392,6 +394,7 @@ impl ShapeCaster {
     }
 }
 
+#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 fn on_add_shape_caster(mut world: DeferredWorld, ctx: HookContext) {
     let shape_caster = world.get::<ShapeCaster>(ctx.entity).unwrap();
     let max_hits = if shape_caster.max_hits == u32::MAX {

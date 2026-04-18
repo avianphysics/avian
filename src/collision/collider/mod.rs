@@ -55,14 +55,14 @@ pub trait IntoCollider<C: AnyCollider> {
 
 /// Context necessary for operations involving an [`AnyCollider`].
 #[derive(Deref)]
-pub struct ColliderContext<'a, 'w, 's, T: ReadOnlySystemParam> {
+pub struct ColliderContext<'a, 'w, 's, T: ReadOnlySystemParam, E: EntityUsage> {
     /// The collider entity involved in the operation.
-    pub collider: Entity,
+    pub collider: E::Entity,
     #[deref]
     item: &'a SystemParamItem<'w, 's, T>,
 }
 
-impl<T: ReadOnlySystemParam> Clone for ColliderContext<'_, '_, '_, T> {
+impl<T: ReadOnlySystemParam, E: EntityUsage> Clone for ColliderContext<'_, '_, '_, T, E> {
     fn clone(&self) -> Self {
         Self {
             collider: self.collider,
@@ -71,33 +71,43 @@ impl<T: ReadOnlySystemParam> Clone for ColliderContext<'_, '_, '_, T> {
     }
 }
 
-impl<'a, 'w, 's, T: ReadOnlySystemParam> ColliderContext<'a, 'w, 's, T> {
+impl<'a, 'w, 's, T: ReadOnlySystemParam, E: EntityUsage> ColliderContext<'a, 'w, 's, T, E> {
     /// Constructs a [`ColliderContext`].
     pub fn new(collider: Entity, item: &'a <T as SystemParam>::Item<'w, 's>) -> Self {
-        Self { collider, item }
+        Self {
+            collider: E::to_field(collider),
+            item,
+        }
     }
 }
 
-impl ColliderContext<'_, '_, '_, ()> {
+impl ColliderContext<'_, '_, '_, (), NoEntity> {
     /// No context is needed for this collider.
     const NO_CONTEXT: Self = Self {
-        collider: Entity::PLACEHOLDER,
+        collider: (),
         item: &(),
     };
 }
 
+impl<'a, 'w, 's, T: ReadOnlySystemParam> ColliderContext<'a, 'w, 's, T, NoEntity> {
+    /// Constructs a [`ColliderContext`]
+    pub fn no_entity(item: &'a <T as SystemParam>::Item<'w, 's>) -> Self {
+        Self { collider: (), item }
+    }
+}
+
 /// Context necessary for operations involving a pair of [`AnyCollider`]s.
 #[derive(Deref)]
-pub struct ColliderPairContext<'a, 'w, 's, T: ReadOnlySystemParam> {
+pub struct ColliderPairContext<'a, 'w, 's, T: ReadOnlySystemParam, E: EntityUsage> {
     /// The first collider entity involved in the operation.
-    pub collider1: Entity,
+    pub collider1: E::Entity,
     /// The second collider entity involved in the operation.
-    pub collider2: Entity,
+    pub collider2: E::Entity,
     #[deref]
     item: &'a SystemParamItem<'w, 's, T>,
 }
 
-impl<'a, 'w, 's, T: ReadOnlySystemParam> ColliderPairContext<'a, 'w, 's, T> {
+impl<'a, 'w, 's, T: ReadOnlySystemParam, E: EntityUsage> ColliderPairContext<'a, 'w, 's, T, E> {
     /// Constructs a [`ColliderPairContext`].
     pub fn new(
         collider1: Entity,
@@ -105,25 +115,49 @@ impl<'a, 'w, 's, T: ReadOnlySystemParam> ColliderPairContext<'a, 'w, 's, T> {
         item: &'a <T as SystemParam>::Item<'w, 's>,
     ) -> Self {
         Self {
-            collider1,
-            collider2,
+            collider1: E::to_field(collider1),
+            collider2: E::to_field(collider2),
             item,
         }
     }
 }
 
-impl ColliderPairContext<'_, '_, '_, ()> {
+impl ColliderPairContext<'_, '_, '_, (), NoEntity> {
     /// No context is needed for this collider pair.
     const NO_CONTEXT: Self = Self {
-        collider1: Entity::PLACEHOLDER,
-        collider2: Entity::PLACEHOLDER,
+        collider1: (),
+        collider2: (),
         item: &(),
     };
 }
 
-/// A trait that generalizes over colliders. Implementing this trait
-/// allows colliders to be used with the physics engine.
-pub trait AnyCollider: Component<Mutability = Mutable> + ComputeMassProperties {
+/// A trait to indicate the [`Entity`] usage of a [`BoundedCollider`] `Context`. See [`NoEntity`] and [`NeedsEntity`].
+pub trait EntityUsage {
+    /// The type the [`Entity`] is stored in ([`()`] vs [`Entity`])
+    type Entity: Clone + Copy;
+    /// Convert an [`Entity`] to the stored type
+    fn to_field(e: Entity) -> Self::Entity;
+}
+
+/// A type indicating an entity is required for a [`BoundedCollider`]'s `Context`
+pub struct NeedsEntity;
+impl EntityUsage for NeedsEntity {
+    type Entity = Entity;
+    fn to_field(e: Entity) -> Self::Entity {
+        e
+    }
+}
+
+/// A type indicating no entity is used for a [`BoundedCollider`]'s `Context`
+pub struct NoEntity;
+impl EntityUsage for NoEntity {
+    type Entity = ();
+    fn to_field(_: Entity) {}
+}
+
+/// A collider type that can be bounded by a volume. Required by [`AnyCollider`], but seperately useful
+/// for [`QueryCollider`]'s `CastShape` and `IntersectionShape`.
+pub trait BoundedCollider {
     /// A type providing additional context for collider operations.
     ///
     /// `Context` allows you to access an arbitrary [`ReadOnlySystemParam`] on
@@ -201,6 +235,9 @@ pub trait AnyCollider: Component<Mutability = Mutable> + ComputeMassProperties {
     /// ```
     type Context: for<'w, 's> ReadOnlySystemParam<Item<'w, 's>: Send + Sync>;
 
+    /// The usage of Context [`Entity`]s for this type
+    type EntityUsage: EntityUsage;
+
     /// Computes the [Axis-Aligned Bounding Box](ColliderAabb) of the collider
     /// with the given position and rotation.
     ///
@@ -213,9 +250,15 @@ pub trait AnyCollider: Component<Mutability = Mutable> + ComputeMassProperties {
         &self,
         position: Vector,
         rotation: impl Into<Rotation>,
-        context: ColliderContext<Self::Context>,
+        context: ColliderContext<Self::Context, Self::EntityUsage>,
     ) -> ColliderAabb;
+}
 
+/// A trait that generalizes over colliders. Implementing this trait
+/// allows colliders to be used with the physics engine.
+pub trait AnyCollider:
+    Component<Mutability = Mutable> + ComputeMassProperties + BoundedCollider
+{
     /// Computes the swept [Axis-Aligned Bounding Box](ColliderAabb) of the collider.
     /// This corresponds to the space the shape would occupy if it moved from the given
     /// start position to the given end position.
@@ -231,7 +274,7 @@ pub trait AnyCollider: Component<Mutability = Mutable> + ComputeMassProperties {
         start_rotation: impl Into<Rotation>,
         end_position: Vector,
         end_rotation: impl Into<Rotation>,
-        context: ColliderContext<Self::Context>,
+        context: ColliderContext<Self::Context, Self::EntityUsage>,
     ) -> ColliderAabb {
         self.aabb_with_context(start_position, start_rotation, context.clone())
             .merged(self.aabb_with_context(end_position, end_rotation, context))
@@ -252,7 +295,7 @@ pub trait AnyCollider: Component<Mutability = Mutable> + ComputeMassProperties {
         rotation2: impl Into<Rotation>,
         prediction_distance: Scalar,
         manifolds: &mut Vec<ContactManifold>,
-        context: ColliderPairContext<Self::Context>,
+        context: ColliderPairContext<Self::Context, Self::EntityUsage>,
     );
 
     /// Returns a conservative minimum thickness used by [Continuous Collision Detection (CCD)][CCD]
@@ -262,7 +305,10 @@ pub trait AnyCollider: Component<Mutability = Mutable> + ComputeMassProperties {
     /// of any given shape to its surface.
     ///
     /// [CCD]: crate::dynamics::ccd
-    fn ccd_thickness_with_context(&self, context: ColliderContext<Self::Context>) -> Scalar {
+    fn ccd_thickness_with_context(
+        &self,
+        context: ColliderContext<Self::Context, Self::EntityUsage>,
+    ) -> Scalar {
         let aabb = self.aabb_with_context(Vector::ZERO, Rotation::IDENTITY, context);
         aabb.size().min_element() * 0.5
     }
@@ -271,7 +317,7 @@ pub trait AnyCollider: Component<Mutability = Mutable> + ComputeMassProperties {
     fn max_distance_to_point_with_context(
         &self,
         point: Vector,
-        context: ColliderContext<Self::Context>,
+        context: ColliderContext<Self::Context, Self::EntityUsage>,
     ) -> Scalar {
         let aabb = self.aabb_with_context(Vector::ZERO, Rotation::IDENTITY, context);
         point.distance(aabb.center()) + aabb.size().length() * 0.5
@@ -280,7 +326,10 @@ pub trait AnyCollider: Component<Mutability = Mutable> + ComputeMassProperties {
     /// Returns the radius of the bounding sphere of the collider.
     ///
     /// This is used to compute a size-relative [`ColliderAabbMargin`] for the collider.
-    fn bounding_radius_with_context(&self, context: ColliderContext<Self::Context>) -> Scalar {
+    fn bounding_radius_with_context(
+        &self,
+        context: ColliderContext<Self::Context, Self::EntityUsage>,
+    ) -> Scalar {
         // We don't have a bounding sphere method directly available here,
         // so for now we settle for this approximation for the default implementation.
         let aabb = self.aabb_with_context(Vector::ZERO, Rotation::IDENTITY, context.clone());
@@ -290,7 +339,9 @@ pub trait AnyCollider: Component<Mutability = Mutable> + ComputeMassProperties {
 
 /// A simplified wrapper around [`AnyCollider`] that doesn't require passing in the context for
 /// implementations that don't need context
-pub trait SimpleCollider: AnyCollider<Context = ()> {
+pub trait SimpleCollider:
+    BoundedCollider<Context = (), EntityUsage = NoEntity> + AnyCollider
+{
     /// Computes the [Axis-Aligned Bounding Box](ColliderAabb) of the collider
     /// with the given position and rotation.
     ///
@@ -372,7 +423,7 @@ pub trait SimpleCollider: AnyCollider<Context = ()> {
     }
 }
 
-impl<C: AnyCollider<Context = ()>> SimpleCollider for C {}
+impl<C: BoundedCollider<Context = (), EntityUsage = NoEntity> + AnyCollider> SimpleCollider for C {}
 
 /// A trait for colliders that support scaling.
 pub trait ScalableCollider: AnyCollider {
@@ -392,6 +443,129 @@ pub trait ScalableCollider: AnyCollider {
     fn scale_by(&mut self, factor: Vector, detail: u32) {
         self.set_scale(factor * self.scale(), detail)
     }
+}
+
+/// A trait for spatial query support for a collider type
+pub trait QueryCollider: BoundedCollider + AnyCollider {
+    /// The shape type that is used when casting a collider, if possible this should be `Self`
+    type CastShape: BoundedCollider<Context = Self::Context, EntityUsage = NoEntity>;
+    /// The shape type that is used when casting a collider, if possible this should be `Self`
+    type IntersectionShape: BoundedCollider<Context = Self::Context, EntityUsage = NoEntity>;
+
+    /// Projects the given `point` onto `self` transformed by `translation` and `rotation`.
+    /// The returned tuple contains the projected point and whether it is inside the collider.
+    ///
+    /// If `solid` is true and the given `point` is inside of the collider, the projection will be at the point.
+    /// Otherwise, the collider will be treated as hollow, and the projection will be at the collider's boundary.
+    fn project_point(
+        &self,
+        translation: impl Into<Position>,
+        rotation: impl Into<Rotation>,
+        point: Vector,
+        solid: bool,
+        context: ColliderContext<Self::Context, Self::EntityUsage>,
+    ) -> (Vector, bool);
+
+    /// Computes the minimum distance between the given `point` and `self` transformed by `translation` and `rotation`.
+    ///
+    /// If `solid` is true and the given `point` is inside of the collider, the returned distance will be `0.0`.
+    /// Otherwise, the collider will be treated as hollow, and the distance will be the distance
+    /// to the collider's boundary.
+    fn distance_to_point(
+        &self,
+        translation: impl Into<Position>,
+        rotation: impl Into<Rotation>,
+        point: Vector,
+        solid: bool,
+        context: ColliderContext<Self::Context, Self::EntityUsage>,
+    ) -> Scalar;
+
+    /// Tests whether the given `point` is inside of `self` transformed by `translation` and `rotation`.
+    fn contains_point(
+        &self,
+        translation: impl Into<Position>,
+        rotation: impl Into<Rotation>,
+        point: Vector,
+        context: ColliderContext<Self::Context, Self::EntityUsage>,
+    ) -> bool;
+
+    /// Computes the distance and normal between the given ray and `self`
+    /// transformed by `translation` and `rotation`.
+    ///
+    /// The returned tuple is in the format `(distance, normal)`.
+    ///
+    /// # Arguments
+    ///
+    /// - `ray_origin`: Where the ray is cast from.
+    /// - `ray_direction`: What direction the ray is cast in.
+    /// - `max_distance`: The maximum distance the ray can travel.
+    /// - `solid`: If true and the ray origin is inside of a collider, the hit point will be the ray origin itself.
+    ///   Otherwise, the collider will be treated as hollow, and the hit point will be at the collider's boundary.
+    fn cast_ray(
+        &self,
+        translation: impl Into<Position>,
+        rotation: impl Into<Rotation>,
+        ray_origin: Vector,
+        ray_direction: Vector,
+        max_distance: Scalar,
+        solid: bool,
+        context: ColliderContext<Self::Context, Self::EntityUsage>,
+    ) -> Option<(Scalar, Vector)>;
+
+    /// Tests whether the given ray intersects `self` transformed by `translation` and `rotation`.
+    ///
+    /// # Arguments
+    ///
+    /// - `ray_origin`: Where the ray is cast from.
+    /// - `ray_direction`: What direction the ray is cast in.
+    /// - `max_distance`: The maximum distance the ray can travel.
+    fn intersects_ray(
+        &self,
+        translation: impl Into<Position>,
+        rotation: impl Into<Rotation>,
+        ray_origin: Vector,
+        ray_direction: Vector,
+        max_distance: Scalar,
+        context: ColliderContext<Self::Context, Self::EntityUsage>,
+    ) -> bool;
+
+    /// Tests whether the given shape intersects `self` transformed by `translation` and `rotation`.
+    ///
+    /// # Arguments
+    ///
+    /// - `shape`: The shape we are testing `self` against
+    /// - `shape_position`: The position of the `shape`
+    /// - `shape_rotation`: The rotation of the `shape`
+    fn intersects_shape(
+        &self,
+        translation: impl Into<Position>,
+        rotation: impl Into<Rotation>,
+        shape: &Self::IntersectionShape,
+        shape_position: impl Into<Position>,
+        shape_rotation: impl Into<Rotation>,
+        context: ColliderContext<Self::Context, Self::EntityUsage>,
+    ) -> bool;
+
+    /// Tests whether the given shape, cast along a ray, intersects `self` transformed by `translation` and `rotation`.
+    ///
+    /// # Arguments
+    ///
+    /// - `shape`: The shape we are testing `self` against
+    /// - `shape_origin`: The starting position for the `shape`
+    /// - `shape_rotation`: The rotation of the `shape`
+    /// - `shape_direction`: The direction the `shape` moves along
+    /// - `max_distance`: The maximum distance the `shape` will travel to find a hit
+    fn intersects_cast_shape(
+        &self,
+        translation: impl Into<Position>,
+        rotation: impl Into<Rotation>,
+        shape: &Self::CastShape,
+        shape_origin: Vector,
+        shape_rotation: impl Into<Rotation>,
+        shape_direction: Vector,
+        max_distance: Scalar,
+        context: ColliderContext<Self::Context, Self::EntityUsage>,
+    ) -> Option<ShapeHitData>;
 }
 
 /// A marker component that indicates that a [collider](Collider) is disabled

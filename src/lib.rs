@@ -537,8 +537,6 @@ pub mod prelude {
     pub use crate::diagnostics::PhysicsDiagnosticsPlugin;
     #[cfg(feature = "diagnostic_ui")]
     pub use crate::diagnostics::ui::{PhysicsDiagnosticsUiPlugin, PhysicsDiagnosticsUiSettings};
-    #[cfg(feature = "default-collider")]
-    pub(crate) use crate::physics_transform::RotationValue;
     #[cfg(feature = "bevy_picking")]
     pub use crate::picking::{
         PhysicsPickable, PhysicsPickingFilter, PhysicsPickingPlugin, PhysicsPickingSettings,
