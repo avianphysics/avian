@@ -141,7 +141,8 @@ fn keyboard_input(
     let right = keyboard_input.any_pressed([KeyCode::KeyD, KeyCode::ArrowRight]);
 
     let horizontal = right as i8 - left as i8;
-    let vertical = up as i8 - down as i8;
+    // vertical negated to reflect the right-handedness of bevy
+    let vertical = -(up as i8 - down as i8);
     let direction = Vector2::new(horizontal as Scalar, vertical as Scalar).clamp_length_max(1.0);
 
     if direction != Vector2::ZERO {
@@ -160,8 +161,9 @@ fn gamepad_input(mut movement_writer: MessageWriter<MovementAction>, gamepads: Q
             gamepad.get(GamepadAxis::LeftStickX),
             gamepad.get(GamepadAxis::LeftStickY),
         ) {
+            // Y negated to reflect the right-handedness of bevy
             movement_writer.write(MovementAction::Move(
-                Vector2::new(x as Scalar, y as Scalar).clamp_length_max(1.0),
+                Vector2::new(x as Scalar, -y as Scalar).clamp_length_max(1.0),
             ));
         }
 
@@ -220,7 +222,7 @@ fn movement(
             match event {
                 MovementAction::Move(direction) => {
                     linear_velocity.x += direction.x * movement_acceleration.0 * delta_time;
-                    linear_velocity.z -= direction.y * movement_acceleration.0 * delta_time;
+                    linear_velocity.z += direction.y * movement_acceleration.0 * delta_time;
                 }
                 MovementAction::Jump => {
                     if is_grounded {
