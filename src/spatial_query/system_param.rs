@@ -63,6 +63,14 @@ use bevy::{
 /// }
 /// ```
 #[derive(SystemParam)]
+#[cfg(feature = "default-collider")]
+pub struct SpatialQuery<'w, 's, C: QueryCollider = Collider> {
+    colliders: Query<'w, 's, (&'static Position, &'static Rotation, &'static C)>,
+    aabbs: Query<'w, 's, &'static ColliderAabb>,
+    collider_trees: Res<'w, ColliderTrees>,
+    context: StaticSystemParam<'w, 's, <C as BoundedCollider>::Context>,
+}
+#[cfg(not(feature = "default-collider"))]
 pub struct SpatialQuery<'w, 's, C: QueryCollider> {
     colliders: Query<'w, 's, (&'static Position, &'static Rotation, &'static C)>,
     aabbs: Query<'w, 's, &'static ColliderAabb>,

@@ -133,7 +133,7 @@ impl ColliderPairContext<'_, '_, '_, (), NoEntity> {
 
 /// A trait to indicate the [`Entity`] usage of a [`BoundedCollider`] `Context`. See [`NoEntity`] and [`NeedsEntity`].
 pub trait EntityUsage {
-    /// The type the [`Entity`] is stored in ([`()`] vs [`Entity`])
+    /// The type the [`Entity`] is stored in (`()` vs [`Entity`])
     type Entity: Clone + Copy;
     /// Convert an [`Entity`] to the stored type
     fn to_field(e: Entity) -> Self::Entity;
@@ -241,7 +241,7 @@ pub trait BoundedCollider {
     /// Computes the [Axis-Aligned Bounding Box](ColliderAabb) of the collider
     /// with the given position and rotation.
     ///
-    /// See [`SimpleCollider::aabb`] for collider types with an empty [`AnyCollider::Context`].
+    /// See [`SimpleCollider::aabb`] for collider types with an empty [`BoundedCollider::Context`].
     #[cfg_attr(
         feature = "2d",
         doc = "\n\nThe rotation is counterclockwise and in radians."
@@ -263,7 +263,7 @@ pub trait AnyCollider:
     /// This corresponds to the space the shape would occupy if it moved from the given
     /// start position to the given end position.
     ///
-    /// See [`SimpleCollider::swept_aabb`] for collider types with an empty [`AnyCollider::Context`].
+    /// See [`SimpleCollider::swept_aabb`] for collider types with an empty [`BoundedCollider::Context`].
     #[cfg_attr(
         feature = "2d",
         doc = "\n\nThe rotation is counterclockwise and in radians."
@@ -285,7 +285,7 @@ pub trait AnyCollider:
     /// Returns an empty vector if the colliders are separated by a distance greater than `prediction_distance`
     /// or if the given shapes are invalid.
     ///
-    /// See [`SimpleCollider::contact_manifolds`] for collider types with an empty [`AnyCollider::Context`].
+    /// See [`SimpleCollider::contact_manifolds`] for collider types with an empty [`BoundedCollider::Context`].
     fn contact_manifolds_with_context(
         &self,
         other: &Self,
@@ -345,7 +345,7 @@ pub trait SimpleCollider:
     /// Computes the [Axis-Aligned Bounding Box](ColliderAabb) of the collider
     /// with the given position and rotation.
     ///
-    /// See [`AnyCollider::aabb_with_context`] for collider types with a non-empty [`AnyCollider::Context`].
+    /// See [`AnyCollider::aabb_with_context`] for collider types with a non-empty [`BoundedCollider::Context`].
     fn aabb(&self, position: Vector, rotation: impl Into<Rotation>) -> ColliderAabb {
         self.aabb_with_context(position, rotation, ColliderContext::NO_CONTEXT)
     }
@@ -354,7 +354,7 @@ pub trait SimpleCollider:
     /// This corresponds to the space the shape would occupy if it moved from the given
     /// start position to the given end position.
     ///
-    /// See [`AnyCollider::swept_aabb_with_context`] for collider types with a non-empty [`AnyCollider::Context`].
+    /// See [`AnyCollider::swept_aabb_with_context`] for collider types with a non-empty [`BoundedCollider::Context`].
     fn swept_aabb(
         &self,
         start_position: Vector,
@@ -376,7 +376,7 @@ pub trait SimpleCollider:
     /// `manifolds` is cleared if the colliders are separated by a distance greater than `prediction_distance`
     /// or if the given shapes are invalid.
     ///
-    /// See [`AnyCollider::contact_manifolds_with_context`] for collider types with a non-empty [`AnyCollider::Context`].
+    /// See [`AnyCollider::contact_manifolds_with_context`] for collider types with a non-empty [`BoundedCollider::Context`].
     fn contact_manifolds(
         &self,
         other: &Self,
