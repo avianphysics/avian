@@ -49,6 +49,9 @@ use bevy::{
 /// You can configure the [`PhysicsGizmos`] retrieved from `GizmoConfigStore` for the global configuration
 /// and the [`DebugRender`] component for entity-level configuration.
 ///
+/// The plugin also initializes the [`PhysicsDebugRenderConfig`] resource, which lets you
+/// enable or disable individual debug render systems at runtime. All systems are enabled by default.
+///
 /// # Example
 ///
 /// ```no_run
@@ -86,11 +89,26 @@ use bevy::{
 ///     ));
 /// }
 /// ```
+///
+/// # Runtime Configuration
+///
+/// To toggle debug render systems at runtime, use the [`PhysicsDebugRenderConfig`] resource:
+///
+/// ```no_run
+#[cfg_attr(feature = "2d", doc = "use avian2d::prelude::*;")]
+#[cfg_attr(feature = "3d", doc = "use avian3d::prelude::*;")]
+/// use bevy::prelude::*;
+///
+/// fn disable_aabb(mut config: ResMut<PhysicsDebugRenderConfig>) {
+///     config.enable_aabb = false;
+/// }
+/// ```
 #[derive(Default)]
 pub struct PhysicsDebugPlugin;
 
 impl Plugin for PhysicsDebugPlugin {
     fn build(&self, app: &mut App) {
+        app.init_resource::<PhysicsDebugRenderConfig>();
         app.init_gizmo_group::<PhysicsGizmos>();
 
         let mut store = app.world_mut().resource_mut::<GizmoConfigStore>();
@@ -104,32 +122,38 @@ impl Plugin for PhysicsDebugPlugin {
             config.line.width = 1.5;
         }
 
+        macro_rules! configured {
+            ($field:ident) => {
+                (|r: Res<PhysicsDebugRenderConfig>| r.$field)
+            };
+        }
+
         app.add_systems(
             PostUpdate,
             (
-                debug_render_axes,
-                debug_render_aabbs,
-                debug_render_bvh,
+                debug_render_axes.run_if(configured!(enable_axes)),
+                debug_render_aabbs.run_if(configured!(enable_aabb)),
+                debug_render_bvh.run_if(configured!(enable_bvh)),
                 #[cfg(all(
                     feature = "default-collider",
                     any(feature = "parry-f32", feature = "parry-f64")
                 ))]
-                debug_render_colliders,
-                debug_render_contacts,
+                debug_render_colliders.run_if(configured!(enable_colliders)),
+                debug_render_contacts.run_if(configured!(enable_contacts)),
                 // TODO: Refactor joints to allow iterating over all of them without generics
-                debug_render_constraint::<FixedJoint, 2>,
-                debug_render_constraint::<PrismaticJoint, 2>,
-                debug_render_constraint::<DistanceJoint, 2>,
-                debug_render_constraint::<RevoluteJoint, 2>,
+                debug_render_constraint::<FixedJoint, 2>.run_if(configured!(enable_joints)),
+                debug_render_constraint::<PrismaticJoint, 2>.run_if(configured!(enable_joints)),
+                debug_render_constraint::<DistanceJoint, 2>.run_if(configured!(enable_joints)),
+                debug_render_constraint::<RevoluteJoint, 2>.run_if(configured!(enable_joints)),
                 #[cfg(feature = "3d")]
-                debug_render_constraint::<SphericalJoint, 2>,
-                debug_render_raycasts,
+                debug_render_constraint::<SphericalJoint, 2>.run_if(configured!(enable_joints)),
+                debug_render_raycasts.run_if(configured!(enable_raycasts)),
                 #[cfg(all(
                     feature = "default-collider",
                     any(feature = "parry-f32", feature = "parry-f64")
                 ))]
-                debug_render_shapecasts,
-                debug_render_islands.run_if(resource_exists::<PhysicsIslands>),
+                debug_render_shapecasts.run_if(configured!(enable_shapecasts)),
+                debug_render_islands.run_if(configured!(enable_islands)),
             )
                 .after(TransformSystems::Propagate)
                 .run_if(|store: Res<GizmoConfigStore>| store.config::<PhysicsGizmos>().0.enabled),
