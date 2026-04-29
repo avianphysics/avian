@@ -15,7 +15,7 @@ use bevy::{color::palettes::css::*, prelude::*};
 /// #[cfg_attr(feature = "3d", doc = "use avian3d::prelude::*;")]
 /// use bevy::prelude::*;
 ///
-/// fn disable_aabb(mut config: ResMut<GlobalPhysicsDebugConfig>) {
+/// fn disable_aabb(mut config: ResMut<PhysicsDebugRenderConfig>) {
 ///     config.enable_aabb = false;
 /// }
 /// ```
