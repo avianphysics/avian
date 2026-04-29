@@ -11,8 +11,8 @@ use bevy::{color::palettes::css::*, prelude::*};
 /// For example, to disable AABB rendering:
 ///
 /// ```no_run
-/// #[cfg_attr(feature = "2d", doc = "use avian2d::prelude::*;")]
-/// #[cfg_attr(feature = "3d", doc = "use avian3d::prelude::*;")]
+#[cfg_attr(feature = "2d", doc = "use avian2d::prelude::*;")]
+#[cfg_attr(feature = "3d", doc = "use avian3d::prelude::*;")]
 /// use bevy::prelude::*;
 ///
 /// fn disable_aabb(mut config: ResMut<PhysicsDebugRenderConfig>) {
