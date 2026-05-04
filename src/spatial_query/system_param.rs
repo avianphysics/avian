@@ -63,71 +63,12 @@ use bevy::{
 /// }
 /// ```
 #[derive(SystemParam)]
-#[cfg(feature = "default-collider")]
-pub struct SpatialQuery<'w, 's, C: QueryCollider = Collider> {
-    colliders: Query<'w, 's, (&'static Position, &'static Rotation, &'static C)>,
-    aabbs: Query<'w, 's, &'static ColliderAabb>,
-    collider_trees: Res<'w, ColliderTrees>,
-    context: StaticSystemParam<'w, 's, <C as BoundedCollider>::Context>,
-}
-
-/// A system parameter for performing [spatial queries](spatial_query).
-///
-/// # Methods
-///
-/// - [Raycasting](spatial_query#raycasting): [`cast_ray`](SpatialQuery::cast_ray), [`cast_ray_predicate`](SpatialQuery::cast_ray_predicate),
-///   [`ray_hits`](SpatialQuery::ray_hits), [`ray_hits_callback`](SpatialQuery::ray_hits_callback)
-/// - [Shapecasting](spatial_query#shapecasting): [`cast_shape`](SpatialQuery::cast_shape), [`cast_shape_predicate`](SpatialQuery::cast_shape_predicate),
-///   [`shape_hits`](SpatialQuery::shape_hits), [`shape_hits_callback`](SpatialQuery::shape_hits_callback)
-/// - [Point projection](spatial_query#point-projection): [`project_point`](SpatialQuery::project_point) and [`project_point_predicate`](SpatialQuery::project_point_predicate)
-/// - [Intersection tests](spatial_query#intersection-tests)
-///     - Point intersections: [`point_intersections`](SpatialQuery::point_intersections),
-///       [`point_intersections_callback`](SpatialQuery::point_intersections_callback)
-///     - AABB intersections: [`aabb_intersections_with_aabb`](SpatialQuery::aabb_intersections_with_aabb),
-///       [`aabb_intersections_with_aabb_callback`](SpatialQuery::aabb_intersections_with_aabb_callback)
-///     - Shape intersections: [`shape_intersections`](SpatialQuery::shape_intersections)
-///       [`shape_intersections_callback`](SpatialQuery::shape_intersections_callback)
-///
-/// For simple raycasts and shapecasts, consider using the [`RayCaster`] and [`ShapeCaster`] components that
-/// provide a more ECS-based approach and perform casts on every frame.
-///
-/// # Example
-///
-/// ```
-/// # #[cfg(feature = "2d")]
-/// # use avian2d::prelude::*;
-/// # #[cfg(feature = "3d")]
-/// use avian3d::prelude::*;
-/// use bevy::prelude::*;
-///
-/// # #[cfg(all(feature = "3d", feature = "f32"))]
-/// fn print_hits(spatial_query: SpatialQuery) {
-///     // Ray origin and direction
-///     let origin = Vec3::ZERO;
-///     let direction = Dir3::X;
-///
-///     // Configuration for the ray cast
-///     let max_distance = 100.0;
-///     let solid = true;
-///     let filter = SpatialQueryFilter::default();
-///
-///     // Cast ray and print first hit
-///     if let Some(first_hit) = spatial_query.cast_ray(origin, direction, max_distance, solid, &filter) {
-///         println!("First hit: {:?}", first_hit);
-///     }
-///
-///     // Cast ray and get up to 20 hits
-///     let hits = spatial_query.ray_hits(origin, direction, max_distance, 20, solid, &filter);
-///
-///     // Print hits
-///     for hit in hits.iter() {
-///         println!("Hit: {:?}", hit);
-///     }
-/// }
-/// ```
-#[derive(SystemParam)]
-#[cfg(not(feature = "default-collider"))]
-pub struct SpatialQuery<'w, 's, C: QueryCollider> {
+pub struct SpatialQuery<
+    'w,
+    's,
+    #[cfg(feature = "default-collider")] C: QueryCollider = Collider,
+    #[cfg(not(feature = "default-collider"))] C: QueryCollider,
+> {
     colliders: Query<'w, 's, (&'static Position, &'static Rotation, &'static C)>,
     aabbs: Query<'w, 's, &'static ColliderAabb>,
     collider_trees: Res<'w, ColliderTrees>,
