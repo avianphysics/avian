@@ -392,7 +392,7 @@ fn update_shape_caster_positions(
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 fn raycast(
     mut rays: Query<(Entity, &mut RayCaster, &mut RayHits)>,
-    spatial_query: SpatialQuery<Collider>,
+    spatial_query: SpatialQuery,
     mut diagnostics: ResMut<SpatialQueryDiagnostics>,
 ) {
     let start = crate::utils::Instant::now();
@@ -411,7 +411,7 @@ fn raycast(
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 fn shapecast(
     mut shape_casters: Query<(Entity, &mut ShapeCaster, &mut ShapeHits)>,
-    spatial_query: SpatialQuery<Collider>,
+    spatial_query: SpatialQuery,
     mut diagnostics: ResMut<SpatialQueryDiagnostics>,
 ) {
     let start = crate::utils::Instant::now();

@@ -142,7 +142,7 @@ fn reset_colors(
 }
 
 fn raycast(
-    query: SpatialQuery<Collider>,
+    query: SpatialQuery,
     mut materials: ResMut<Assets<StandardMaterial>>,
     cubes: Query<(&MeshMaterial3d<StandardMaterial>, &OutOfGlass)>,
     mut indicator_transform: Single<&mut Transform, With<RayIndicator>>,
