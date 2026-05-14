@@ -58,7 +58,7 @@
 //!             println!(
 //!                 "Hit entity {} at {} with normal {}",
 //!                 hit.entity,
-//!                 ray.origin + *ray.direction * hit.distance,
+//!                 ray.get_global_point(hit.distance),
 //!                 hit.normal,
 //!             );
 //!         }
@@ -168,19 +168,43 @@ pub use shape_caster::*;
 pub use system_param::*;
 
 use crate::prelude::*;
-use bevy::prelude::*;
+use bevy::{
+    ecs::{intern::Interned, schedule::ScheduleLabel},
+    prelude::*,
+};
 
 /// Handles component-based [spatial queries](spatial_query) like [raycasting](spatial_query#raycasting)
 /// and [shapecasting](spatial_query#shapecasting) with [`RayCaster`] and [`ShapeCaster`].
-pub struct SpatialQueryPlugin;
+pub struct SpatialQueryPlugin {
+    schedule: Interned<dyn ScheduleLabel>,
+}
+
+impl SpatialQueryPlugin {
+    /// Creates a [`SpatialQueryPlugin`] with the schedule that is used for running the [`PhysicsSchedule`].
+    ///
+    /// The default schedule is `FixedPostUpdate`.
+    pub fn new(schedule: impl ScheduleLabel) -> Self {
+        Self {
+            schedule: schedule.intern(),
+        }
+    }
+}
+
+impl Default for SpatialQueryPlugin {
+    fn default() -> Self {
+        Self::new(FixedPostUpdate)
+    }
+}
 
 impl Plugin for SpatialQueryPlugin {
     fn build(&self, app: &mut App) {
-        let physics_schedule = app
-            .get_schedule_mut(PhysicsSchedule)
-            .expect("add PhysicsSchedule first");
+        app.configure_sets(
+            self.schedule,
+            SpatialQuerySystems.after(TransformSystems::Propagate),
+        );
 
-        physics_schedule.add_systems(
+        app.add_systems(
+            self.schedule,
             (
                 update_ray_caster_positions,
                 #[cfg(all(
@@ -190,7 +214,7 @@ impl Plugin for SpatialQueryPlugin {
                 (update_shape_caster_positions, raycast, shapecast).chain(),
             )
                 .chain()
-                .in_set(PhysicsStepSystems::SpatialQuery),
+                .in_set(SpatialQuerySystems),
         );
     }
 
@@ -199,6 +223,12 @@ impl Plugin for SpatialQueryPlugin {
         app.register_physics_diagnostics::<SpatialQueryDiagnostics>();
     }
 }
+
+/// Responsible for updating spatial query components like [`RayCaster`] and [`ShapeCaster`].
+///
+/// See [`SpatialQueryPlugin`].
+#[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct SpatialQuerySystems;
 
 type RayCasterPositionQueryComponents = (
     &'static mut RayCaster,

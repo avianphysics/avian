@@ -187,26 +187,27 @@ fn no_ambiguity_errors() {
     #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
     struct DeterministicSchedule;
 
-    App::new()
-        .add_plugins((
-            MinimalPlugins,
-            PhysicsPlugins::new(DeterministicSchedule)
-                .build()
-                .disable::<ColliderHierarchyPlugin>(),
-            bevy::asset::AssetPlugin::default(),
-            #[cfg(feature = "bevy_scene")]
-            bevy::scene::ScenePlugin,
-            #[cfg(all(feature = "collider-from-mesh", feature = "default-collider"))]
-            bevy::mesh::MeshPlugin,
-        ))
-        .edit_schedule(DeterministicSchedule, |s| {
-            s.set_build_settings(ScheduleBuildSettings {
-                ambiguity_detection: LogLevel::Error,
-                ..default()
-            });
-        })
-        .add_systems(Update, |w: &mut World| {
-            w.run_schedule(DeterministicSchedule);
-        })
-        .update();
+    let mut app = App::new();
+    app.add_plugins((
+        MinimalPlugins,
+        PhysicsPlugins::new(DeterministicSchedule)
+            .build()
+            .disable::<ColliderHierarchyPlugin>(),
+        bevy::asset::AssetPlugin::default(),
+        #[cfg(feature = "bevy_scene")]
+        bevy::scene::ScenePlugin,
+        #[cfg(all(feature = "collider-from-mesh", feature = "default-collider"))]
+        bevy::mesh::MeshPlugin,
+    ))
+    .edit_schedule(DeterministicSchedule, |s| {
+        s.set_build_settings(ScheduleBuildSettings {
+            ambiguity_detection: LogLevel::Error,
+            ..default()
+        });
+    })
+    .add_systems(Update, |w: &mut World| {
+        w.run_schedule(DeterministicSchedule);
+    })
+    .finish();
+    app.update();
 }

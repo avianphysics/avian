@@ -459,6 +459,7 @@ mod tests {
     fn create_app() -> App {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, PhysicsPlugins::default(), TransformPlugin));
+        app.finish();
         app
     }
 

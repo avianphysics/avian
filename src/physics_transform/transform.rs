@@ -280,7 +280,7 @@ impl Rotation {
         let rotation = Self { sin, cos };
         debug_assert!(
             rotation.is_normalized(),
-            "the given sine and cosine produce an invalid rotation"
+            "the given sine and cosine produce an invalid rotation: {rotation:?}"
         );
         rotation
     }

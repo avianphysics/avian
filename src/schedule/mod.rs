@@ -100,7 +100,6 @@ impl Plugin for PhysicsSchedulePlugin {
                     PhysicsStepSystems::NarrowPhase,
                     PhysicsStepSystems::Solver,
                     PhysicsStepSystems::Sleeping,
-                    PhysicsStepSystems::SpatialQuery,
                     PhysicsStepSystems::Finalize,
                     PhysicsStepSystems::Last,
                 )
@@ -187,7 +186,7 @@ pub type PhysicsSet = PhysicsSystems;
 /// 3. Narrow phase
 /// 4. Solver
 /// 5. Sleeping
-/// 6. Spatial queries
+/// 6. Finalize
 /// 7. Last
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PhysicsStepSystems {
@@ -208,10 +207,6 @@ pub enum PhysicsStepSystems {
     Solver,
     /// Responsible for controlling when bodies should be deactivated and marked as [`Sleeping`].
     Sleeping,
-    /// Responsible for spatial queries like [raycasting](`RayCaster`) and shapecasting.
-    ///
-    /// See [`SpatialQueryPlugin`].
-    SpatialQuery,
     /// Responsible for logic that runs after the core physics step and prepares for the next one.
     Finalize,
     /// Runs at the end of the [`PhysicsSchedule`].

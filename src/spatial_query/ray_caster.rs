@@ -57,7 +57,7 @@ use bevy::{
 ///             println!(
 ///                 "Hit entity {} at {} with normal {}",
 ///                 hit.entity,
-///                 ray.origin + *ray.direction * hit.distance,
+///                 ray.get_global_point(hit.distance),
 ///                 hit.normal,
 ///             );
 ///         }
@@ -278,6 +278,18 @@ impl RayCaster {
                 &self.query_filter,
             ));
         }
+    }
+
+    /// Returns the point at a given distance along the ray.
+    #[must_use]
+    pub fn get_point(&self, distance: Scalar) -> Vector {
+        self.origin + self.direction.adjust_precision() * distance
+    }
+
+    /// Like [`Self::get_point`], but returns the point in global coordinates.
+    #[must_use]
+    pub fn get_global_point(&self, distance: Scalar) -> Vector {
+        self.global_origin + self.global_direction.adjust_precision() * distance
     }
 }
 

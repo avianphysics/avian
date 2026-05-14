@@ -509,7 +509,7 @@ struct LastDynamicKinematicAabbUpdate(Tick);
 /// previous [`EnlargedAabb`], or whose collider has been added to a [`ColliderTree`].
 ///
 /// [`ColliderTree`]: crate::collider_tree::ColliderTree
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Clone)]
 pub struct MovedProxies {
     /// A vector of moved proxy keys.
     proxies: Vec<ColliderTreeProxyKey>,
