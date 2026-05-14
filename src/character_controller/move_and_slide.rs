@@ -997,7 +997,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     )]
     ///         config.skin_width,
     ///         &filter,
-    ///         |contact_point, normal| {
+    ///         |_entity, contact_point, normal| {
     ///             intersections.push((normal, contact_point.penetration + config.skin_width));
     ///             true
     ///         },
