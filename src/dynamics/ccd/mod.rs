@@ -234,8 +234,6 @@
 use super::solver::solver_body::SolverBody;
 use crate::prelude::*;
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
-use crate::math::parry_conv::vec3_to_parry;
-#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 use bevy::ecs::query::QueryData;
 use bevy::prelude::*;
 use derive_more::From;
@@ -609,15 +607,15 @@ fn solve_swept_ccd(
                 // TODO: Support child colliders
                 let motion1 = NonlinearRigidMotion::new(
                     iso1,
-                    vec3_to_parry(com1.0),
-                    vec3_to_parry(lin_vel1),
-                    vec3_to_parry(ang_vel1),
+                    com1.0,
+                    lin_vel1,
+                    ang_vel1,
                 );
                 let motion2 = NonlinearRigidMotion::new(
                     iso2,
-                    vec3_to_parry(body2.com.0),
-                    vec3_to_parry(lin_vel2),
-                    vec3_to_parry(ang_vel2),
+                    body2.com.0,
+                    lin_vel2,
+                    ang_vel2,
                 );
 
                 let sweep_mode = if ccd1.mode == SweepMode::Linear

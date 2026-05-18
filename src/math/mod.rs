@@ -96,87 +96,6 @@ pub(crate) type Isometry = Isometry2d;
 #[cfg(feature = "3d")]
 pub(crate) type Isometry = Isometry3d;
 
-// Conversion utilities between parry's glam types (glam 0.30 via glamx)
-// and bevy's glam types (glam 0.32). These have identical memory layouts
-// but are different types due to the version mismatch.
-#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
-pub(crate) mod parry_conv {
-    /// Convert a parry Vec3 (glam 0.30) to a bevy Vec3 (glam 0.32).
-    #[cfg(feature = "3d")]
-    #[inline(always)]
-    pub fn vec3_from_parry(v: parry::math::Vec3) -> bevy_math::Vec3 {
-        bevy_math::Vec3::new(v.x, v.y, v.z)
-    }
-
-    /// Convert a bevy Vec3 (glam 0.32) to a parry Vec3 (glam 0.30).
-    #[cfg(feature = "3d")]
-    #[inline(always)]
-    pub fn vec3_to_parry(v: bevy_math::Vec3) -> parry::math::Vec3 {
-        parry::math::Vec3::new(v.x, v.y, v.z)
-    }
-
-    /// Convert a parry Vec2 (glam 0.30) to a bevy Vec2 (glam 0.32).
-    #[cfg(feature = "2d")]
-    #[inline(always)]
-    pub fn vec2_from_parry(v: parry::math::Vec2) -> bevy_math::Vec2 {
-        bevy_math::Vec2::new(v.x, v.y)
-    }
-
-    /// Convert a bevy Vec2 (glam 0.32) to a parry Vec2 (glam 0.30).
-    #[cfg(feature = "2d")]
-    #[inline(always)]
-    pub fn vec2_to_parry(v: bevy_math::Vec2) -> parry::math::Vec2 {
-        parry::math::Vec2::new(v.x, v.y)
-    }
-
-    /// Convert a parry Quat (glamx, glam 0.30) to a bevy Quat (glam 0.32).
-    #[inline(always)]
-    pub fn quat_from_parry(q: parry::glamx::Quat) -> bevy_math::Quat {
-        bevy_math::Quat::from_xyzw(q.x, q.y, q.z, q.w)
-    }
-
-    /// Convert a bevy Quat (glam 0.32) to a parry Quat (glamx, glam 0.30).
-    #[inline(always)]
-    pub fn quat_to_parry(q: bevy_math::Quat) -> parry::glamx::Quat {
-        parry::glamx::Quat::from_xyzw(q.x, q.y, q.z, q.w)
-    }
-
-    /// Convert a Vec of bevy Vec3 to a Vec of parry Vec3.
-    #[cfg(feature = "3d")]
-    #[inline]
-    pub fn vec3s_to_parry(vs: Vec<bevy_math::Vec3>) -> Vec<parry::math::Vec3> {
-        vs.into_iter().map(vec3_to_parry).collect()
-    }
-
-    /// Convert a slice of bevy Vec3 to a Vec of parry Vec3.
-    #[cfg(feature = "3d")]
-    #[inline]
-    pub fn vec3_slice_to_parry(vs: &[bevy_math::Vec3]) -> Vec<parry::math::Vec3> {
-        vs.iter().copied().map(vec3_to_parry).collect()
-    }
-
-    /// Convert a Vec of parry Vec3 to a Vec of bevy Vec3.
-    #[cfg(feature = "3d")]
-    #[inline]
-    pub fn vec3s_from_parry(vs: Vec<parry::math::Vec3>) -> Vec<bevy_math::Vec3> {
-        vs.into_iter().map(vec3_from_parry).collect()
-    }
-
-    /// Convert a bevy IVec3 to a parry IVec3 (glam 0.30).
-    #[cfg(feature = "3d")]
-    #[inline(always)]
-    pub fn ivec3_to_parry(v: bevy_math::IVec3) -> parry::glamx::IVec3 {
-        parry::glamx::IVec3::new(v.x, v.y, v.z)
-    }
-
-    /// Convert a slice of bevy IVec3 to a Vec of parry IVec3.
-    #[cfg(feature = "3d")]
-    #[inline]
-    pub fn ivec3_slice_to_parry(vs: &[bevy_math::IVec3]) -> Vec<parry::glamx::IVec3> {
-        vs.iter().copied().map(ivec3_to_parry).collect()
-    }
-}
-
 /// Adjust the precision of the math construct to the precision chosen for compilation.
 pub trait AdjustPrecision {
     /// A math construct type with the desired precision.
@@ -306,24 +225,6 @@ impl AsF32 for SymmetricMat3 {
     type F32 = Self;
     fn f32(&self) -> Self::F32 {
         *self
-    }
-}
-
-// AsF32 implementations for parry's glam types (glam 0.30 via glamx).
-// These are needed because parry uses a different glam version than bevy.
-#[cfg(all(feature = "3d", any(feature = "parry-f32", feature = "parry-f64")))]
-impl AsF32 for parry::math::Vec3 {
-    type F32 = Vec3;
-    fn f32(&self) -> Self::F32 {
-        Vec3::new(self.x, self.y, self.z)
-    }
-}
-
-#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
-impl AsF32 for parry::glamx::Quat {
-    type F32 = Quat;
-    fn f32(&self) -> Self::F32 {
-        Quat::from_xyzw(self.x, self.y, self.z, self.w)
     }
 }
 
@@ -713,10 +614,7 @@ pub(crate) fn make_pose(
 ) -> parry::math::Pose3 {
     let position: Position = position.into();
     let rotation: Rotation = rotation.into();
-    parry::math::Pose3::from_parts(
-        parry_conv::vec3_to_parry(position.0),
-        parry_conv::quat_to_parry(rotation.0),
-    )
+    parry::math::Pose3::from_parts(position.0, rotation.0)
 }
 
 /// Computes the skew-symmetric matrix corresponding to the given vector.

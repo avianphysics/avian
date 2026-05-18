@@ -10,3 +10,17 @@ std_instead_of_core = "warn"
 
 [profile.dev]
 opt-level = 1 # Use slightly better optimization, so examples work
+
+# Force parry's transitive `glamx` to the 0.2 line, which is on glam 0.32 —
+# the same major as bevy main. This makes parry's math types (Vec2/Vec3/Quat)
+# identical to bevy's, eliminating the need for vec*_from_parry conversions.
+# Drop this once parry releases a version that depends on glamx >= 0.2.
+[patch.crates-io]
+# parry fork on the `glamx-0.2` branch: bumps glamx from 0.1.2 -> 0.2, which is
+# on glam 0.32 (same major as bevy main). This makes parry's math types
+# (Vec2/Vec3/Quat) identical to bevy's, eliminating all conversion code.
+# Drop once upstream parry releases a version on glamx 0.2.
+parry2d = { git = "https://github.com/stuartparmenter/parry", branch = "glamx-0.2" }
+parry3d = { git = "https://github.com/stuartparmenter/parry", branch = "glamx-0.2" }
+parry2d-f64 = { git = "https://github.com/stuartparmenter/parry", branch = "glamx-0.2" }
+parry3d-f64 = { git = "https://github.com/stuartparmenter/parry", branch = "glamx-0.2" }

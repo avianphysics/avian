@@ -6,7 +6,7 @@ use bevy::prelude::*;
 use parry::shape::{SharedShape, TypedShape};
 use thiserror::Error;
 
-use crate::{math::parry_conv::{vec3_from_parry, quat_from_parry}, prelude::*};
+use crate::prelude::*;
 
 /// An ergonomic builder for triangle meshes from [`Collider`]s.
 ///
@@ -260,9 +260,9 @@ impl TrimeshBuilder {
                     move |mut compound_trimesh, (sub_pos, shape)| {
                         sub_builder.shape = shape.clone();
                         sub_builder.position =
-                            Position(self.position.0 + self.rotation * vec3_from_parry(sub_pos.translation));
+                            Position(self.position.0 + self.rotation * sub_pos.translation);
                         sub_builder.rotation =
-                            self.rotation.mul_quat(quat_from_parry(sub_pos.rotation)).normalize().into();
+                            self.rotation.mul_quat(sub_pos.rotation).normalize().into();
                         let trimesh = match sub_builder.build() {
                             Ok(trimesh) => trimesh,
                             Err(error) => {
@@ -322,7 +322,7 @@ impl TrimeshBuilder {
         Ok(Trimesh {
             vertices: vertices
                 .into_iter()
-                .map(|v| pos.0 + self.rotation * vec3_from_parry(v))
+                .map(|v| pos.0 + self.rotation * v)
                 .collect(),
             indices,
         })

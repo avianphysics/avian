@@ -14,7 +14,7 @@
 //! For geometric queries that query the entire world for intersections, like raycasting, shapecasting
 //! and point projection, see [spatial queries](spatial_query).
 
-use crate::{collision::contact_types::SingleContact, math::parry_conv::{vec3_from_parry, vec3_to_parry}, prelude::*};
+use crate::{collision::contact_types::SingleContact, prelude::*};
 use bevy::prelude::*;
 use parry::query::{PersistentQueryDispatcher, ShapeCastOptions, Unsupported};
 
@@ -85,10 +85,10 @@ pub fn contact(
     .map(|contact| {
         if let Some(contact) = contact {
             // Transform contact data into local space
-            let point1: Vector = rotation1.inverse() * vec3_from_parry(contact.point1);
-            let point2: Vector = rotation2.inverse() * vec3_from_parry(contact.point2);
-            let normal1: Vector = (rotation1.inverse() * vec3_from_parry(contact.normal1)).normalize();
-            let normal2: Vector = (rotation2.inverse() * vec3_from_parry(contact.normal2)).normalize();
+            let point1: Vector = rotation1.inverse() * contact.point1;
+            let point2: Vector = rotation2.inverse() * contact.point2;
+            let normal1: Vector = (rotation1.inverse() * contact.normal1).normalize();
+            let normal2: Vector = (rotation2.inverse() * contact.normal2).normalize();
 
             // Make sure the normals are valid
             if !normal1.is_normalized() || !normal2.is_normalized() {
@@ -199,14 +199,14 @@ pub fn contact_manifolds(
             prediction_distance,
         )
     {
-        let normal: Vector = rotation1 * vec3_from_parry(contact.normal1);
+        let normal: Vector = rotation1 * contact.normal1;
 
         // Make sure the normal is valid
         if !normal.is_normalized() {
             return;
         }
 
-        let local_point1: Vector = vec3_from_parry(contact.point1);
+        let local_point1: Vector = contact.point1;
 
         // The contact point is the midpoint of the two points in world space.
         // The anchors are relative to the positions of the colliders.
@@ -231,7 +231,7 @@ pub fn contact_manifolds(
         }
 
         let subpos1 = manifold.subshape_pos1.unwrap_or_default();
-        let local_normal: Vector = vec3_from_parry((subpos1.rotation * manifold.local_n1).normalize());
+        let local_normal: Vector = (subpos1.rotation * manifold.local_n1).normalize();
         let normal = rotation1 * local_normal;
 
         // Make sure the normal is valid
@@ -242,7 +242,7 @@ pub fn contact_manifolds(
         let points = manifold.contacts().iter().map(|contact| {
             // The contact point is the midpoint of the two points in world space.
             // The anchors are relative to the positions of the colliders.
-            let point1 = rotation1 * vec3_from_parry(subpos1.transform_point(contact.local_p1));
+            let point1 = rotation1 * subpos1.transform_point(contact.local_p1);
             let anchor1 = point1 + normal * contact.dist * 0.5;
             let anchor2 = anchor1 + (position1.0 - position2.0);
             let world_point = position1.0 + anchor1;
@@ -364,7 +364,7 @@ pub fn closest_points(
     .map(|closest_points| match closest_points {
         parry::query::ClosestPoints::Intersecting => ClosestPoints::Intersecting,
         parry::query::ClosestPoints::WithinMargin(point1, point2) => {
-            ClosestPoints::WithinMargin(vec3_from_parry(point1), vec3_from_parry(point2))
+            ClosestPoints::WithinMargin(point1, point2)
         }
         parry::query::ClosestPoints::Disjoint => ClosestPoints::OutsideMargin,
     })
@@ -589,10 +589,10 @@ pub fn time_of_impact(
 
     parry::query::cast_shapes(
         &isometry1,
-        vec3_to_parry(velocity1.0),
+        velocity1.0,
         collider1.shape_scaled().0.as_ref(),
         &isometry2,
-        vec3_to_parry(velocity2.0),
+        velocity2.0,
         collider2.shape_scaled().0.as_ref(),
         ShapeCastOptions {
             max_time_of_impact,
@@ -603,10 +603,10 @@ pub fn time_of_impact(
     .map(|toi| {
         toi.map(|toi| TimeOfImpact {
             time_of_impact: toi.time_of_impact,
-            point1: vec3_from_parry(toi.witness1),
-            point2: vec3_from_parry(toi.witness2),
-            normal1: vec3_from_parry(toi.normal1),
-            normal2: vec3_from_parry(toi.normal2),
+            point1: toi.witness1,
+            point2: toi.witness2,
+            normal1: toi.normal1,
+            normal2: toi.normal2,
             status: toi.status,
         })
     })
