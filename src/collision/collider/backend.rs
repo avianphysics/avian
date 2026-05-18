@@ -12,7 +12,7 @@ use crate::{
     prelude::*,
 };
 #[cfg(all(feature = "bevy_scene", feature = "default-collider"))]
-use bevy::scene::SceneInstance;
+use bevy::world_serialization::{WorldAssetRoot as SceneRoot, WorldInstance as SceneInstance, WorldInstanceSpawner as SceneSpawner};
 use bevy::{
     ecs::{intern::Interned, schedule::ScheduleLabel},
     prelude::*,

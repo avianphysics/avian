@@ -46,7 +46,7 @@ parry-f64 = ["f64", "dep:parry2d-f64", "default-collider"]
 # Enables the XPBD constraint solver for joints.
 xpbd_joints = []
 
-bevy_scene = ["bevy/bevy_scene"]
+bevy_scene = ["bevy/bevy_world_serialization"]
 bevy_picking = ["bevy/bevy_picking"]
 serialize = [
     "dep:serde",
@@ -77,14 +77,14 @@ bench = false
 
 [dependencies]
 avian_derive = { path = "../avian_derive", version = "0.2" }
-bevy = { git = "https://github.com/bevyengine/bevy", default-features = false, features = [
+bevy = { git = "https://github.com/bevyengine/bevy",default-features = false, features = [
     "std",
     "bevy_log",
 ] }
-bevy_math = { version = "0.18.0", features = ["approx"] }
-glam_matrix_extras = { version = "0.2", features = ["bevy_reflect"] }
-bevy_heavy = { version = "0.4" }
-bevy_transform_interpolation = { version = "0.4" }
+bevy_math = { git = "https://github.com/bevyengine/bevy",features = ["approx"] }
+glam_matrix_extras = { git = "https://github.com/jbuehler23/glam_matrix_extras", branch = "bsn", features = ["bevy_reflect"] }
+bevy_heavy = { git = "https://github.com/jbuehler23/bevy_heavy", branch = "bsn" }
+bevy_transform_interpolation = { git = "https://github.com/jbuehler23/bevy_transform_interpolation", branch = "bsn" }
 libm = { version = "0.2", optional = true }
 approx = "0.5"
 parry2d = { version = "0.26", optional = true }
@@ -102,8 +102,8 @@ disqualified = { version = "1.0" }
 
 [dev-dependencies]
 examples_common_2d = { path = "../examples_common_2d" }
-bevy = { git = "https://github.com/bevyengine/bevy", default-features = false, features = ["2d", "ui"] }
-bevy_heavy = { version = "0.4", features = ["approx"] }
+bevy = { git = "https://github.com/bevyengine/bevy",default-features = false, features = ["2d", "ui"] }
+bevy_heavy = { git = "https://github.com/jbuehler23/bevy_heavy", branch = "bsn", features = ["approx"] }
 glam = { version = "0.30", features = ["bytemuck"] }
 bytemuck = "1.19"
 criterion = { version = "0.8", features = ["html_reports"] }
