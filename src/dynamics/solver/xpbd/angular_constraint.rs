@@ -21,10 +21,9 @@ pub trait AngularConstraint {
         inv_angular_inertia2: SymmetricTensor,
         delta_lagrange: f32,
     ) -> f32 {
-        if delta_lagrange.abs() <= f32::EPSILON {
-            return 0.0;
-        }
-
+        // Do not early-out on a small `delta_lagrange`: it is an impulse scaled by inertia,
+        // so for low-inertia bodies it can be tiny while the applied correction
+        // `inv_inertia * delta_lagrange` is large. Skipping here drops large corrections.
         self.apply_angular_impulse(
             body1,
             body2,
@@ -71,10 +70,7 @@ pub trait AngularConstraint {
         delta_lagrange: f32,
         axis: Vector,
     ) -> Vector {
-        if delta_lagrange.abs() <= f32::EPSILON {
-            return Vector::ZERO;
-        }
-
+        // See the 2D variant: gating on `delta_lagrange` drops large low-inertia corrections.
         let impulse = -delta_lagrange * axis;
 
         self.apply_angular_impulse(
@@ -208,10 +204,7 @@ pub trait AngularConstraint {
         delta_lagrange: f32,
         axis: Vec3,
     ) -> f32 {
-        if delta_lagrange.abs() <= f32::EPSILON {
-            return 0.0;
-        }
-
+        // See `apply_angular_lagrange_update`: gating on `delta_lagrange` drops large low-inertia corrections.
         // Compute angular impulse
         // `axis.z` is 1 or -1 and it controls if the body should rotate counterclockwise or clockwise
         let p = -delta_lagrange * axis.z;
@@ -239,10 +232,7 @@ pub trait AngularConstraint {
         delta_lagrange: f32,
         axis: Vector,
     ) -> Vector {
-        if delta_lagrange.abs() <= f32::EPSILON {
-            return Vector::ZERO;
-        }
-
+        // See `apply_angular_lagrange_update`: gating on `delta_lagrange` drops large low-inertia corrections.
         // Compute angular impulse
         let p = -delta_lagrange * axis;
 
