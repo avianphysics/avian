@@ -5200,8 +5200,9 @@ dependencies = [
 
 [[package]]
 name = "parry2d"
-version = "0.26.1"
-source = "git+https://github.com/stuartparmenter/parry?branch=glamx-0.2#fd5762fc6b6a41e303446e3ecf8ee52984962422"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64f0ec92e9560ebd24cbdd071e19e07a96df6a6d4970d8719cc898c7dfdc359a"
 dependencies = [
  "approx",
  "arrayvec",
@@ -5229,8 +5230,9 @@ dependencies = [
 
 [[package]]
 name = "parry2d-f64"
-version = "0.26.1"
-source = "git+https://github.com/stuartparmenter/parry?branch=glamx-0.2#fd5762fc6b6a41e303446e3ecf8ee52984962422"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9445ae064bfaad3ef13354d2f9a4a5b6e01bbbad770a18aafd38662501b289cb"
 dependencies = [
  "approx",
  "arrayvec",
@@ -5258,8 +5260,9 @@ dependencies = [
 
 [[package]]
 name = "parry3d"
-version = "0.26.1"
-source = "git+https://github.com/stuartparmenter/parry?branch=glamx-0.2#fd5762fc6b6a41e303446e3ecf8ee52984962422"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99613136af5c3ae1e26907eb8ef90183636f54d02341c0a1121caa813a242cb5"
 dependencies = [
  "approx",
  "arrayvec",
@@ -5289,8 +5292,9 @@ dependencies = [
 
 [[package]]
 name = "parry3d-f64"
-version = "0.26.1"
-source = "git+https://github.com/stuartparmenter/parry?branch=glamx-0.2#fd5762fc6b6a41e303446e3ecf8ee52984962422"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1f331c2ecfa5c34dfe379eff7efb824e5e8cfcc933d9624d74e7f867ea696dd"
 dependencies = [
  "approx",
  "arrayvec",

@@ -87,8 +87,8 @@ bevy_heavy = { git = "https://github.com/jbuehler23/bevy_heavy", branch = "bsn" 
 bevy_transform_interpolation = { git = "https://github.com/jbuehler23/bevy_transform_interpolation", branch = "bsn" }
 libm = { version = "0.2", optional = true }
 approx = "0.5"
-parry2d = { version = "0.26", optional = true }
-parry2d-f64 = { version = "0.26", optional = true }
+parry2d = { version = "0.27", optional = true }
+parry2d-f64 = { version = "0.27", optional = true }
 obvhs = { version = "0.3" }
 serde = { version = "1", features = ["derive"], optional = true }
 derive_more = "2"
