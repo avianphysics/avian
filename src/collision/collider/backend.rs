@@ -281,7 +281,7 @@ fn init_collider_constructors(
                 "Tried to add a collider to entity {name} via {constructor:#?}, \
                 but that entity already holds a collider. Skipping.",
             );
-            commands.entity(entity).remove::<ColliderConstructor>();
+            commands.entity(entity).try_remove::<ColliderConstructor>();
             continue;
         }
         #[cfg(feature = "collider-from-mesh")]
@@ -305,7 +305,7 @@ fn init_collider_constructors(
         let collider = Collider::try_from_constructor(constructor.clone());
 
         if let Some(collider) = collider {
-            commands.entity(entity).insert(collider);
+            commands.entity(entity).try_insert(collider);
             commands.trigger(ColliderConstructorReady { entity })
         } else {
             error!(
@@ -313,7 +313,7 @@ fn init_collider_constructors(
                 but the collider could not be generated. Skipping.",
             );
         }
-        commands.entity(entity).remove::<ColliderConstructor>();
+        commands.entity(entity).try_remove::<ColliderConstructor>();
     }
 }
 
@@ -420,7 +420,7 @@ fn init_collider_constructor_hierarchies(
             let collider = Collider::try_from_constructor(constructor);
 
             if let Some(collider) = collider {
-                commands.entity(child_entity).insert((
+                commands.entity(child_entity).try_insert((
                     collider,
                     collider_data
                         .layers
@@ -439,7 +439,7 @@ fn init_collider_constructor_hierarchies(
 
         commands
             .entity(scene_entity)
-            .remove::<ColliderConstructorHierarchy>();
+            .try_remove::<ColliderConstructorHierarchy>();
 
         commands.trigger(ColliderConstructorHierarchyReady {
             entity: scene_entity,
