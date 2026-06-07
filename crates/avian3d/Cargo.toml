@@ -71,6 +71,9 @@ diagnostic_ui = ["bevy_diagnostic", "bevy/bevy_ui"]
 # Enables additional correctness checks and validation at the cost of worse performance.
 validate = []
 
+# Enables the new gyro solver
+new_gyro = []
+
 [lib]
 name = "avian3d"
 path = "../../src/lib.rs"
