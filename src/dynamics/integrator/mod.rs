@@ -430,11 +430,22 @@ pub fn solve_gyroscopic_torque(
     let j_k = local_k.dot(local_inverse_inertia * local_k) / k2;
     let modified_ang_vel = local_ang_vel - j_k * local_momentum;
 
+    #[cfg(feature = "approx_rotation")]
+    let new_local_momentum = approx_rotation(-modified_ang_vel * delta_secs, local_momentum);
+    #[cfg(not(feature = "approx_rotation"))]
     let new_local_momentum =
         Quat::from_scaled_axis(-modified_ang_vel * delta_secs) * local_momentum;
 
     // Convert back to world-space angular velocity.
     *ang_vel = rotation * (local_inverse_inertia * new_local_momentum);
+}
+
+#[cfg(feature = "approx_rotation")]
+#[inline]
+fn approx_rotation(scaled_axis: Vec3, vec: Vec3) -> Vec3 {
+    let half_vec = 0.5 * scaled_axis;
+    let k = half_vec.cross(vec);
+    vec + 2.0 * (k + half_vec.cross(k)) / (1.0 + half_vec.length_squared())
 }
 
 /// Applies the effects of gyroscopic motion to the given angular velocity.

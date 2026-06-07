@@ -73,6 +73,7 @@ validate = []
 
 # Enables the new gyro solver
 new_gyro = []
+approx_rotation = []
 
 [lib]
 name = "avian3d"
