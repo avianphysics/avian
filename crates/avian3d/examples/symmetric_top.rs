@@ -35,7 +35,7 @@ fn main() {
 /// The angular velocities of bodies with this component
 /// are updated whenever their moments of inertia change
 #[derive(Component)]
-struct InitialAngularMomentum(Vec3);
+struct InitialAngularMomentum(Vector);
 
 fn setup(
     mut commands: Commands,
