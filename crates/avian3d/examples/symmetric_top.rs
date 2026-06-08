@@ -3,11 +3,11 @@
 //! inertia tensors seemingly wobbling as they spin in the air or on the ground, and is
 //! responsible for many rotational phenomena.
 //!
-//! One interesting example of gyroscopic motion is the Dzhanibekov effect, also known as the
-//! "tennis racket theorem". When a rigid body with three distinct principal moments of inertia
-//! is rotated about one of its principal axes, it can exhibit a sudden flip or change in
-//! rotation about the other two axes. This example demonstrates this effect using a
-//! tennis racket and a T-handle.
+//! The this example demonstrates precession: an object with two distinct principle moments
+//! of inertia (one of them repeated) whose angular momentum is oblique to its "special axis"
+//! will spin around that axis, while that axis itself rotates around the angular momentum
+//! vector. The angle between the angular momentum and the axis of the object should remain
+//! constant, as the rotational energy is a direct function of this angle.
 //!
 //! Avian handles gyroscopic motion automatically. No special setup is required.
 
@@ -31,7 +31,9 @@ fn main() {
         .run();
 }
 
-/// A marker component for the "T-handle" used to demonstrate the Dzhanibekov effect.
+/// Set the initial angular momentum.
+/// The angular velocities of bodies with this component
+/// are updated whenever their moments of inertia change
 #[derive(Component)]
 struct InitialAngularMomentum(Vec3);
 
@@ -42,25 +44,25 @@ fn setup(
 ) {
     let material = materials.add(Color::WHITE);
 
-    // Spawn the T-handle.
+    // Spawn the long bar.
     let bar = Cuboid::new(1.0, 5.0, 1.0);
     commands.spawn((
         Name::new("Long Bar"),
         RigidBody::Dynamic,
         InitialAngularMomentum(Vector::Y * 10.0),
-        Transform::from_xyz(-4.0, 0.0 as f32, 0.0).with_rotation(Quat::from_rotation_z(0.3)),
+        Transform::from_xyz(-4.0, 0.0, 0.0).with_rotation(Quat::from_rotation_z(0.3)),
         Collider::from(bar),
         Mesh3d(meshes.add(bar)),
         MeshMaterial3d(material.clone()),
     ));
 
-    // Spawn the tennis racket.
+    // Spawn the flat plate.
     let plate = Cuboid::new(5.0, 1.0, 5.0);
     commands.spawn((
         Name::new("Flat Plate"),
         RigidBody::Dynamic,
         InitialAngularMomentum(Vector::Y * 500.0),
-        Transform::from_xyz(4.0, 0.0 as f32, 0.0).with_rotation(Quat::from_rotation_z(0.3)),
+        Transform::from_xyz(4.0, 0.0, 0.0).with_rotation(Quat::from_rotation_z(0.3)),
         Collider::from(plate),
         Mesh3d(meshes.add(plate)),
         MeshMaterial3d(material.clone()),
@@ -84,7 +86,6 @@ fn setup(
 }
 
 fn setup_angular_momentum(
-    // new_inertia: On<Add, ComputedAngularInertia>,
     q: Query<
         (
             &InitialAngularMomentum,
@@ -115,6 +116,6 @@ fn log_conserved_quantities(
         let j_l = body_l.dot(body_w) / body_l2;
         let body_l = body_l2.sqrt();
 
-        info!("{name}: {j_l}; {body_l}");
+        info!("{name}: Energy / |L|² = {j_l}; |L| = {body_l}");
     }
 }

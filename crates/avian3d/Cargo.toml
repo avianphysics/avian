@@ -190,6 +190,10 @@ name = "gyroscopic_motion"
 required-features = ["3d", "default-collider"]
 
 [[example]]
+name = "symmetric_top"
+required-features = ["3d", "default-collider"]
+
+[[example]]
 name = "move_and_slide_3d"
 required-features = [
     "3d",
