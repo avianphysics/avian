@@ -1,0 +1,7 @@
+error: proc-macro derive panicked
+ --> tests/derive/too_many_layers.rs:8:10
+  |
+8 | #[derive(PhysicsLayer, Default)]
+  |          ^^^^^^^^^^^^
+  |
+  = help: message: attempt to shift left with overflow

@@ -1,0 +1,19 @@
+error: multiple defaults
+ --> tests/derive/multiple_defaults.rs:9:6
+  |
+9 | enum MultiDefault {
+  |      ^^^^^^^^^^^^
+
+error: multiple declared defaults
+  --> tests/derive/multiple_defaults.rs:8:24
+   |
+ 8 | #[derive(PhysicsLayer, Default)]
+   |                        ^^^^^^^
+...
+11 |     A,
+   |     - first default
+12 |     #[default]
+13 |     B,
+   |     - additional default
+   |
+   = note: only one variant can be default

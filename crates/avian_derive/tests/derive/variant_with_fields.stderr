@@ -1,0 +1,5 @@
+error: can only derive `PhysicsLayer` for enums without fields
+  --> tests/derive/variant_with_fields.rs:12:8
+   |
+12 |     Bad(u32),
+   |        ^^^^^

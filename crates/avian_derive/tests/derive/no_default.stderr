@@ -1,0 +1,8 @@
+error: `PhysicsLayer` enums must derive `Default` and have a variant annotated with the `#[default]` attribute.
+
+         = note: Manually implementing `Default` using `impl Default for FooLayer` is not supported.
+
+ --> tests/derive/no_default.rs:9:6
+  |
+9 | enum NoDefault {
+  |      ^^^^^^^^^
