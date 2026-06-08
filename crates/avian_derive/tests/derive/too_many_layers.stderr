@@ -1,7 +1,5 @@
-error: proc-macro derive panicked
- --> tests/derive/too_many_layers.rs:8:10
+error: `PhysicsLayer` only supports a maximum of 32 layers
+ --> tests/derive/too_many_layers.rs:9:6
   |
-8 | #[derive(PhysicsLayer, Default)]
-  |          ^^^^^^^^^^^^
-  |
-  = help: message: attempt to shift left with overflow
+9 | enum TooManyLayers {
+  |      ^^^^^^^^^^^^^
