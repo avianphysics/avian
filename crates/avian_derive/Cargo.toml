@@ -14,6 +14,6 @@ bench = false
 
 [dependencies]
 proc-macro2 = "1.0.78"
-proc-macro-error2 = "2.0"
+proc-macro-error3 = "3.0"
 quote = "1.0"
 syn = "2.0"
