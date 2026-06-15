@@ -1,6 +1,6 @@
 use bevy_math::primitives::{
     Capsule3d, Cone, Cuboid, Cylinder, InfinitePlane3d, Line3d, Plane3d, Polyline3d, Segment3d,
-    Sphere,
+    Sphere, Triangle3d,
 };
 use parry::shape::SharedShape;
 
@@ -93,6 +93,16 @@ impl IntoCollider<Collider> for Cone {
         Collider::cone(
             self.radius.adjust_precision(),
             self.height.adjust_precision(),
+        )
+    }
+}
+
+impl IntoCollider<Collider> for Triangle3d {
+    fn collider(&self) -> Collider {
+        Collider::triangle(
+            self.vertices[0].adjust_precision(),
+            self.vertices[1].adjust_precision(),
+            self.vertices[2].adjust_precision(),
         )
     }
 }

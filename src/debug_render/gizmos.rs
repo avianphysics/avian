@@ -6,7 +6,7 @@ use bevy::prelude::*;
     feature = "default-collider",
     any(feature = "parry-f32", feature = "parry-f64")
 ))]
-use parry::shape::{SharedShape, TypedShape};
+use parry::shape::TypedShape;
 
 /// An extension trait for `Gizmos<PhysicsGizmo>`.
 pub trait PhysicsGizmoExt {
@@ -221,7 +221,11 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
             TypedShape::TriMesh(s) => {
                 for tri in s.triangles() {
                     self.draw_collider(
-                        &Collider::from(SharedShape::new(tri)),
+                        &Collider::from(cfg_select! {
+                            feature = "2d" => Triangle2d::new(tri.a.f32(), tri.b.f32(), tri.c.f32()),
+                            feature = "3d" => Triangle3d::new(tri.a.f32(), tri.b.f32(), tri.c.f32()),
+                            _ => compile_error!("either the `2d` or `3d` feature should be active")
+                        }),
                         position,
                         rotation,
                         color,
@@ -263,7 +267,7 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
                 #[cfg(feature = "2d")]
                 for segment in s.segments() {
                     self.draw_collider(
-                        &Collider::from(SharedShape::new(segment)),
+                        &Collider::from(Segment2d::new(segment.a.f32(), segment.b.f32())),
                         position,
                         rotation,
                         color,
@@ -272,7 +276,11 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
                 #[cfg(feature = "3d")]
                 for triangle in s.triangles() {
                     self.draw_collider(
-                        &Collider::from(SharedShape::new(triangle)),
+                        &Collider::from(Triangle3d::new(
+                            triangle.a.f32(),
+                            triangle.b.f32(),
+                            triangle.c.f32(),
+                        )),
                         position,
                         rotation,
                         color,
@@ -328,7 +336,14 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
                 // Parry doesn't have a method for the rounded outline, so we have to just use a normal triangle
                 // (or compute the outline manually based on the border radius)
                 self.draw_collider(
-                    &Collider::from(SharedShape::new(s.inner_shape)),
+                    &Collider::from({
+                        let tri = s.inner_shape;
+                        cfg_select! {
+                            feature = "2d" => Triangle2d::new(tri.a.f32(), tri.b.f32(), tri.c.f32()),
+                            feature = "3d" => Triangle3d::new(tri.a.f32(), tri.b.f32(), tri.c.f32()),
+                            _ => compile_error!("either the `2d` or `3d` feature should be active")
+                        }
+                    }),
                     position,
                     rotation,
                     color,
