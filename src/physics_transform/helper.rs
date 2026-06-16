@@ -1,18 +1,20 @@
 use bevy::{
     ecs::{
         entity::{Entity, EntityNotSpawnedError},
+        hierarchy::{ChildOf, Children},
+        query::With,
         system::{Query, SystemParam, lifetimeless::Write},
         world::Mut,
     },
-    transform::{
-        components::GlobalTransform,
-        helper::{ComputeGlobalTransformError, TransformHelper},
-    },
+    transform::components::{GlobalTransform, Transform},
+    transform::helper::{ComputeGlobalTransformError, TransformHelper},
 };
 use thiserror::Error;
 
+#[cfg(feature = "2d")]
+use crate::math::Quaternion;
 use crate::{
-    math::AdjustPrecision,
+    math::{AdjustPrecision, AsF32},
     prelude::{Position, Rotation},
 };
 
@@ -104,4 +106,120 @@ pub enum UpdatePhysicsTransformError {
     /// This probably means that your hierarchy has been improperly maintained.
     #[error("{0}")]
     MalformedHierarchy(EntityNotSpawnedError),
+}
+
+/// A system parameter for writing up-to-date [`Transform`] components from
+/// [`Position`] and [`Rotation`] on demand, without advancing the simulation.
+///
+/// This is the inverse of [`PhysicsTransformHelper::update_physics_transform`]:
+/// it pushes the physics pose out to [`Transform`] immediately, for cases like
+/// setting [`Position`]/[`Rotation`] directly and then reading or rendering the
+/// result before the schedule (and its `position_to_transform` writeback) runs.
+///
+/// Like the `position_to_transform` system, nested bodies are resolved against
+/// their parent's [`GlobalTransform`].
+#[derive(SystemParam)]
+pub struct PhysicsTransformWriter<'w, 's> {
+    bodies: Query<
+        'w,
+        's,
+        (
+            &'static mut Transform,
+            &'static Position,
+            &'static Rotation,
+            Option<&'static ChildOf>,
+        ),
+    >,
+    parents: Query<
+        'w,
+        's,
+        (
+            &'static GlobalTransform,
+            Option<&'static Position>,
+            Option<&'static Rotation>,
+        ),
+        With<Children>,
+    >,
+}
+
+impl PhysicsTransformWriter<'_, '_> {
+    /// Updates the [`Transform`] of `entity` from its [`Position`] and
+    /// [`Rotation`] (and its parent's, for nested bodies). The inverse of
+    /// [`PhysicsTransformHelper::update_physics_transform`].
+    ///
+    /// [`Transform`]: bevy::transform::components::Transform
+    pub fn update_transform(&mut self, entity: Entity) -> Result<(), UpdatePhysicsTransformError> {
+        let (pos, rot, parent) = {
+            let (_, pos, rot, parent) = self
+                .bodies
+                .get(entity)
+                .map_err(|_| UpdatePhysicsTransformError::MissingTransform(entity))?;
+            (*pos, *rot, parent.map(|&ChildOf(parent)| parent))
+        };
+
+        #[cfg(feature = "3d")]
+        let (translation, rotation) = if let Some(parent) = parent {
+            let (parent_transform, parent_pos, parent_rot) = self
+                .parents
+                .get(parent)
+                .map_err(|_| UpdatePhysicsTransformError::MissingTransform(parent))?;
+            let parent_transform = parent_transform.compute_transform();
+            let parent_pos = parent_pos.map_or(parent_transform.translation, |pos| pos.f32());
+            let parent_rot = parent_rot.map_or(parent_transform.rotation, |rot| rot.f32());
+            let parent_transform = Transform::from_translation(parent_pos)
+                .with_rotation(parent_rot)
+                .with_scale(parent_transform.scale);
+            let new_transform = GlobalTransform::from(
+                Transform::from_translation(pos.f32()).with_rotation(rot.f32()),
+            )
+            .reparented_to(&GlobalTransform::from(parent_transform));
+            (new_transform.translation, new_transform.rotation)
+        } else {
+            (pos.f32(), rot.f32())
+        };
+
+        #[cfg(feature = "2d")]
+        let (translation, rotation) = {
+            let z = self
+                .bodies
+                .get(entity)
+                .map(|(transform, ..)| transform.translation.z)
+                .unwrap_or(0.0);
+            if let Some(parent) = parent {
+                let (parent_transform, parent_pos, parent_rot) = self
+                    .parents
+                    .get(parent)
+                    .map_err(|_| UpdatePhysicsTransformError::MissingTransform(parent))?;
+                let parent_transform = parent_transform.compute_transform();
+                let parent_pos = parent_pos.map_or(parent_transform.translation, |pos| {
+                    pos.f32().extend(parent_transform.translation.z)
+                });
+                let parent_rot = parent_rot.map_or(parent_transform.rotation, |rot| {
+                    Quaternion::from(*rot).f32()
+                });
+                let parent_scale = parent_transform.scale;
+                let parent_transform = Transform::from_translation(parent_pos)
+                    .with_rotation(parent_rot)
+                    .with_scale(parent_scale);
+                let new_transform = GlobalTransform::from(
+                    Transform::from_translation(
+                        pos.f32().extend(parent_pos.z + z * parent_scale.z),
+                    )
+                    .with_rotation(Quaternion::from(rot).f32()),
+                )
+                .reparented_to(&GlobalTransform::from(parent_transform));
+                (new_transform.translation, new_transform.rotation)
+            } else {
+                (pos.f32().extend(z), Quaternion::from(rot).f32())
+            }
+        };
+
+        let (mut transform, ..) = self
+            .bodies
+            .get_mut(entity)
+            .map_err(|_| UpdatePhysicsTransformError::MissingTransform(entity))?;
+        transform.translation = translation;
+        transform.rotation = rotation;
+        Ok(())
+    }
 }
