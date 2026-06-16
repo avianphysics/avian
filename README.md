@@ -157,6 +157,20 @@ and precision:
 cargo run --example cubes --no-default-features --features "3d f64 parry-f64"
 ```
 
+## Headless Simulation
+
+To remove dependency on `bevy_render` (allowing use for CLIs and other headless applications),
+you can use the `no-render` or `no-render-f64` feature groups (depending on your desired precision):
+
+```shell
+# For 2D applications:
+cargo add avian2d --no-default-features --features no-render
+cargo add avian2d --no-default-features --features no-render-f64 # for 64-bit sim
+# For 3D applications:
+cargo add avian3d --no-default-features --features no-render
+cargo add avian3d --no-default-features --features no-render-f64 # for 64-bit sim
+``
+
 ## Version Table
 
 | Bevy    | Avian         |
