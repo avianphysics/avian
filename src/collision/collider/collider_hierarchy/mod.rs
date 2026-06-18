@@ -175,7 +175,7 @@ impl Relationship for ColliderOf {
                 relationship_target.collection_mut_risky(),
                 entity,
             );
-            if relationship_target.len() == 0 {
+            if relationship_target.is_empty() {
                 let command = |mut entity: EntityWorldMut| {
                     if entity
                         .get::<Self::RelationshipTarget>()

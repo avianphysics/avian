@@ -1027,8 +1027,7 @@ impl Collider {
     ///
     /// Each voxel has the size `voxel_size` and contains at least one point from `points`.
     pub fn voxels_from_points(voxel_size: Vector, points: &[Vector]) -> Self {
-        let pp = points;
-        SharedShape::voxels_from_points(voxel_size, &pp).into()
+        SharedShape::voxels_from_points(voxel_size, points).into()
     }
 
     /// Creates a voxel collider obtained from the decomposition of the given polyline into voxelized convex parts.
@@ -1050,8 +1049,7 @@ impl Collider {
         voxel_size: Scalar,
         fill_mode: FillMode,
     ) -> Self {
-        let pv = vertices;
-        SharedShape::voxelized_mesh(&pv, indices, voxel_size, fill_mode.into()).into()
+        SharedShape::voxelized_mesh(vertices, indices, voxel_size, fill_mode.into()).into()
     }
 
     /// Creates a voxel collider obtained from the decomposition of the given `Mesh` into voxelized convex parts.
@@ -1064,8 +1062,7 @@ impl Collider {
         fill_mode: FillMode,
     ) -> Option<Self> {
         extract_mesh_vertices_indices(mesh).map(|(vertices, indices)| {
-            let pv = &vertices;
-            SharedShape::voxelized_mesh(&pv, &indices, voxel_size, fill_mode.into()).into()
+            SharedShape::voxelized_mesh(&vertices, &indices, voxel_size, fill_mode.into()).into()
         })
     }
 
@@ -1101,9 +1098,8 @@ impl Collider {
         indices: &[[u32; DIM]],
         parameters: &VhacdParameters,
     ) -> Vec<Self> {
-        let pv = vertices;
         SharedShape::voxelized_convex_decomposition_with_params(
-            &pv,
+            vertices,
             indices,
             &parameters.clone().into(),
         )
