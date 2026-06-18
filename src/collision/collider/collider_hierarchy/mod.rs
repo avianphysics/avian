@@ -171,7 +171,10 @@ impl Relationship for ColliderOf {
         if let Ok(mut body_mut) = world.get_entity_mut(body)
             && let Some(mut relationship_target) = body_mut.get_mut::<Self::RelationshipTarget>()
         {
-            RelationshipSourceCollection::remove(relationship_target.collection_mut_risky(), entity);
+            RelationshipSourceCollection::remove(
+                relationship_target.collection_mut_risky(),
+                entity,
+            );
             if relationship_target.len() == 0 {
                 let command = |mut entity: EntityWorldMut| {
                     if entity
@@ -182,9 +185,7 @@ impl Relationship for ColliderOf {
                     }
                 };
 
-                world
-                    .commands()
-                    .queue_silenced(command.with_entity(body));
+                world.commands().queue_silenced(command.with_entity(body));
             }
         }
     }

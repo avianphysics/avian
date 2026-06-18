@@ -11,7 +11,7 @@ use itertools::Either;
 ///
 /// In contrast to [`ColliderConstructor`], this component will *not* generate a collider on its own entity.
 ///
-/// If this component is used on a scene, such as one spawned by a [`SceneRoot`], it will
+/// If this component is used on a scene, such as one spawned by a `SceneRoot`, it will
 /// wait until the scene is loaded before generating colliders. Note that this requires
 /// the `bevy_scene` feature to be enabled.
 ///

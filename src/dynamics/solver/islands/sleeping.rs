@@ -8,7 +8,7 @@ use bevy::{
         entity::Entity,
         entity_disabling::Disabled,
         error::Result,
-        lifecycle::{HookContext, Insert, Discard},
+        lifecycle::{Discard, HookContext, Insert},
         observer::On,
         query::{Changed, Has, Or, With, Without},
         resource::Resource,

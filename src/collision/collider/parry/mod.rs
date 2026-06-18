@@ -977,8 +977,7 @@ impl Collider {
         params: VhacdParameters,
     ) -> Self {
         let pv = vertices;
-        SharedShape::convex_decomposition_with_params(&pv, &indices, &params.clone().into())
-            .into()
+        SharedShape::convex_decomposition_with_params(&pv, &indices, &params.clone().into()).into()
     }
 
     /// Creates a collider with a [convex polygon](https://en.wikipedia.org/wiki/Convex_polygon) shape obtained after computing
@@ -1250,11 +1249,10 @@ impl Collider {
     /// ```
     #[cfg(feature = "collider-from-mesh")]
     pub fn convex_hull_from_mesh(mesh: &Mesh) -> Option<Self> {
-        extract_mesh_vertices_indices(mesh)
-            .and_then(|(vertices, _)| {
-                let pv = vertices;
-                SharedShape::convex_hull(&pv).map(|shape| shape.into())
-            })
+        extract_mesh_vertices_indices(mesh).and_then(|(vertices, _)| {
+            let pv = vertices;
+            SharedShape::convex_hull(&pv).map(|shape| shape.into())
+        })
     }
 
     /// Creates a compound shape obtained from the decomposition of a `Mesh`.
@@ -1309,12 +1307,8 @@ impl Collider {
     ) -> Option<Self> {
         extract_mesh_vertices_indices(mesh).map(|(vertices, indices)| {
             let pv = vertices;
-            SharedShape::convex_decomposition_with_params(
-                &pv,
-                &indices,
-                &parameters.clone().into(),
-            )
-            .into()
+            SharedShape::convex_decomposition_with_params(&pv, &indices, &parameters.clone().into())
+                .into()
         })
     }
 
@@ -1704,10 +1698,7 @@ fn scale_shape(
                 ));
                 #[cfg(feature = "3d")]
                 scaled.push((
-                    make_pose(
-                        pose.translation * scale,
-                        Rotation(pose.rotation),
-                    ),
+                    make_pose(pose.translation * scale, Rotation(pose.rotation)),
                     scale_shape(shape, scale, num_subdivisions)?,
                 ));
             }
