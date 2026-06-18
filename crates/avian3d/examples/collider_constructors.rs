@@ -51,7 +51,6 @@ fn setup(
     commands.spawn((
         PointLight {
             intensity: 1_000_000.0,
-            shadows_enabled: true,
             ..default()
         },
         Transform::from_xyz(2.0, 8.0, 2.0),

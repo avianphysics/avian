@@ -74,7 +74,6 @@ fn setup(
         PointLight {
             intensity: 2_000_000.0,
             range: 50.0,
-            shadows_enabled: true,
             ..default()
         },
         Transform::from_xyz(0.0, 15.0, 0.0),

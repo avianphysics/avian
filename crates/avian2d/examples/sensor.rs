@@ -77,7 +77,7 @@ fn setup(
         Name::new("Character Velocity Text"),
         Text::new("Velocity: "),
         TextFont {
-            font_size: 16.0,
+            font_size: FontSize::Px(16.0),
             ..default()
         },
         Node {
