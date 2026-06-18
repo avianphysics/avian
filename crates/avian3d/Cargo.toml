@@ -47,6 +47,10 @@ parry-f64 = ["f64", "dep:parry3d-f64", "default-collider"]
 # Enables the XPBD constraint solver for joints.
 xpbd_joints = []
 
+# Gates the `debugdump_3d` example. `bevy_mod_debugdump` does not yet support
+# Bevy 0.19, so the example is opt-in to keep it out of the default CI build.
+debugdump = []
+
 collider-from-mesh = ["bevy/bevy_mesh", "bevy/bevy_mikktspace", "3d"]
 bevy_scene = ["bevy/bevy_world_serialization"]
 bevy_picking = ["bevy/bevy_picking"]
@@ -212,7 +216,7 @@ required-features = ["3d", "default-collider", "diagnostic_ui"]
 
 [[example]]
 name = "debugdump_3d"
-required-features = ["3d", "debug-plugin"]
+required-features = ["3d", "debug-plugin", "debugdump"]
 
 [[bench]]
 name = "velocity_projection"

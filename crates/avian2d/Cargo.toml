@@ -46,6 +46,10 @@ parry-f64 = ["f64", "dep:parry2d-f64", "default-collider"]
 # Enables the XPBD constraint solver for joints.
 xpbd_joints = []
 
+# Gates the `debugdump_2d` example. `bevy_mod_debugdump` does not yet support
+# Bevy 0.19, so the example is opt-in to keep it out of the default CI build.
+debugdump = []
+
 bevy_scene = ["bevy/bevy_world_serialization"]
 bevy_picking = ["bevy/bevy_picking"]
 serialize = [
@@ -206,4 +210,4 @@ required-features = ["2d", "default-collider"]
 
 [[example]]
 name = "debugdump_2d"
-required-features = ["2d", "debug-plugin"]
+required-features = ["2d", "debug-plugin", "debugdump"]

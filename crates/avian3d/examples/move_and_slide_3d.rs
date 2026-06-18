@@ -10,7 +10,7 @@ use bevy::{
     ecs::entity::EntityHashSet,
     gltf::{GltfLoaderSettings, convert_coordinates::GltfConvertCoordinates},
     input::{common_conditions::input_just_pressed, mouse::AccumulatedMouseMotion},
-    pbr::{Atmosphere, ScatteringMedium},
+    light::{Atmosphere, atmosphere::ScatteringMedium},
     prelude::*,
     window::{CursorGrabMode, CursorOptions},
 };
@@ -72,15 +72,19 @@ fn setup(
 
     // Scene
     commands.spawn((
-        SceneRoot(assets.load_with_settings(
-            "https://github.com/avianphysics/avian_asset_files/raw/08f82a1031c4fbdf1a461600468d2a37593a804a/move_and_slide_level/move_and_slide_level.glb#Scene0",
-            |settings: &mut GltfLoaderSettings| {
-                settings.convert_coordinates = Some(GltfConvertCoordinates {
-                    rotate_scene_entity: true,
-                    rotate_meshes: true,
-                });
-            },
-        )),
+        WorldAssetRoot(
+            assets
+                .load_builder()
+                .with_settings(|settings: &mut GltfLoaderSettings| {
+                    settings.convert_coordinates = Some(GltfConvertCoordinates {
+                        rotate_scene_entity: true,
+                        rotate_meshes: true,
+                    });
+                })
+                .load(
+                    "https://github.com/avianphysics/avian_asset_files/raw/08f82a1031c4fbdf1a461600468d2a37593a804a/move_and_slide_level/move_and_slide_level.glb#Scene0",
+                ),
+        ),
         ColliderConstructorHierarchy::new(ColliderConstructor::TrimeshFromMesh),
         RigidBody::Static,
     )).observe(|
@@ -118,7 +122,7 @@ fn setup(
     commands.spawn((
         Camera3d::default(),
         Transform::from_xyz(-5.0, 3.5, 5.5).looking_at(Vec3::ZERO, Vec3::Y),
-        Atmosphere::earthlike(scattering_media.add(ScatteringMedium::default())),
+        Atmosphere::earth(scattering_media.add(ScatteringMedium::default())),
         EnvironmentMapLight {
             diffuse_map: assets.load("https://github.com/avianphysics/avian_asset_files/raw/08f82a1031c4fbdf1a461600468d2a37593a804a/voortrekker_interior/voortrekker_interior_1k_diffuse.ktx2"),
             specular_map: assets.load("https://github.com/avianphysics/avian_asset_files/raw/08f82a1031c4fbdf1a461600468d2a37593a804a/voortrekker_interior/voortrekker_interior_1k_specular.ktx2"),

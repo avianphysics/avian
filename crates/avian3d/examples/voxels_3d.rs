@@ -13,8 +13,8 @@ use bevy::{
     asset::RenderAssetUsages,
     camera::Exposure,
     core_pipeline::tonemapping::Tonemapping,
+    light::{Atmosphere, atmosphere::ScatteringMedium},
     mesh::{Indices, PrimitiveTopology},
-    pbr::{Atmosphere, ScatteringMedium},
     prelude::*,
 };
 use examples_common_3d::ExampleCommonPlugin;
@@ -146,7 +146,7 @@ fn setup(
     // Camera and atmosphere
     commands.spawn((
         Camera3d::default(),
-        Atmosphere::earthlike(scattering_media.add(ScatteringMedium::default())),
+        Atmosphere::earth(scattering_media.add(ScatteringMedium::default())),
         AmbientLight {
             brightness: 4000.0,
             color: Color::WHITE,
