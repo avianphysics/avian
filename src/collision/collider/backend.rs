@@ -8,7 +8,7 @@ use core::marker::PhantomData;
 use crate::collision::collider::cache::ColliderCache;
 use crate::{
     collision::collider::EnlargedAabb,
-    physics_transform::{PhysicsTransformConfig, PhysicsTransformSystems, init_physics_transform},
+    physics_transform::{init_physics_transform, PhysicsTransformConfig, PhysicsTransformSystems},
     prelude::*,
 };
 #[cfg(all(feature = "bevy_scene", feature = "default-collider"))]
@@ -20,7 +20,7 @@ use bevy::{
     ecs::{intern::Interned, schedule::ScheduleLabel},
     prelude::*,
 };
-use mass_properties::{MassPropertySystems, components::RecomputeMassProperties};
+use mass_properties::{components::RecomputeMassProperties, MassPropertySystems};
 
 /// A plugin for handling generic collider backend logic.
 ///
@@ -329,7 +329,7 @@ fn init_collider_constructor_hierarchies(
     #[cfg(feature = "collider-from-mesh")] meshes: Res<Assets<Mesh>>,
     #[cfg(feature = "collider-from-mesh")] mesh_handles: Query<&Mesh3d>,
     #[cfg(feature = "collider-from-mesh")] mut collider_cache: Option<ResMut<ColliderCache>>,
-    #[cfg(feature = "bevy_scene")] scene_spawner: Res<SceneSpawner>,
+    #[cfg(feature = "bevy_scene")] scene_spawner: If<Res<SceneSpawner>>,
     #[cfg(feature = "bevy_scene")] scenes: Query<&SceneRoot>,
     #[cfg(feature = "bevy_scene")] scene_instances: Query<&SceneInstance>,
     collider_constructors: Query<(Entity, &ColliderConstructorHierarchy)>,
