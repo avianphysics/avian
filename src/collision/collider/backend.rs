@@ -8,7 +8,7 @@ use core::marker::PhantomData;
 use crate::collision::collider::cache::ColliderCache;
 use crate::{
     collision::collider::EnlargedAabb,
-    physics_transform::{init_physics_transform, PhysicsTransformConfig, PhysicsTransformSystems},
+    physics_transform::{PhysicsTransformConfig, PhysicsTransformSystems, init_physics_transform},
     prelude::*,
 };
 #[cfg(all(feature = "bevy_scene", feature = "default-collider"))]
@@ -20,7 +20,7 @@ use bevy::{
     ecs::{intern::Interned, schedule::ScheduleLabel},
     prelude::*,
 };
-use mass_properties::{components::RecomputeMassProperties, MassPropertySystems};
+use mass_properties::{MassPropertySystems, components::RecomputeMassProperties};
 
 /// A plugin for handling generic collider backend logic.
 ///
