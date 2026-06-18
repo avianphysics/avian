@@ -51,6 +51,11 @@ xpbd_joints = []
 # Bevy 0.19, so the example is opt-in to keep it out of the default CI build.
 debugdump = []
 
+# Gates the `bvh` example. It uses the experimental `bevy_feathers` UI, whose
+# control API changed structurally in Bevy 0.19. The example needs a manual
+# rewrite, so it is opt-in to keep it out of the default CI build.
+feathers_example = []
+
 collider-from-mesh = ["bevy/bevy_mesh", "bevy/bevy_mikktspace", "3d"]
 bevy_scene = ["bevy/bevy_world_serialization"]
 bevy_picking = ["bevy/bevy_picking"]
@@ -127,7 +132,7 @@ features = ["diagnostic_ui"]
 
 [[example]]
 name = "bvh"
-required-features = ["3d", "default-collider"]
+required-features = ["3d", "default-collider", "feathers_example"]
 
 [[example]]
 name = "dynamic_character_3d"
