@@ -354,6 +354,7 @@ enum OneWayPlatformCommand {
 }
 
 impl Command for OneWayPlatformCommand {
+    type Out = ();
     fn apply(self, world: &mut World) {
         match self {
             OneWayPlatformCommand::Add {
