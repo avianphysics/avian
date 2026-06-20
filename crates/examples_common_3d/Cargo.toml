@@ -7,10 +7,7 @@ edition = "2024"
 use-debug-plugin = []
 
 [dependencies]
-bevy = { version = "0.19.0-rc", default-features = false, features = [
-    "3d",
-    "ui",
-] }
+bevy = { version = "0.19.0", default-features = false, features = ["3d", "ui"] }
 avian3d = { path = "../avian3d", default-features = false, features = [
     "diagnostic_ui",
 ] }
