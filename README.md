@@ -74,11 +74,11 @@ First, add `avian2d` or `avian3d` to your dependencies in `Cargo.toml`:
 ```toml
 # For 2D applications:
 [dependencies]
-avian2d = "0.6"
+avian2d = "0.7"
 
 # For 3D applications:
 [dependencies]
-avian3d = "0.6"
+avian3d = "0.7"
 
 # If you want to use the most up-to-date version, you can follow the main branch:
 [dependencies]
@@ -161,7 +161,7 @@ cargo run --example cubes --no-default-features --features "3d f64 parry-f64"
 
 | Bevy | Avian   |
 | ---- | ------- |
-| 0.19 | main    |
+| 0.19 | 0.7     |
 | 0.18 | 0.5-0.6 |
 | 0.17 | 0.4     |
 | 0.16 | 0.3     |
