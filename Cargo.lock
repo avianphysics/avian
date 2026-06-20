@@ -383,7 +383,7 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
 name = "avian2d"
-version = "0.7.0"
+version = "0.8.0-dev"
 dependencies = [
  "approx",
  "arrayvec",
@@ -414,7 +414,7 @@ dependencies = [
 
 [[package]]
 name = "avian3d"
-version = "0.7.0"
+version = "0.8.0-dev"
 dependencies = [
  "approx",
  "avian_derive",
