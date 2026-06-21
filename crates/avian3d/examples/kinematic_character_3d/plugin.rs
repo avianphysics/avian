@@ -220,16 +220,16 @@ fn movement(
     let delta_secs = time.delta_secs_f64().adjust_precision();
 
     // Accumulated movement actions to make movement less framerate-dependent.
-    let (jumping, direction): (bool, Vec2) =
-        movement_reader
-            .read()
-            .fold((false, Vec2::ZERO), |(jumping, dir), action| match action {
-                // For movement actions, use existing jump and add to the existing movement
-                // direction.
-                MovementAction::Move(d) => (jumping, (dir + d).normalize_or_zero()),
-                // For jump actions, use existing movemnt and set the jump field to true.
-                MovementAction::Jump => (true, dir),
-            });
+    let (jumping, direction): (bool, Vector2) = movement_reader.read().fold(
+        (false, Vector2::ZERO),
+        |(jumping, dir), action| match action {
+            // For movement actions, use existing jump and add to the existing movement
+            // direction.
+            MovementAction::Move(d) => (jumping, (dir + d).normalize_or_zero()),
+            // For jump actions, use existing movemnt and set the jump field to true.
+            MovementAction::Jump => (true, dir),
+        },
+    );
 
     for (movement, mut linear_velocity, is_grounded) in &mut controllers {
         linear_velocity.x += direction.x * movement.acceleration * delta_secs;
