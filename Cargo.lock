@@ -443,7 +443,7 @@ dependencies = [
 
 [[package]]
 name = "avian_derive"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "proc-macro-error3",
  "proc-macro2",
