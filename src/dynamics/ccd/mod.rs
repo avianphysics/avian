@@ -567,8 +567,6 @@ struct CcdImpact {
     collider1: Entity,
     /// The obstacle's colliding collider.
     collider2: Entity,
-    /// The obstacle's body, if any (static colliders have none).
-    body2: Option<Entity>,
     /// Additional speculative distance to request for the discrete solver next timestep,
     /// so that the contact is detected even if the bodies were separated at the TOI impact.
     ///
@@ -813,7 +811,6 @@ fn solve_continuous(
                         best_impact = Some(CcdImpact {
                             collider1: collider_entity,
                             collider2: collider_entity2,
-                            body2: proxy.body,
                             // The additional speculative distance only needs to span the gap
                             // the fast contact opens. The body's max travel is a safe upper bound
                             // that the fast-body test already computed. The narrow phase has a more
@@ -870,7 +867,7 @@ fn solve_continuous(
                 }
             }
 
-            // Ensure a contact pair exists and request an additional speculative distance.
+            // Request an additional speculative distance for any existing separated contact pair.
             // This helps ensure the contact is detected by the discrete solver next timestep,
             // even if the bodies ended up separated at the TOI impact.
             //
@@ -881,24 +878,10 @@ fn solve_continuous(
             // velocity correction, which also caused significant overlap with other boxes.
             if fraction < 1.0
                 && let Some(impact) = impact
-            {
-                if let Some((_edge, pair)) =
+                && let Some((_edge, pair)) =
                     contact_graph.get_mut(impact.collider1, impact.collider2)
-                {
-                    pair.speculative_distance = pair.speculative_distance.max(impact.distance);
-                } else {
-                    let mut edge = ContactEdge::new(impact.collider1, impact.collider2);
-                    edge.body1 = Some(entity);
-                    edge.body2 = impact.body2;
-                    let body1 = Some(entity);
-                    let body2 = impact.body2;
-                    let distance = impact.distance;
-                    contact_graph.add_edge_with(edge, |pair| {
-                        pair.body1 = body1;
-                        pair.body2 = body2;
-                        pair.speculative_distance = distance;
-                    });
-                }
+            {
+                pair.speculative_distance = pair.speculative_distance.max(impact.distance);
             }
         }
     }
