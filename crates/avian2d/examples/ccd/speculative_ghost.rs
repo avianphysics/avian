@@ -18,7 +18,10 @@
 //!
 //! This example is based on the SpeculativeGhost sample in Box2D.
 
-use avian2d::prelude::*;
+use avian2d::{
+    math::{Scalar, Vector},
+    prelude::*,
+};
 use bevy::{camera::ScalingMode, input::common_conditions::input_just_pressed, prelude::*};
 use examples_common_2d::ExampleCommonPlugin;
 
@@ -78,7 +81,7 @@ fn setup_scene(
         MeshMaterial2d(materials.add(Color::srgb(0.5, 0.5, 0.5))),
     ));
 
-    const HZ: f32 = 64.0;
+    const HZ: Scalar = 64.0;
 
     // Dynamic body that falls right past the platform and should not collide with it
     commands.spawn((
@@ -88,7 +91,7 @@ fn setup_scene(
         // SpeculativeCcd::default(),
         Collider::rectangle(0.5, 0.5),
         Transform::from_xyz(0.015, 2.515, 0.0),
-        LinearVelocity(Vec2::new(0.1 * 3.1 * HZ, -0.1 * 3.1 * HZ)),
+        LinearVelocity(Vector::new(0.1 * 3.1 * HZ, -0.1 * 3.1 * HZ)),
         GravityScale(0.0),
         Mesh2d(meshes.add(Rectangle::new(0.5, 0.5))),
         MeshMaterial2d(materials.add(Color::srgb(0.2, 0.7, 0.9))),

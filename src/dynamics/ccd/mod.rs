@@ -240,14 +240,16 @@ use thread_local::ThreadLocal;
 pub struct CcdPlugin;
 
 impl Plugin for CcdPlugin {
+    #[cfg_attr(
+        not(any(feature = "parry-f32", feature = "parry-f64")),
+        expect(unused_variables)
+    )]
     fn build(&self, app: &mut App) {
         // Get the `PhysicsSchedule`, and panic if it doesn't exist.
-        #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
         let physics = app
             .get_schedule_mut(PhysicsSchedule)
             .expect("add PhysicsSchedule first");
 
-        #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
         physics.add_systems(solve_continuous.in_set(SolverSystems::ContinuousCollision));
     }
 }
