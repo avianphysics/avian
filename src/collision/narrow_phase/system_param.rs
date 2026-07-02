@@ -668,11 +668,13 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
 
                     // The margin is how far the bodies are expected to move relative to each other.
                     let margin = (clamped_vel2 - clamped_vel1).length() * delta_secs;
-                    speculative_distance = margin.max(speculative_distance).max(contact_tolerance);
+                    speculative_distance = margin.max(speculative_distance);
                 }
 
+                // Ensure that the speculative distance is at least as large as the contact tolerance.
+                speculative_distance = speculative_distance.max(contact_tolerance);
+
                 // The maximum distance at which contacts are detected.
-                // This is at least as large as the contact tolerance.
                 let max_contact_distance = collision_margin_sum + speculative_distance;
 
                 let was_touching = contacts.flags.contains(ContactPairFlags::TOUCHING);
