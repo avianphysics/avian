@@ -47,7 +47,7 @@ impl<C: Component + TypePath> Plugin for AncestorMarkerPlugin<C> {
         // until an ancestor that has other `AncestorMarker<C>` entities as children is encountered.
         #[allow(clippy::type_complexity)]
         app.add_observer(
-            |insert: On<Replace, (ChildOf, C)>,
+            |insert: On<Discard, (ChildOf, C)>,
             mut commands: Commands,
             collider_query: Query<&C>,
             child_query: Query<&Children>,

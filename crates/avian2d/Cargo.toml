@@ -1,6 +1,6 @@
 [package]
 name = "avian2d"
-version = "0.7.0-dev"
+version = "0.8.0-dev"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 authors = ["Joona Aalto <jondolf.dev@gmail.com>"]
@@ -46,7 +46,7 @@ parry-f64 = ["f64", "dep:parry2d-f64", "default-collider"]
 # Enables the XPBD constraint solver for joints.
 xpbd_joints = []
 
-bevy_scene = ["bevy/bevy_scene"]
+bevy_scene = ["bevy/bevy_world_serialization"]
 bevy_picking = ["bevy/bevy_picking"]
 serialize = [
     "dep:serde",
@@ -77,37 +77,37 @@ bench = false
 
 [dependencies]
 avian_derive = { path = "../avian_derive", version = "0.2" }
-bevy = { version = "0.18.0", default-features = false, features = [
+bevy = { version = "0.19.0", default-features = false, features = [
     "std",
     "bevy_log",
 ] }
-bevy_math = { version = "0.18.0", features = ["approx"] }
-glam_matrix_extras = { version = "0.2", features = ["bevy_reflect"] }
-bevy_heavy = { version = "0.4" }
-bevy_transform_interpolation = { version = "0.4" }
+bevy_math = { version = "0.19.0", features = ["approx"] }
+glam_matrix_extras = { version = "0.3", features = ["bevy_reflect"] }
+bevy_heavy = { version = "0.5" }
+bevy_transform_interpolation = { version = "0.5" }
 libm = { version = "0.2", optional = true }
 approx = "0.5"
-parry2d = { version = "0.26", optional = true }
-parry2d-f64 = { version = "0.26", optional = true }
+parry2d = { version = "0.27", optional = true }
+parry2d-f64 = { version = "0.27", optional = true }
 obvhs = { version = "0.3" }
 serde = { version = "1", features = ["derive"], optional = true }
 derive_more = "2"
 thiserror = "2"
 arrayvec = "0.7"
 smallvec = "1.15"
-itertools = "0.14"
+itertools = "0.15"
 bitflags = "2.5.0"
 thread_local = { version = "1.1" }
 disqualified = { version = "1.0" }
 
 [dev-dependencies]
 examples_common_2d = { path = "../examples_common_2d" }
-bevy = { version = "0.18.0", default-features = false, features = ["2d", "ui"] }
-bevy_heavy = { version = "0.4", features = ["approx"] }
-glam = { version = "0.30", features = ["bytemuck"] }
+bevy = { version = "0.19.0", default-features = false, features = ["2d", "ui"] }
+bevy_heavy = { version = "0.5", features = ["approx"] }
+glam = { version = "0.32", features = ["bytemuck"] }
 bytemuck = "1.19"
 criterion = { version = "0.8", features = ["html_reports"] }
-bevy_mod_debugdump = { version = "0.15" }
+bevy_mod_debugdump = { version = "0.16" }
 
 [lints]
 workspace = true

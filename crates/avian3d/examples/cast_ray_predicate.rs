@@ -85,7 +85,7 @@ fn setup(
     commands.spawn((
         DirectionalLight {
             illuminance: 5000.0,
-            shadows_enabled: true,
+            shadow_maps_enabled: true,
             ..default()
         },
         Transform::default().looking_at(Vec3::new(-1.0, -2.5, -1.5), Vec3::Y),
@@ -131,7 +131,7 @@ fn reset_colors(
     cubes: Query<(&MeshMaterial3d<StandardMaterial>, &OutOfGlass)>,
 ) {
     for (material_handle, out_of_glass) in cubes.iter() {
-        if let Some(material) = materials.get_mut(material_handle) {
+        if let Some(mut material) = materials.get_mut(material_handle) {
             if out_of_glass.0 {
                 material.base_color = CUBE_COLOR_GLASS;
             } else {
@@ -162,7 +162,7 @@ fn raycast(
     {
         // Set the color of the hit object to red.
         if let Ok((material_handle, _)) = cubes.get(ray_hit_data.entity)
-            && let Some(material) = materials.get_mut(material_handle)
+            && let Some(mut material) = materials.get_mut(material_handle)
         {
             material.base_color = RED.into();
         }

@@ -395,9 +395,9 @@ impl<N, E> UnGraph<N, E> {
     pub fn remove_edge(&mut self, e: EdgeIndex) -> Option<E> {
         // Every edge is part of two lists, outgoing and incoming edges.
         // Remove it from both.
-        let (edge_node, edge_next) = match self.edges.get(e.index()) {
-            None => return None,
-            Some(x) => (x.node, x.next),
+        let (edge_node, edge_next) = {
+            let x = self.edges.get(e.index())?;
+            (x.node, x.next)
         };
 
         // Remove the edge from its in and out lists by replacing it with

@@ -18,9 +18,9 @@ Below are some of the core design principles used in Avian.
 - **Made with Bevy, for Bevy.** No wrappers around existing engines.
 - **Provide an ergonomic and familiar API.** Ergonomics is key for a good experience.
 - **Utilize the ECS as much as possible.** The engine should feel like a part of Bevy, and it shouldn't
-    need to maintain a separate physics world.
+  need to maintain a separate physics world.
 - **Use a highly modular plugin architecture.** Users should be able to replace parts of the engine
-    with their own implementations.
+  with their own implementations.
 - **Have good documentation.** A physics engine is pointless if you don't know how to use it.
 
 ## Features
@@ -28,29 +28,29 @@ Below are some of the core design principles used in Avian.
 Below are some of the current features of Avian.
 
 - Dynamic, kinematic and static rigid bodies
-  - Linear and angular velocity
-  - External forces, torque and impulses
-  - Gravity and gravity scale
-  - Linear and angular damping
-  - Locking translational and rotational axes
-  - Rigid body dominance
-  - Continuous Collision Detection (CCD)
-  - Automatic deactivation with sleeping
+    - Linear and angular velocity
+    - External forces, torque and impulses
+    - Gravity and gravity scale
+    - Linear and angular damping
+    - Locking translational and rotational axes
+    - Rigid body dominance
+    - Continuous Collision Detection (CCD)
+    - Automatic deactivation with sleeping
 - Collision detection powered by [Parry](https://parry.rs)
-  - Colliders with configurable collision layers, density, material properties and more
-  - Collider generation for meshes and entire scenes
-  - Collision events
-  - Access to colliding entities
-  - Filtering and modifying collisions with collision hooks
-  - Manual contact queries and intersection tests
+    - Colliders with configurable collision layers, density, material properties and more
+    - Collider generation for meshes and entire scenes
+    - Collision events
+    - Access to colliding entities
+    - Filtering and modifying collisions with collision hooks
+    - Manual contact queries and intersection tests
 - Constraints and joints
-  - Several built-in joint types: fixed, distance, prismatic, revolute, spherical
-  - Support for custom joints and other constraints using XPBD
+    - Several built-in joint types: fixed, distance, prismatic, revolute, spherical
+    - Support for custom joints and other constraints using XPBD
 - Spatial queries
-  - Raycasting, shapecasting, point projection and intersection tests
-  - Ergonomic component-based API for raycasts and shapecasts
-  - Flexible `SpatialQuery` system parameter
-  - Spatial query filters
+    - Raycasting, shapecasting, point projection and intersection tests
+    - Ergonomic component-based API for raycasts and shapecasts
+    - Flexible `SpatialQuery` system parameter
+    - Spatial query filters
 - `Transform` interpolation and extrapolation for fixed timesteps
 - Debug rendering for colliders, AABBs, contacts, joints, spatial queries, and more
 - Configurable scheduling and high customizability
@@ -74,11 +74,11 @@ First, add `avian2d` or `avian3d` to your dependencies in `Cargo.toml`:
 ```toml
 # For 2D applications:
 [dependencies]
-avian2d = "0.6"
+avian2d = "0.7"
 
 # For 3D applications:
 [dependencies]
-avian3d = "0.6"
+avian3d = "0.7"
 
 # If you want to use the most up-to-date version, you can follow the main branch:
 [dependencies]
@@ -126,7 +126,7 @@ fn setup(
     // Light
     commands.spawn((
         PointLight {
-            shadows_enabled: true,
+            shadow_maps_enabled: true,
             ..default()
         },
         Transform::from_xyz(4.0, 8.0, 4.0),
@@ -159,26 +159,27 @@ cargo run --example cubes --no-default-features --features "3d f64 parry-f64"
 
 ## Version Table
 
-| Bevy    | Avian         |
-| ------- | ------------- |
-| 0.18    | 0.5-0.6, main |
-| 0.17    | 0.4           |
-| 0.16    | 0.3           |
-| 0.15    | 0.2           |
-| 0.14    | 0.1           |
+| Bevy | Avian   |
+| ---- | ------- |
+| 0.19 | 0.7     |
+| 0.18 | 0.5-0.6 |
+| 0.17 | 0.4     |
+| 0.16 | 0.3     |
+| 0.15 | 0.2     |
+| 0.14 | 0.1     |
 
 Avian provides [migration guides](./migration-guides) for each version.
 
 <details>
   <summary>Bevy XPBD versions (the predecessor of Avian)</summary>
 
-  | Bevy | Bevy XPBD |
-  | ---- | --------- |
-  | 0.14 | 0.5       |
-  | 0.13 | 0.4       |
-  | 0.12 | 0.3       |
-  | 0.11 | 0.2       |
-  | 0.10 | 0.1       |
+| Bevy | Bevy XPBD |
+| ---- | --------- |
+| 0.14 | 0.5       |
+| 0.13 | 0.4       |
+| 0.12 | 0.3       |
+| 0.11 | 0.2       |
+| 0.10 | 0.1       |
 
 </details>
 

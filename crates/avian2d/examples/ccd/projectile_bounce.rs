@@ -98,7 +98,7 @@ fn setup_scene(
     commands.spawn((
         Text::new("Press R to reset"),
         TextFont {
-            font_size: 20.0,
+            font_size: FontSize::Px(20.0),
             ..default()
         },
         Node {

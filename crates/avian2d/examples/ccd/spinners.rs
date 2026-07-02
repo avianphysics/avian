@@ -128,7 +128,7 @@ fn setup(mut commands: Commands) {
 
     // Instruction text
     let font = TextFont {
-        font_size: 20.0,
+        font_size: FontSize::Px(20.0),
         ..default()
     };
     commands.spawn((

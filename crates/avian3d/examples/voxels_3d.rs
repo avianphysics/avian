@@ -13,8 +13,9 @@ use bevy::{
     asset::RenderAssetUsages,
     camera::Exposure,
     core_pipeline::tonemapping::Tonemapping,
+    light::{Atmosphere, atmosphere::ScatteringMedium},
     mesh::{Indices, PrimitiveTopology},
-    pbr::{Atmosphere, ScatteringMedium},
+    pbr::AtmosphereSettings,
     prelude::*,
 };
 use examples_common_3d::ExampleCommonPlugin;
@@ -138,16 +139,21 @@ fn setup(
     commands.spawn((
         DirectionalLight {
             illuminance: 14e4,
-            shadows_enabled: true,
+            shadow_maps_enabled: true,
             ..default()
         },
         Transform::from_xyz(1.0, 2.0, 2.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 
-    // Camera and atmosphere
+    // Atmosphere
+    commands.spawn(Atmosphere::earth(
+        scattering_media.add(ScatteringMedium::default()),
+    ));
+
+    // Camera
     commands.spawn((
         Camera3d::default(),
-        Atmosphere::earthlike(scattering_media.add(ScatteringMedium::default())),
+        AtmosphereSettings::default(),
         AmbientLight {
             brightness: 4000.0,
             color: Color::WHITE,
