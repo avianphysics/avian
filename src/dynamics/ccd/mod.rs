@@ -301,7 +301,7 @@ impl Plugin for CcdPlugin {
 ///             filter: CcdFilter::ALL,
 ///             mode: SweepMode::Linear,
 ///             ..default()
-///         }
+///         },
 #[cfg_attr(feature = "2d", doc = "        LinearVelocity(Vec2::X * 100.0),")]
 #[cfg_attr(feature = "3d", doc = "        LinearVelocity(Vec3::X * 100.0),")]
 #[cfg_attr(feature = "2d", doc = "        Collider::circle(0.1),")]
