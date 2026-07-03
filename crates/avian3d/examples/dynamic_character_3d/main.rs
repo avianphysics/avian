@@ -63,7 +63,7 @@ fn setup(
 
     // Environment (see the `collider_constructors` example for creating colliders from scenes)
     commands.spawn((
-        SceneRoot(assets.load("character_controller_demo.glb#Scene0")),
+        WorldAssetRoot(assets.load("character_controller_demo.glb#Scene0")),
         Transform::from_rotation(Quat::from_rotation_y(-core::f32::consts::PI * 0.5)),
         ColliderConstructorHierarchy::new(ColliderConstructor::ConvexHullFromMesh),
         RigidBody::Static,
@@ -74,7 +74,7 @@ fn setup(
         PointLight {
             intensity: 2_000_000.0,
             range: 50.0,
-            shadows_enabled: true,
+            shadow_maps_enabled: true,
             ..default()
         },
         Transform::from_xyz(0.0, 15.0, 0.0),

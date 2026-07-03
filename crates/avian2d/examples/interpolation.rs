@@ -145,7 +145,7 @@ struct TimestepText;
 
 fn setup_text(mut commands: Commands) {
     let font = TextFont {
-        font_size: 20.0,
+        font_size: FontSize::Px(20.0),
         ..default()
     };
 
@@ -166,7 +166,7 @@ fn setup_text(mut commands: Commands) {
     commands.spawn((
         Text::new("Change Timestep With Up/Down Arrow\nPress R to reset"),
         TextColor::from(WHITE),
-        TextLayout::new_with_justify(Justify::Right),
+        TextLayout::justify(Justify::Right),
         font.clone(),
         Node {
             position_type: PositionType::Absolute,

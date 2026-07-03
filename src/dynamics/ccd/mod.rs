@@ -605,18 +605,8 @@ fn solve_swept_ccd(
                 let iso2 = make_pose(prev_pos2, prev_rot2);
 
                 // TODO: Support child colliders
-                let motion1 = NonlinearRigidMotion::new(
-                    iso1,
-                    com1.0.into(),
-                    lin_vel1.into(),
-                    ang_vel1.into(),
-                );
-                let motion2 = NonlinearRigidMotion::new(
-                    iso2,
-                    body2.com.0.into(),
-                    lin_vel2.into(),
-                    ang_vel2.into(),
-                );
+                let motion1 = NonlinearRigidMotion::new(iso1, com1.0, lin_vel1, ang_vel1);
+                let motion2 = NonlinearRigidMotion::new(iso2, body2.com.0, lin_vel2, ang_vel2);
 
                 let sweep_mode = if ccd1.mode == SweepMode::Linear
                     && body2.ccd.is_none_or(|ccd| ccd.mode == SweepMode::Linear)

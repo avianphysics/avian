@@ -128,7 +128,7 @@ fn ui(mut commands: Commands) {
         .with_child((
             Text::new("Use Arrow Keys or WASD to Move The Chain"),
             TextFont {
-                font_size: 20.0,
+                font_size: FontSize::Px(20.0),
                 ..default()
             },
             TextColor(Color::WHITE),

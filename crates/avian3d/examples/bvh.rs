@@ -12,20 +12,20 @@ use bevy::{
     color::palettes::tailwind::GRAY_400,
     feathers::{
         FeathersPlugins,
-        constants::fonts::{BOLD, REGULAR},
-        controls::{SliderProps, checkbox, radio, slider},
+        constants::fonts::BOLD,
+        controls::{FeathersCheckbox, FeathersRadio, FeathersSlider},
         dark_theme::create_dark_theme,
-        theme::UiTheme,
+        theme::{ThemedText, UiTheme},
     },
     prelude::*,
+    text::FontSourceTemplate,
     ui::Checked,
     ui_widgets::{
-        RadioButton, RadioGroup, SliderPrecision, SliderStep, ValueChange, observe,
-        slider_self_update,
+        RadioButton, RadioGroup, SliderPrecision, SliderStep, ValueChange, slider_self_update,
     },
 };
 use examples_common_3d::ExampleCommonPlugin;
-use rand::Rng;
+use rand::RngExt;
 
 fn main() {
     let mut app = App::new();
@@ -167,23 +167,16 @@ fn move_random(mut query: Query<&mut Transform>, settings: Res<BvhExampleSetting
 
 // === UI Setup ===
 
-#[derive(Component)]
+#[derive(Component, Clone, Default)]
 struct OptimizationModeRadio(TreeOptimizationMode);
 
-#[derive(Component)]
+#[derive(Component, Clone, Default)]
 struct GridSizeRadio(usize);
 
 // TODO: Change optimization settings at runtime.
-fn setup_ui(
-    mut commands: Commands,
-    settings: Res<BvhExampleSettings>,
-    asset_server: Res<AssetServer>,
-) {
-    let regular: Handle<Font> = asset_server.load(REGULAR);
-    let bold: Handle<Font> = asset_server.load(BOLD);
-
-    commands.spawn((
-        Name::new("Example Settings UI"),
+fn setup_ui(mut commands: Commands, settings: Res<BvhExampleSettings>) {
+    commands.spawn_scene(bsn! {
+        Name("Example Settings UI")
         Node {
             position_type: PositionType::Absolute,
             bottom: Val::Px(5.0),
@@ -193,30 +186,31 @@ fn setup_ui(
             border_radius: BorderRadius::all(Val::Px(5.0)),
             flex_direction: FlexDirection::Column,
             row_gap: Val::Px(15.0),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8)),
-        children![
+        }
+        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8))
+        Children [
             (
                 Node {
                     flex_direction: FlexDirection::Column,
                     row_gap: Val::Px(5.0),
-                    ..default()
-                },
-                children![
+                }
+                Children [
                     (
-                        Text::new("Optimization Mode"),
-                        TextFont::from_font_size(14.0).with_font(bold.clone())
+                        Text("Optimization Mode")
+                        TextFont {
+                            font: FontSourceTemplate::Handle(BOLD),
+                            font_size: FontSize::Px(14.0),
+                        }
+                        ThemedText
                     ),
                     (
                         Node {
                             display: Display::Flex,
                             flex_direction: FlexDirection::Column,
                             row_gap: px(5),
-                            ..default()
-                        },
-                        RadioGroup,
-                        observe(
+                        }
+                        RadioGroup
+                        on(
                             |value_change: On<ValueChange<Entity>>,
                              radio_buttons: Query<
                                 (Entity, &OptimizationModeRadio),
@@ -238,63 +232,67 @@ fn setup_ui(
                                     }
                                 }
                             }
-                        ),
-                        children![
-                            radio(
-                                OptimizationModeRadio(TreeOptimizationMode::Reinsert),
-                                Spawn((
-                                    Text::new("Reinsert"),
-                                    TextFont::from_font_size(13.0).with_font(regular.clone())
-                                ))
+                        )
+                        Children [
+                            (
+                                @FeathersRadio {
+                                    @caption: bsn! {
+                                        Text("Reinsert") ThemedText
+                                    }
+                                }
+                                OptimizationModeRadio(TreeOptimizationMode::Reinsert)
                             ),
-                            radio(
-                                OptimizationModeRadio(TreeOptimizationMode::PartialRebuild),
-                                Spawn((
-                                    Text::new("Partial Rebuild"),
-                                    TextFont::from_font_size(13.0).with_font(regular.clone())
-                                ))
+                            (
+                                @FeathersRadio {
+                                    @caption: bsn! {
+                                        Text("Partial Rebuild") ThemedText
+                                    }
+                                }
+                                OptimizationModeRadio(TreeOptimizationMode::PartialRebuild)
                             ),
-                            radio(
-                                OptimizationModeRadio(TreeOptimizationMode::FullRebuild),
-                                Spawn((
-                                    Text::new("Full Rebuild"),
-                                    TextFont::from_font_size(13.0).with_font(regular.clone())
-                                ))
+                            (
+                                @FeathersRadio {
+                                    @caption: bsn! {
+                                        Text("Full Rebuild") ThemedText
+                                    }
+                                }
+                                OptimizationModeRadio(TreeOptimizationMode::FullRebuild)
                             ),
-                            radio(
-                                (
-                                    Checked,
-                                    OptimizationModeRadio(TreeOptimizationMode::default())
-                                ),
-                                Spawn((
-                                    Text::new("Adaptive"),
-                                    TextFont::from_font_size(13.0).with_font(regular.clone())
-                                ))
+                            (
+                                @FeathersRadio {
+                                    @caption: bsn! {
+                                        Text("Adaptive") ThemedText
+                                    }
+                                }
+                                Checked
+                                OptimizationModeRadio(TreeOptimizationMode::default())
                             ),
                         ]
                     ),
-                ],
+                ]
             ),
             (
                 Node {
                     flex_direction: FlexDirection::Column,
                     row_gap: Val::Px(5.0),
-                    ..default()
-                },
-                children![
+                }
+                Children [
                     (
-                        Text::new("Grid Size"),
-                        TextFont::from_font_size(14.0).with_font(bold.clone())
+                        Text("Grid Size")
+                        TextFont {
+                            font: FontSourceTemplate::Handle(BOLD),
+                            font_size: FontSize::Px(14.0),
+                        }
+                        ThemedText
                     ),
                     (
                         Node {
                             display: Display::Flex,
                             flex_direction: FlexDirection::Column,
                             row_gap: px(5),
-                            ..default()
-                        },
-                        RadioGroup,
-                        observe(
+                        }
+                        RadioGroup
+                        on(
                             |value_change: On<ValueChange<Entity>>,
                              radio_buttons: Query<(Entity, &GridSizeRadio), With<RadioButton>>,
                              mut settings: ResMut<BvhExampleSettings>,
@@ -314,113 +312,115 @@ fn setup_ui(
                                     }
                                 }
                             }
-                        ),
-                        children![
-                            radio(
-                                GridSizeRadio(10),
-                                Spawn((
-                                    Text::new("10x10"),
-                                    TextFont::from_font_size(13.0).with_font(regular.clone())
-                                ))
+                        )
+                        Children [
+                            (
+                                @FeathersRadio {
+                                    @caption: bsn! { Text("10x10") ThemedText }
+                                }
+                                GridSizeRadio(10)
                             ),
-                            radio(
-                                GridSizeRadio(50),
-                                Spawn((
-                                    Text::new("50x50"),
-                                    TextFont::from_font_size(13.0).with_font(regular.clone())
-                                ))
+                            (
+                                @FeathersRadio {
+                                    @caption: bsn! { Text("50x50") ThemedText }
+                                }
+                                GridSizeRadio(50)
                             ),
-                            radio(
-                                (Checked, GridSizeRadio(100)),
-                                Spawn((
-                                    Text::new("100x100"),
-                                    TextFont::from_font_size(13.0).with_font(regular.clone())
-                                ))
+                            (
+                                @FeathersRadio {
+                                    @caption: bsn! { Text("100x100") ThemedText }
+                                }
+                                Checked
+                                GridSizeRadio(100)
                             ),
                         ]
                     ),
-                ],
+                ]
             ),
             (
                 Node {
                     flex_direction: FlexDirection::Column,
                     row_gap: Val::Px(5.0),
-                    ..default()
-                },
-                children![
+                }
+                Children [
                     (
-                        Text::new("Move Fraction"),
-                        TextFont::from_font_size(14.0).with_font(bold.clone())
+                        Text("Move Fraction")
+                        TextFont {
+                            font: FontSourceTemplate::Handle(BOLD),
+                            font_size: FontSize::Px(14.0),
+                        }
+                        ThemedText
                     ),
                     (
-                        slider(
-                            SliderProps {
-                                min: 0.0,
-                                max: 1.0,
-                                value: settings.move_fraction,
-                            },
-                            (SliderStep(0.05), SliderPrecision(2)),
-                        ),
-                        observe(slider_self_update),
-                        observe(
+                        @FeathersSlider {
+                            @min: 0.0,
+                            @max: 1.0,
+                            @value: {settings.move_fraction},
+                        }
+                        SliderStep(0.05)
+                        SliderPrecision(2)
+                        on(slider_self_update)
+                        on(
                             |change: On<ValueChange<f32>>,
                              mut settings: ResMut<BvhExampleSettings>| {
                                 settings.move_fraction = change.value;
                             },
-                        ),
+                        )
                     )
-                ],
+                ]
             ),
             (
                 Node {
                     flex_direction: FlexDirection::Column,
                     row_gap: Val::Px(5.0),
-                    ..default()
-                },
-                children![
+                }
+                Children [
                     (
-                        Text::new("Delta Fraction"),
-                        TextFont::from_font_size(14.0).with_font(bold.clone())
+                        Text("Delta Fraction")
+                        TextFont {
+                            font: FontSourceTemplate::Handle(BOLD),
+                            font_size: FontSize::Px(14.0),
+                        }
+                        ThemedText
                     ),
                     (
-                        slider(
-                            SliderProps {
-                                min: 0.0,
-                                max: 1.0,
-                                value: settings.delta_fraction,
-                            },
-                            (SliderStep(0.05), SliderPrecision(2)),
-                        ),
-                        observe(slider_self_update),
-                        observe(
+                        @FeathersSlider {
+                            @min: 0.0,
+                            @max: 1.0,
+                            @value: {settings.delta_fraction},
+                        }
+                        SliderStep(0.05)
+                        SliderPrecision(2)
+                        on(slider_self_update)
+                        on(
                             |change: On<ValueChange<f32>>,
                              mut settings: ResMut<BvhExampleSettings>| {
                                 settings.delta_fraction = change.value;
                             },
-                        ),
+                        )
                     )
-                ],
+                ]
             ),
             (
                 Node {
                     flex_direction: FlexDirection::Column,
                     row_gap: Val::Px(5.0),
-                    ..default()
-                },
-                children![
+                }
+                Children [
                     (
-                        Text::new("BVH Debug Rendering"),
-                        TextFont::from_font_size(14.0).with_font(bold)
+                        Text("BVH Debug Rendering")
+                        TextFont {
+                            font: FontSourceTemplate::Handle(BOLD),
+                            font_size: FontSize::Px(14.0),
+                        }
+                        ThemedText
                     ),
                     (
-                        checkbox(
-                            Checked,
-                            Spawn((
-                                Text::new("Draw Internal Nodes"),
-                                TextFont::from_font_size(13.0).with_font(regular.clone())
-                            ))
-                        ),
-                        observe(
+                        @FeathersCheckbox {
+                            @caption: bsn! { Text("Draw Internal Nodes") ThemedText }
+                        }
+                        Checked
+                        on(
                             |change: On<ValueChange<bool>>,
                              mut gizmo_store: ResMut<GizmoConfigStore>,
                              mut commands: Commands| {
@@ -436,14 +436,11 @@ fn setup_ui(
                         )
                     ),
                     (
-                        checkbox(
-                            Checked,
-                            Spawn((
-                                Text::new("Draw Leaf Nodes"),
-                                TextFont::from_font_size(13.0).with_font(regular)
-                            ))
-                        ),
-                        observe(
+                        @FeathersCheckbox {
+                            @caption: bsn! { Text("Draw Leaf Nodes") ThemedText }
+                        }
+                        Checked
+                        on(
                             |change: On<ValueChange<bool>>,
                              mut gizmo_store: ResMut<GizmoConfigStore>,
                              mut commands: Commands| {
@@ -458,8 +455,8 @@ fn setup_ui(
                             },
                         )
                     )
-                ],
+                ]
             ),
-        ],
-    ));
+        ]
+    });
 }

@@ -11,7 +11,7 @@ use itertools::Either;
 ///
 /// In contrast to [`ColliderConstructor`], this component will *not* generate a collider on its own entity.
 ///
-/// If this component is used on a scene, such as one spawned by a [`SceneRoot`], it will
+/// If this component is used on a scene, such as one spawned by a `WorldAssetRoot`, it will
 /// wait until the scene is loaded before generating colliders. Note that this requires
 /// the `bevy_scene` feature to be enabled.
 ///
@@ -51,7 +51,7 @@ use itertools::Either;
     doc = "    // Spawn the scene and automatically generate triangle mesh colliders"
 )]
 ///     commands.spawn((
-///         SceneRoot(scene.clone()),
+///         WorldAssetRoot(scene.clone()),
 #[cfg_attr(
     feature = "2d",
     doc = "        ColliderConstructorHierarchy::new(ColliderConstructor::Circle { radius: 2.0 }),"
@@ -64,7 +64,7 @@ use itertools::Either;
 ///
 ///     // Specify configuration for specific meshes by name
 ///     commands.spawn((
-///         SceneRoot(scene.clone()),
+///         WorldAssetRoot(scene.clone()),
 #[cfg_attr(
     feature = "2d",
     doc = "        ColliderConstructorHierarchy::new(ColliderConstructor::Circle { radius: 2.0 })
@@ -81,7 +81,7 @@ use itertools::Either;
 ///
 ///     // Only generate colliders for specific meshes by name
 ///     commands.spawn((
-///         SceneRoot(scene.clone()),
+///         WorldAssetRoot(scene.clone()),
 ///         ColliderConstructorHierarchy::new(None)
 #[cfg_attr(
     feature = "2d",
@@ -95,7 +95,7 @@ use itertools::Either;
 ///
 ///     // Generate colliders for everything except specific meshes by name
 ///     commands.spawn((
-///         SceneRoot(scene),
+///         WorldAssetRoot(scene),
 #[cfg_attr(
     feature = "2d",
     doc = "        ColliderConstructorHierarchy::new(ColliderConstructor::Circle { radius: 2.0 })
@@ -545,7 +545,7 @@ impl ColliderConstructor {
 mod tests {
     use super::*;
     #[cfg(feature = "bevy_scene")]
-    use bevy::scene::ScenePlugin;
+    use bevy::world_serialization::WorldSerializationPlugin;
     use bevy::{ecs::query::QueryData, mesh::MeshPlugin};
 
     #[test]
@@ -759,7 +759,8 @@ mod tests {
         let mut app = create_gltf_test_app();
 
         app.add_observer(
-            |_trigger: On<bevy::scene::SceneInstanceReady>, mut commands: Commands| {
+            |_trigger: On<bevy::world_serialization::WorldInstanceReady>,
+             mut commands: Commands| {
                 commands.insert_resource(SceneReady);
             },
         );
@@ -772,7 +773,7 @@ mod tests {
         let hierarchy = app
             .world_mut()
             .spawn((
-                SceneRoot(scene_handle),
+                WorldAssetRoot(scene_handle),
                 ColliderConstructorHierarchy::new(ColliderConstructor::ConvexDecompositionFromMesh)
                     // Use a primitive collider for the left arm.
                     .with_constructor_for_name("armL_mesh.ferris_material", PRIMITIVE_COLLIDER)
@@ -791,7 +792,7 @@ mod tests {
             app.update();
             counter += 1;
             if counter > 1000 {
-                panic!("SceneInstanceReady was never triggered");
+                panic!("WorldInstanceReady was never triggered");
             }
         }
         app.update();
@@ -844,7 +845,7 @@ mod tests {
             MinimalPlugins,
             AssetPlugin::default(),
             #[cfg(feature = "bevy_scene")]
-            ScenePlugin,
+            WorldSerializationPlugin,
             MeshPlugin,
             PhysicsPlugins::default(),
         ));
@@ -858,7 +859,7 @@ mod tests {
 
         // Todo: it would be best to disable all rendering-related plugins,
         // but we have so far not succeeded in finding the right plugin combination
-        // that still results in `SceneInstanceReady` being triggered.
+        // that still results in `WorldInstanceReady` being triggered.
         let mut app = App::new();
         app.add_plugins((
             DefaultPlugins
