@@ -79,12 +79,11 @@ impl<'a, 'w, 's, T: ReadOnlySystemParam> ColliderContext<'a, 'w, 's, T> {
 }
 
 impl ColliderContext<'_, '_, '_, ()> {
-    fn fake() -> Self {
-        Self {
-            collider: Entity::PLACEHOLDER,
-            item: &(),
-        }
-    }
+    /// No context is needed for this collider.
+    const NO_CONTEXT: Self = Self {
+        collider: Entity::PLACEHOLDER,
+        item: &(),
+    };
 }
 
 /// Context necessary for operations involving a pair of [`AnyCollider`]s.
@@ -114,13 +113,12 @@ impl<'a, 'w, 's, T: ReadOnlySystemParam> ColliderPairContext<'a, 'w, 's, T> {
 }
 
 impl ColliderPairContext<'_, '_, '_, ()> {
-    fn fake() -> Self {
-        Self {
-            collider1: Entity::PLACEHOLDER,
-            collider2: Entity::PLACEHOLDER,
-            item: &(),
-        }
-    }
+    /// No context is needed for this collider pair.
+    const NO_CONTEXT: Self = Self {
+        collider1: Entity::PLACEHOLDER,
+        collider2: Entity::PLACEHOLDER,
+        item: &(),
+    };
 }
 
 /// A trait that generalizes over colliders. Implementing this trait
@@ -298,7 +296,7 @@ pub trait SimpleCollider: AnyCollider<Context = ()> {
     ///
     /// See [`AnyCollider::aabb_with_context`] for collider types with a non-empty [`AnyCollider::Context`].
     fn aabb(&self, position: Vector, rotation: impl Into<Rotation>) -> ColliderAabb {
-        self.aabb_with_context(position, rotation, ColliderContext::fake())
+        self.aabb_with_context(position, rotation, ColliderContext::NO_CONTEXT)
     }
 
     /// Computes the swept [Axis-Aligned Bounding Box](ColliderAabb) of the collider.
@@ -318,7 +316,7 @@ pub trait SimpleCollider: AnyCollider<Context = ()> {
             start_rotation,
             end_position,
             end_rotation,
-            ColliderContext::fake(),
+            ColliderContext::NO_CONTEXT,
         )
     }
 
@@ -346,7 +344,7 @@ pub trait SimpleCollider: AnyCollider<Context = ()> {
             rotation2,
             prediction_distance,
             manifolds,
-            ColliderPairContext::fake(),
+            ColliderPairContext::NO_CONTEXT,
         )
     }
 
@@ -358,19 +356,19 @@ pub trait SimpleCollider: AnyCollider<Context = ()> {
     ///
     /// [CCD]: crate::dynamics::ccd
     fn ccd_thickness(&self) -> Scalar {
-        self.ccd_thickness_with_context(ColliderContext::fake())
+        self.ccd_thickness_with_context(ColliderContext::NO_CONTEXT)
     }
 
     /// Returns the maximum distance from the collider to the given point.
     fn max_distance_to_point(&self, point: Vector) -> Scalar {
-        self.max_distance_to_point_with_context(point, ColliderContext::fake())
+        self.max_distance_to_point_with_context(point, ColliderContext::NO_CONTEXT)
     }
 
     /// Returns the radius of the bounding sphere of the collider.
     ///
     /// This is used to compute a size-relative [`ColliderAabbMargin`] for the collider.
     fn bounding_radius(&self) -> Scalar {
-        self.bounding_radius_with_context(ColliderContext::fake())
+        self.bounding_radius_with_context(ColliderContext::NO_CONTEXT)
     }
 }
 

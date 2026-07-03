@@ -187,9 +187,14 @@ Avian provides [migration guides](./migration-guides) for each version.
 
 If you encounter any problems, feel free to open issues or create pull requests.
 For larger changes and additions, it's better to open an issue or ask me for input
-before making a pull request.
+before making a pull request. Make sure to review our [AI policy](/AI_POLICY.md)
+before contributing.
 
-You can also ask for help or ask questions on the [Bevy Discord](https://discord.com/invite/gMUk5Ph)
+We also have our own [Avian Dev Discord](https://discord.gg/nE5xt4JdPx) server
+for development discussions related to Avian or other physics topics. Hop in
+if you want to chat or follow along!
+
+For other guidance or questions, consider joining us on the [Bevy Discord](https://discord.com/invite/gMUk5Ph)
 server's Avian Physics topic in `#ecosystem-crates`. My username on the Discord is `Jondolf` (`@jondolfdev`).
 
 ## Acknowledgements
