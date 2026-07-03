@@ -1,10 +1,17 @@
-name: CI
+name: Rust
 
 on:
     push:
         branches: [main]
     pull_request:
         branches: [main]
+        types: [opened, synchronize, reopened, ready_for_review]
+        paths:
+            - "**.rs"
+            - "**/Cargo.toml"
+            - "**/Cargo.lock"
+            - ".cargo/**"
+            - ".github/workflows/rust.yaml"
 
 env:
     CARGO_TERM_COLOR: always
@@ -48,7 +55,7 @@ jobs:
         name: Test Suite
         strategy:
             matrix:
-                os: [windows-latest, macos-latest, ubuntu-latest]
+                os: ${{ fromJSON((github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'Cross-Platform')) && '["windows-latest","macos-latest","ubuntu-latest"]' || '["ubuntu-latest"]') }}
         env:
             RUSTFLAGS: --deny warnings -C debuginfo=line-tables-only -Zthreads=0
         runs-on: ${{ matrix.os }}
@@ -124,12 +131,3 @@ jobs:
               run: cargo fmt --all -- --check
             - name: Run cargo clippy
               run: cargo clippy --locked --all-targets
-
-    no-ai-commits:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v6
-              with:
-                  # Required so the full commit range is available
-                  fetch-depth: 0
-            - uses: Jondolf/ai-commit-check@v1

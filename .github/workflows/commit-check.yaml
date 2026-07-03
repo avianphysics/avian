@@ -1,0 +1,17 @@
+name: Commit Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  no-ai-commits:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Required so the full commit range is available
+          fetch-depth: 0
+      - uses: Jondolf/ai-commit-check@v1
