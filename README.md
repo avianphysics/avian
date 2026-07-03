@@ -1,6 +1,6 @@
 # ![Avian Physics](https://raw.githubusercontent.com/Jondolf/avian/avian/assets/branding/logo.svg)
 
-[![MIT/Apache 2.0](https://img.shields.io/badge/license-MIT%2FApache-blue.svg)](https://github.com/avianphysics/avian#license)(https://github.com/avianphysics/avian/actions/workflows/ci.yml)
+[![MIT/Apache 2.0](https://img.shields.io/badge/license-MIT%2FApache-blue.svg)](https://github.com/avianphysics/avian#license)
 [![2D crates.io](https://img.shields.io/crates/v/avian2d?label=2D%20crates.io)](https://crates.io/crates/avian2d)
 [![2D docs.rs](https://img.shields.io/docsrs/avian2d?label=2D%20docs.rs)](https://docs.rs/avian2d)
 [![3D crates.io](https://img.shields.io/crates/v/avian3d?label=3D%20crates.io)](https://crates.io/crates/avian3d)
