@@ -8,7 +8,7 @@ pub use transform::{Position, PreSolveDeltaPosition, PreSolveDeltaRotation, Rota
 pub(crate) use transform::{RotationValue, init_physics_transform};
 
 mod helper;
-pub use helper::PhysicsTransformHelper;
+pub use helper::{PhysicsTransformHelper, PhysicsTransformWriter};
 
 #[cfg(test)]
 mod tests;

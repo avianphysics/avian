@@ -1,5 +1,4 @@
 use crate::{physics_transform::PhysicsTransformConfig, prelude::*};
-#[cfg(feature = "3d")]
 use approx::assert_relative_eq;
 use bevy::prelude::*;
 
@@ -264,4 +263,62 @@ fn test_init_transforms_basics() {
             assert!(app.world().get::<Rotation>(e_7_without_rb).is_none());
         }
     }
+}
+
+#[cfg(feature = "3d")]
+#[test]
+fn test_update_transform_writes_transform_from_position() {
+    use crate::physics_transform::PhysicsTransformWriter;
+    use bevy::ecs::system::RunSystemOnce;
+
+    let mut app = App::new();
+
+    let entity = app
+        .world_mut()
+        .spawn((
+            RigidBody::Dynamic,
+            Position::from_xyz(1.0, 2.0, 3.0),
+            Rotation(Quaternion::from_axis_angle(Vector::Y, 0.5)),
+            Transform::default(),
+        ))
+        .id();
+
+    app.world_mut()
+        .run_system_once(move |mut writer: PhysicsTransformWriter| {
+            writer.update_transform(entity).unwrap();
+        })
+        .unwrap();
+
+    let transform = app.world().get::<Transform>(entity).unwrap();
+    assert_relative_eq!(transform.translation, Vec3::new(1.0, 2.0, 3.0));
+    assert_relative_eq!(transform.rotation, Quat::from_axis_angle(Vec3::Y, 0.5));
+}
+
+#[cfg(feature = "2d")]
+#[test]
+fn test_update_transform_writes_transform_from_position() {
+    use crate::physics_transform::PhysicsTransformWriter;
+    use bevy::ecs::system::RunSystemOnce;
+
+    let mut app = App::new();
+
+    let entity = app
+        .world_mut()
+        .spawn((
+            RigidBody::Dynamic,
+            Position::from_xy(1.0, 2.0),
+            Rotation::radians(0.5),
+            Transform::default(),
+        ))
+        .id();
+
+    app.world_mut()
+        .run_system_once(move |mut writer: PhysicsTransformWriter| {
+            writer.update_transform(entity).unwrap();
+        })
+        .unwrap();
+
+    let transform = app.world().get::<Transform>(entity).unwrap();
+    assert_relative_eq!(transform.translation, Vec3::new(1.0, 2.0, 0.0));
+    assert_relative_eq!(transform.rotation, Quat::from_rotation_z(0.5));
 }
