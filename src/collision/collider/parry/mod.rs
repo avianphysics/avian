@@ -405,7 +405,7 @@ impl AnyCollider for Collider {
         &self,
         position: Vector,
         rotation: impl Into<Rotation>,
-        _: AabbContext<Self::Context>,
+        _: ColliderContext<Self::Context>,
     ) -> ColliderAabb {
         let aabb = self
             .shape_scaled()
@@ -425,7 +425,7 @@ impl AnyCollider for Collider {
         rotation2: impl Into<Rotation>,
         prediction_distance: Scalar,
         manifolds: &mut Vec<ContactManifold>,
-        _: ContactManifoldContext<Self::Context>,
+        _: ColliderPairContext<Self::Context>,
     ) {
         contact_query::contact_manifolds(
             self,

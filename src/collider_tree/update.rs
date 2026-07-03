@@ -95,7 +95,7 @@ impl<C: AnyCollider> Plugin for ColliderTreeUpdatePlugin<C> {
 
                     // TODO: Should we instead do this in `add_to_tree_on`?
                     // Update tight-fitting AABB.
-                    let context = AabbContext::new(trigger.entity, &*collider_context);
+                    let context = ColliderContext::new(trigger.entity, &*collider_context);
                     let growth = Vector::splat(contact_tolerance + collision_margin);
                     *aabb = collider
                         .aabb_with_context(pos.0, *rot, context)
@@ -734,7 +734,7 @@ fn update_solver_body_aabbs<C: AnyCollider>(
                     speculative_margin.map_or(default_speculative_margin, |margin| margin.0)
                 };
 
-                let context = AabbContext::new(collider_entity, &*collider_context);
+                let context = ColliderContext::new(collider_entity, &*collider_context);
                 let growth = Vector::splat(contact_tolerance + collision_margin);
 
                 if speculative_margin <= 0.0 {
@@ -900,7 +900,7 @@ pub fn update_moved_collider_aabbs<C: AnyCollider>(
             let collision_margin = collision_margin.map_or(0.0, |margin| margin.0);
 
             // Update tight-fitting AABB.
-            let context = AabbContext::new(entity, &*collider_context);
+            let context = ColliderContext::new(entity, &*collider_context);
             let growth = Vector::splat(contact_tolerance + collision_margin);
             *aabb = collider
                 .aabb_with_context(pos.0, *rot, context)
