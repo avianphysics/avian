@@ -6,12 +6,6 @@ on:
     pull_request:
         branches: [main]
         types: [opened, synchronize, reopened, ready_for_review]
-        paths:
-            - "**.rs"
-            - "**/Cargo.toml"
-            - "**/Cargo.lock"
-            - ".cargo/**"
-            - ".github/workflows/rust.yaml"
 
 concurrency:
     group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -23,8 +17,40 @@ env:
     RUSTDOCFLAGS: --deny warnings
 
 jobs:
+    changes:
+        name: Detect Rust Changes
+        runs-on: ubuntu-latest
+        outputs:
+            rust: ${{ steps.rust-changed.outputs.rust }}
+        steps:
+            - uses: actions/checkout@v6
+              if: ${{ github.event_name == 'pull_request' }}
+              with:
+                  fetch-depth: 0
+            - uses: dorny/paths-filter@v3
+              id: filter
+              if: ${{ github.event_name == 'pull_request' }}
+              with:
+                  filters: |
+                      rust:
+                          - '**.rs'
+                          - '**/Cargo.toml'
+                          - '**/Cargo.lock'
+                          - '.cargo/**'
+                          - '.github/workflows/rust.yaml'
+            - name: Set Rust change output
+              id: rust-changed
+              run: |
+                  if [[ "${{ github.event_name }}" == "push" ]]; then
+                      echo "rust=true" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "rust=${{ steps.filter.outputs.rust }}" >> "$GITHUB_OUTPUT"
+                  fi
+
     check:
         name: Check Minimal Features
+        needs: changes
+        if: ${{ github.event_name == 'push' || needs.changes.outputs.rust == 'true' }}
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v6
@@ -41,6 +67,8 @@ jobs:
 
     docs:
         name: Check Documentation
+        needs: changes
+        if: ${{ github.event_name == 'push' || needs.changes.outputs.rust == 'true' }}
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v6
@@ -57,6 +85,8 @@ jobs:
 
     test:
         name: Test Suite
+        needs: changes
+        if: ${{ github.event_name == 'push' || needs.changes.outputs.rust == 'true' }}
         strategy:
             matrix:
                 os: ${{ fromJSON((github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'Cross-Platform')) && '["windows-latest","macos-latest","ubuntu-latest"]' || '["ubuntu-latest"]') }}
@@ -118,6 +148,8 @@ jobs:
 
     lints:
         name: Lints
+        needs: changes
+        if: ${{ github.event_name == 'push' || needs.changes.outputs.rust == 'true' }}
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v6
