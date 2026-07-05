@@ -13,16 +13,31 @@ categories = ["game-development", "science", "simulation"]
 
 [features]
 default = [
-    "3d",
-    "f32",
-    "parry-f32",
     "debug-plugin",
+    "no-render",
+    "bevy_picking",
+]
+
+# a feature group for physics simulation without render dependencies
+# (servers, headless, etc...)
+no-render = [
+    "3d",
+    "parry-f32",
     "xpbd_joints",
     "parallel",
     "collider-from-mesh",
     "bevy_scene",
-    "bevy_picking",
 ]
+# a feature group for 64-bit physics simulation without render dependencies
+no-render-f64 = [
+    "3d",
+    "parry-f64",
+    "xpbd_joints",
+    "parallel",
+    "collider-from-mesh",
+    "bevy_scene",
+]
+
 3d = []
 f32 = []
 f64 = []
