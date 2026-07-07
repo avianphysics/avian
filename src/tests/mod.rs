@@ -213,3 +213,72 @@ fn no_ambiguity_errors() {
     .finish();
     app.update();
 }
+
+#[test]
+#[cfg(all(
+    feature = "default-collider",
+    any(feature = "parry-f32", feature = "parry-f64")
+))]
+// Casts are needed so that the test works with both the `f32` and `f64` features.
+#[allow(clippy::unnecessary_cast)]
+fn fast_rolling_ball_does_not_sink() {
+    // A small, fast-rolling ball spins by a large angle each time step.
+    // Its contact anchor used to be treated as a material point following the
+    // body's rotation when tracking contact separation during substeps, which
+    // made the solver believe the contact was separating and let the ball sink
+    // deep into the ground (over half its radius at 125 rad/s and 60 Hz).
+    use crate::math::Real;
+
+    let mut app = create_app();
+
+    const RADIUS: f32 = 0.008; // a marble-sized ball
+    const SPEED: f32 = 1.0;
+
+    app.add_systems(Startup, |mut commands: Commands| {
+        // Long static floor with its top surface at y = 0.
+        commands.spawn((
+            RigidBody::Static,
+            #[cfg(feature = "2d")]
+            Collider::rectangle(20.0, 0.1),
+            #[cfg(feature = "3d")]
+            Collider::cuboid(20.0, 0.1, 1.0),
+            Transform::from_xyz(9.0, -0.05, 0.0),
+        ));
+        // Ball resting on the floor, rolling to the right without slipping.
+        commands.spawn((
+            RigidBody::Dynamic,
+            #[cfg(feature = "2d")]
+            Collider::circle(RADIUS),
+            #[cfg(feature = "3d")]
+            Collider::sphere(RADIUS),
+            Transform::from_xyz(0.0, RADIUS, 0.0),
+            LinearVelocity(Vector::X * SPEED),
+            #[cfg(feature = "2d")]
+            AngularVelocity(-SPEED / RADIUS),
+            #[cfg(feature = "3d")]
+            AngularVelocity(Vector::Z * (-SPEED / RADIUS)),
+        ));
+    });
+
+    // Run startup systems
+    app.update();
+
+    // Roll for five seconds.
+    for _ in 0..300 {
+        tick_app(&mut app, 1.0 / 60.0);
+    }
+
+    let mut query = app.world_mut().query::<(&Position, &RigidBody)>();
+    let (position, _) = query
+        .iter(app.world())
+        .find(|(_, rb)| rb.is_dynamic())
+        .unwrap();
+
+    // The ball should still ride on the surface at approximately y = radius.
+    let depth = RADIUS as Real - position.y;
+    assert!(
+        depth < 0.05 * RADIUS as Real,
+        "rolling ball sank into the ground: ride depth {depth} is {:.1}% of its radius",
+        depth / RADIUS as Real * 100.0
+    );
+}

@@ -173,6 +173,13 @@ pub fn contact_manifolds(
     let isometry2 = make_pose(position2, rotation2);
     let isometry12 = isometry1.inv_mul(&isometry2);
 
+    // Balls get an anchor pivot at the shape's center, which is zero here since
+    // the anchors computed below are relative to it. The narrow phase adds the
+    // offset from the body's center of mass when adjusting the anchors.
+    // See `ContactManifold::anchor_pivot1` for details.
+    let anchor_pivot1 = collider1.shape_scaled().as_ball().map(|_| Vector::ZERO);
+    let anchor_pivot2 = collider2.shape_scaled().as_ball().map(|_| Vector::ZERO);
+
     // TODO: Reuse manifolds from previous frame to improve performance
     let mut new_manifolds =
         Vec::<parry::query::ContactManifold<(), ()>>::with_capacity(manifolds.len());
@@ -223,7 +230,10 @@ pub fn contact_manifolds(
             -contact.dist.f32(),
         )];
 
-        manifolds.push(ContactManifold::new(points, normal));
+        let mut manifold = ContactManifold::new(points, normal);
+        manifold.anchor_pivot1 = anchor_pivot1;
+        manifold.anchor_pivot2 = anchor_pivot2;
+        manifolds.push(manifold);
     }
 
     manifolds.extend(new_manifolds.iter().filter_map(|manifold| {
@@ -252,7 +262,9 @@ pub fn contact_manifolds(
                 .with_feature_ids(contact.fid1.into(), contact.fid2.into())
         });
 
-        let manifold = ContactManifold::new(points, normal);
+        let mut manifold = ContactManifold::new(points, normal);
+        manifold.anchor_pivot1 = anchor_pivot1;
+        manifold.anchor_pivot2 = anchor_pivot2;
 
         Some(manifold)
     }));
