@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::{collision::collider::ShapeCastSettings, prelude::*};
 use bevy::{
     ecs::entity::{EntityMapper, MapEntities},
     prelude::*,
@@ -438,6 +438,16 @@ pub struct ShapeCastConfig {
     ///
     /// The default is `false`.
     pub ignore_origin_penetration: bool,
+}
+
+impl ShapeCastSettings for ShapeCastConfig {
+    fn max_distance(&self) -> f32 {
+        self.max_distance
+    }
+
+    fn collision_tolerance(&self) -> f32 {
+        self.target_distance
+    }
 }
 
 impl Default for ShapeCastConfig {

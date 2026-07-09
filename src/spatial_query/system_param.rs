@@ -1,6 +1,6 @@
 use crate::{
     collider_tree::ColliderTrees,
-    collision::collider::{BoundedCollider, QueryCollider},
+    collision::collider::{BoundedCollider, QueryCollider, ShapeCastSettings},
     prelude::*,
 };
 use bevy::{
@@ -465,7 +465,7 @@ impl<C: QueryCollider> SpatialQuery<'_, '_, C> {
         origin: Vector,
         shape_rotation: RotationValue,
         direction: Dir,
-        config: &ShapeCastConfig,
+        config: &C::ShapeCastSettings,
         filter: &SpatialQueryFilter,
     ) -> Option<ShapeHitData> {
         self.cast_shape_predicate(
@@ -542,11 +542,11 @@ impl<C: QueryCollider> SpatialQuery<'_, '_, C> {
         origin: Vector,
         shape_rotation: RotationValue,
         direction: Dir,
-        config: &ShapeCastConfig,
+        config: &C::ShapeCastSettings,
         filter: &SpatialQueryFilter,
         predicate: &dyn Fn(Entity) -> bool,
     ) -> Option<ShapeHitData> {
-        let mut closest_distance = config.max_distance;
+        let mut closest_distance = config.max_distance();
         let mut closest_hit: Option<ShapeHitData> = None;
 
         let aabb = obvhs::aabb::Aabb::from(shape.aabb_with_context(
@@ -560,7 +560,7 @@ impl<C: QueryCollider> SpatialQuery<'_, '_, C> {
                 aabb,
                 direction,
                 closest_distance,
-                config.target_distance,
+                config.collision_tolerance(),
                 |proxy_id| {
                     let proxy = tree.get_proxy(proxy_id).unwrap();
 
@@ -581,7 +581,7 @@ impl<C: QueryCollider> SpatialQuery<'_, '_, C> {
                         origin,
                         shape_rotation,
                         *direction,
-                        config.max_distance,
+                        config,
                         context,
                     ) else {
                         return Scalar::MAX;
@@ -661,7 +661,7 @@ impl<C: QueryCollider> SpatialQuery<'_, '_, C> {
         shape_rotation: RotationValue,
         direction: Dir,
         max_hits: u32,
-        config: &ShapeCastConfig,
+        config: &C::ShapeCastSettings,
         filter: &SpatialQueryFilter,
     ) -> Vec<ShapeHitData> {
         let mut hits = Vec::new();
@@ -749,7 +749,7 @@ impl<C: QueryCollider> SpatialQuery<'_, '_, C> {
         origin: Vector,
         shape_rotation: RotationValue,
         direction: Dir,
-        config: &ShapeCastConfig,
+        config: &C::ShapeCastSettings,
         filter: &SpatialQueryFilter,
         mut callback: impl FnMut(ShapeHitData) -> bool,
     ) {
@@ -763,8 +763,8 @@ impl<C: QueryCollider> SpatialQuery<'_, '_, C> {
             tree.sweep_traverse_all(
                 aabb,
                 direction,
-                config.max_distance,
-                config.target_distance,
+                config.max_distance(),
+                config.collision_tolerance(),
                 |proxy_id| {
                     let proxy = tree.get_proxy(proxy_id).unwrap();
 
@@ -785,7 +785,7 @@ impl<C: QueryCollider> SpatialQuery<'_, '_, C> {
                         origin,
                         shape_rotation,
                         *direction,
-                        config.max_distance,
+                        config,
                         context,
                     ) else {
                         return true;

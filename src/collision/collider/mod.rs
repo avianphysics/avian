@@ -445,12 +445,23 @@ pub trait ScalableCollider: AnyCollider {
     }
 }
 
+/// A trait for types that can be used as settings for shape casts in [`QueryCollider`]
+pub trait ShapeCastSettings {
+    /// The maximum distance the shape is allowed to travel
+    fn max_distance(&self) -> f32;
+    /// Extra tolerance for the intersection
+    fn collision_tolerance(&self) -> f32;
+}
+
 /// A trait for spatial query support for a collider type
 pub trait QueryCollider: BoundedCollider + AnyCollider {
     /// The shape type that is used when casting a collider, if possible this should be `Self`
     type CastShape: BoundedCollider<Context = Self::Context, EntityUsage = NoEntity>;
     /// The shape type that is used when casting a collider, if possible this should be `Self`
     type IntersectionShape: BoundedCollider<Context = Self::Context, EntityUsage = NoEntity>;
+
+    /// A type to used as settings for shape casting queries
+    type ShapeCastSettings: ShapeCastSettings;
 
     /// Projects the given `point` onto `self` transformed by `translation` and `rotation`.
     /// The returned tuple contains the projected point and whether it is inside the collider.
@@ -563,7 +574,7 @@ pub trait QueryCollider: BoundedCollider + AnyCollider {
         shape_origin: Vector,
         shape_rotation: impl Into<Rotation>,
         shape_direction: Vector,
-        max_distance: Scalar,
+        settings: &Self::ShapeCastSettings,
         context: ColliderContext<Self::Context, Self::EntityUsage>,
     ) -> Option<ShapeHitData>;
 }

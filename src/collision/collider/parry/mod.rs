@@ -471,6 +471,7 @@ impl AnyCollider for Collider {
 impl QueryCollider for Collider {
     type CastShape = Self;
     type IntersectionShape = Self;
+    type ShapeCastSettings = ShapeCastConfig;
 
     fn project_point(
         &self,
@@ -565,7 +566,7 @@ impl QueryCollider for Collider {
         shape_origin: Vector,
         shape_rotation: impl Into<Rotation>,
         shape_direction: Vector,
-        max_distance: Scalar,
+        settings: &Self::ShapeCastSettings,
         _: ColliderContext<(), NoEntity>,
     ) -> Option<ShapeHitData> {
         let pose1 = make_pose(translation, rotation);
@@ -579,11 +580,10 @@ impl QueryCollider for Collider {
             shape_direction.adjust_precision(),
             shape.shape_scaled().as_ref(),
             ShapeCastOptions {
-                max_time_of_impact: max_distance,
-                // target_distance: config.target_distance,
-                // stop_at_penetration: !config.ignore_origin_penetration,
-                // compute_impact_geometry_on_penetration: config.compute_contact_on_penetration,
-                ..Default::default()
+                max_time_of_impact: settings.max_distance,
+                target_distance: settings.target_distance,
+                stop_at_penetration: !settings.ignore_origin_penetration,
+                compute_impact_geometry_on_penetration: settings.compute_contact_on_penetration,
             },
         )
         .ok()
