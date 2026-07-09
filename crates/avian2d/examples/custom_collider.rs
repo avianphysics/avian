@@ -90,7 +90,7 @@ impl AnyCollider for CircleCollider {
         _rotation2: impl Into<Rotation>,
         prediction_distance: Scalar,
         manifolds: &mut Vec<ContactManifold>,
-        _: ColliderPairContext<Self::Context>,
+        _: ColliderPairContext<Self::Context, Self::EntityUsage>,
     ) {
         // Clear the previous manifolds.
         manifolds.clear();
