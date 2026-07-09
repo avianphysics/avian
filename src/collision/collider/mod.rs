@@ -345,7 +345,7 @@ pub trait SimpleCollider:
     /// Computes the [Axis-Aligned Bounding Box](ColliderAabb) of the collider
     /// with the given position and rotation.
     ///
-    /// See [`AnyCollider::aabb_with_context`] for collider types with a non-empty [`BoundedCollider::Context`].
+    /// See [`BoundedCollider::aabb_with_context`] for collider types with a non-empty [`BoundedCollider::Context`].
     fn aabb(&self, position: Vector, rotation: impl Into<Rotation>) -> ColliderAabb {
         self.aabb_with_context(position, rotation, ColliderContext::NO_CONTEXT)
     }
