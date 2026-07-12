@@ -257,7 +257,7 @@ pub struct MoveAndSlideOutput {
     /// The final position of the character after move and slide.
     ///
     /// Set your [`Transform::translation`] to this value.
-    pub position: Vector,
+    pub position: RVector,
 
     /// The final velocity of the character after move and slide.
     ///
@@ -271,7 +271,7 @@ pub struct MoveAndSlideOutput {
     /// Note that if you apply this to [`LinearVelocity`], it is recommended to use [`CustomPositionIntegration`].
     /// This ways, the character's position is only updated via the move and slide algorithm,
     /// and not also by the physics integrator.
-    pub projected_velocity: VectorF32,
+    pub projected_velocity: Vector,
 }
 
 /// Data related to a hit during [`MoveAndSlide::move_and_slide`].
@@ -292,16 +292,16 @@ pub struct MoveAndSlideHitData<'a> {
     pub distance: f32,
 
     /// The hit point on the shape that was hit, expressed in world space.
-    pub point: Vector,
+    pub point: RVector,
 
     /// The outward surface normal on the hit shape at `point`, expressed in world space.
     pub normal: &'a mut Dir,
 
     /// The position of the collider at the time of the move and slide iteration.
-    pub position: &'a mut Vector,
+    pub position: &'a mut RVector,
 
     /// The velocity of the collider at the time of the move and slide iteration.
-    pub velocity: &'a mut VectorF32,
+    pub velocity: &'a mut Vector,
 
     /// The raw distance to the next collision, not respecting skin width.
     /// To move the shape, use [`Self::distance`] instead.
@@ -364,19 +364,19 @@ pub struct MoveHitData {
     ///
     /// If the shapes are penetrating or the target distance is greater than zero,
     /// this will be different from `point2`.
-    pub point1: Vector,
+    pub point1: RVector,
 
     /// The closest point on the shape that was cast, expressed in world space.
     ///
     /// If the shapes are penetrating or the target distance is greater than zero,
     /// this will be different from `point1`.
-    pub point2: Vector,
+    pub point2: RVector,
 
     /// The outward surface normal on the hit shape at `point1`, expressed in world space.
-    pub normal1: VectorF32,
+    pub normal1: Vector,
 
     /// The outward surface normal on the cast shape at `point2`, expressed in world space.
-    pub normal2: VectorF32,
+    pub normal2: Vector,
 
     /// The raw distance to the next collision, not respecting skin width.
     /// To move the shape, use [`Self::distance`] instead.
@@ -418,16 +418,16 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// use std::collections::HashSet;
     #[cfg_attr(
         feature = "2d",
-        doc = "use avian2d::{prelude::*, math::{Vector, AdjustPrecision as _, AsF32 as _}};"
+        doc = "use avian2d::{prelude::*, math::{RVector, ToRealPrecision as _, ToF32Precision as _}};"
     )]
     #[cfg_attr(
         feature = "3d",
-        doc = "use avian3d::{prelude::*, math::{Vector, AdjustPrecision as _, AsF32 as _}};"
+        doc = "use avian3d::{prelude::*, math::{RVector, ToRealPrecision as _, ToF32Precision as _}};"
     )]
     ///
     /// #[derive(Component)]
     /// struct CharacterController {
-    ///     velocity: Vector,
+    ///     velocity: RVector,
     /// }
     ///
     /// fn perform_move_and_slide(
@@ -436,19 +436,13 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///     time: Res<Time>
     /// ) {
     ///     let (entity, collider, mut controller, mut transform) = player.into_inner();
-    ///     let velocity = controller.velocity + Vector::X * 10.0;
+    ///     let velocity = controller.velocity + RVector::X * 10.0;
     ///     let filter = SpatialQueryFilter::from_excluded_entities([entity]);
     ///     let mut collisions = HashSet::new();
     ///     let out = move_and_slide.move_and_slide(
     ///         collider,
-    #[cfg_attr(
-        feature = "2d",
-        doc = "         transform.translation.xy().adjust_precision(),"
-    )]
-    #[cfg_attr(
-        feature = "3d",
-        doc = "         transform.translation.adjust_precision(),"
-    )]
+    #[cfg_attr(feature = "2d", doc = "         transform.translation.xy().real(),")]
+    #[cfg_attr(feature = "3d", doc = "         transform.translation.real(),")]
     #[cfg_attr(
         feature = "2d",
         doc = "         transform.rotation.to_euler(EulerRot::XYZ).2,"
@@ -481,9 +475,9 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     pub fn move_and_slide(
         &self,
         shape: &Collider,
-        shape_position: Vector,
-        shape_rotation: impl Into<RotF32>,
-        mut velocity: VectorF32,
+        shape_position: RVector,
+        shape_rotation: impl Into<Rot>,
+        mut velocity: Vector,
         delta_time: Duration,
         config: &MoveAndSlideConfig,
         filter: &SpatialQueryFilter,
@@ -498,7 +492,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         // Initial depenetration pass
         let depenetration_offset =
             self.depenetrate(shape, position, shape_rotation, &config.into(), filter);
-        position += depenetration_offset.adjust_precision();
+        position += depenetration_offset.real();
 
         // Main move and slide loop:
         // 1. Sweep the shape along the velocity vector
@@ -523,14 +517,14 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 self.cast_move(shape, position, shape_rotation, sweep, skin_width, filter)
             else {
                 // No collision, move the full distance.
-                position += sweep.adjust_precision();
+                position += sweep.real();
                 break;
             };
             let point = sweep_hit.point2;
 
             // Move up to the hit point.
             time_left -= time_left * (sweep_hit.distance / distance);
-            position += (vel_dir * sweep_hit.distance).adjust_precision();
+            position += (vel_dir * sweep_hit.distance).real();
 
             // Initialize velocity clipping planes with the user-defined planes.
             // This often includes a ground plane.
@@ -623,7 +617,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         // TODO: We could get the intersections from the last iteration and avoid re-querying them here.
         let depenetration_offset =
             self.depenetrate(shape, position, shape_rotation, &config.into(), filter);
-        position += depenetration_offset.adjust_precision();
+        position += depenetration_offset.real();
 
         MoveAndSlideOutput {
             position,
@@ -661,16 +655,16 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// use bevy::prelude::*;
     #[cfg_attr(
         feature = "2d",
-        doc = "use avian2d::{prelude::*, math::{VectorF32, Dir}};"
+        doc = "use avian2d::{prelude::*, math::{Vector, Dir}};"
     )]
     #[cfg_attr(
         feature = "3d",
-        doc = "use avian3d::{prelude::*, math::{VectorF32, Dir}};"
+        doc = "use avian3d::{prelude::*, math::{Vector, Dir}};"
     )]
     ///
     /// #[derive(Component)]
     /// struct CharacterController {
-    ///     velocity: VectorF32,
+    ///     velocity: Vector,
     /// }
     ///
     /// fn perform_cast_move(
@@ -747,9 +741,9 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     pub fn cast_move(
         &self,
         shape: &Collider,
-        shape_position: Vector,
-        shape_rotation: RotF32,
-        movement: VectorF32,
+        shape_position: RVector,
+        shape_rotation: Rot,
+        movement: Vector,
         skin_width: f32,
         filter: &SpatialQueryFilter,
     ) -> Option<MoveHitData> {
@@ -818,11 +812,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// use bevy::prelude::*;
     #[cfg_attr(
         feature = "2d",
-        doc = "use avian2d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::{AdjustPrecision as _, AsF32 as _}};"
+        doc = "use avian2d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::{ToRealPrecision as _, ToF32Precision as _}};"
     )]
     #[cfg_attr(
         feature = "3d",
-        doc = "use avian3d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::{AdjustPrecision as _, AsF32 as _}};"
+        doc = "use avian3d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::{ToRealPrecision as _, ToF32Precision as _}};"
     )]
     /// fn depenetrate_player(
     ///     player: Single<(Entity, &Collider, &mut Transform)>,
@@ -834,14 +828,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///
     ///     let offset = move_and_slide.depenetrate(
     ///         collider,
-    #[cfg_attr(
-        feature = "2d",
-        doc = "         transform.translation.xy().adjust_precision(),"
-    )]
-    #[cfg_attr(
-        feature = "3d",
-        doc = "         transform.translation.adjust_precision(),"
-    )]
+    #[cfg_attr(feature = "2d", doc = "         transform.translation.xy().real(),")]
+    #[cfg_attr(feature = "3d", doc = "         transform.translation.real(),")]
     #[cfg_attr(
         feature = "2d",
         doc = "         transform.rotation.to_euler(EulerRot::XYZ).2,"
@@ -867,14 +855,14 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     pub fn depenetrate(
         &self,
         shape: &Collider,
-        shape_position: Vector,
-        shape_rotation: RotF32,
+        shape_position: RVector,
+        shape_rotation: Rot,
         config: &DepenetrationConfig,
         filter: &SpatialQueryFilter,
-    ) -> VectorF32 {
+    ) -> Vector {
         if config.depenetration_iterations == 0 {
             // Depenetration disabled
-            return VectorF32::ZERO;
+            return Vector::ZERO;
         }
 
         let mut intersections = Vec::new();
@@ -923,11 +911,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// use bevy::prelude::*;
     #[cfg_attr(
         feature = "2d",
-        doc = "use avian2d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::{AdjustPrecision as _, AsF32 as _}};"
+        doc = "use avian2d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::{ToRealPrecision as _, ToF32Precision as _}};"
     )]
     #[cfg_attr(
         feature = "3d",
-        doc = "use avian3d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::{AdjustPrecision as _, AsF32 as _}};"
+        doc = "use avian3d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::{ToRealPrecision as _, ToF32Precision as _}};"
     )]
     /// fn depenetrate_player_manually(
     ///     player: Single<(Entity, &Collider, &mut Transform)>,
@@ -941,14 +929,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///     let mut intersections = Vec::new();
     ///     move_and_slide.intersections(
     ///         collider,
-    #[cfg_attr(
-        feature = "2d",
-        doc = "         transform.translation.xy().adjust_precision(),"
-    )]
-    #[cfg_attr(
-        feature = "3d",
-        doc = "         transform.translation.adjust_precision(),"
-    )]
+    #[cfg_attr(feature = "2d", doc = "         transform.translation.xy().real(),")]
+    #[cfg_attr(feature = "3d", doc = "         transform.translation.real(),")]
     #[cfg_attr(
         feature = "2d",
         doc = "         transform.rotation.to_euler(EulerRot::XYZ).2,"
@@ -979,8 +961,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         &self,
         config: &DepenetrationConfig,
         intersections: &[(Dir, f32)],
-    ) -> VectorF32 {
-        let mut fixup = VectorF32::ZERO;
+    ) -> Vector {
+        let mut fixup = Vector::ZERO;
 
         // Gauss-Seidel style iterative depenetration
         for _ in 0..config.depenetration_iterations {
@@ -1027,8 +1009,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     pub fn intersections(
         &self,
         shape: &Collider,
-        shape_position: Vector,
-        shape_rotation: RotF32,
+        shape_position: RVector,
+        shape_rotation: Rot,
         prediction_distance: f32,
         filter: &SpatialQueryFilter,
         mut callback: impl FnMut(Entity, &ContactPoint, Dir) -> bool,
@@ -1080,7 +1062,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// This is often used after [`MoveAndSlide::cast_move`] to ensure a character moved that way
     /// does not try to continue moving into colliding geometry.
     #[must_use]
-    pub fn project_velocity(v: VectorF32, normals: &[Dir]) -> VectorF32 {
+    pub fn project_velocity(v: Vector, normals: &[Dir]) -> Vector {
         project_velocity(v, normals)
     }
 }

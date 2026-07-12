@@ -407,11 +407,11 @@ pub struct RigidBodyDisabled;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, Component, Default, PartialEq)]
-pub struct LinearVelocity(pub VectorF32);
+pub struct LinearVelocity(pub Vector);
 
 impl LinearVelocity {
     /// Zero linear velocity.
-    pub const ZERO: LinearVelocity = LinearVelocity(VectorF32::ZERO);
+    pub const ZERO: LinearVelocity = LinearVelocity(Vector::ZERO);
 }
 
 /// The maximum linear speed of a [rigid body](RigidBody), clamping the [`LinearVelocity`],
@@ -532,7 +532,7 @@ pub struct AngularVelocity(pub f32);
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, Component, Default, PartialEq)]
-pub struct AngularVelocity(pub VectorF32);
+pub struct AngularVelocity(pub Vector);
 
 impl AngularVelocity {
     /// Zero angular velocity.
@@ -540,7 +540,7 @@ impl AngularVelocity {
     pub const ZERO: AngularVelocity = AngularVelocity(0.0);
     /// Zero angular velocity.
     #[cfg(feature = "3d")]
-    pub const ZERO: AngularVelocity = AngularVelocity(VectorF32::ZERO);
+    pub const ZERO: AngularVelocity = AngularVelocity(Vector::ZERO);
 }
 
 /// Controls how [gravity](Gravity) affects a specific [rigid body](RigidBody).

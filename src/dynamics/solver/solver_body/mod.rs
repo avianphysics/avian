@@ -13,10 +13,10 @@ pub use plugin::SolverBodyPlugin;
 
 use bevy::prelude::*;
 
-use super::RotF32;
+use super::Rot;
 #[cfg(feature = "3d")]
 use crate::prelude::ComputedAngularInertia;
-use crate::{SymmetricTensor, math::VectorF32, prelude::LockedAxes};
+use crate::{SymmetricTensor, math::Vector, prelude::LockedAxes};
 
 // The `SolverBody` layout is inspired by `b2BodyState` in Box2D v3.
 
@@ -60,7 +60,7 @@ pub struct SolverBody {
     /// The linear velocity of the body.
     ///
     /// 8 bytes in 2D and 12 bytes in 3D.
-    pub linear_velocity: VectorF32,
+    pub linear_velocity: Vector,
     /// The angular velocity of the body.
     ///
     /// 4 bytes in 2D and 12 bytes in 3D.
@@ -70,20 +70,20 @@ pub struct SolverBody {
     ///
     /// 8 bytes in 2D and 12 bytes in 3D.
     #[cfg(feature = "3d")]
-    pub angular_velocity: VectorF32,
+    pub angular_velocity: Vector,
     /// The change in position of the body.
     ///
     /// Stored as a delta to avoid round-off error when far from the origin.
     ///
     /// 8 bytes in 2D and 12 bytes in 3D.
-    pub delta_position: VectorF32,
+    pub delta_position: Vector,
     /// The change in rotation of the body.
     ///
     /// Stored as a delta because the rotation of static bodies cannot be accessed
     /// in the solver, but they have a known delta rotation of zero.
     ///
     /// 8 bytes in 2D and 16 bytes in 3D.
-    pub delta_rotation: RotF32,
+    pub delta_rotation: Rot,
     /// Flags for the body.
     ///
     /// 4 bytes.
@@ -93,18 +93,18 @@ pub struct SolverBody {
 impl SolverBody {
     /// A dummy [`SolverBody`] for static bodies.
     pub const DUMMY: Self = Self {
-        linear_velocity: VectorF32::ZERO,
+        linear_velocity: Vector::ZERO,
         #[cfg(feature = "2d")]
         angular_velocity: 0.0,
         #[cfg(feature = "3d")]
-        angular_velocity: VectorF32::ZERO,
-        delta_position: VectorF32::ZERO,
-        delta_rotation: RotF32::IDENTITY,
+        angular_velocity: Vector::ZERO,
+        delta_position: Vector::ZERO,
+        delta_rotation: Rot::IDENTITY,
         flags: SolverBodyFlags::empty(),
     };
 
     /// Computes the velocity at the given `point` relative to the center of the body.
-    pub fn velocity_at_point(&self, point: VectorF32) -> VectorF32 {
+    pub fn velocity_at_point(&self, point: Vector) -> Vector {
         #[cfg(feature = "2d")]
         {
             self.linear_velocity + self.angular_velocity * point.perp()
@@ -227,7 +227,7 @@ pub struct SolverBodyInertia {
     ///
     /// 8 bytes.
     #[cfg(feature = "2d")]
-    effective_inv_mass: VectorF32,
+    effective_inv_mass: Vector,
 
     /// The inverse mass of the body.
     ///
@@ -270,7 +270,7 @@ impl SolverBodyInertia {
     /// A dummy [`SolverBodyInertia`] for static bodies.
     pub const DUMMY: Self = Self {
         #[cfg(feature = "2d")]
-        effective_inv_mass: VectorF32::ZERO,
+        effective_inv_mass: Vector::ZERO,
         #[cfg(feature = "3d")]
         inv_mass: 0.0,
         #[cfg(feature = "2d")]
@@ -344,7 +344,7 @@ impl SolverBodyInertia {
         dominance: i8,
         is_dynamic: bool,
     ) -> Self {
-        let mut effective_inv_mass = VectorF32::splat(inv_mass);
+        let mut effective_inv_mass = Vector::splat(inv_mass);
         let mut effective_inv_angular_inertia = inv_inertia;
         let mut flags = InertiaFlags(locked_axes.to_bits() as u16);
 
@@ -432,7 +432,7 @@ impl SolverBodyInertia {
     /// taking into account any locked axes.
     #[inline]
     #[cfg(feature = "2d")]
-    pub fn effective_inv_mass(&self) -> VectorF32 {
+    pub fn effective_inv_mass(&self) -> Vector {
         self.effective_inv_mass
     }
 
@@ -440,8 +440,8 @@ impl SolverBodyInertia {
     /// taking into account any locked axes.
     #[inline]
     #[cfg(feature = "3d")]
-    pub fn effective_inv_mass(&self) -> VectorF32 {
-        let mut inv_mass = VectorF32::splat(self.inv_mass);
+    pub fn effective_inv_mass(&self) -> Vector {
+        let mut inv_mass = Vector::splat(self.inv_mass);
 
         if self.flags.contains(InertiaFlags::TRANSLATION_X_LOCKED) {
             inv_mass.x = 0.0;

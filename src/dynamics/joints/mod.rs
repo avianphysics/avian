@@ -325,11 +325,11 @@ impl DistanceLimit {
 
     /// Returns the direction and magnitude of the positional correction required
     /// to limit the given `separation` to be within the distance limit.
-    pub fn compute_correction(&self, separation: VectorF32) -> (VectorF32, f32) {
+    pub fn compute_correction(&self, separation: Vector) -> (Vector, f32) {
         let distance_squared = separation.length_squared();
 
         if distance_squared <= f32::EPSILON {
-            return (VectorF32::ZERO, 0.0);
+            return (Vector::ZERO, 0.0);
         }
 
         let distance = distance_squared.sqrt();
@@ -342,17 +342,13 @@ impl DistanceLimit {
             // Separation distance upper limit
             (-separation / distance, (distance - self.max))
         } else {
-            (VectorF32::ZERO, 0.0)
+            (Vector::ZERO, 0.0)
         }
     }
 
     /// Returns the positional correction required to limit the given `separation`
     /// to be within the distance limit along a given `axis`.
-    pub fn compute_correction_along_axis(
-        &self,
-        separation: VectorF32,
-        axis: VectorF32,
-    ) -> VectorF32 {
+    pub fn compute_correction_along_axis(&self, separation: Vector, axis: Vector) -> Vector {
         let a = separation.dot(axis);
 
         // Equation 25
@@ -363,7 +359,7 @@ impl DistanceLimit {
             // Separation distance upper limit
             -axis * (a - self.max)
         } else {
-            VectorF32::ZERO
+            Vector::ZERO
         }
     }
 }
@@ -433,11 +429,11 @@ impl AngleLimit {
     #[cfg(feature = "3d")]
     pub fn compute_correction(
         &self,
-        limit_axis: VectorF32,
-        axis1: VectorF32,
-        axis2: VectorF32,
+        limit_axis: Vector,
+        axis1: Vector,
+        axis2: Vector,
         max_correction: f32,
-    ) -> Option<VectorF32> {
+    ) -> Option<Vector> {
         // [limit_axis, axis1, axis2] = [n, n1, n2] in XPBD rigid body paper.
 
         // Angle between axis1 and axis2 with respect to limit_axis.
@@ -665,8 +661,8 @@ pub struct JointDamping {
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Component, Debug, PartialEq)]
 pub struct JointForces {
-    force: VectorF32,
-    torque: AngularVectorF32,
+    force: Vector,
+    torque: AngularVector,
     motor_force: f32,
 }
 
@@ -675,24 +671,24 @@ impl JointForces {
     #[inline]
     pub const fn new() -> Self {
         Self {
-            force: VectorF32::ZERO,
+            force: Vector::ZERO,
             #[cfg(feature = "2d")]
             torque: 0.0,
             #[cfg(feature = "3d")]
-            torque: VectorF32::ZERO,
+            torque: Vector::ZERO,
             motor_force: 0.0,
         }
     }
 
     /// Returns the force applied by the joint.
     #[inline]
-    pub const fn force(&self) -> VectorF32 {
+    pub const fn force(&self) -> Vector {
         self.force
     }
 
     /// Returns the torque applied by the joint.
     #[inline]
-    pub const fn torque(&self) -> AngularVectorF32 {
+    pub const fn torque(&self) -> AngularVector {
         self.torque
     }
 
@@ -709,7 +705,7 @@ impl JointForces {
     ///
     /// This should be done automatically by the joint solver.
     #[inline]
-    pub const fn set_force(&mut self, force: VectorF32) {
+    pub const fn set_force(&mut self, force: Vector) {
         self.force = force;
     }
 
@@ -717,7 +713,7 @@ impl JointForces {
     ///
     /// This should be done automatically by the joint solver.
     #[inline]
-    pub const fn set_torque(&mut self, torque: AngularVectorF32) {
+    pub const fn set_torque(&mut self, torque: AngularVector) {
         self.torque = torque;
     }
 
@@ -822,9 +818,9 @@ impl JointFrame {
     pub fn global(isometry: impl Into<Isometry>) -> Self {
         let isometry: Isometry = isometry.into();
         #[cfg(feature = "2d")]
-        let anchor = isometry.translation.adjust_precision();
+        let anchor = isometry.translation.real();
         #[cfg(feature = "3d")]
-        let anchor = Vec3::from(isometry.translation).adjust_precision();
+        let anchor = Vec3::from(isometry.translation).real();
         Self {
             anchor: JointAnchor::FromGlobal(anchor),
             basis: JointBasis::FromGlobal(isometry.rotation),
@@ -880,10 +876,10 @@ impl JointFrame {
     pub fn compute_local(
         frame1: Self,
         frame2: Self,
-        pos1: Vector,
-        pos2: Vector,
-        rot1: RotF32,
-        rot2: RotF32,
+        pos1: RVector,
+        pos2: RVector,
+        rot1: Rot,
+        rot2: Rot,
     ) -> [JointFrame; 2] {
         let [local_anchor1, local_anchor2] =
             JointAnchor::compute_local(frame1.anchor, frame2.anchor, pos1, pos2, rot1, rot2);
@@ -918,9 +914,9 @@ impl JointFrame {
 #[reflect(Debug, PartialEq)]
 pub enum JointAnchor {
     /// The anchor point is specified in local coordinates relative to the body transform.
-    Local(VectorF32),
+    Local(Vector),
     /// The anchor point is specified in global coordinates.
-    FromGlobal(Vector),
+    FromGlobal(RVector),
 }
 
 impl Default for JointAnchor {
@@ -933,17 +929,17 @@ impl JointAnchor {
     /// The anchor point at the local origin.
     ///
     /// This represents an anchor that aligns with the body transform.
-    pub const ZERO: Self = Self::Local(VectorF32::ZERO);
+    pub const ZERO: Self = Self::Local(Vector::ZERO);
 
     /// Computes [`JointAnchor::Local`]s for the given [`JointAnchor`]s
     /// corresponding to the transforms of two bodies constrained by a joint.
     pub fn compute_local(
         anchor1: Self,
         anchor2: Self,
-        pos1: Vector,
-        pos2: Vector,
-        rot1: RotF32,
-        rot2: RotF32,
+        pos1: RVector,
+        pos2: RVector,
+        rot1: Rot,
+        rot2: Rot,
     ) -> [Self; 2] {
         let [local_anchor1, local_anchor2] = match [anchor1, anchor2] {
             [JointAnchor::Local(anchor1), JointAnchor::Local(anchor2)] => [anchor1, anchor2],
@@ -995,9 +991,9 @@ impl From<JointAnchor> for JointFrame {
 #[reflect(Debug, PartialEq)]
 pub enum JointBasis {
     /// The basis is specified in local space relative to the body transform.
-    Local(RotF32),
+    Local(Rot),
     /// The basis is specified in world space.
-    FromGlobal(RotF32),
+    FromGlobal(Rot),
 }
 
 impl Default for JointBasis {
@@ -1010,7 +1006,7 @@ impl JointBasis {
     /// The identity basis.
     ///
     /// This represents a basis that aligns with the body transform.
-    pub const IDENTITY: Self = Self::Local(RotF32::IDENTITY);
+    pub const IDENTITY: Self = Self::Local(Rot::IDENTITY);
 
     /// Creates a [`JointBasis::Local`] from the given local `x_axis`.
     ///
@@ -1104,12 +1100,7 @@ impl JointBasis {
 
     /// Computes a [`JointBasis::Local`] for the given [`JointBasis`]s
     /// corresponding to the transforms of two bodies constrained by a joint.
-    pub fn compute_local(
-        rotation1: Self,
-        rotation2: Self,
-        rot1: RotF32,
-        rot2: RotF32,
-    ) -> [Self; 2] {
+    pub fn compute_local(rotation1: Self, rotation2: Self, rot1: Rot, rot2: Rot) -> [Self; 2] {
         let [local_basis1, local_basis2] = match [rotation1, rotation2] {
             [JointBasis::Local(basis1), JointBasis::Local(basis2)] => [basis1, basis2],
             [

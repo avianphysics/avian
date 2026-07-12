@@ -233,7 +233,7 @@ fn run_move_and_slide(
             projected_velocity,
         } = move_and_slide.move_and_slide(
             collider,
-            transform.translation.adjust_precision(),
+            transform.translation.real(),
             transform.rotation,
             lin_vel.0,
             time.delta(),
@@ -283,7 +283,7 @@ fn update_camera_transform(
     const MAX_DISTANCE: f32 = 15.0;
     camera.translation = player_transform.translation + camera.back() * MAX_DISTANCE;
     if let Some(hit) = spatial.cast_ray(
-        player_transform.translation.adjust_precision(),
+        player_transform.translation.real(),
         camera.back(),
         MAX_DISTANCE,
         true,

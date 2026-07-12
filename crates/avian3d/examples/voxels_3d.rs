@@ -6,7 +6,7 @@
 #![allow(clippy::unnecessary_cast)]
 
 use avian3d::{
-    math::{AsF32, Scalar, Vector},
+    math::{RVector, Real, ToF32Precision},
     prelude::*,
 };
 use bevy::{
@@ -20,7 +20,7 @@ use bevy::{
 };
 use examples_common_3d::ExampleCommonPlugin;
 
-const PI: Scalar = core::f64::consts::PI as Scalar;
+const PI: Real = core::f64::consts::PI as Real;
 
 fn main() {
     App::new()
@@ -41,15 +41,15 @@ fn setup(
 ) {
     // Create a voxelized bowl-like surface by sampling points.
     let mut points = vec![];
-    let voxel_size = Vector::splat(0.25);
+    let voxel_size = RVector::splat(0.25);
     let n = 200;
     for i in 0..n {
         for j in 0..n {
-            let x = i as Scalar;
-            let z = j as Scalar;
-            let y = -40.0
-                * ((x / n as Scalar * PI).sin() * (z / n as Scalar * PI).sin()).clamp(0.1, 0.9);
-            points.push(voxel_size * Vector::new(x, y, z));
+            let x = i as Real;
+            let z = j as Real;
+            let y =
+                -40.0 * ((x / n as Real * PI).sin() * (z / n as Real * PI).sin()).clamp(0.1, 0.9);
+            points.push(voxel_size * RVector::new(x, y, z));
         }
     }
 
@@ -79,10 +79,10 @@ fn setup(
         Mesh3d(meshes.add(mesh)),
         MeshMaterial3d(materials.add(Color::srgb(0.4, 0.6, 0.4))),
         Transform::from_translation(
-            Vector::new(
-                -n as Scalar / 2.0 * voxel_size.x,
+            RVector::new(
+                -n as Real / 2.0 * voxel_size.x,
                 -5.0 * voxel_size.y,
-                -n as Scalar / 2.0 * voxel_size.z,
+                -n as Real / 2.0 * voxel_size.z,
             )
             .f32(),
         ),

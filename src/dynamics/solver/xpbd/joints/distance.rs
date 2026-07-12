@@ -13,18 +13,18 @@ use bevy::prelude::*;
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Component, Debug, PartialEq)]
 pub struct DistanceJointSolverData {
-    pub(super) world_r1: VectorF32,
-    pub(super) world_r2: VectorF32,
-    pub(super) center_difference: VectorF32,
-    pub(super) total_lagrange: VectorF32,
+    pub(super) world_r1: Vector,
+    pub(super) world_r2: Vector,
+    pub(super) center_difference: Vector,
+    pub(super) total_lagrange: Vector,
 }
 
 impl XpbdConstraintSolverData for DistanceJointSolverData {
     fn clear_lagrange_multipliers(&mut self) {
-        self.total_lagrange = VectorF32::ZERO;
+        self.total_lagrange = Vector::ZERO;
     }
 
-    fn total_position_lagrange(&self) -> VectorF32 {
+    fn total_position_lagrange(&self) -> Vector {
         self.total_lagrange
     }
 }

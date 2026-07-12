@@ -22,181 +22,219 @@ use bevy_math::{prelude::*, *};
 use glam_matrix_extras::{SymmetricDMat2, SymmetricDMat3, SymmetricMat2, SymmetricMat3};
 
 /// The active dimension.
+///
+/// This is a constant value of `2` in 2D and `3` in 3D.
 #[cfg(feature = "2d")]
 pub const DIM: usize = 2;
+
 /// The active dimension.
+///
+/// This is a constant value of `2` in 2D and `3` in 3D.
 #[cfg(feature = "3d")]
 pub const DIM: usize = 3;
 
-/// The `f32` vector type chosen based on the dimension.
+/// The single-precision vector type used by Avian.
+///
+/// This is a type alias for `Vec2` in 2D and `Vec3` in 3D.
 #[cfg(feature = "2d")]
-pub(crate) use bevy_math::Vec2 as VectorF32;
+pub(crate) use bevy_math::Vec2 as Vector;
 
-/// The `f32` vector type chosen based on the dimension.
+/// The single-precision vector type used by Avian.
+///
+/// This is a type alias for `Vec2` in 2D and `Vec3` in 3D.
 #[cfg(feature = "3d")]
-pub(crate) use bevy_math::Vec3 as VectorF32;
+pub(crate) use bevy_math::Vec3 as Vector;
 
-/// The `i32` vector type chosen based on the dimension.
+/// The `i32` vector type used by Avian.
+///
+/// This is a type alias for `IVec2` in 2D and `IVec3` in 3D.
 #[cfg(feature = "2d")]
 pub(crate) use bevy_math::IVec2 as IVector;
 
-/// The `i32` vector type chosen based on the dimension.
+/// The `i32` vector type used by Avian.
+///
+/// This is a type alias for `IVec2` in 2D and `IVec3` in 3D.
 #[cfg(feature = "3d")]
 pub(crate) use bevy_math::IVec3 as IVector;
 
-/// The ray type chosen based on the dimension.
+/// The ray type used by Avian.
+///
+/// This is a type alias for `Ray2d` in 2D and `Ray3d` in 3D.
 #[cfg(feature = "2d")]
 pub(crate) type Ray = Ray2d;
 
-/// The ray type chosen based on the dimension.
+/// The ray type used by Avian.
+///
+/// This is a type alias for `Ray2d` in 2D and `Ray3d` in 3D.
 #[cfg(feature = "3d")]
 pub(crate) type Ray = Ray3d;
 
-// Note: This is called `Dir` instead of `Direction` because Bevy has a conflicting `Direction` type.
-/// The direction type chosen based on the dimension.
+/// The direction type used by Avian.
+///
+/// This is a type alias for `Dir2` in 2D and `Dir3` in 3D.
 #[cfg(feature = "2d")]
 pub type Dir = Dir2;
 
-/// The direction type chosen based on the dimension.
+/// The direction type used by Avian.
+///
+/// This is a type alias for `Dir2` in 2D and `Dir3` in 3D.
 #[cfg(feature = "3d")]
 pub type Dir = Dir3;
 
-/// The `f32` vector type for angular values chosen based on the dimension.
+/// The `f32` vector type for angular values used by Avian.
+///
+/// This is a type alias for `f32` in 2D and `Vec3` in 3D.
 #[cfg(feature = "2d")]
-pub(crate) type AngularVectorF32 = f32;
+pub(crate) type AngularVector = f32;
 
-/// The `f32` vector type for angular values chosen based on the dimension.
+/// The `f32` vector type for angular values used by Avian.
+///
+/// This is a type alias for `f32` in 2D and `Vec3` in 3D.
 #[cfg(feature = "3d")]
-pub(crate) type AngularVectorF32 = VectorF32;
+pub(crate) type AngularVector = Vector;
 
-/// The `f32` matrix type chosen based on the dimension.
+/// The `f32` matrix type used by Avian.
+///
+/// This is a type alias for `Mat3` in 3D.
 #[cfg(feature = "3d")]
-pub(crate) type MatrixF32 = Mat3;
+pub(crate) type Matrix = Mat3;
 
-/// The symmetric tensor type chosen based on the dimension.
+/// The symmetric tensor type used by Avian.
 /// Often used for angular inertia.
 ///
-/// In 2D, this is a scalar, while in 3D, it is a 3x3 matrix.
+/// This is a type alias for `f32` in 2D and `SymmetricMat3` in 3D.
 #[cfg(feature = "2d")]
 pub(crate) type SymmetricTensor = f32;
 
-/// The symmetric tensor type chosen based on the dimension.
+/// The symmetric tensor type used by Avian.
 /// Often used for angular inertia.
 ///
-/// In 2D, this is a scalar, while in 3D, it is a 3x3 matrix.
+/// This is a type alias for `f32` in 2D and `SymmetricMat3` in 3D.
 #[cfg(feature = "3d")]
 pub(crate) type SymmetricTensor = SymmetricMat3;
 
-/// The `f32` rotation type chosen based on the dimension.
+/// The `f32` rotation type used by Avian.
+///
+/// This is a type alias for `Rot2` in 2D and `Quat` in 3D.
 #[cfg(feature = "2d")]
-pub(crate) type RotF32 = Rot2;
+pub(crate) type Rot = Rot2;
 
-/// The `f32` rotation type chosen based on the dimension.
+/// The `f32` rotation type used by Avian.
+///
+/// This is a type alias for `Rot2` in 2D and `Quat` in 3D.
 #[cfg(feature = "3d")]
-pub(crate) type RotF32 = Quat;
+pub(crate) type Rot = Quat;
 
-/// The isometry type chosen based on the dimension.
+/// The isometry type used by Avian.
+///
+/// This is a type alias for `Isometry2d` in 2D and `Isometry3d` in 3D.
 #[cfg(feature = "2d")]
 pub(crate) type Isometry = Isometry2d;
 
-/// The isometry type chosen based on the dimension.
+/// The isometry type used by Avian.
+///
+/// This is a type alias for `Isometry2d` in 2D and `Isometry3d` in 3D.
 #[cfg(feature = "3d")]
 pub(crate) type Isometry = Isometry3d;
 
-/// Adjust the precision of the math construct to the precision chosen for compilation.
-pub trait AdjustPrecision {
-    /// A math construct type with the desired precision.
+/// Adjusts the precision of the math type to the [`Real`] number precision.
+pub trait ToRealPrecision {
+    /// The math type with the precision adjusted to [`Real`].
     type Adjusted;
-    /// Adjusts the precision of [`self`] to [`Self::Adjusted`](#associatedtype.Adjusted).
-    fn adjust_precision(&self) -> Self::Adjusted;
+
+    /// Adjusts the precision of [`self`] to the [`Real`] number precision.
+    #[must_use]
+    fn real(&self) -> Self::Adjusted;
 }
 
-/// Adjust the precision down to `f32` regardless of compilation.
-pub trait AsF32 {
-    /// The `f32` version of a math construct.
+/// Adjusts the precision of the math type to `f32`.
+pub trait ToF32Precision {
+    /// The math type with the precision adjusted to `f32`.
     type F32;
-    /// Returns the `f32` version of this type.
+
+    /// Adjusts the precision of [`self`] to `f32`.
+    #[must_use]
     fn f32(&self) -> Self::F32;
 }
 
-impl AsF32 for f32 {
+impl ToF32Precision for f32 {
     type F32 = Self;
     fn f32(&self) -> Self::F32 {
         *self
     }
 }
 
-impl AsF32 for f64 {
+impl ToF32Precision for f64 {
     type F32 = f32;
     fn f32(&self) -> Self::F32 {
         *self as f32
     }
 }
 
-impl AsF32 for DVec3 {
+impl ToF32Precision for DVec3 {
     type F32 = Vec3;
     fn f32(&self) -> Self::F32 {
         self.as_vec3()
     }
 }
 
-impl AsF32 for Vec3 {
+impl ToF32Precision for Vec3 {
     type F32 = Self;
     fn f32(&self) -> Self::F32 {
         *self
     }
 }
 
-impl AsF32 for DVec2 {
+impl ToF32Precision for DVec2 {
     type F32 = Vec2;
     fn f32(&self) -> Self::F32 {
         self.as_vec2()
     }
 }
 
-impl AsF32 for Vec2 {
+impl ToF32Precision for Vec2 {
     type F32 = Self;
     fn f32(&self) -> Self::F32 {
         *self
     }
 }
 
-impl AsF32 for Vec4 {
+impl ToF32Precision for Vec4 {
     type F32 = Self;
     fn f32(&self) -> Self::F32 {
         *self
     }
 }
 
-impl AsF32 for DQuat {
+impl ToF32Precision for DQuat {
     type F32 = Quat;
     fn f32(&self) -> Self::F32 {
         self.as_quat()
     }
 }
 
-impl AsF32 for Quat {
+impl ToF32Precision for Quat {
     type F32 = Self;
     fn f32(&self) -> Self::F32 {
         *self
     }
 }
 
-impl AsF32 for DMat2 {
+impl ToF32Precision for DMat2 {
     type F32 = Mat2;
     fn f32(&self) -> Self::F32 {
         self.as_mat2()
     }
 }
 
-impl AsF32 for Mat2 {
+impl ToF32Precision for Mat2 {
     type F32 = Self;
     fn f32(&self) -> Self::F32 {
         *self
     }
 }
 
-impl AsF32 for SymmetricDMat2 {
+impl ToF32Precision for SymmetricDMat2 {
     type F32 = SymmetricMat2;
     fn f32(&self) -> Self::F32 {
         SymmetricMat2 {
@@ -207,28 +245,28 @@ impl AsF32 for SymmetricDMat2 {
     }
 }
 
-impl AsF32 for SymmetricMat2 {
+impl ToF32Precision for SymmetricMat2 {
     type F32 = Self;
     fn f32(&self) -> Self::F32 {
         *self
     }
 }
 
-impl AsF32 for DMat3 {
+impl ToF32Precision for DMat3 {
     type F32 = Mat3;
     fn f32(&self) -> Self::F32 {
         self.as_mat3()
     }
 }
 
-impl AsF32 for Mat3 {
+impl ToF32Precision for Mat3 {
     type F32 = Self;
     fn f32(&self) -> Self::F32 {
         *self
     }
 }
 
-impl AsF32 for SymmetricDMat3 {
+impl ToF32Precision for SymmetricDMat3 {
     type F32 = SymmetricMat3;
     fn f32(&self) -> Self::F32 {
         SymmetricMat3 {
@@ -242,7 +280,7 @@ impl AsF32 for SymmetricDMat3 {
     }
 }
 
-impl AsF32 for SymmetricMat3 {
+impl ToF32Precision for SymmetricMat3 {
     type F32 = Self;
     fn f32(&self) -> Self::F32 {
         *self
@@ -250,7 +288,7 @@ impl AsF32 for SymmetricMat3 {
 }
 
 #[cfg(feature = "2d")]
-impl AsF32 for Rotation {
+impl ToF32Precision for Rotation {
     type F32 = Rot2;
     fn f32(&self) -> Self::F32 {
         Rot2::from_sin_cos(self.sin, self.cos)
@@ -258,14 +296,14 @@ impl AsF32 for Rotation {
 }
 
 #[cfg(feature = "3d")]
-impl AsF32 for Rotation {
+impl ToF32Precision for Rotation {
     type F32 = Quat;
     fn f32(&self) -> Self::F32 {
         self.0.f32()
     }
 }
 
-impl AsF32 for Rot2 {
+impl ToF32Precision for Rot2 {
     type F32 = Self;
     fn f32(&self) -> Self::F32 {
         *self
@@ -350,7 +388,7 @@ impl RecipOrZero for DVec3 {
 /// An extension trait for matrix types.
 pub trait MatExt {
     /// The scalar type of the matrix.
-    type Scalar;
+    type Real;
 
     /// Computes the inverse of `self` if `self` is not zero,
     /// and returns zero otherwise to avoid division by zero.
@@ -361,11 +399,11 @@ pub trait MatExt {
     ///
     /// For second-order tensors, this means that the diagonal elements
     /// are equal and the off-diagonal elements are zero.
-    fn is_isotropic(&self, epsilon: Self::Scalar) -> bool;
+    fn is_isotropic(&self, epsilon: Self::Real) -> bool;
 }
 
 impl MatExt for Mat2 {
-    type Scalar = f32;
+    type Real = f32;
 
     #[inline]
     fn inverse_or_zero(self) -> Self {
@@ -395,7 +433,7 @@ impl MatExt for Mat2 {
 }
 
 impl MatExt for DMat2 {
-    type Scalar = f64;
+    type Real = f64;
 
     #[inline]
     fn inverse_or_zero(self) -> Self {
@@ -425,7 +463,7 @@ impl MatExt for DMat2 {
 }
 
 impl MatExt for SymmetricMat2 {
-    type Scalar = f32;
+    type Real = f32;
 
     #[inline]
     fn inverse_or_zero(self) -> Self {
@@ -452,7 +490,7 @@ impl MatExt for SymmetricMat2 {
 }
 
 impl MatExt for SymmetricDMat2 {
-    type Scalar = f64;
+    type Real = f64;
 
     #[inline]
     fn inverse_or_zero(self) -> Self {
@@ -479,7 +517,7 @@ impl MatExt for SymmetricDMat2 {
 }
 
 impl MatExt for Mat3 {
-    type Scalar = f32;
+    type Real = f32;
 
     #[inline]
     fn inverse_or_zero(self) -> Self {
@@ -518,7 +556,7 @@ impl MatExt for Mat3 {
 }
 
 impl MatExt for DMat3 {
-    type Scalar = f64;
+    type Real = f64;
 
     #[inline]
     fn inverse_or_zero(self) -> Self {
@@ -557,7 +595,7 @@ impl MatExt for DMat3 {
 }
 
 impl MatExt for SymmetricMat3 {
-    type Scalar = f32;
+    type Real = f32;
 
     #[inline]
     fn inverse_or_zero(self) -> Self {
@@ -589,7 +627,7 @@ impl MatExt for SymmetricMat3 {
 }
 
 impl MatExt for SymmetricDMat3 {
-    type Scalar = f64;
+    type Real = f64;
 
     #[inline]
     fn inverse_or_zero(self) -> Self {
@@ -709,16 +747,13 @@ use crate::prelude::*;
 ))]
 pub(crate) fn make_pose(
     position: impl Into<Position>,
-    rotation: impl Into<RotF32>,
+    rotation: impl Into<Rot>,
 ) -> parry::math::Pose2 {
     let position: Position = position.into();
-    let rotation: RotF32 = rotation.into();
+    let rotation: Rot = rotation.into();
     parry::math::Pose2::from_parts(
         position.0,
-        parry::math::Rot2::from_cos_sin_unchecked(
-            rotation.cos.adjust_precision(),
-            rotation.sin.adjust_precision(),
-        ),
+        parry::math::Rot2::from_cos_sin_unchecked(rotation.cos.real(), rotation.sin.real()),
     )
 }
 
@@ -729,25 +764,11 @@ pub(crate) fn make_pose(
 ))]
 pub(crate) fn make_pose(
     position: impl Into<Position>,
-    rotation: impl Into<RotF32>,
+    rotation: impl Into<Rot>,
 ) -> parry::math::Pose3 {
     let position: Position = position.into();
-    let rotation: RotF32 = rotation.into();
-    parry::math::Pose3::from_parts(position.0, rotation.adjust_precision())
-}
-
-/// Computes the skew-symmetric matrix corresponding to the given vector.
-///
-/// ```text
-///                          [   0  -v.z  v.y ]
-/// skew_symmetric_mat3(v) = [  v.z   0  -v.x ]
-///                          [ -v.y  v.x   0  ]
-/// ```
-#[inline]
-#[must_use]
-#[cfg(feature = "3d")]
-pub fn skew_symmetric_mat3(v: Vector3) -> Matrix3 {
-    Matrix3::from_cols_array(&[0.0, v.z, -v.y, -v.z, 0.0, v.x, v.y, -v.x, 0.0])
+    let rotation: Rot = rotation.into();
+    parry::math::Pose3::from_parts(position.0, rotation.real())
 }
 
 /// Computes the rotation matrix of the orthonormal basis computed from the given axis.
@@ -755,7 +776,7 @@ pub fn skew_symmetric_mat3(v: Vector3) -> Matrix3 {
 /// The `axis` must be a unit vector.
 #[inline]
 #[must_use]
-pub fn orthonormal_basis_from_vec(axis: VectorF32) -> RotF32 {
+pub fn orthonormal_basis_from_vec(axis: Vector) -> Rot {
     #[cfg(feature = "2d")]
     {
         let normal = axis.perp();
@@ -773,7 +794,7 @@ pub fn orthonormal_basis_from_vec(axis: VectorF32) -> RotF32 {
 /// Each axis must be a unit vector.
 #[inline]
 #[must_use]
-pub fn orthonormal_basis(axes: [VectorF32; DIM]) -> RotF32 {
+pub fn orthonormal_basis(axes: [Vector; DIM]) -> Rot {
     #[cfg(feature = "2d")]
     {
         Rot2::from_sin_cos(axes[1].x, axes[0].x)
@@ -795,7 +816,7 @@ pub fn orthonormal_basis(axes: [VectorF32; DIM]) -> RotF32 {
 /// shape even after precision loss far from the origin.
 #[inline(always)]
 #[must_use]
-pub fn next_down_vector(vec: Vector) -> VectorF32 {
+pub fn next_down_vector(vec: RVector) -> Vector {
     #[cfg(feature = "f32")]
     {
         vec
@@ -805,7 +826,7 @@ pub fn next_down_vector(vec: Vector) -> VectorF32 {
         #[cfg(feature = "2d")]
         {
             let [x, y] = [vec.x as f32, vec.y as f32];
-            VectorF32::new(
+            Vector::new(
                 if x as f64 <= vec.x { x } else { x.next_down() },
                 if y as f64 <= vec.y { y } else { y.next_down() },
             )
@@ -813,7 +834,7 @@ pub fn next_down_vector(vec: Vector) -> VectorF32 {
         #[cfg(feature = "3d")]
         {
             let [x, y, z] = [vec.x as f32, vec.y as f32, vec.z as f32];
-            VectorF32::new(
+            Vector::new(
                 if x as f64 <= vec.x { x } else { x.next_down() },
                 if y as f64 <= vec.y { y } else { y.next_down() },
                 if z as f64 <= vec.z { z } else { z.next_down() },
@@ -832,7 +853,7 @@ pub fn next_down_vector(vec: Vector) -> VectorF32 {
 /// shape even after precision loss far from the origin.
 #[inline(always)]
 #[must_use]
-pub fn next_up_vector(vec: Vector) -> VectorF32 {
+pub fn next_up_vector(vec: RVector) -> Vector {
     #[cfg(feature = "f32")]
     {
         vec
@@ -842,7 +863,7 @@ pub fn next_up_vector(vec: Vector) -> VectorF32 {
         #[cfg(feature = "2d")]
         {
             let [x, y] = [vec.x as f32, vec.y as f32];
-            VectorF32::new(
+            Vector::new(
                 if x as f64 >= vec.x { x } else { x.next_up() },
                 if y as f64 >= vec.y { y } else { y.next_up() },
             )
@@ -850,7 +871,7 @@ pub fn next_up_vector(vec: Vector) -> VectorF32 {
         #[cfg(feature = "3d")]
         {
             let [x, y, z] = [vec.x as f32, vec.y as f32, vec.z as f32];
-            VectorF32::new(
+            Vector::new(
                 if x as f64 >= vec.x { x } else { x.next_up() },
                 if y as f64 >= vec.y { y } else { y.next_up() },
                 if z as f64 >= vec.z { z } else { z.next_up() },

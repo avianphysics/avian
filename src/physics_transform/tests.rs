@@ -218,11 +218,11 @@ fn test_init_transforms_basics() {
             let expected: Position = Position::new({
                 #[cfg(feature = "2d")]
                 {
-                    trans_4.translation.truncate().adjust_precision()
+                    trans_4.translation.truncate().real()
                 }
                 #[cfg(feature = "3d")]
                 {
-                    trans_4.translation.adjust_precision()
+                    trans_4.translation.real()
                 }
             });
             assert_eq!(pos, &expected);
@@ -238,11 +238,11 @@ fn test_init_transforms_basics() {
             let expected: Position = Position::new({
                 #[cfg(feature = "2d")]
                 {
-                    trans_5.translation.truncate().adjust_precision()
+                    trans_5.translation.truncate().real()
                 }
                 #[cfg(feature = "3d")]
                 {
-                    trans_5.translation.adjust_precision()
+                    trans_5.translation.real()
                 }
             });
             assert_eq!(pos, &expected);

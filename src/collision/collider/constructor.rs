@@ -1,6 +1,6 @@
 use core::iter::once;
 
-use crate::prelude::*;
+use crate::{math::Real, prelude::*};
 use bevy::{platform::collections::HashMap, prelude::*};
 use itertools::Either;
 
@@ -357,84 +357,76 @@ pub enum ColliderConstructor {
     /// Constructs a collider with [`Collider::capsule`].
     Capsule { radius: f32, height: f32 },
     /// Constructs a collider with [`Collider::capsule_endpoints`].
-    CapsuleEndpoints {
-        radius: f32,
-        a: VectorF32,
-        b: VectorF32,
-    },
+    CapsuleEndpoints { radius: f32, a: Vector, b: Vector },
     /// Constructs a collider with [`Collider::half_space`].
-    HalfSpace { outward_normal: VectorF32 },
+    HalfSpace { outward_normal: Vector },
     /// Constructs a collider with [`Collider::segment`].
-    Segment { a: VectorF32, b: VectorF32 },
+    Segment { a: Vector, b: Vector },
     /// Constructs a collider with [`Collider::triangle`].
-    Triangle {
-        a: VectorF32,
-        b: VectorF32,
-        c: VectorF32,
-    },
+    Triangle { a: Vector, b: Vector, c: Vector },
     /// Constructs a collider with [`Collider::regular_polygon`].
     #[cfg(feature = "2d")]
     RegularPolygon { circumradius: f32, sides: u32 },
     /// Constructs a collider with [`Collider::polyline`].
     Polyline {
-        vertices: Vec<Vector>,
+        vertices: Vec<RVector>,
         indices: Option<Vec<[u32; 2]>>,
     },
     /// Constructs a collider with [`Collider::trimesh`].
     Trimesh {
-        vertices: Vec<Vector>,
+        vertices: Vec<RVector>,
         indices: Vec<[u32; 3]>,
     },
     /// Constructs a collider with [`Collider::trimesh_with_config`].
     TrimeshWithConfig {
-        vertices: Vec<Vector>,
+        vertices: Vec<RVector>,
         indices: Vec<[u32; 3]>,
         flags: TrimeshFlags,
     },
     /// Constructs a collider with [`Collider::convex_decomposition`].
     #[cfg(feature = "2d")]
     ConvexDecomposition {
-        vertices: Vec<Vector>,
+        vertices: Vec<RVector>,
         indices: Vec<[u32; 2]>,
     },
     /// Constructs a collider with [`Collider::convex_decomposition`].
     #[cfg(feature = "3d")]
     ConvexDecomposition {
-        vertices: Vec<Vector>,
+        vertices: Vec<RVector>,
         indices: Vec<[u32; 3]>,
     },
     /// Constructs a collider with [`Collider::convex_decomposition_with_config`].
     #[cfg(feature = "2d")]
     ConvexDecompositionWithConfig {
-        vertices: Vec<Vector>,
+        vertices: Vec<RVector>,
         indices: Vec<[u32; 2]>,
         params: VhacdParameters,
     },
     /// Constructs a collider with [`Collider::convex_decomposition_with_config`].
     #[cfg(feature = "3d")]
     ConvexDecompositionWithConfig {
-        vertices: Vec<Vector>,
+        vertices: Vec<RVector>,
         indices: Vec<[u32; 3]>,
         params: VhacdParameters,
     },
     /// Constructs a collider with [`Collider::convex_hull`].
     #[cfg(feature = "2d")]
-    ConvexHull { points: Vec<Vector> },
+    ConvexHull { points: Vec<RVector> },
     /// Constructs a collider with [`Collider::convex_hull`].
     #[cfg(feature = "3d")]
-    ConvexHull { points: Vec<Vector> },
+    ConvexHull { points: Vec<RVector> },
     /// Constructs a collider with [`Collider::convex_polyline`].
     #[cfg(feature = "2d")]
-    ConvexPolyline { points: Vec<Vector> },
+    ConvexPolyline { points: Vec<RVector> },
     /// Constructs a collider with [`Collider::voxels`].
     Voxels {
-        voxel_size: VectorF32,
+        voxel_size: Vector,
         grid_coordinates: Vec<IVector>,
     },
     /// Constructs a collider with [`Collider::voxelized_polyline`].
     #[cfg(feature = "2d")]
     VoxelizedPolyline {
-        vertices: Vec<Vector>,
+        vertices: Vec<RVector>,
         indices: Vec<[u32; 2]>,
         voxel_size: f32,
         fill_mode: FillMode,
@@ -442,22 +434,19 @@ pub enum ColliderConstructor {
     /// Constructs a collider with [`Collider::voxelized_trimesh`].
     #[cfg(feature = "3d")]
     VoxelizedTrimesh {
-        vertices: Vec<Vector>,
+        vertices: Vec<RVector>,
         indices: Vec<[u32; 3]>,
         voxel_size: f32,
         fill_mode: FillMode,
     },
     /// Constructs a collider with [`Collider::heightfield`].
     #[cfg(feature = "2d")]
-    Heightfield {
-        heights: Vec<Scalar>,
-        scale: VectorF32,
-    },
+    Heightfield { heights: Vec<Real>, scale: Vector },
     /// Constructs a collider with [`Collider::heightfield`].
     #[cfg(feature = "3d")]
     Heightfield {
-        heights: Vec<Vec<Scalar>>,
-        scale: VectorF32,
+        heights: Vec<Vec<Real>>,
+        scale: Vector,
     },
     /// Constructs a collider with [`Collider::trimesh_from_mesh`].
     #[cfg(feature = "collider-from-mesh")]
@@ -532,7 +521,7 @@ impl ColliderConstructor {
                     Either::Left(Self::flatten_compound_constructors(nested).into_iter().map(
                         move |(nested_pos, nested_rot, nested_constructor)| {
                             (
-                                Position(pos.0 + rot.adjust_precision() * nested_pos.0),
+                                Position(pos.0 + rot.real() * nested_pos.0),
                                 rot * nested_rot,
                                 nested_constructor,
                             )

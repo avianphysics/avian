@@ -509,7 +509,7 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
             let overlap = collider1.enlarged_aabb.intersects(
                 &collider2
                     .enlarged_aabb
-                    .grow(VectorF32::splat(speculative_distance)),
+                    .grow(Vector::splat(speculative_distance)),
             );
 
             // Also check if the collision layers are still compatible and the contact pair is valid.

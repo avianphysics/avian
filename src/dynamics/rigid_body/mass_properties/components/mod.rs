@@ -912,11 +912,11 @@ impl From<AngularInertia> for AngularInertiaTensor {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, Component, Default, PartialEq)]
-pub struct CenterOfMass(pub VectorF32);
+pub struct CenterOfMass(pub Vector);
 
 impl CenterOfMass {
     /// A center of mass set at the local origin.
-    pub const ZERO: Self = Self(VectorF32::ZERO);
+    pub const ZERO: Self = Self(Vector::ZERO);
 
     /// Creates a new [`CenterOfMass`] at the given local position.
     #[inline]

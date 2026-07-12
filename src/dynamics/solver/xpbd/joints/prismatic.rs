@@ -19,11 +19,11 @@ use core::f32::consts::TAU;
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Component, Debug, PartialEq)]
 pub struct PrismaticJointSolverData {
-    pub(super) world_r1: VectorF32,
-    pub(super) world_r2: VectorF32,
-    pub(super) center_difference: VectorF32,
-    pub(super) free_axis1: VectorF32,
-    pub(super) total_position_lagrange: VectorF32,
+    pub(super) world_r1: Vector,
+    pub(super) world_r2: Vector,
+    pub(super) center_difference: Vector,
+    pub(super) free_axis1: Vector,
+    pub(super) total_position_lagrange: Vector,
     pub(super) angle_constraint: FixedAngleConstraintShared,
     /// Accumulated motor Lagrange multiplier for this frame.
     pub(super) total_motor_lagrange: f32,
@@ -34,18 +34,18 @@ pub struct PrismaticJointSolverData {
 
 impl XpbdConstraintSolverData for PrismaticJointSolverData {
     fn clear_lagrange_multipliers(&mut self) {
-        self.total_position_lagrange = VectorF32::ZERO;
+        self.total_position_lagrange = Vector::ZERO;
         self.angle_constraint.clear_lagrange_multipliers();
         // Save motor lagrange for warm starting before clearing.
         self.warm_start_motor_lagrange = self.total_motor_lagrange;
         self.total_motor_lagrange = 0.0;
     }
 
-    fn total_position_lagrange(&self) -> VectorF32 {
+    fn total_position_lagrange(&self) -> Vector {
         self.total_position_lagrange
     }
 
-    fn total_rotation_lagrange(&self) -> AngularVectorF32 {
+    fn total_rotation_lagrange(&self) -> AngularVector {
         self.angle_constraint.total_rotation_lagrange()
     }
 
@@ -172,7 +172,7 @@ impl PrismaticJoint {
         let world_r1 = body1.delta_rotation * solver_data.world_r1;
         let world_r2 = body2.delta_rotation * solver_data.world_r2;
 
-        let mut delta_x = VectorF32::ZERO;
+        let mut delta_x = Vector::ZERO;
 
         let axis1 = body1.delta_rotation * solver_data.free_axis1;
         if let Some(limits) = self.limits {

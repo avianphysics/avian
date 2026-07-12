@@ -14,7 +14,7 @@ use crate::{
         collider_transform::ColliderTransform,
     },
     dynamics::rigid_body::mass_properties::components::ComputedCenterOfMass,
-    math::AdjustPrecision,
+    math::ToRealPrecision,
     schedule::{PhysicsSchedule, PhysicsStepSystems},
 };
 
@@ -117,8 +117,7 @@ fn update_body_size_metrics<C: AnyCollider>(
             // Compute the sweep radius
             let ctx = ColliderContext::new(entity, &context);
             let point = com.0 - collider_transform.translation;
-            let distance_to_com =
-                collider.max_distance_to_point_with_context(point.adjust_precision(), ctx);
+            let distance_to_com = collider.max_distance_to_point_with_context(point.real(), ctx);
             sweep_radius = sweep_radius.max(distance_to_com);
         }
 

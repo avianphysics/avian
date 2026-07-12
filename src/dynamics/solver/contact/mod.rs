@@ -39,10 +39,10 @@ pub struct ContactConstraintPoint {
     pub tangent_part: Option<ContactTangentPart>,
 
     /// The world-space contact point relative to the center of mass of the first body.
-    pub anchor1: VectorF32,
+    pub anchor1: Vector,
 
     /// The world-space contact point relative to the center of mass of the second body.
-    pub anchor2: VectorF32,
+    pub anchor2: Vector,
 
     /// The pre-solve relative velocity of the bodies along the normal at the contact point.
     pub normal_speed: f32,
@@ -88,12 +88,12 @@ pub struct ContactConstraint {
     /// Defaults to zero. If set to a non-zero value, this can be used to simulate effects
     /// such as conveyor belts.
     #[cfg(feature = "3d")]
-    pub tangent_velocity: VectorF32,
+    pub tangent_velocity: Vector,
     /// The world-space contact normal shared by all points in the contact manifold.
-    pub normal: VectorF32,
+    pub normal: Vector,
     /// The first world-space tangent direction shared by all points in the contact manifold.
     #[cfg(feature = "3d")]
-    pub tangent1: VectorF32,
+    pub tangent1: Vector,
     /// The contact points in the manifold. Each point shares the same `normal`.
     // TODO: Use a `SmallVec`
     pub points: Vec<ContactConstraintPoint>,
@@ -134,7 +134,7 @@ impl ContactConstraint {
                 inertia2.effective_inv_angular_inertia(),
             ),
             Ordering::Greater => (
-                VectorF32::ZERO,
+                Vector::ZERO,
                 default(),
                 inertia2.effective_inv_mass(),
                 inertia2.effective_inv_angular_inertia(),
@@ -142,7 +142,7 @@ impl ContactConstraint {
             Ordering::Less => (
                 inertia1.effective_inv_mass(),
                 inertia1.effective_inv_angular_inertia(),
-                VectorF32::ZERO,
+                Vector::ZERO,
                 default(),
             ),
         };
@@ -409,10 +409,10 @@ impl ContactConstraint {
 
     /// Returns the tangent directions for the contact constraint.
     #[inline(always)]
-    pub fn tangent_directions(&self) -> [VectorF32; DIM - 1] {
+    pub fn tangent_directions(&self) -> [Vector; DIM - 1] {
         #[cfg(feature = "2d")]
         {
-            [VectorF32::new(self.normal.y, -self.normal.x)]
+            [Vector::new(self.normal.y, -self.normal.x)]
         }
         #[cfg(feature = "3d")]
         {
@@ -426,13 +426,13 @@ impl ContactConstraint {
 #[allow(unused_variables)]
 #[inline(always)]
 fn compute_tangent_directions(
-    normal: VectorF32,
-    velocity1: VectorF32,
-    velocity2: VectorF32,
-) -> [VectorF32; DIM - 1] {
+    normal: Vector,
+    velocity1: Vector,
+    velocity2: Vector,
+) -> [Vector; DIM - 1] {
     #[cfg(feature = "2d")]
     {
-        [VectorF32::new(normal.y, -normal.x)]
+        [Vector::new(normal.y, -normal.x)]
     }
     #[cfg(feature = "3d")]
     {

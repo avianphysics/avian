@@ -136,11 +136,11 @@ pub trait AnyCollider: Component<Mutability = Mutable> + ComputeMassProperties {
     /// ```
     #[cfg_attr(
         feature = "2d",
-        doc = "# use avian2d::{prelude::*, math::{RotF32, Vector}};"
+        doc = "# use avian2d::{prelude::*, math::{Rot, RVector}};"
     )]
     #[cfg_attr(
         feature = "3d",
-        doc = "# use avian3d::{prelude::*, math::{RotF32, Vector}};"
+        doc = "# use avian3d::{prelude::*, math::{Rot, RVector}};"
     )]
     /// # use bevy::prelude::*;
     /// # use bevy::ecs::system::{SystemParam, lifetimeless::{SRes, SQuery}};
@@ -175,8 +175,8 @@ pub trait AnyCollider: Component<Mutability = Mutable> + ComputeMassProperties {
     ///
     /// #   fn aabb_with_context(
     /// #       &self,
-    /// #       _: Vector,
-    /// #       _: impl Into<RotF32>,
+    /// #       _: RVector,
+    /// #       _: impl Into<Rot>,
     /// #       _: f32,
     /// #       _: ColliderContext<Self::Context>,
     /// #   ) -> ColliderAabb { unimplemented!() }
@@ -184,10 +184,10 @@ pub trait AnyCollider: Component<Mutability = Mutable> + ComputeMassProperties {
     ///     fn contact_manifolds_with_context(
     ///         &self,
     ///         other: &Self,
-    ///         position1: Vector,
-    ///         rotation1: impl Into<RotF32>,
-    ///         position2: Vector,
-    ///         rotation2: impl Into<RotF32>,
+    ///         position1: RVector,
+    ///         rotation1: impl Into<Rot>,
+    ///         position2: RVector,
+    ///         rotation2: impl Into<Rot>,
     ///         prediction_distance: f32,
     ///         manifolds: &mut Vec<ContactManifold>,
     ///         context: ColliderPairContext<Self::Context>,
@@ -212,8 +212,8 @@ pub trait AnyCollider: Component<Mutability = Mutable> + ComputeMassProperties {
     )]
     fn aabb_with_context(
         &self,
-        position: Vector,
-        rotation: impl Into<RotF32>,
+        position: RVector,
+        rotation: impl Into<Rot>,
         margin: f32,
         context: ColliderContext<Self::Context>,
     ) -> ColliderAabb;
@@ -229,10 +229,10 @@ pub trait AnyCollider: Component<Mutability = Mutable> + ComputeMassProperties {
     )]
     fn swept_aabb_with_context(
         &self,
-        start_position: Vector,
-        start_rotation: impl Into<RotF32>,
-        end_position: Vector,
-        end_rotation: impl Into<RotF32>,
+        start_position: RVector,
+        start_rotation: impl Into<Rot>,
+        end_position: RVector,
+        end_rotation: impl Into<Rot>,
         margin: f32,
         context: ColliderContext<Self::Context>,
     ) -> ColliderAabb {
@@ -249,10 +249,10 @@ pub trait AnyCollider: Component<Mutability = Mutable> + ComputeMassProperties {
     fn contact_manifolds_with_context(
         &self,
         other: &Self,
-        position1: Vector,
-        rotation1: impl Into<RotF32>,
-        position2: Vector,
-        rotation2: impl Into<RotF32>,
+        position1: RVector,
+        rotation1: impl Into<Rot>,
+        position2: RVector,
+        rotation2: impl Into<Rot>,
         prediction_distance: f32,
         manifolds: &mut Vec<ContactManifold>,
         context: ColliderPairContext<Self::Context>,
@@ -266,17 +266,17 @@ pub trait AnyCollider: Component<Mutability = Mutable> + ComputeMassProperties {
     ///
     /// [CCD]: crate::dynamics::ccd
     fn ccd_thickness_with_context(&self, context: ColliderContext<Self::Context>) -> f32 {
-        let aabb = self.aabb_with_context(Vector::ZERO, RotF32::IDENTITY, 0.0, context);
+        let aabb = self.aabb_with_context(RVector::ZERO, Rot::IDENTITY, 0.0, context);
         aabb.size().min_element() * 0.5
     }
 
     /// Returns the maximum distance from the collider to the given point.
     fn max_distance_to_point_with_context(
         &self,
-        point: Vector,
+        point: RVector,
         context: ColliderContext<Self::Context>,
     ) -> f32 {
-        let aabb = self.aabb_with_context(Vector::ZERO, RotF32::IDENTITY, 0.0, context);
+        let aabb = self.aabb_with_context(RVector::ZERO, Rot::IDENTITY, 0.0, context);
         point.distance(aabb.center()).f32() + aabb.size().length() * 0.5
     }
 
@@ -286,7 +286,7 @@ pub trait AnyCollider: Component<Mutability = Mutable> + ComputeMassProperties {
     fn bounding_radius_with_context(&self, context: ColliderContext<Self::Context>) -> f32 {
         // We don't have a bounding sphere method directly available here,
         // so for now we settle for this approximation for the default implementation.
-        let aabb = self.aabb_with_context(Vector::ZERO, RotF32::IDENTITY, 0.0, context.clone());
+        let aabb = self.aabb_with_context(RVector::ZERO, Rot::IDENTITY, 0.0, context.clone());
         aabb.size().length() * 0.5
     }
 }
@@ -298,7 +298,7 @@ pub trait SimpleCollider: AnyCollider<Context = ()> {
     /// with the given position and rotation, grown by the given margin.
     ///
     /// See [`AnyCollider::aabb_with_context`] for collider types with a non-empty [`AnyCollider::Context`].
-    fn aabb(&self, position: Vector, rotation: impl Into<RotF32>, margin: f32) -> ColliderAabb {
+    fn aabb(&self, position: RVector, rotation: impl Into<Rot>, margin: f32) -> ColliderAabb {
         self.aabb_with_context(position, rotation, margin, ColliderContext::NO_CONTEXT)
     }
 
@@ -309,10 +309,10 @@ pub trait SimpleCollider: AnyCollider<Context = ()> {
     /// See [`AnyCollider::swept_aabb_with_context`] for collider types with a non-empty [`AnyCollider::Context`].
     fn swept_aabb(
         &self,
-        start_position: Vector,
-        start_rotation: impl Into<RotF32>,
-        end_position: Vector,
-        end_rotation: impl Into<RotF32>,
+        start_position: RVector,
+        start_rotation: impl Into<Rot>,
+        end_position: RVector,
+        end_rotation: impl Into<Rot>,
         margin: f32,
     ) -> ColliderAabb {
         self.swept_aabb_with_context(
@@ -334,10 +334,10 @@ pub trait SimpleCollider: AnyCollider<Context = ()> {
     fn contact_manifolds(
         &self,
         other: &Self,
-        position1: Vector,
-        rotation1: impl Into<RotF32>,
-        position2: Vector,
-        rotation2: impl Into<RotF32>,
+        position1: RVector,
+        rotation1: impl Into<Rot>,
+        position2: RVector,
+        rotation2: impl Into<Rot>,
         prediction_distance: f32,
         manifolds: &mut Vec<ContactManifold>,
     ) {
@@ -365,7 +365,7 @@ pub trait SimpleCollider: AnyCollider<Context = ()> {
     }
 
     /// Returns the maximum distance from the collider to the given point.
-    fn max_distance_to_point(&self, point: Vector) -> f32 {
+    fn max_distance_to_point(&self, point: RVector) -> f32 {
         self.max_distance_to_point_with_context(point, ColliderContext::NO_CONTEXT)
     }
 
@@ -382,19 +382,19 @@ impl<C: AnyCollider<Context = ()>> SimpleCollider for C {}
 /// A trait for colliders that support scaling.
 pub trait ScalableCollider: AnyCollider {
     /// Returns the global scaling factor of the collider.
-    fn scale(&self) -> VectorF32;
+    fn scale(&self) -> Vector;
 
     /// Sets the global scaling factor of the collider.
     ///
     /// If the scaling factor is not uniform and the resulting scaled shape
     /// can not be represented exactly, the given `detail` is used for an approximation.
-    fn set_scale(&mut self, scale: VectorF32, detail: u32);
+    fn set_scale(&mut self, scale: Vector, detail: u32);
 
     /// Scales the collider by the given scaling factor.
     ///
     /// If the scaling factor is not uniform and the resulting scaled shape
     /// can not be represented exactly, the given `detail` is used for an approximation.
-    fn scale_by(&mut self, factor: VectorF32, detail: u32) {
+    fn scale_by(&mut self, factor: Vector, detail: u32) {
         self.set_scale(factor * self.scale(), detail)
     }
 }
@@ -511,9 +511,9 @@ pub struct Sensor;
 #[reflect(Debug, Component, PartialEq)]
 pub struct ColliderAabb {
     /// The minimum point of the AABB.
-    pub min: VectorF32,
+    pub min: Vector,
     /// The maximum point of the AABB.
-    pub max: VectorF32,
+    pub max: Vector,
 }
 
 impl Default for ColliderAabb {
@@ -525,20 +525,20 @@ impl Default for ColliderAabb {
 impl ColliderAabb {
     /// An invalid [`ColliderAabb`] that represents an empty AABB.
     pub const INVALID: Self = Self {
-        min: VectorF32::INFINITY,
-        max: VectorF32::NEG_INFINITY,
+        min: Vector::INFINITY,
+        max: Vector::NEG_INFINITY,
     };
 
     /// Creates a new [`ColliderAabb`] from the given `center` and `half_size`.
-    pub fn new(center: Vector, half_size: VectorF32) -> Self {
+    pub fn new(center: RVector, half_size: Vector) -> Self {
         Self {
-            min: next_down_vector(center - half_size.adjust_precision()),
-            max: next_up_vector(center + half_size.adjust_precision()),
+            min: next_down_vector(center - half_size.real()),
+            max: next_up_vector(center + half_size.real()),
         }
     }
 
     /// Creates a new [`ColliderAabb`] from its minimum and maximum points.
-    pub fn from_min_max(min: Vector, max: Vector) -> Self {
+    pub fn from_min_max(min: RVector, max: RVector) -> Self {
         Self {
             min: next_down_vector(min),
             max: next_up_vector(max),
@@ -560,21 +560,19 @@ impl ColliderAabb {
 
     /// Computes the center of the AABB,
     #[inline(always)]
-    pub fn center(self) -> Vector {
-        self.min
-            .adjust_precision()
-            .midpoint(self.max.adjust_precision())
+    pub fn center(self) -> RVector {
+        self.min.real().midpoint(self.max.real())
     }
 
     /// Computes the size of the AABB.
     #[inline(always)]
-    pub fn size(self) -> VectorF32 {
+    pub fn size(self) -> Vector {
         self.max - self.min
     }
 
     /// Computes the half-size of the AABB.
     #[inline(always)]
-    pub fn half_size(self) -> VectorF32 {
+    pub fn half_size(self) -> Vector {
         self.size() * 0.5
     }
 
@@ -589,7 +587,7 @@ impl ColliderAabb {
 
     /// Increases the size of the bounding volume in each direction by the given amount.
     #[inline(always)]
-    pub fn grow(&self, amount: VectorF32) -> Self {
+    pub fn grow(&self, amount: Vector) -> Self {
         let b = Self {
             min: self.min - amount,
             max: self.max + amount,
@@ -600,7 +598,7 @@ impl ColliderAabb {
 
     /// Decreases the size of the bounding volume in each direction by the given amount.
     #[inline(always)]
-    pub fn shrink(&self, amount: VectorF32) -> Self {
+    pub fn shrink(&self, amount: Vector) -> Self {
         let b = Self {
             min: self.min + amount,
             max: self.max - amount,
@@ -680,7 +678,7 @@ impl EnlargedAabb {
             return false;
         }
 
-        let margin = VectorF32::splat(margin);
+        let margin = Vector::splat(margin);
         self.0.min = aabb.min - margin;
         self.0.max = aabb.max + margin;
 

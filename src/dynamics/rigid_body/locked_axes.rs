@@ -227,7 +227,7 @@ impl LockedAxes {
     }
 
     /// Sets translational axes of the given vector to zero based on the [`LockedAxes`] configuration.
-    pub(crate) fn apply_to_vec(&self, mut vector: VectorF32) -> VectorF32 {
+    pub(crate) fn apply_to_vec(&self, mut vector: Vector) -> Vector {
         if self.is_translation_x_locked() {
             vector.x = 0.0;
         }
@@ -292,7 +292,7 @@ impl LockedAxes {
 
     /// Sets axes of the given angular velocity to zero based on the [`LockedAxes`] configuration.
     #[cfg(feature = "3d")]
-    pub(crate) fn apply_to_angular_velocity(&self, mut angular_velocity: VectorF32) -> VectorF32 {
+    pub(crate) fn apply_to_angular_velocity(&self, mut angular_velocity: Vector) -> Vector {
         if self.is_rotation_x_locked() {
             angular_velocity.x = 0.0;
         }

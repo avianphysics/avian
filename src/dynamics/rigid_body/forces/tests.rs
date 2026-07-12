@@ -26,7 +26,7 @@ fn create_app() -> App {
     app.insert_resource(SubstepCount(20));
 
     // Use a gravity of 9.81 m/s².
-    app.insert_resource(Gravity(VectorF32::NEG_Y * 9.81));
+    app.insert_resource(Gravity(Vector::NEG_Y * 9.81));
 
     // Configure the timestep.
     app.insert_resource(Time::<Fixed>::from_duration(Duration::from_secs_f32(
@@ -58,7 +58,7 @@ fn apply_force() {
     // Continuously apply a force of 9.81 N in the positive Y direction.
     app.add_systems(FixedUpdate, |mut query: Query<Forces>| {
         for mut forces in query.iter_mut() {
-            forces.apply_force(VectorF32::Y * 9.81);
+            forces.apply_force(Vector::Y * 9.81);
         }
     });
 
@@ -103,7 +103,7 @@ fn apply_local_force() {
     // Continuously apply a force of 9.81 N in the local positive Y direction.
     app.add_systems(FixedUpdate, |mut query: Query<Forces>| {
         for mut forces in query.iter_mut() {
-            forces.apply_local_force(VectorF32::Y * 9.81);
+            forces.apply_local_force(Vector::Y * 9.81);
         }
     });
 
@@ -156,7 +156,7 @@ fn apply_linear_impulse() {
     // Continuously apply a linear impulse of 9.81 kg⋅m/s multiplied by the timestep in the positive Y direction.
     app.add_systems(FixedUpdate, |mut query: Query<Forces>| {
         for mut forces in query.iter_mut() {
-            forces.apply_linear_impulse(VectorF32::Y * 9.81 * TIMESTEP);
+            forces.apply_linear_impulse(Vector::Y * 9.81 * TIMESTEP);
         }
     });
 
@@ -201,7 +201,7 @@ fn apply_local_linear_impulse() {
     // Continuously apply a linear impulse of 9.81 m/s² multiplied by the timestep in the local positive Y direction.
     app.add_systems(FixedUpdate, |mut query: Query<Forces>| {
         for mut forces in query.iter_mut() {
-            forces.apply_local_linear_impulse(VectorF32::Y * 9.81 * TIMESTEP);
+            forces.apply_local_linear_impulse(Vector::Y * 9.81 * TIMESTEP);
         }
     });
 
@@ -254,7 +254,7 @@ fn apply_linear_acceleration() {
     // Continuously apply a linear acceleration of 9.81 m/s² in the positive Y direction.
     app.add_systems(FixedUpdate, |mut query: Query<Forces>| {
         for mut forces in query.iter_mut() {
-            forces.apply_linear_acceleration(VectorF32::Y * 9.81);
+            forces.apply_linear_acceleration(Vector::Y * 9.81);
         }
     });
 
@@ -299,7 +299,7 @@ fn apply_local_linear_acceleration() {
     // Continuously apply a linear acceleration of 9.81 m/s² in the local positive Y direction.
     app.add_systems(FixedUpdate, |mut query: Query<Forces>| {
         for mut forces in query.iter_mut() {
-            forces.apply_local_linear_acceleration(VectorF32::Y * 9.81);
+            forces.apply_local_linear_acceleration(Vector::Y * 9.81);
         }
     });
 
@@ -354,7 +354,7 @@ fn apply_torque() {
             #[cfg(feature = "2d")]
             forces.apply_torque(1.5);
             #[cfg(feature = "3d")]
-            forces.apply_torque(VectorF32::Z * 1.5);
+            forces.apply_torque(Vector::Z * 1.5);
         }
     });
 
@@ -402,7 +402,7 @@ fn apply_local_torque() {
     // Continuously apply a torque of 1.5 N⋅m about the local Z axis.
     app.add_systems(FixedUpdate, |mut query: Query<Forces>| {
         for mut forces in query.iter_mut() {
-            forces.apply_local_torque(VectorF32::Z * 1.5);
+            forces.apply_local_torque(Vector::Z * 1.5);
         }
     });
 
@@ -457,7 +457,7 @@ fn apply_angular_impulse() {
             #[cfg(feature = "2d")]
             forces.apply_angular_impulse(1.5 * TIMESTEP);
             #[cfg(feature = "3d")]
-            forces.apply_angular_impulse(VectorF32::Z * 1.5 * TIMESTEP);
+            forces.apply_angular_impulse(Vector::Z * 1.5 * TIMESTEP);
         }
     });
 
@@ -505,7 +505,7 @@ fn apply_local_angular_impulse() {
     // Continuously apply an angular impulse of 1.5 kg⋅m²/s multiplied by the timestep about the local Z axis.
     app.add_systems(FixedUpdate, |mut query: Query<Forces>| {
         for mut forces in query.iter_mut() {
-            forces.apply_local_angular_impulse(VectorF32::Z * 1.5 * TIMESTEP);
+            forces.apply_local_angular_impulse(Vector::Z * 1.5 * TIMESTEP);
         }
     });
 
@@ -560,7 +560,7 @@ fn apply_angular_acceleration() {
             #[cfg(feature = "2d")]
             forces.apply_angular_acceleration(1.5);
             #[cfg(feature = "3d")]
-            forces.apply_angular_acceleration(VectorF32::Z * 1.5);
+            forces.apply_angular_acceleration(Vector::Z * 1.5);
         }
     });
 
@@ -608,7 +608,7 @@ fn apply_local_angular_acceleration() {
     // Continuously apply a torque of 1.5 rad/s² about the local Z axis.
     app.add_systems(FixedUpdate, |mut query: Query<Forces>| {
         for mut forces in query.iter_mut() {
-            forces.apply_local_angular_acceleration(VectorF32::Z * 1.5);
+            forces.apply_local_angular_acceleration(Vector::Z * 1.5);
         }
     });
 

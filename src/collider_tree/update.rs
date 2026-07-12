@@ -97,8 +97,7 @@ impl<C: AnyCollider> Plugin for ColliderTreeUpdatePlugin<C> {
                     // Update tight-fitting AABB.
                     let context = ColliderContext::new(trigger.entity, &*collider_context);
                     let growth = contact_tolerance + collision_margin;
-                    *aabb = collider
-                        .aabb_with_context(pos.0, *rot, growth, context);
+                    *aabb = collider.aabb_with_context(pos.0, *rot, growth, context);
 
                     // Compute and cache the size-relative AABB margin for the collider.
                     let context = ColliderContext::new(trigger.entity, &*collider_context);
@@ -764,8 +763,7 @@ fn update_solver_body_aabbs<C: AnyCollider>(
                             .fast_renormalize();
 
                     collider
-                        .swept_aabb_with_context(pos.0, *rot, pos.0 + movement.adjust_precision(), end_rot,growth, context)
-                        
+                        .swept_aabb_with_context(pos.0, *rot, pos.0 + movement.real(), end_rot,growth, context)
                 } else {
                     collider
                         .aabb_with_context(pos.0, *rot, growth, context)

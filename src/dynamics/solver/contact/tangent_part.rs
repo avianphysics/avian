@@ -35,12 +35,12 @@ pub struct ContactTangentPart {
 impl ContactTangentPart {
     /// Generates a new [`ContactTangentPart`].
     pub fn generate(
-        effective_inverse_mass_sum: VectorF32,
+        effective_inverse_mass_sum: Vector,
         inverse_angular_inertia1: &SymmetricTensor,
         inverse_angular_inertia2: &SymmetricTensor,
-        r1: VectorF32,
-        r2: VectorF32,
-        tangents: [VectorF32; DIM - 1],
+        r1: Vector,
+        r2: Vector,
+        tangents: [Vector; DIM - 1],
         warm_start_impulse: Option<TangentImpulse>,
     ) -> Self {
         let i1 = inverse_angular_inertia1;
@@ -156,14 +156,14 @@ impl ContactTangentPart {
     /// the incremental impulse to apply to each body.
     pub fn solve_impulse(
         &mut self,
-        tangent_directions: [VectorF32; DIM - 1],
-        relative_velocity: VectorF32,
+        tangent_directions: [Vector; DIM - 1],
+        relative_velocity: Vector,
         // The desired relative velocity along the contact surface, used to simulate things like conveyor belts.
         #[cfg(feature = "2d")] surface_speed: f32,
-        #[cfg(feature = "3d")] surface_velocity: VectorF32,
+        #[cfg(feature = "3d")] surface_velocity: Vector,
         friction: f32,
         normal_impulse: f32,
-    ) -> VectorF32 {
+    ) -> Vector {
         // Compute the maximum bound for the friction impulse.
         //
         // According to the Coulomb friction law:
@@ -228,7 +228,7 @@ impl ContactTangentPart {
 
             // TODO: Could this be handled earlier reliably?
             if !effective_mass.is_finite() {
-                return VectorF32::ZERO;
+                return Vector::ZERO;
             }
 
             // Compute the incremental tangent impoulse.

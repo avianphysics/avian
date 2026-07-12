@@ -238,12 +238,10 @@ impl ContactPair {
     ///
     /// To get the corresponding force, divide the impulse by the time step.
     #[inline]
-    pub fn total_normal_impulse(&self) -> VectorF32 {
-        self.manifolds
-            .iter()
-            .fold(VectorF32::ZERO, |acc, manifold| {
-                acc + manifold.normal * manifold.total_normal_impulse()
-            })
+    pub fn total_normal_impulse(&self) -> Vector {
+        self.manifolds.iter().fold(Vector::ZERO, |acc, manifold| {
+            acc + manifold.normal * manifold.total_normal_impulse()
+        })
     }
 
     /// Computes the sum of the magnitudes of all impulses applied along contact normals between the contact pair.
@@ -264,9 +262,9 @@ impl ContactPair {
     ///
     /// To get the corresponding force, divide the impulse by the time step.
     #[inline]
-    pub fn max_normal_impulse(&self) -> VectorF32 {
+    pub fn max_normal_impulse(&self) -> Vector {
         let mut magnitude: f32 = f32::MIN;
-        let mut normal = VectorF32::ZERO;
+        let mut normal = Vector::ZERO;
 
         for manifold in &self.manifolds {
             let impulse = manifold.max_normal_impulse();
@@ -366,7 +364,7 @@ pub struct ContactManifold {
     /// The unit contact normal in world space, pointing from the first shape to the second.
     ///
     /// The same normal is shared by all `points` in a manifold.
-    pub normal: VectorF32,
+    pub normal: Vector,
     /// The effective coefficient of dynamic [friction](Friction) used for the contact surface.
     pub friction: f32,
     /// The effective coefficient of [restitution](Restitution) used for the contact surface.
@@ -386,7 +384,7 @@ pub struct ContactManifold {
     /// Defaults to zero. If set to a non-zero value, this can be used to simulate effects
     /// such as conveyor belts.
     #[cfg(feature = "3d")]
-    pub tangent_velocity: VectorF32,
+    pub tangent_velocity: Vector,
 }
 
 impl ContactManifold {
@@ -395,7 +393,7 @@ impl ContactManifold {
     ///
     /// `index` represents the index of the manifold in the collision.
     #[inline]
-    pub fn new(points: impl IntoIterator<Item = ContactPoint>, normal: VectorF32) -> Self {
+    pub fn new(points: impl IntoIterator<Item = ContactPoint>, normal: Vector) -> Self {
         Self {
             #[cfg(feature = "2d")]
             points: arrayvec::ArrayVec::from_iter(points),
@@ -407,7 +405,7 @@ impl ContactManifold {
             #[cfg(feature = "2d")]
             tangent_speed: 0.0,
             #[cfg(feature = "3d")]
-            tangent_velocity: VectorF32::ZERO,
+            tangent_velocity: Vector::ZERO,
         }
     }
 
@@ -497,7 +495,7 @@ impl ContactManifold {
         const MIN_DISTANCE_SQUARED: f32 = 1e-6;
 
         // Project the contact points onto the contact normal and compute the squared penetration depths.
-        let (projected, penetrations_squared): (Vec<VectorF32>, Vec<f32>) = self
+        let (projected, penetrations_squared): (Vec<Vector>, Vec<f32>) = self
             .points
             .iter()
             .map(|point| {
@@ -610,16 +608,16 @@ impl ContactManifold {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct ContactPoint {
     /// The world-space contact point on the first shape relative to the center of mass.
-    pub anchor1: VectorF32,
+    pub anchor1: Vector,
     /// The world-space contact point on the second shape relative to the center of mass.
-    pub anchor2: VectorF32,
+    pub anchor2: Vector,
     /// The contact point in world space.
     ///
     /// This is the midpoint between the closest points on the surfaces of the two shapes.
     ///
     /// Note that because the contact point is expressed in world space,
     /// it is subject to precision loss at large coordinates.
-    pub point: Vector,
+    pub point: RVector,
     /// The penetration depth.
     ///
     /// Can be negative if the objects are separated and [speculative collision] is enabled.
@@ -674,12 +672,7 @@ impl ContactPoint {
     ///
     /// [Feature IDs](PackedFeatureId) can be specified for the contact points using [`with_feature_ids`](Self::with_feature_ids).
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        anchor1: VectorF32,
-        anchor2: VectorF32,
-        world_point: Vector,
-        penetration: f32,
-    ) -> Self {
+    pub fn new(anchor1: Vector, anchor2: Vector, world_point: RVector, penetration: f32) -> Self {
         Self {
             anchor1,
             anchor2,
@@ -743,13 +736,13 @@ impl ContactPoint {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct SingleContact {
     /// The contact point on the first shape in local space.
-    pub local_point1: VectorF32,
+    pub local_point1: Vector,
     /// The contact point on the second shape in local space.
-    pub local_point2: VectorF32,
+    pub local_point2: Vector,
     /// The contact normal expressed in the local space of the first shape.
-    pub local_normal1: VectorF32,
+    pub local_normal1: Vector,
     /// The contact normal expressed in the local space of the second shape.
-    pub local_normal2: VectorF32,
+    pub local_normal2: Vector,
     /// Penetration depth.
     pub penetration: f32,
 }
@@ -758,10 +751,10 @@ impl SingleContact {
     /// Creates a new [`SingleContact`]. The contact points and normals should be given in local space.
     #[inline]
     pub fn new(
-        local_point1: VectorF32,
-        local_point2: VectorF32,
-        local_normal1: VectorF32,
-        local_normal2: VectorF32,
+        local_point1: Vector,
+        local_point2: Vector,
+        local_normal1: Vector,
+        local_normal2: Vector,
         penetration: f32,
     ) -> Self {
         Self {
@@ -776,26 +769,26 @@ impl SingleContact {
     /// Returns the global contact point on the first shape,
     /// transforming the local point by the given position and rotation.
     #[inline]
-    pub fn global_point1(&self, position: Vector, rotation: RotF32) -> Vector {
-        position + (rotation * self.local_point1).adjust_precision()
+    pub fn global_point1(&self, position: RVector, rotation: Rot) -> RVector {
+        position + (rotation * self.local_point1).real()
     }
 
     /// Returns the global contact point on the second shape,
     /// transforming the local point by the given position and rotation.
     #[inline]
-    pub fn global_point2(&self, position: Vector, rotation: RotF32) -> Vector {
-        position + (rotation * self.local_point2).adjust_precision()
+    pub fn global_point2(&self, position: RVector, rotation: Rot) -> RVector {
+        position + (rotation * self.local_point2).real()
     }
 
     /// Returns the world-space contact normal pointing from the first shape to the second.
     #[inline]
-    pub fn global_normal1(&self, rotation: RotF32) -> VectorF32 {
+    pub fn global_normal1(&self, rotation: Rot) -> Vector {
         rotation * self.local_normal1
     }
 
     /// Returns the world-space contact normal pointing from the second shape to the first.
     #[inline]
-    pub fn global_normal2(&self, rotation: RotF32) -> VectorF32 {
+    pub fn global_normal2(&self, rotation: Rot) -> Vector {
         rotation * self.local_normal2
     }
 

@@ -18,7 +18,7 @@
 use core::time::Duration;
 
 use crate::{
-    math::{PI, Vector},
+    math::{PI, RVector},
     prelude::*,
 };
 use bevy::{prelude::*, time::TimeUpdateStrategy};
@@ -73,7 +73,7 @@ fn cross_platform_determinism_2d() {
 #[derive(Pod, Zeroable, Clone, Copy)]
 #[repr(C)]
 struct Isometry {
-    translation: Vector,
+    translation: RVector,
     rotation: f32,
 }
 

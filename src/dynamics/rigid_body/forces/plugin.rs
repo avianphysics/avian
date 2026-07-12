@@ -242,10 +242,10 @@ fn apply_local_acceleration(
 
 fn clear_accumulated_local_acceleration(mut query: Query<&mut AccumulatedLocalAcceleration>) {
     query.iter_mut().for_each(|mut acceleration| {
-        acceleration.linear = VectorF32::ZERO;
+        acceleration.linear = Vector::ZERO;
         #[cfg(feature = "3d")]
         {
-            acceleration.angular = AngularVectorF32::ZERO;
+            acceleration.angular = AngularVector::ZERO;
         }
     });
 }

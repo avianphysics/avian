@@ -19,17 +19,17 @@ use bevy::prelude::*;
 #[reflect(Debug, Component, PartialEq)]
 pub struct ColliderTransform {
     /// The translation of a collider in a rigid body's frame of reference.
-    pub translation: VectorF32,
+    pub translation: Vector,
     /// The rotation of a collider in a rigid body's frame of reference.
-    pub rotation: RotF32,
+    pub rotation: Rot,
     /// The global scale of a collider. Equivalent to the `GlobalTransform` scale.
-    pub scale: VectorF32,
+    pub scale: Vector,
 }
 
 impl ColliderTransform {
     /// Transforms a given point by applying the translation, rotation and scale of
     /// this [`ColliderTransform`].
-    pub fn transform_point(&self, mut point: VectorF32) -> VectorF32 {
+    pub fn transform_point(&self, mut point: Vector) -> Vector {
         point *= self.scale;
         point = self.rotation * point;
         point += self.translation;
@@ -40,9 +40,9 @@ impl ColliderTransform {
 impl Default for ColliderTransform {
     fn default() -> Self {
         Self {
-            translation: VectorF32::ZERO,
-            rotation: RotF32::default(),
-            scale: VectorF32::ONE,
+            translation: Vector::ZERO,
+            rotation: Rot::default(),
+            scale: Vector::ONE,
         }
     }
 }
@@ -55,7 +55,7 @@ impl From<Transform> for ColliderTransform {
             #[cfg(feature = "3d")]
             translation: value.translation,
             #[cfg(feature = "2d")]
-            rotation: RotF32::radians(value.rotation.to_euler(EulerRot::XYZ).2),
+            rotation: Rot::radians(value.rotation.to_euler(EulerRot::XYZ).2),
             #[cfg(feature = "3d")]
             rotation: value.rotation,
             #[cfg(feature = "2d")]

@@ -690,7 +690,7 @@ fn solve_continuous(
         };
 
         let mode1 = ccd.mode;
-        let body_com_world = fast.position.0 + (fast.rotation * fast.com.0).adjust_precision();
+        let body_com_world = fast.position.0 + (fast.rotation * fast.com.0).real();
 
         // Determine which trees to sweep against based on the body's filter.
         let trees_to_query: [Option<&ColliderTree>; 4] = [
@@ -733,8 +733,8 @@ fn solve_continuous(
             // Compute the collider's end-of-frame pose to build the swept AABB.
             let collider_rot2 = (body.delta_rotation * collider_rot1.f32()).fast_renormalize();
             let collider_pos2 = body_com_world
-                + body.delta_position.adjust_precision()
-                + body.delta_rotation.adjust_precision() * (collider_pos1.0 - body_com_world);
+                + body.delta_position.real()
+                + body.delta_rotation.real() * (collider_pos1.0 - body_com_world);
             let swept_aabb = collider1.swept_aabb(
                 collider_pos1.0,
                 collider_rot1.f32(),
@@ -790,8 +790,8 @@ fn solve_continuous(
                     let (motion2, mode2) = match proxy.body {
                         Some(body2_entity) => match ccd_query.get(body2_entity) {
                             Ok(body2) => {
-                                let target_com_world = body2.position.0
-                                    + (body2.rotation * body2.com.0).adjust_precision();
+                                let target_com_world =
+                                    body2.position.0 + (body2.rotation * body2.com.0).real();
                                 (
                                     collider_sweep_motion(
                                         target_pos.0,
@@ -925,9 +925,9 @@ fn solve_continuous(
 /// mass, so this supports colliders offset from the body origin (i.e. child colliders).
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 fn collider_sweep_motion(
-    collider_pos: Vector,
-    collider_rot: RotF32,
-    com_world: Vector,
+    collider_pos: RVector,
+    collider_rot: Rot,
+    com_world: RVector,
     solver_body: &SolverBody,
     inv_dt: f32,
 ) -> NonlinearRigidMotion {
@@ -940,15 +940,15 @@ fn collider_sweep_motion(
     let local_center = collider_rot.inverse() * (com_world - collider_pos).f32();
     NonlinearRigidMotion::new(
         make_pose(collider_pos, collider_rot),
-        local_center.adjust_precision(),
-        lin_vel.adjust_precision(),
-        ang_vel.adjust_precision(),
+        local_center.real(),
+        lin_vel.real(),
+        ang_vel.real(),
     )
 }
 
 /// A constant (non-moving) [`NonlinearRigidMotion`] at the given pose, for static targets.
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
-fn static_motion(pos: Vector, rot: RotF32) -> NonlinearRigidMotion {
+fn static_motion(pos: RVector, rot: Rot) -> NonlinearRigidMotion {
     NonlinearRigidMotion::constant_position(make_pose(pos, rot))
 }
 
@@ -977,7 +977,7 @@ fn compute_ccd_toi(
             motion2.linvel,
             shape2.as_ref(),
             ShapeCastOptions {
-                max_time_of_impact: min_toi.adjust_precision(),
+                max_time_of_impact: min_toi.real(),
                 stop_at_penetration: false,
                 ..default()
             },
@@ -990,11 +990,11 @@ fn compute_ccd_toi(
             motion2,
             shape2.as_ref(),
             0.0,
-            min_toi.adjust_precision(),
+            min_toi.real(),
             false,
         )
         .ok()??
     };
 
-    (hit.time_of_impact > 0.0 && hit.time_of_impact < min_toi.adjust_precision()).then_some(hit)
+    (hit.time_of_impact > 0.0 && hit.time_of_impact < min_toi.real()).then_some(hit)
 }

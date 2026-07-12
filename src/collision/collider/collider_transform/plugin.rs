@@ -81,7 +81,7 @@ pub(crate) fn update_child_collider_position(
             continue;
         };
 
-        position.0 = rb_pos.0 + (rb_rot * collider_transform.translation).adjust_precision();
+        position.0 = rb_pos.0 + (rb_rot * collider_transform.translation).real();
         #[cfg(feature = "2d")]
         {
             *rotation = (Rot2::from(*rb_rot) * collider_transform.rotation).into();

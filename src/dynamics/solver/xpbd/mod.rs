@@ -55,11 +55,11 @@
 //! ```
 #![cfg_attr(
     feature = "2d",
-    doc = "# use avian2d::{dynamics::{joints::EntityConstraint, solver::{solver_body::{SolverBody, SolverBodyInertia}, xpbd::{XpbdConstraint, XpbdConstraintSolverData}}}, math::VectorF32, prelude::*};"
+    doc = "# use avian2d::{dynamics::{joints::EntityConstraint, solver::{solver_body::{SolverBody, SolverBodyInertia}, xpbd::{XpbdConstraint, XpbdConstraintSolverData}}}, math::Vector, prelude::*};"
 )]
 #![cfg_attr(
     feature = "3d",
-    doc = "# use avian3d::{dynamics::{joints::EntityConstraint, solver::{solver_body::{SolverBody, SolverBodyInertia}, xpbd::{XpbdConstraint, XpbdConstraintSolverData}}}, math::VectorF32, prelude::*};"
+    doc = "# use avian3d::{dynamics::{joints::EntityConstraint, solver::{solver_body::{SolverBody, SolverBodyInertia}, xpbd::{XpbdConstraint, XpbdConstraintSolverData}}}, math::Vector, prelude::*};"
 )]
 //! # use bevy::{ecs::entity::{EntityMapper, MapEntities}, prelude::*};
 //! #
@@ -71,15 +71,15 @@
 //! // Store additional internal solver data for the constraint.
 //! struct CustomConstraintSolverData {
 //!     // Accumulated Lagrange multipliers for the `JointForces` component.
-//!     total_lagrange: VectorF32,
+//!     total_lagrange: Vector,
 //! }
 //!
 //! impl XpbdConstraintSolverData for CustomConstraintSolverData {
 //!     fn clear_lagrange_multipliers(&mut self) {
-//!         self.total_lagrange = VectorF32::ZERO;
+//!         self.total_lagrange = Vector::ZERO;
 //!     }
 //!
-//!     fn total_position_lagrange(&self) -> VectorF32 {
+//!     fn total_position_lagrange(&self) -> Vector {
 //!         self.total_lagrange
 //!     }
 //! }
@@ -302,13 +302,13 @@ pub trait XpbdConstraintSolverData {
     fn clear_lagrange_multipliers(&mut self) {}
 
     /// Returns the total Lagrange multiplier update applied to satisfy the position constraint.
-    fn total_position_lagrange(&self) -> VectorF32 {
-        VectorF32::ZERO
+    fn total_position_lagrange(&self) -> Vector {
+        Vector::ZERO
     }
 
     /// Returns the total Lagrange multiplier update applied to satisfy the rotation constraint.
-    fn total_rotation_lagrange(&self) -> AngularVectorF32 {
-        AngularVectorF32::default()
+    fn total_rotation_lagrange(&self) -> AngularVector {
+        AngularVector::default()
     }
 
     /// Returns the total Lagrange multiplier accumulated by the motor, if any.
@@ -389,7 +389,7 @@ pub trait XpbdConstraint<const ENTITY_COUNT: usize> {
 pub fn compute_lagrange_update_with_gradients(
     lagrange: f32,
     c: f32,
-    gradients: &[VectorF32],
+    gradients: &[Vector],
     inverse_masses: &[f32],
     compliance: f32,
     dt: f32,

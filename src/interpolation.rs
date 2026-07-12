@@ -301,11 +301,11 @@ impl Plugin for PhysicsInterpolationPlugin {
 
 /// The previous linear velocity of an entity indicating its movement speed and direction during the previous frame.
 #[derive(Component, Default, Deref, DerefMut)]
-struct PreviousLinearVelocity(VectorF32);
+struct PreviousLinearVelocity(Vector);
 
 /// The previous angular velocity of an entity indicating its rotation speed during the previous frame.
 #[derive(Component, Default, Deref, DerefMut)]
-struct PreviousAngularVelocity(AngularVectorF32);
+struct PreviousAngularVelocity(AngularVector);
 
 #[derive(QueryData)]
 struct LinVelSource;

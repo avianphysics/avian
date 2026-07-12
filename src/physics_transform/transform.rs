@@ -2,7 +2,7 @@
 
 #![allow(clippy::unnecessary_cast)]
 
-use crate::{physics_transform::PhysicsTransformConfig, prelude::*};
+use crate::{math::Real, physics_transform::PhysicsTransformConfig, prelude::*};
 use bevy::{
     ecs::{lifecycle::HookContext, world::DeferredWorld},
     prelude::*,
@@ -41,47 +41,44 @@ use derive_more::From;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, Component, Default, PartialEq)]
-pub struct Position(pub Vector);
+pub struct Position(pub RVector);
 
 impl Position {
     /// A placeholder position. This is an invalid position and should *not*
     /// be used to an actually position entities in the world, but can be used
     /// to indicate that a position has not yet been initialized.
-    pub const PLACEHOLDER: Self = Self(Vector::MAX);
+    pub const PLACEHOLDER: Self = Self(RVector::MAX);
 
     /// Creates a [`Position`] component with the given global `position`.
-    pub fn new(position: Vector) -> Self {
+    pub fn new(position: RVector) -> Self {
         Self(position)
     }
 
     /// Creates a [`Position`] component with the global position `(x, y)`.
     #[cfg(feature = "2d")]
-    pub fn from_xy(x: Scalar, y: Scalar) -> Self {
-        Self(Vector::new(x, y))
+    pub fn from_xy(x: Real, y: Real) -> Self {
+        Self(RVector::new(x, y))
     }
 
     /// Creates a [`Position`] component with the global position `(x, y, z)`.
     #[cfg(feature = "3d")]
-    pub fn from_xyz(x: Scalar, y: Scalar, z: Scalar) -> Self {
-        Self(Vector::new(x, y, z))
+    pub fn from_xyz(x: Real, y: Real, z: Real) -> Self {
+        Self(RVector::new(x, y, z))
     }
 }
 
 impl From<GlobalTransform> for Position {
     #[cfg(feature = "2d")]
     fn from(value: GlobalTransform) -> Self {
-        Self::from_xy(
-            value.translation().x.adjust_precision(),
-            value.translation().y.adjust_precision(),
-        )
+        Self::from_xy(value.translation().x.real(), value.translation().y.real())
     }
 
     #[cfg(feature = "3d")]
     fn from(value: GlobalTransform) -> Self {
         Self::from_xyz(
-            value.translation().x.adjust_precision(),
-            value.translation().y.adjust_precision(),
-            value.translation().z.adjust_precision(),
+            value.translation().x.real(),
+            value.translation().y.real(),
+            value.translation().z.real(),
         )
     }
 }
@@ -89,18 +86,15 @@ impl From<GlobalTransform> for Position {
 impl From<&GlobalTransform> for Position {
     #[cfg(feature = "2d")]
     fn from(value: &GlobalTransform) -> Self {
-        Self::from_xy(
-            value.translation().x.adjust_precision(),
-            value.translation().y.adjust_precision(),
-        )
+        Self::from_xy(value.translation().x.real(), value.translation().y.real())
     }
 
     #[cfg(feature = "3d")]
     fn from(value: &GlobalTransform) -> Self {
         Self::from_xyz(
-            value.translation().x.adjust_precision(),
-            value.translation().y.adjust_precision(),
-            value.translation().z.adjust_precision(),
+            value.translation().x.real(),
+            value.translation().y.real(),
+            value.translation().z.real(),
         )
     }
 }
@@ -108,7 +102,7 @@ impl From<&GlobalTransform> for Position {
 impl Ease for Position {
     fn interpolating_curve_unbounded(start: Self, end: Self) -> impl Curve<Self> {
         FunctionCurve::new(Interval::UNIT, move |t| {
-            Position(Vector::lerp(start.0, end.0, t as Scalar))
+            Position(RVector::lerp(start.0, end.0, t as Real))
         })
     }
 }
@@ -118,14 +112,14 @@ impl Ease for Position {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, Component, Default, PartialEq)]
-pub struct PreSolveDeltaPosition(pub VectorF32);
+pub struct PreSolveDeltaPosition(pub Vector);
 
 /// The rotation accumulated before the XPBD position solve.
 #[derive(Reflect, Clone, Copy, Component, Debug, Default, Deref, DerefMut, PartialEq, From)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, Component, Default, PartialEq)]
-pub struct PreSolveDeltaRotation(pub RotF32);
+pub struct PreSolveDeltaRotation(pub Rot);
 
 /// The global counterclockwise physics rotation of a [rigid body](RigidBody)
 /// or a [collider](Collider) in radians.
@@ -901,10 +895,10 @@ impl core::ops::Mul<Dir> for Rotation {
     }
 }
 
-impl core::ops::Mul<VectorF32> for &Rotation {
-    type Output = VectorF32;
+impl core::ops::Mul<Vector> for &Rotation {
+    type Output = Vector;
 
-    fn mul(self, vector: VectorF32) -> Self::Output {
+    fn mul(self, vector: Vector) -> Self::Output {
         *self * vector
     }
 }
@@ -917,10 +911,10 @@ impl core::ops::Mul<Dir> for &Rotation {
     }
 }
 
-impl core::ops::Mul<VectorF32> for &mut Rotation {
-    type Output = VectorF32;
+impl core::ops::Mul<Vector> for &mut Rotation {
+    type Output = Vector;
 
-    fn mul(self, vector: VectorF32) -> Self::Output {
+    fn mul(self, vector: Vector) -> Self::Output {
         *self * vector
     }
 }
@@ -933,10 +927,10 @@ impl core::ops::Mul<Dir> for &mut Rotation {
     }
 }
 
-impl core::ops::Mul<&VectorF32> for Rotation {
-    type Output = VectorF32;
+impl core::ops::Mul<&Vector> for Rotation {
+    type Output = Vector;
 
-    fn mul(self, vector: &VectorF32) -> Self::Output {
+    fn mul(self, vector: &Vector) -> Self::Output {
         self * *vector
     }
 }
@@ -949,10 +943,10 @@ impl core::ops::Mul<&Dir> for Rotation {
     }
 }
 
-impl core::ops::Mul<&mut VectorF32> for Rotation {
-    type Output = VectorF32;
+impl core::ops::Mul<&mut Vector> for Rotation {
+    type Output = Vector;
 
-    fn mul(self, vector: &mut VectorF32) -> Self::Output {
+    fn mul(self, vector: &mut Vector) -> Self::Output {
         self * *vector
     }
 }
@@ -965,10 +959,10 @@ impl core::ops::Mul<&mut Dir> for Rotation {
     }
 }
 
-impl core::ops::Mul<&VectorF32> for &Rotation {
-    type Output = VectorF32;
+impl core::ops::Mul<&Vector> for &Rotation {
+    type Output = Vector;
 
-    fn mul(self, vector: &VectorF32) -> Self::Output {
+    fn mul(self, vector: &Vector) -> Self::Output {
         *self * *vector
     }
 }
@@ -981,10 +975,10 @@ impl core::ops::Mul<&Dir> for &Rotation {
     }
 }
 
-impl core::ops::Mul<&VectorF32> for &mut Rotation {
-    type Output = VectorF32;
+impl core::ops::Mul<&Vector> for &mut Rotation {
+    type Output = Vector;
 
-    fn mul(self, vector: &VectorF32) -> Self::Output {
+    fn mul(self, vector: &Vector) -> Self::Output {
         *self * *vector
     }
 }
@@ -997,10 +991,10 @@ impl core::ops::Mul<&Dir> for &mut Rotation {
     }
 }
 
-impl core::ops::Mul<&mut VectorF32> for &Rotation {
-    type Output = VectorF32;
+impl core::ops::Mul<&mut Vector> for &Rotation {
+    type Output = Vector;
 
-    fn mul(self, vector: &mut VectorF32) -> Self::Output {
+    fn mul(self, vector: &mut Vector) -> Self::Output {
         *self * *vector
     }
 }
@@ -1013,10 +1007,10 @@ impl core::ops::Mul<&mut Dir> for &Rotation {
     }
 }
 
-impl core::ops::Mul<&mut VectorF32> for &mut Rotation {
-    type Output = VectorF32;
+impl core::ops::Mul<&mut Vector> for &mut Rotation {
+    type Output = Vector;
 
-    fn mul(self, vector: &mut VectorF32) -> Self::Output {
+    fn mul(self, vector: &mut Vector) -> Self::Output {
         *self * *vector
     }
 }
@@ -1097,7 +1091,7 @@ pub(crate) fn init_physics_transform(world: &mut DeferredWorld, ctx: &HookContex
         .map_or((default(), true), |r| (*r, *r == Rotation::PLACEHOLDER));
 
     if is_pos_placeholder {
-        position.0 = Vector::ZERO;
+        position.0 = RVector::ZERO;
     }
     if is_rot_placeholder {
         rotation = Rotation::IDENTITY;
@@ -1193,7 +1187,7 @@ pub(crate) fn init_physics_transform(world: &mut DeferredWorld, ctx: &HookContex
 
     if !config.transform_to_position {
         if is_pos_placeholder && let Some(mut position) = world.get_mut::<Position>(ctx.entity) {
-            position.0 = Vector::ZERO;
+            position.0 = RVector::ZERO;
         }
         if is_rot_placeholder && let Some(mut rotation) = world.get_mut::<Rotation>(ctx.entity) {
             *rotation = Rotation::IDENTITY;
@@ -1208,18 +1202,18 @@ pub(crate) fn init_physics_transform(world: &mut DeferredWorld, ctx: &HookContex
                 global_transform.to_scale_rotation_translation();
             #[cfg(feature = "2d")]
             {
-                position.0 = global_translation.truncate().adjust_precision();
+                position.0 = global_translation.truncate().real();
                 rotation = Rotation::from(global_rotation);
             }
             #[cfg(feature = "3d")]
             {
-                position.0 = global_translation.adjust_precision();
+                position.0 = global_translation.real();
                 rotation.0 = global_rotation;
             }
         } else {
             // No transform was set. Set the computed `position` and `rotation` to default values.
             if is_pos_placeholder {
-                position.0 = Vector::ZERO;
+                position.0 = RVector::ZERO;
             }
             if is_rot_placeholder {
                 rotation = Rotation::IDENTITY;

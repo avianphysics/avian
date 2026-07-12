@@ -117,7 +117,7 @@ impl SphericalJoint {
     ///
     /// This configures the [`JointAnchor`] of each [`JointFrame`].
     #[inline]
-    pub const fn with_anchor(mut self, anchor: Vector) -> Self {
+    pub const fn with_anchor(mut self, anchor: RVector) -> Self {
         self.frame1.anchor = JointAnchor::FromGlobal(anchor);
         self.frame2.anchor = JointAnchor::FromGlobal(anchor);
         self
@@ -145,7 +145,7 @@ impl SphericalJoint {
     ///
     /// This configures the [`JointBasis`] of each [`JointFrame`].
     #[inline]
-    pub fn with_basis(mut self, basis: impl Into<RotF32>) -> Self {
+    pub fn with_basis(mut self, basis: impl Into<Rot>) -> Self {
         let basis = basis.into();
         self.frame1.basis = JointBasis::FromGlobal(basis);
         self.frame2.basis = JointBasis::FromGlobal(basis);
@@ -156,7 +156,7 @@ impl SphericalJoint {
     ///
     /// This configures the [`JointBasis`] of the first [`JointFrame`].
     #[inline]
-    pub fn with_local_basis1(mut self, basis: impl Into<RotF32>) -> Self {
+    pub fn with_local_basis1(mut self, basis: impl Into<Rot>) -> Self {
         self.frame1.basis = JointBasis::Local(basis.into());
         self
     }
@@ -165,7 +165,7 @@ impl SphericalJoint {
     ///
     /// This configures the [`JointBasis`] of the second [`JointFrame`].
     #[inline]
-    pub fn with_local_basis2(mut self, basis: impl Into<RotF32>) -> Self {
+    pub fn with_local_basis2(mut self, basis: impl Into<Rot>) -> Self {
         self.frame2.basis = JointBasis::Local(basis.into());
         self
     }
@@ -221,7 +221,7 @@ impl SphericalJoint {
     /// If the [`JointBasis`] is set to [`FromGlobal`](JointBasis::FromGlobal),
     /// and the local basis has not yet been computed, this will return `None`.
     #[inline]
-    pub const fn local_basis1(&self) -> Option<RotF32> {
+    pub const fn local_basis1(&self) -> Option<Rot> {
         match self.frame1.basis {
             JointBasis::Local(basis) => Some(basis),
             _ => None,
@@ -233,7 +233,7 @@ impl SphericalJoint {
     /// If the [`JointBasis`] is set to [`FromGlobal`](JointBasis::FromGlobal),
     /// and the local basis has not yet been computed, this will return `None`.
     #[inline]
-    pub const fn local_basis2(&self) -> Option<RotF32> {
+    pub const fn local_basis2(&self) -> Option<Rot> {
         match self.frame2.basis {
             JointBasis::Local(basis) => Some(basis),
             _ => None,
@@ -369,7 +369,7 @@ impl DebugRenderConstraint<2> for SphericalJoint {
 
     fn debug_render(
         &self,
-        positions: [Vector; 2],
+        positions: [RVector; 2],
         rotations: [Rotation; 2],
         _context: &mut Self::Context,
         gizmos: &mut Gizmos<PhysicsGizmos>,
@@ -385,8 +385,8 @@ impl DebugRenderConstraint<2> for SphericalJoint {
             return;
         };
 
-        let anchor1 = pos1 + (rot1 * local_anchor1).adjust_precision();
-        let anchor2 = pos2 + (rot2 * local_anchor2).adjust_precision();
+        let anchor1 = pos1 + (rot1 * local_anchor1).real();
+        let anchor2 = pos2 + (rot2 * local_anchor2).real();
 
         if let Some(anchor_color) = config.joint_anchor_color {
             gizmos.draw_line(pos1, anchor1, anchor_color);

@@ -14,21 +14,21 @@ use bevy::prelude::*;
 #[reflect(Debug, PartialEq)]
 pub struct PointConstraintShared {
     /// The world-space anchor point relative to the center of mass of the first body.
-    pub world_r1: VectorF32,
+    pub world_r1: Vector,
     /// The world-space anchor point relative to the center of mass of the second body.
-    pub world_r2: VectorF32,
+    pub world_r2: Vector,
     /// The difference in center of mass positions between the two bodies.
-    pub center_difference: VectorF32,
+    pub center_difference: Vector,
     /// The total Lagrange multiplier across the whole time step.
-    pub total_lagrange: VectorF32,
+    pub total_lagrange: Vector,
 }
 
 impl XpbdConstraintSolverData for PointConstraintShared {
     fn clear_lagrange_multipliers(&mut self) {
-        self.total_lagrange = VectorF32::ZERO;
+        self.total_lagrange = Vector::ZERO;
     }
 
-    fn total_position_lagrange(&self) -> VectorF32 {
+    fn total_position_lagrange(&self) -> Vector {
         self.total_lagrange
     }
 }
@@ -38,8 +38,8 @@ impl PointConstraintShared {
     pub fn prepare(
         &mut self,
         bodies: [&RigidBodyQueryReadOnlyItem; 2],
-        local_anchor1: VectorF32,
-        local_anchor2: VectorF32,
+        local_anchor1: Vector,
+        local_anchor2: Vector,
     ) {
         let [body1, body2] = bodies;
 

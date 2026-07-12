@@ -13,9 +13,9 @@ pub trait PositionConstraint {
         body2: &mut SolverBody,
         inertia1: &SolverBodyInertia,
         inertia2: &SolverBodyInertia,
-        impulse: VectorF32,
-        r1: VectorF32,
-        r2: VectorF32,
+        impulse: Vector,
+        r1: Vector,
+        r2: Vector,
     ) {
         let inv_mass1 = inertia1.effective_inv_mass();
         let inv_mass2 = inertia2.effective_inv_mass();
@@ -94,7 +94,7 @@ pub trait PositionConstraint {
     }
 
     /// Computes the force acting along the constraint using the equation f = lambda * n / h^2
-    fn compute_force(&self, lagrange: f32, direction: VectorF32, dt: f32) -> VectorF32 {
+    fn compute_force(&self, lagrange: f32, direction: Vector, dt: f32) -> Vector {
         lagrange * direction / dt.powi(2)
     }
 }

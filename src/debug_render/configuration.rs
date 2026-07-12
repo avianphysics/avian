@@ -51,7 +51,7 @@ use bevy::{color::palettes::css::*, prelude::*};
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 pub struct PhysicsGizmos {
     /// The lengths of the axes drawn for an entity at the center of mass.
-    pub axis_lengths: Option<VectorF32>,
+    pub axis_lengths: Option<Vector>,
     /// The color of the [AABBs](ColliderAabb). If `None`, the AABBs will not be rendered.
     pub aabb_color: Option<Color>,
     /// The color of the [collider](Collider) wireframes. If `None`, the colliders will not be rendered.
@@ -104,7 +104,7 @@ pub struct PhysicsGizmos {
 impl Default for PhysicsGizmos {
     fn default() -> Self {
         Self {
-            axis_lengths: Some(VectorF32::splat(0.5)),
+            axis_lengths: Some(Vector::splat(0.5)),
             aabb_color: None,
             collider_color: Some(ORANGE.into()),
             sleeping_color_multiplier: Some([1.0, 1.0, 0.4, 1.0]),
@@ -151,7 +151,7 @@ impl PhysicsGizmos {
     /// Creates a [`PhysicsGizmos`] configuration with all rendering options enabled.
     pub fn all() -> Self {
         Self {
-            axis_lengths: Some(VectorF32::splat(0.5)),
+            axis_lengths: Some(Vector::splat(0.5)),
             aabb_color: Some(Color::srgb(0.8, 0.8, 0.8)),
             collider_color: Some(ORANGE.into()),
             sleeping_color_multiplier: Some([1.0, 1.0, 0.4, 1.0]),
@@ -206,7 +206,7 @@ impl PhysicsGizmos {
 
     /// Creates a [`PhysicsGizmos`] configuration with the given lengths for the axes
     /// that are drawn for the entity at the center of mass. Other debug rendering options will be disabled.
-    pub fn axes(axis_lengths: VectorF32) -> Self {
+    pub fn axes(axis_lengths: Vector) -> Self {
         Self {
             axis_lengths: Some(axis_lengths),
             ..Self::none()
@@ -260,7 +260,7 @@ impl PhysicsGizmos {
     }
 
     /// Sets the lengths of the axes drawn for the entity.
-    pub fn with_axes(mut self, axis_lengths: VectorF32) -> Self {
+    pub fn with_axes(mut self, axis_lengths: Vector) -> Self {
         self.axis_lengths = Some(axis_lengths);
         self
     }
@@ -438,7 +438,7 @@ impl PhysicsGizmos {
 #[reflect(Component, PartialEq)]
 pub struct DebugRender {
     /// The lengths of the axes drawn for the entity at the center of mass.
-    pub axis_lengths: Option<VectorF32>,
+    pub axis_lengths: Option<Vector>,
     /// The color of the [AABB](ColliderAabb). If `None`, the AABB will not be rendered.
     pub aabb_color: Option<Color>,
     /// The color of the [collider](Collider) wireframe. If `None`, the collider will not be rendered.
@@ -454,9 +454,9 @@ impl Default for DebugRender {
     fn default() -> Self {
         Self {
             #[cfg(feature = "2d")]
-            axis_lengths: Some(VectorF32::new(5.0, 5.0)),
+            axis_lengths: Some(Vector::new(5.0, 5.0)),
             #[cfg(feature = "3d")]
-            axis_lengths: Some(VectorF32::new(0.5, 0.5, 0.5)),
+            axis_lengths: Some(Vector::new(0.5, 0.5, 0.5)),
             aabb_color: None,
             collider_color: Some(ORANGE.into()),
             sleeping_color_multiplier: Some([1.0, 1.0, 0.4, 1.0]),
@@ -470,9 +470,9 @@ impl DebugRender {
     pub fn all() -> Self {
         Self {
             #[cfg(feature = "2d")]
-            axis_lengths: Some(VectorF32::new(5.0, 5.0)),
+            axis_lengths: Some(Vector::new(5.0, 5.0)),
             #[cfg(feature = "3d")]
-            axis_lengths: Some(VectorF32::new(0.5, 0.5, 0.5)),
+            axis_lengths: Some(Vector::new(0.5, 0.5, 0.5)),
             aabb_color: Some(Color::srgb(0.8, 0.8, 0.8)),
             collider_color: Some(ORANGE.into()),
             sleeping_color_multiplier: Some([1.0, 1.0, 0.4, 1.0]),
@@ -493,7 +493,7 @@ impl DebugRender {
 
     /// Creates a [`DebugRender`] configuration with the given lengths for the axes
     /// that are drawn for the entity at the center of mass. Other debug rendering options will be disabled.
-    pub fn axes(axis_lengths: VectorF32) -> Self {
+    pub fn axes(axis_lengths: Vector) -> Self {
         Self {
             axis_lengths: Some(axis_lengths),
             ..Self::none()
@@ -519,7 +519,7 @@ impl DebugRender {
     }
 
     /// Sets the lengths of the axes drawn for the entity at the center of mass.
-    pub fn with_axes(mut self, axis_lengths: VectorF32) -> Self {
+    pub fn with_axes(mut self, axis_lengths: Vector) -> Self {
         self.axis_lengths = Some(axis_lengths);
         self
     }

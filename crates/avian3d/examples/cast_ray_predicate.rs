@@ -151,7 +151,7 @@ fn raycast(
     let filter = SpatialQueryFilter::default();
 
     if let Some(ray_hit_data) = query.cast_ray_predicate(
-        origin.adjust_precision(),
+        origin.real(),
         direction,
         f32::MAX,
         true,

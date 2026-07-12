@@ -74,7 +74,7 @@ fn setup(mut commands: Commands) {
         .id();
 
     // Revolute joint with velocity-controlled motor
-    // Default anchors are at body centers (Vector::ZERO)
+    // Default anchors are at body centers
     commands.spawn((
         RevoluteJoint::new(velocity_anchor, velocity_wheel).with_motor(AngularMotor {
             target_velocity: 5.0,
@@ -155,7 +155,7 @@ fn setup(mut commands: Commands) {
             piston_base_sprite,
             Transform::from_xyz(200.0, 0.0, 0.0),
             RigidBody::Static,
-            Position(Vector::new(200.0, 0.0)),
+            Position(RVector::new(200.0, 0.0)),
         ))
         .id();
 
@@ -168,7 +168,7 @@ fn setup(mut commands: Commands) {
             Mass(1.0),
             AngularInertia(1.0),
             SleepingDisabled, // Prevent sleeping so motor can always control it
-            Position(Vector::new(200.0, 0.0)),
+            Position(RVector::new(200.0, 0.0)),
         ))
         .id();
 

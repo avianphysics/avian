@@ -84,19 +84,19 @@ pub struct ShapeCaster {
     /// of the shape caster entity or its parent.
     ///
     /// To get the global origin, use the `global_origin` method.
-    pub origin: Vector,
+    pub origin: RVector,
 
     /// The global origin of the shape.
-    global_origin: Vector,
+    global_origin: RVector,
 
     /// The local rotation of the shape being cast relative to the [`Rotation`]
     /// of the shape caster entity or its parent. Expressed in radians.
     ///
     /// To get the global shape rotation, use the `global_shape_rotation` method.
-    pub shape_rotation: RotF32,
+    pub shape_rotation: Rot,
 
     /// The global rotation of the shape.
-    global_shape_rotation: RotF32,
+    global_shape_rotation: Rot,
 
     /// The local direction of the shapecast relative to the [`Rotation`] of the shape caster entity or its parent.
     ///
@@ -150,10 +150,10 @@ impl Default for ShapeCaster {
             shape: Collider::circle(0.0),
             #[cfg(feature = "3d")]
             shape: Collider::sphere(0.0),
-            origin: Vector::ZERO,
-            global_origin: Vector::ZERO,
-            shape_rotation: RotF32::IDENTITY,
-            global_shape_rotation: RotF32::IDENTITY,
+            origin: RVector::ZERO,
+            global_origin: RVector::ZERO,
+            shape_rotation: Rot::IDENTITY,
+            global_shape_rotation: Rot::IDENTITY,
             direction: Dir::X,
             global_direction: Dir::X,
             max_hits: 1,
@@ -171,8 +171,8 @@ impl ShapeCaster {
     /// Creates a new [`ShapeCaster`] with a given shape, origin, shape rotation and direction.
     pub fn new(
         shape: impl Into<Collider>,
-        origin: Vector,
-        shape_rotation: impl Into<RotF32>,
+        origin: RVector,
+        shape_rotation: impl Into<Rot>,
         direction: Dir,
     ) -> Self {
         Self {
@@ -185,7 +185,7 @@ impl ShapeCaster {
     }
 
     /// Sets the ray origin.
-    pub fn with_origin(mut self, origin: Vector) -> Self {
+    pub fn with_origin(mut self, origin: RVector) -> Self {
         self.origin = origin;
         self
     }
@@ -265,12 +265,12 @@ impl ShapeCaster {
     }
 
     /// Returns the global origin of the ray.
-    pub fn global_origin(&self) -> Vector {
+    pub fn global_origin(&self) -> RVector {
         self.global_origin
     }
 
     /// Returns the global rotation of the shape.
-    pub fn global_shape_rotation(&self) -> RotF32 {
+    pub fn global_shape_rotation(&self) -> Rot {
         self.global_shape_rotation
     }
 
@@ -280,12 +280,12 @@ impl ShapeCaster {
     }
 
     /// Sets the global origin of the ray.
-    pub(crate) fn set_global_origin(&mut self, global_origin: Vector) {
+    pub(crate) fn set_global_origin(&mut self, global_origin: RVector) {
         self.global_origin = global_origin;
     }
 
     /// Sets the global rotation of the shape.
-    pub(crate) fn set_global_shape_rotation(&mut self, global_rotation: impl Into<RotF32>) {
+    pub(crate) fn set_global_shape_rotation(&mut self, global_rotation: impl Into<Rot>) {
         self.global_shape_rotation = global_rotation.into();
     }
 
@@ -540,19 +540,19 @@ pub struct ShapeHitData {
     ///
     /// If the shapes are penetrating or the target distance is greater than zero,
     /// this will be different from `point2`.
-    pub point1: Vector,
+    pub point1: RVector,
 
     /// The closest point on the shape that was cast, expressed in world space.
     ///
     /// If the shapes are penetrating or the target distance is greater than zero,
     /// this will be different from `point1`.
-    pub point2: Vector,
+    pub point2: RVector,
 
     /// The outward surface normal on the hit shape at `point1`, expressed in world space.
-    pub normal1: VectorF32,
+    pub normal1: Vector,
 
     /// The outward surface normal on the cast shape at `point2`, expressed in world space.
-    pub normal2: VectorF32,
+    pub normal2: Vector,
 }
 
 impl MapEntities for ShapeHitData {

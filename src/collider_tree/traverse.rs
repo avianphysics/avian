@@ -6,7 +6,7 @@ use crate::{
         obvhs_ext::{Sweep, SweepHit},
         obvhs_ray,
     },
-    math::{AsF32, Dir, Ray, Vector, VectorF32},
+    math::{ToF32Precision, Dir, RVector, Ray, Vector},
 };
 
 impl ColliderTree {
@@ -161,7 +161,7 @@ impl ColliderTree {
     #[inline(always)]
     pub fn squared_distance_traverse_closest<F: FnMut(ProxyId) -> f32>(
         &self,
-        point: Vector,
+        point: RVector,
         max_distance_squared: f32,
         mut eval: F,
     ) -> Option<(ProxyId, f32)> {
@@ -195,7 +195,7 @@ impl ColliderTree {
     /// - `eval`: A function that takes a proxy ID and is called for each potential intersection found during traversal.
     ///   Return false to halt traversal early.
     #[inline(always)]
-    pub fn point_traverse<F: FnMut(ProxyId) -> bool>(&self, point: VectorF32, mut eval: F) {
+    pub fn point_traverse<F: FnMut(ProxyId) -> bool>(&self, point: Vector, mut eval: F) {
         #[cfg(feature = "2d")]
         let point = point.extend(0.0).to_array().into();
         #[cfg(feature = "3d")]

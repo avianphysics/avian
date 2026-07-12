@@ -110,7 +110,7 @@ impl SpatialQuery<'_, '_> {
     /// - [`SpatialQuery::ray_hits_callback`]
     pub fn cast_ray(
         &self,
-        origin: Vector,
+        origin: RVector,
         direction: Dir,
         max_distance: f32,
         solid: bool,
@@ -175,7 +175,7 @@ impl SpatialQuery<'_, '_> {
     /// - [`SpatialQuery::ray_hits_callback`]
     pub fn cast_ray_predicate(
         &self,
-        origin: Vector,
+        origin: RVector,
         direction: Dir,
         mut max_distance: f32,
         solid: bool,
@@ -276,7 +276,7 @@ impl SpatialQuery<'_, '_> {
     /// - [`SpatialQuery::ray_hits_callback`]
     pub fn ray_hits(
         &self,
-        origin: Vector,
+        origin: RVector,
         direction: Dir,
         max_distance: f32,
         max_hits: u32,
@@ -353,7 +353,7 @@ impl SpatialQuery<'_, '_> {
     /// - [`SpatialQuery::ray_hits`]
     pub fn ray_hits_callback(
         &self,
-        origin: Vector,
+        origin: RVector,
         direction: Dir,
         max_distance: f32,
         solid: bool,
@@ -446,8 +446,8 @@ impl SpatialQuery<'_, '_> {
     pub fn cast_shape(
         &self,
         shape: &Collider,
-        origin: Vector,
-        shape_rotation: impl Into<RotF32>,
+        origin: RVector,
+        shape_rotation: impl Into<Rot>,
         direction: Dir,
         config: &ShapeCastConfig,
         filter: &SpatialQueryFilter,
@@ -523,8 +523,8 @@ impl SpatialQuery<'_, '_> {
     pub fn cast_shape_predicate(
         &self,
         shape: &Collider,
-        origin: Vector,
-        shape_rotation: impl Into<RotF32>,
+        origin: RVector,
+        shape_rotation: impl Into<Rot>,
         direction: Dir,
         config: &ShapeCastConfig,
         filter: &SpatialQueryFilter,
@@ -560,14 +560,14 @@ impl SpatialQuery<'_, '_> {
 
                     let Ok(Some(hit)) = parry::query::cast_shapes(
                         &pose1,
-                        Vector::ZERO,
+                        RVector::ZERO,
                         collider.shape_scaled().as_ref(),
                         &pose2,
-                        direction.adjust_precision(),
+                        direction.real(),
                         shape.shape_scaled().as_ref(),
                         ShapeCastOptions {
-                            max_time_of_impact: config.max_distance.adjust_precision(),
-                            target_distance: config.target_distance.adjust_precision(),
+                            max_time_of_impact: config.max_distance.real(),
+                            target_distance: config.target_distance.real(),
                             stop_at_penetration: !config.ignore_origin_penetration,
                             compute_impact_geometry_on_penetration: config
                                 .compute_contact_on_penetration,
@@ -582,7 +582,7 @@ impl SpatialQuery<'_, '_> {
                         closest_hit = Some(ShapeHitData {
                             entity: proxy.collider,
                             point1: pose1 * hit.witness1,
-                            point2: pose2 * hit.witness2 + (direction * toi).adjust_precision(),
+                            point2: pose2 * hit.witness2 + (direction * toi).real(),
                             normal1: (pose1.rotation * hit.normal1).f32(),
                             normal2: (pose2.rotation * hit.normal2).f32(),
                             distance: toi,
@@ -653,8 +653,8 @@ impl SpatialQuery<'_, '_> {
     pub fn shape_hits(
         &self,
         shape: &Collider,
-        origin: Vector,
-        shape_rotation: impl Into<RotF32>,
+        origin: RVector,
+        shape_rotation: impl Into<Rot>,
         direction: Dir,
         max_hits: u32,
         config: &ShapeCastConfig,
@@ -742,8 +742,8 @@ impl SpatialQuery<'_, '_> {
     pub fn shape_hits_callback(
         &self,
         shape: &Collider,
-        origin: Vector,
-        shape_rotation: impl Into<RotF32>,
+        origin: RVector,
+        shape_rotation: impl Into<Rot>,
         direction: Dir,
         config: &ShapeCastConfig,
         filter: &SpatialQueryFilter,
@@ -776,14 +776,14 @@ impl SpatialQuery<'_, '_> {
 
                     let Ok(Some(hit)) = parry::query::cast_shapes(
                         &pose1,
-                        Vector::ZERO,
+                        RVector::ZERO,
                         collider.shape_scaled().as_ref(),
                         &pose2,
-                        direction.adjust_precision(),
+                        direction.real(),
                         shape.shape_scaled().as_ref(),
                         ShapeCastOptions {
-                            max_time_of_impact: config.max_distance.adjust_precision(),
-                            target_distance: config.target_distance.adjust_precision(),
+                            max_time_of_impact: config.max_distance.real(),
+                            target_distance: config.target_distance.real(),
                             stop_at_penetration: !config.ignore_origin_penetration,
                             compute_impact_geometry_on_penetration: config
                                 .compute_contact_on_penetration,
@@ -795,8 +795,8 @@ impl SpatialQuery<'_, '_> {
                     let toi = hit.time_of_impact.f32();
                     callback(ShapeHitData {
                         entity: proxy.collider,
-                        point1: position.0 + rotation.adjust_precision() * hit.witness1,
-                        point2: pose2 * hit.witness2 + (direction * toi).adjust_precision(),
+                        point1: position.0 + rotation.real() * hit.witness1,
+                        point2: pose2 * hit.witness2 + (direction * toi).real(),
                         normal1: (pose1.rotation * hit.normal1).f32(),
                         normal2: (pose2.rotation * hit.normal2).f32(),
                         distance: toi,
@@ -843,7 +843,7 @@ impl SpatialQuery<'_, '_> {
     /// - [`SpatialQuery::project_point_predicate`]
     pub fn project_point(
         &self,
-        point: Vector,
+        point: RVector,
         solid: bool,
         filter: &SpatialQueryFilter,
     ) -> Option<PointProjection> {
@@ -895,7 +895,7 @@ impl SpatialQuery<'_, '_> {
     /// - [`SpatialQuery::project_point`]
     pub fn project_point_predicate(
         &self,
-        point: Vector,
+        point: RVector,
         solid: bool,
         filter: &SpatialQueryFilter,
         predicate: &dyn Fn(Entity) -> bool,
@@ -964,7 +964,7 @@ impl SpatialQuery<'_, '_> {
     /// # Related Methods
     ///
     /// - [`SpatialQuery::point_intersections_callback`]
-    pub fn point_intersections(&self, point: Vector, filter: &SpatialQueryFilter) -> Vec<Entity> {
+    pub fn point_intersections(&self, point: RVector, filter: &SpatialQueryFilter) -> Vec<Entity> {
         let mut intersections = vec![];
 
         self.point_intersections_callback(point, filter, |entity| {
@@ -1018,7 +1018,7 @@ impl SpatialQuery<'_, '_> {
     /// - [`SpatialQuery::point_intersections`]
     pub fn point_intersections_callback(
         &self,
-        point: Vector,
+        point: RVector,
         filter: &SpatialQueryFilter,
         mut callback: impl FnMut(Entity) -> bool,
     ) {
@@ -1176,8 +1176,8 @@ impl SpatialQuery<'_, '_> {
     pub fn shape_intersections(
         &self,
         shape: &Collider,
-        shape_position: Vector,
-        shape_rotation: impl Into<RotF32>,
+        shape_position: RVector,
+        shape_rotation: impl Into<Rot>,
         filter: &SpatialQueryFilter,
     ) -> Vec<Entity> {
         let mut intersections = vec![];
@@ -1244,8 +1244,8 @@ impl SpatialQuery<'_, '_> {
     pub fn shape_intersections_callback(
         &self,
         shape: &Collider,
-        shape_position: Vector,
-        shape_rotation: impl Into<RotF32>,
+        shape_position: RVector,
+        shape_rotation: impl Into<Rot>,
         filter: &SpatialQueryFilter,
         mut callback: impl FnMut(Entity) -> bool,
     ) {
@@ -1292,7 +1292,7 @@ pub struct PointProjection {
     /// The entity of the collider that the point was projected onto.
     pub entity: Entity,
     /// The point where the point was projected.
-    pub point: Vector,
+    pub point: RVector,
     /// True if the point was inside of the collider.
     pub is_inside: bool,
 }

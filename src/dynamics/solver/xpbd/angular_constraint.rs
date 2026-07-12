@@ -69,10 +69,10 @@ pub trait AngularConstraint {
         inv_angular_inertia1: SymmetricTensor,
         inv_angular_inertia2: SymmetricTensor,
         delta_lagrange: f32,
-        axis: VectorF32,
-    ) -> VectorF32 {
+        axis: Vector,
+    ) -> Vector {
         if delta_lagrange.abs() <= f32::EPSILON {
-            return VectorF32::ZERO;
+            return Vector::ZERO;
         }
 
         let impulse = -delta_lagrange * axis;
@@ -97,8 +97,8 @@ pub trait AngularConstraint {
         body2: &mut SolverBody,
         inv_angular_inertia1: SymmetricTensor,
         inv_angular_inertia2: SymmetricTensor,
-        impulse: VectorF32,
-    ) -> VectorF32 {
+        impulse: Vector,
+    ) -> Vector {
         // Apply rotational updates
         let delta_quat = Self::get_delta_rot(inv_angular_inertia1, impulse);
         body1.delta_rotation = delta_quat * body1.delta_rotation;
@@ -237,10 +237,10 @@ pub trait AngularConstraint {
         inv_angular_inertia1: SymmetricTensor,
         inv_angular_inertia2: SymmetricTensor,
         delta_lagrange: f32,
-        axis: VectorF32,
-    ) -> VectorF32 {
+        axis: Vector,
+    ) -> Vector {
         if delta_lagrange.abs() <= f32::EPSILON {
-            return VectorF32::ZERO;
+            return Vector::ZERO;
         }
 
         // Compute angular impulse
@@ -278,7 +278,7 @@ pub trait AngularConstraint {
 
     /// Computes the update in rotation when applying an angular correction `p`.
     #[cfg(feature = "3d")]
-    fn get_delta_rot(inverse_inertia: SymmetricTensor, p: VectorF32) -> Quat {
+    fn get_delta_rot(inverse_inertia: SymmetricTensor, p: Vector) -> Quat {
         // Equation 8/9
         Quat::from_scaled_axis(inverse_inertia * p)
     }
@@ -293,7 +293,7 @@ pub trait AngularConstraint {
 
     /// Computes the torque acting along the constraint using the equation `tau = lambda * n / h^2`
     #[cfg(feature = "3d")]
-    fn compute_torque(&self, lagrange: f32, axis: VectorF32, dt: f32) -> VectorF32 {
+    fn compute_torque(&self, lagrange: f32, axis: Vector, dt: f32) -> Vector {
         // Eq (17)
         lagrange * axis / dt.powi(2)
     }

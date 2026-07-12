@@ -179,17 +179,17 @@ fn debug_render_axes(
                 Color::hsla(120.0 * mul[0], 1.0 * mul[1], 0.4 * mul[2], 1.0 * mul[3]),
                 Color::hsla(220.0 * mul[0], 1.0 * mul[1], 0.6 * mul[2], 1.0 * mul[3]),
             ];
-            let global_com = pos.0 + (rot * local_com.0).adjust_precision();
+            let global_com = pos.0 + (rot * local_com.0).real();
 
-            let x = (rot * (VectorF32::X * lengths.x)).adjust_precision();
+            let x = (rot * (Vector::X * lengths.x)).real();
             gizmos.draw_line(global_com - x, global_com + x, x_color);
 
-            let y = (rot * (VectorF32::Y * lengths.y)).adjust_precision();
+            let y = (rot * (Vector::Y * lengths.y)).real();
             gizmos.draw_line(global_com - y, global_com + y, y_color);
 
             #[cfg(feature = "3d")]
             {
-                let z = (rot * (VectorF32::Z * lengths.z)).adjust_precision();
+                let z = (rot * (Vector::Z * lengths.z)).real();
                 gizmos.draw_line(global_com - z, global_com + z, _z_color);
             }
         }
@@ -383,7 +383,7 @@ fn debug_render_contacts(
 
                     gizmos.draw_arrow(
                         contact.point,
-                        contact.point + (manifold.normal * length).adjust_precision(),
+                        contact.point + (manifold.normal * length).real(),
                         0.1 * length_unit.0,
                         color,
                     );
@@ -403,7 +403,7 @@ pub trait DebugRenderConstraint<const N: usize>: EntityConstraint<N> {
     /// Renders the debug information for the constraint.
     fn debug_render(
         &self,
-        positions: [Vector; N],
+        positions: [RVector; N],
         rotations: [Rotation; N],
         context: &mut SystemParamItem<Self::Context>,
         gizmos: &mut Gizmos<PhysicsGizmos>,
@@ -422,7 +422,7 @@ pub fn debug_render_constraint<T: Component + DebugRenderConstraint<N>, const N:
     let config = store.config::<PhysicsGizmos>().1;
     for constraint in &constraints {
         if let Ok(bodies) = bodies.get_many(constraint.entities()) {
-            let positions: [Vector; N] = bodies
+            let positions: [RVector; N] = bodies
                 .iter()
                 .map(|transform| Position::from(**transform).0)
                 .collect::<Vec<_>>()

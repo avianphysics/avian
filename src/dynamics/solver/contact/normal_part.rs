@@ -35,12 +35,12 @@ impl ContactNormalPart {
     /// Generates a new [`ContactNormalPart`].
     #[allow(clippy::too_many_arguments)]
     pub fn generate(
-        effective_inverse_mass_sum: VectorF32,
+        effective_inverse_mass_sum: Vector,
         inverse_angular_inertia1: &SymmetricTensor,
         inverse_angular_inertia2: &SymmetricTensor,
-        r1: VectorF32,
-        r2: VectorF32,
-        normal: VectorF32,
+        r1: Vector,
+        r2: Vector,
+        normal: Vector,
         warm_start_impulse: Option<f32>,
         softness: SoftnessCoefficients,
     ) -> Self {
@@ -114,8 +114,8 @@ impl ContactNormalPart {
     pub fn solve_impulse(
         &mut self,
         separation: f32,
-        relative_velocity: VectorF32,
-        normal: VectorF32,
+        relative_velocity: Vector,
+        normal: Vector,
         use_bias: bool,
         max_overlap_solve_speed: f32,
         delta_secs: f32,

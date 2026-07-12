@@ -843,7 +843,7 @@ mod tests {
         assert_eq!(mass.value() as f32, 10.0 + 5.0);
         assert_relative_eq!(
             center_of_mass.0,
-            VectorF32::new(0.0, -1.0 / 3.0),
+            Vector::new(0.0, -1.0 / 3.0),
             epsilon = 1.0e-6
         );
 
@@ -857,7 +857,7 @@ mod tests {
         let (mass, _, center_of_mass) = get_computed_mass_properties(app.world_mut(), body_entity);
 
         assert_eq!(mass.value(), 10.0 + 5.0);
-        assert_relative_eq!(center_of_mass.0, VectorF32::new(0.0, 1.0));
+        assert_relative_eq!(center_of_mass.0, Vector::new(0.0, 1.0));
     }
 
     #[test]

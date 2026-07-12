@@ -23,7 +23,7 @@ fn create_app() -> App {
 
     app.insert_resource(SubstepCount(20));
 
-    app.insert_resource(Gravity(VectorF32::ZERO));
+    app.insert_resource(Gravity(Vector::ZERO));
 
     app.insert_resource(Time::<Fixed>::from_duration(Duration::from_secs_f32(
         TIMESTEP,
@@ -43,14 +43,14 @@ fn revolute_motor_spins_body() {
 
     let anchor = app
         .world_mut()
-        .spawn((RigidBody::Static, Position(Vector::ZERO)))
+        .spawn((RigidBody::Static, Position(RVector::ZERO)))
         .id();
 
     let dynamic = app
         .world_mut()
         .spawn((
             RigidBody::Dynamic,
-            Position(Vector::X * 2.0),
+            Position(RVector::X * 2.0),
             Mass(1.0),
             #[cfg(feature = "2d")]
             AngularInertia(1.0),
@@ -108,14 +108,14 @@ fn prismatic_motor_moves_body() {
 
     let anchor = app
         .world_mut()
-        .spawn((RigidBody::Static, Position(Vector::ZERO)))
+        .spawn((RigidBody::Static, Position(RVector::ZERO)))
         .id();
 
     let dynamic = app
         .world_mut()
         .spawn((
             RigidBody::Dynamic,
-            Position(Vector::X * 2.0),
+            Position(RVector::X * 2.0),
             Mass(1.0),
             #[cfg(feature = "2d")]
             AngularInertia(1.0),
@@ -126,7 +126,7 @@ fn prismatic_motor_moves_body() {
 
     app.world_mut().spawn(
         PrismaticJoint::new(anchor, dynamic)
-            .with_local_anchor1(VectorF32::X * 2.0)
+            .with_local_anchor1(Vector::X * 2.0)
             .with_motor(LinearMotor {
                 target_velocity: 1.0,
                 max_force: 100.0,
@@ -170,14 +170,14 @@ fn revolute_motor_respects_max_torque() {
 
     let anchor = app
         .world_mut()
-        .spawn((RigidBody::Static, Position(Vector::ZERO)))
+        .spawn((RigidBody::Static, Position(RVector::ZERO)))
         .id();
 
     let dynamic = app
         .world_mut()
         .spawn((
             RigidBody::Dynamic,
-            Position(Vector::X * 2.0),
+            Position(RVector::X * 2.0),
             Mass(100.0), // Heavy body to test torque limiting
             #[cfg(feature = "2d")]
             AngularInertia(100.0),
@@ -235,14 +235,14 @@ fn revolute_motor_position_target() {
 
     let anchor = app
         .world_mut()
-        .spawn((RigidBody::Static, Position(Vector::ZERO)))
+        .spawn((RigidBody::Static, Position(RVector::ZERO)))
         .id();
 
     let dynamic = app
         .world_mut()
         .spawn((
             RigidBody::Dynamic,
-            Position(Vector::X * 2.0),
+            Position(RVector::X * 2.0),
             Mass(1.0),
             #[cfg(feature = "2d")]
             AngularInertia(1.0),
@@ -309,14 +309,14 @@ fn prismatic_motor_position_target() {
 
     let anchor = app
         .world_mut()
-        .spawn((RigidBody::Static, Position(Vector::ZERO)))
+        .spawn((RigidBody::Static, Position(RVector::ZERO)))
         .id();
 
     let dynamic = app
         .world_mut()
         .spawn((
             RigidBody::Dynamic,
-            Position(Vector::X * 2.0),
+            Position(RVector::X * 2.0),
             Mass(1.0),
             #[cfg(feature = "2d")]
             AngularInertia(1.0),
@@ -330,7 +330,7 @@ fn prismatic_motor_position_target() {
     let target_position = 1.0; // Target is 1 meter along the slider axis
     app.world_mut().spawn(
         PrismaticJoint::new(anchor, dynamic)
-            .with_local_anchor1(VectorF32::X * 2.0)
+            .with_local_anchor1(Vector::X * 2.0)
             .with_motor(LinearMotor {
                 target_position,
                 max_force: 100.0,
@@ -384,14 +384,14 @@ fn revolute_motor_respects_angle_limits() {
 
     let anchor = app
         .world_mut()
-        .spawn((RigidBody::Static, Position(Vector::ZERO)))
+        .spawn((RigidBody::Static, Position(RVector::ZERO)))
         .id();
 
     let dynamic = app
         .world_mut()
         .spawn((
             RigidBody::Dynamic,
-            Position(Vector::X * 2.0),
+            Position(RVector::X * 2.0),
             Mass(1.0),
             #[cfg(feature = "2d")]
             AngularInertia(1.0),
@@ -475,7 +475,7 @@ fn prismatic_motor_respects_limits() {
 
     let anchor = app
         .world_mut()
-        .spawn((RigidBody::Static, Position(Vector::ZERO)))
+        .spawn((RigidBody::Static, Position(RVector::ZERO)))
         .id();
 
     // Start at origin so we can measure displacement clearly.
@@ -483,7 +483,7 @@ fn prismatic_motor_respects_limits() {
         .world_mut()
         .spawn((
             RigidBody::Dynamic,
-            Position(Vector::ZERO),
+            Position(RVector::ZERO),
             Mass(1.0),
             #[cfg(feature = "2d")]
             AngularInertia(1.0),
@@ -516,7 +516,7 @@ fn prismatic_motor_respects_limits() {
         let body_ref = app.world().entity(dynamic);
         let position = body_ref.get::<Position>().unwrap();
         assert!(
-            (position.0.x - distance_limit.adjust_precision()).abs() > 0.1,
+            (position.0.x - distance_limit.real()).abs() > 0.1,
             "Displacement {} should not be near the limit {} at the start of the test",
             position.0.x,
             distance_limit
@@ -560,14 +560,14 @@ fn revolute_motor_force_based() {
 
     let anchor = app
         .world_mut()
-        .spawn((RigidBody::Static, Position(Vector::ZERO)))
+        .spawn((RigidBody::Static, Position(RVector::ZERO)))
         .id();
 
     let dynamic = app
         .world_mut()
         .spawn((
             RigidBody::Dynamic,
-            Position(Vector::X * 2.0),
+            Position(RVector::X * 2.0),
             Mass(1.0),
             #[cfg(feature = "2d")]
             AngularInertia(1.0),
@@ -645,14 +645,14 @@ fn revolute_motor_spring_damper() {
 
     let anchor = app
         .world_mut()
-        .spawn((RigidBody::Static, Position(Vector::ZERO)))
+        .spawn((RigidBody::Static, Position(RVector::ZERO)))
         .id();
 
     let dynamic = app
         .world_mut()
         .spawn((
             RigidBody::Dynamic,
-            Position(Vector::X * 2.0),
+            Position(RVector::X * 2.0),
             Mass(1.0),
             #[cfg(feature = "2d")]
             AngularInertia(1.0),
@@ -721,14 +721,14 @@ fn revolute_motor_combined_position_velocity() {
 
     let anchor = app
         .world_mut()
-        .spawn((RigidBody::Static, Position(Vector::ZERO)))
+        .spawn((RigidBody::Static, Position(RVector::ZERO)))
         .id();
 
     let dynamic = app
         .world_mut()
         .spawn((
             RigidBody::Dynamic,
-            Position(Vector::X * 2.0),
+            Position(RVector::X * 2.0),
             Mass(1.0),
             #[cfg(feature = "2d")]
             AngularInertia(1.0),
@@ -796,14 +796,14 @@ fn prismatic_motor_combined_position_velocity() {
 
     let anchor = app
         .world_mut()
-        .spawn((RigidBody::Static, Position(Vector::ZERO)))
+        .spawn((RigidBody::Static, Position(RVector::ZERO)))
         .id();
 
     let dynamic = app
         .world_mut()
         .spawn((
             RigidBody::Dynamic,
-            Position(Vector::X * 2.0),
+            Position(RVector::X * 2.0),
             Mass(1.0),
             #[cfg(feature = "2d")]
             AngularInertia(1.0),
@@ -815,7 +815,7 @@ fn prismatic_motor_combined_position_velocity() {
     // Motor with both position and velocity targeting.
     app.world_mut().spawn(
         PrismaticJoint::new(anchor, dynamic)
-            .with_local_anchor1(VectorF32::X * 2.0)
+            .with_local_anchor1(Vector::X * 2.0)
             .with_motor(LinearMotor {
                 enabled: true,
                 target_position: 1.0,

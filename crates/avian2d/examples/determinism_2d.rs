@@ -16,7 +16,7 @@
 
 use core::f32::consts::PI;
 
-use avian2d::{math::Vector, prelude::*};
+use avian2d::{math::RVector, prelude::*};
 use bevy::{
     camera::ScalingMode, color::palettes::tailwind::CYAN_400,
     input::common_conditions::input_just_pressed, prelude::*,
@@ -204,7 +204,7 @@ fn clear_scene(
 #[derive(Pod, Zeroable, Clone, Copy)]
 #[repr(C)]
 struct Isometry {
-    translation: Vector,
+    translation: RVector,
     rotation: f32,
 }
 

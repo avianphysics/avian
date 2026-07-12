@@ -23,30 +23,30 @@ pub struct RevoluteJointSolverData {
     #[cfg(feature = "2d")]
     pub(super) rotation_difference: f32,
     #[cfg(feature = "3d")]
-    pub(super) a1: VectorF32,
+    pub(super) a1: Vector,
     #[cfg(feature = "3d")]
-    pub(super) a2: VectorF32,
+    pub(super) a2: Vector,
     #[cfg(feature = "3d")]
-    pub(super) b1: VectorF32,
+    pub(super) b1: Vector,
     #[cfg(feature = "3d")]
-    pub(super) b2: VectorF32,
-    pub(super) total_align_lagrange: AngularVectorF32,
-    pub(super) total_limit_lagrange: AngularVectorF32,
+    pub(super) b2: Vector,
+    pub(super) total_align_lagrange: AngularVector,
+    pub(super) total_limit_lagrange: AngularVector,
     /// Accumulated motor Lagrange multiplier for this frame.
-    pub(super) total_motor_lagrange: AngularVectorF32,
+    pub(super) total_motor_lagrange: AngularVector,
     /// Motor Lagrange multiplier from the previous frame, used for warm starting.
     /// This is zeroed after being applied in the first substep.
-    pub(super) warm_start_motor_lagrange: AngularVectorF32,
+    pub(super) warm_start_motor_lagrange: AngularVector,
 }
 
 impl XpbdConstraintSolverData for RevoluteJointSolverData {
     fn clear_lagrange_multipliers(&mut self) {
         self.point_constraint.clear_lagrange_multipliers();
-        self.total_align_lagrange = AngularVectorF32::default();
-        self.total_limit_lagrange = AngularVectorF32::default();
+        self.total_align_lagrange = AngularVector::default();
+        self.total_limit_lagrange = AngularVector::default();
         // Save motor lagrange for warm starting before clearing.
         self.warm_start_motor_lagrange = self.total_motor_lagrange;
-        self.total_motor_lagrange = AngularVectorF32::default();
+        self.total_motor_lagrange = AngularVector::default();
     }
 
     fn total_motor_lagrange(&self) -> f32 {
@@ -60,11 +60,11 @@ impl XpbdConstraintSolverData for RevoluteJointSolverData {
         }
     }
 
-    fn total_position_lagrange(&self) -> VectorF32 {
+    fn total_position_lagrange(&self) -> Vector {
         self.point_constraint.total_position_lagrange()
     }
 
-    fn total_rotation_lagrange(&self) -> AngularVectorF32 {
+    fn total_rotation_lagrange(&self) -> AngularVector {
         self.total_align_lagrange + self.total_limit_lagrange + self.total_motor_lagrange
     }
 }
@@ -195,7 +195,7 @@ impl XpbdConstraint<2> for RevoluteJoint {
         body1.angular_velocity -= inv_angular_inertia1 * impulse;
         body2.angular_velocity += inv_angular_inertia2 * impulse;
 
-        solver_data.warm_start_motor_lagrange = AngularVectorF32::default();
+        solver_data.warm_start_motor_lagrange = AngularVector::default();
     }
 }
 

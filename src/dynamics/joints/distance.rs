@@ -62,7 +62,7 @@ impl DistanceJoint {
     ///
     /// This configures the [`JointAnchor`] of each [`JointFrame`].
     #[inline]
-    pub const fn with_anchor(mut self, anchor: Vector) -> Self {
+    pub const fn with_anchor(mut self, anchor: RVector) -> Self {
         self.anchor1 = JointAnchor::FromGlobal(anchor);
         self.anchor2 = JointAnchor::FromGlobal(anchor);
         self
@@ -72,7 +72,7 @@ impl DistanceJoint {
     ///
     /// This configures the [`JointAnchor`] of the first [`JointFrame`].
     #[inline]
-    pub const fn with_local_anchor1(mut self, anchor: VectorF32) -> Self {
+    pub const fn with_local_anchor1(mut self, anchor: Vector) -> Self {
         self.anchor1 = JointAnchor::Local(anchor);
         self
     }
@@ -81,7 +81,7 @@ impl DistanceJoint {
     ///
     /// This configures the [`JointAnchor`] of the second [`JointFrame`].
     #[inline]
-    pub const fn with_local_anchor2(mut self, anchor: VectorF32) -> Self {
+    pub const fn with_local_anchor2(mut self, anchor: Vector) -> Self {
         self.anchor2 = JointAnchor::Local(anchor);
         self
     }
@@ -91,7 +91,7 @@ impl DistanceJoint {
     /// If the [`JointAnchor`] is set to [`FromGlobal`](JointAnchor::FromGlobal),
     /// and the local anchor has not yet been computed, this will return `None`.
     #[inline]
-    pub const fn local_anchor1(&self) -> Option<VectorF32> {
+    pub const fn local_anchor1(&self) -> Option<Vector> {
         match self.anchor1 {
             JointAnchor::Local(anchor) => Some(anchor),
             _ => None,
@@ -103,7 +103,7 @@ impl DistanceJoint {
     /// If the [`JointAnchor`] is set to [`FromGlobal`](JointAnchor::FromGlobal),
     /// and the local anchor has not yet been computed, this will return `None`.
     #[inline]
-    pub const fn local_anchor2(&self) -> Option<VectorF32> {
+    pub const fn local_anchor2(&self) -> Option<Vector> {
         match self.anchor2 {
             JointAnchor::Local(anchor) => Some(anchor),
             _ => None,
@@ -207,7 +207,7 @@ impl DebugRenderConstraint<2> for DistanceJoint {
 
     fn debug_render(
         &self,
-        positions: [Vector; 2],
+        positions: [RVector; 2],
         rotations: [Rotation; 2],
         _context: &mut Self::Context,
         gizmos: &mut Gizmos<PhysicsGizmos>,
@@ -223,8 +223,8 @@ impl DebugRenderConstraint<2> for DistanceJoint {
             return;
         };
 
-        let anchor1 = pos1 + (rot1 * local_anchor1).adjust_precision();
-        let anchor2 = pos2 + (rot2 * local_anchor2).adjust_precision();
+        let anchor1 = pos1 + (rot1 * local_anchor1).real();
+        let anchor2 = pos2 + (rot2 * local_anchor2).real();
 
         if let Some(anchor_color) = config.joint_anchor_color {
             gizmos.draw_line(pos1, anchor1, anchor_color);

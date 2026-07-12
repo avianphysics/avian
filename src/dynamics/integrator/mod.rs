@@ -150,17 +150,17 @@ pub type IntegrationSet = IntegrationSystems;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, Resource)]
-pub struct Gravity(pub VectorF32);
+pub struct Gravity(pub Vector);
 
 impl Default for Gravity {
     fn default() -> Self {
-        Self(VectorF32::Y * -9.81)
+        Self(Vector::Y * -9.81)
     }
 }
 
 impl Gravity {
     /// Zero gravity.
-    pub const ZERO: Gravity = Gravity(VectorF32::ZERO);
+    pub const ZERO: Gravity = Gravity(Vector::ZERO);
 }
 
 /// A marker component for bodies that use custom velocity integration.
@@ -215,12 +215,12 @@ pub struct VelocityIntegrationData {
     ///
     /// **Note:** This is treated as linear acceleration until [`IntegrationSystems::UpdateVelocityIncrements`].
     /// where it is multiplied by the time step to get the corresponding velocity increment.
-    pub linear_increment: VectorF32,
+    pub linear_increment: Vector,
     /// The angular velocity increment to be applied to the body at each substep.
     ///
     /// **Note:** This is treated as angular acceleration until [`IntegrationSystems::UpdateVelocityIncrements`].
     /// where it is multiplied by the time step to get the corresponding velocity increment.
-    pub angular_increment: AngularVectorF32,
+    pub angular_increment: AngularVector,
     /// The right-hand side of the linear damping equation,
     /// `1 / (1 + dt * c)`, where `c` is the damping coefficient.
     pub linear_damping_rhs: f32,
@@ -231,12 +231,12 @@ pub struct VelocityIntegrationData {
 
 impl VelocityIntegrationData {
     /// Applies a given linear acceleration to the body.
-    pub fn apply_linear_acceleration(&mut self, acceleration: VectorF32) {
+    pub fn apply_linear_acceleration(&mut self, acceleration: Vector) {
         self.linear_increment += acceleration;
     }
 
     /// Applies a given angular acceleration to the body.
-    pub fn apply_angular_acceleration(&mut self, acceleration: AngularVectorF32) {
+    pub fn apply_angular_acceleration(&mut self, acceleration: AngularVector) {
         self.angular_increment += acceleration;
     }
 
@@ -317,7 +317,7 @@ fn clear_velocity_increments(
     let start = crate::utils::Instant::now();
 
     bodies.par_iter_mut().for_each(|mut integration| {
-        integration.linear_increment = VectorF32::ZERO;
+        integration.linear_increment = Vector::ZERO;
         integration.angular_increment = default();
     });
 
@@ -398,7 +398,7 @@ pub fn integrate_velocities(
 #[cfg(feature = "3d")]
 #[inline]
 pub fn solve_gyroscopic_torque(
-    ang_vel: &mut VectorF32,
+    ang_vel: &mut Vector,
     rotation: Quat,
     local_inertia: &ComputedAngularInertia,
     delta_secs: f32,
@@ -445,7 +445,7 @@ pub fn solve_gyroscopic_torque(
     // energy into the system due to the extrapolation done by semi-implicit Euler integration.
     let new_local_momentum_length_squared = new_local_momentum.length_squared();
     if new_local_momentum_length_squared == 0.0 {
-        *ang_vel = VectorF32::ZERO;
+        *ang_vel = Vector::ZERO;
         return;
     }
     new_local_momentum *=
@@ -603,7 +603,7 @@ mod tests {
         let angular_velocity = entity_ref.get::<AngularVelocity>().unwrap().0;
 
         // Euler methods have some precision issues, but this seems weirdly inaccurate.
-        assert_relative_eq!(position, Vector::NEG_Y * 490.5, epsilon = 10.0);
+        assert_relative_eq!(position, RVector::NEG_Y * 490.5, epsilon = 10.0);
 
         #[cfg(feature = "2d")]
         assert_relative_eq!(
@@ -614,10 +614,10 @@ mod tests {
         #[cfg(feature = "3d")]
         assert_relative_eq!(rotation.0, Quat::from_rotation_z(20.0), epsilon = 0.01);
 
-        assert_relative_eq!(linear_velocity, VectorF32::NEG_Y * 98.1, epsilon = 0.0001);
+        assert_relative_eq!(linear_velocity, Vector::NEG_Y * 98.1, epsilon = 0.0001);
         #[cfg(feature = "2d")]
         assert_relative_eq!(angular_velocity, 2.0, epsilon = 0.00001);
         #[cfg(feature = "3d")]
-        assert_relative_eq!(angular_velocity, VectorF32::Z * 2.0, epsilon = 0.00001);
+        assert_relative_eq!(angular_velocity, Vector::Z * 2.0, epsilon = 0.00001);
     }
 }

@@ -20,15 +20,15 @@ pub struct FixedAngleConstraintShared {
     #[cfg(feature = "3d")]
     pub rotation_difference: Quat,
     /// The total Lagrange multiplier across the whole time step.
-    pub total_lagrange: AngularVectorF32,
+    pub total_lagrange: AngularVector,
 }
 
 impl XpbdConstraintSolverData for FixedAngleConstraintShared {
     fn clear_lagrange_multipliers(&mut self) {
-        self.total_lagrange = AngularVectorF32::default();
+        self.total_lagrange = AngularVector::default();
     }
 
-    fn total_rotation_lagrange(&self) -> AngularVectorF32 {
+    fn total_rotation_lagrange(&self) -> AngularVector {
         self.total_lagrange
     }
 }
@@ -39,8 +39,8 @@ impl FixedAngleConstraintShared {
         &mut self,
         rotation1: &Rotation,
         rotation2: &Rotation,
-        local_basis1: RotF32,
-        local_basis2: RotF32,
+        local_basis1: Rot,
+        local_basis2: Rot,
     ) {
         // Prepare the base rotation difference.
         #[cfg(feature = "2d")]

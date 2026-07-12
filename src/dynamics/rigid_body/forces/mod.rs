@@ -102,13 +102,13 @@
 //! that allows applying forces to a body without waking it up.
 //!
 //! ```
-#![cfg_attr(feature = "2d", doc = "# use avian2d::{math::VectorF32, prelude::*};")]
-#![cfg_attr(feature = "3d", doc = "# use avian3d::{math::VectorF32, prelude::*};")]
+#![cfg_attr(feature = "2d", doc = "# use avian2d::{math::Vector, prelude::*};")]
+#![cfg_attr(feature = "3d", doc = "# use avian3d::{math::Vector, prelude::*};")]
 //! # use bevy::prelude::*;
 //! #
 //! # fn apply_forces(mut query: Query<Forces>) {
 //! #     for mut forces in &mut query {
-//! #         let force = VectorF32::default();
+//! #         let force = Vector::default();
 //! // Apply a force without waking up the body if it is sleeping.
 //! forces.non_waking().apply_force(force);
 //! #     }
@@ -119,14 +119,14 @@
 //! with the [center of mass](CenterOfMass), it will apply a torque to the body.
 //!
 //! ```
-#![cfg_attr(feature = "2d", doc = "# use avian2d::{math::VectorF32, prelude::*};")]
-#![cfg_attr(feature = "3d", doc = "# use avian3d::{math::VectorF32, prelude::*};")]
+#![cfg_attr(feature = "2d", doc = "# use avian2d::{math::Vector, prelude::*};")]
+#![cfg_attr(feature = "3d", doc = "# use avian3d::{math::Vector, prelude::*};")]
 //! # use bevy::prelude::*;
 //! #
 //! # fn apply_impulses(mut query: Query<Forces>) {
 //! #     for mut forces in &mut query {
-//! #         let force = VectorF32::default();
-//! #         let point = VectorF32::default();
+//! #         let force = Vector::default();
+//! #         let point = Vector::default();
 //! // Apply an impulse at a specific point in the world.
 //! // Unlike forces, impulses are applied immediately to the velocity.
 //! forces.apply_linear_impulse_at_point(force, point);
@@ -257,19 +257,19 @@ impl FloatZero for f32 {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Component, Debug, Default, PartialEq)]
-pub struct ConstantForce(pub VectorF32);
+pub struct ConstantForce(pub Vector);
 
 impl ConstantForce {
     /// Creates a new [`ConstantForce`] with the given `x` and `y` components.
     #[cfg(feature = "2d")]
     pub fn new(x: f32, y: f32) -> Self {
-        Self(VectorF32::new(x, y))
+        Self(Vector::new(x, y))
     }
 
     /// Creates a new [`ConstantForce`] with the given `x`, `y`, and `z` components.
     #[cfg(feature = "3d")]
     pub fn new(x: f32, y: f32, z: f32) -> Self {
-        Self(VectorF32::new(x, y, z))
+        Self(Vector::new(x, y, z))
     }
 }
 
@@ -314,13 +314,13 @@ impl ConstantForce {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Component, Debug, Default, PartialEq)]
-pub struct ConstantTorque(pub AngularVectorF32);
+pub struct ConstantTorque(pub AngularVector);
 
 #[cfg(feature = "3d")]
 impl ConstantTorque {
     /// Creates a new [`ConstantTorque`] with the given `x`, `y`, and `z` components.
     pub fn new(x: f32, y: f32, z: f32) -> Self {
-        Self(VectorF32::new(x, y, z))
+        Self(Vector::new(x, y, z))
     }
 }
 
@@ -368,19 +368,19 @@ impl ConstantTorque {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Component, Debug, Default, PartialEq)]
-pub struct ConstantLocalForce(pub VectorF32);
+pub struct ConstantLocalForce(pub Vector);
 
 impl ConstantLocalForce {
     /// Creates a new [`ConstantLocalForce`] with the given `x` and `y` components.
     #[cfg(feature = "2d")]
     pub fn new(x: f32, y: f32) -> Self {
-        Self(VectorF32::new(x, y))
+        Self(Vector::new(x, y))
     }
 
     /// Creates a new [`ConstantLocalForce`] with the given `x`, `y`, and `z` components.
     #[cfg(feature = "3d")]
     pub fn new(x: f32, y: f32, z: f32) -> Self {
-        Self(VectorF32::new(x, y, z))
+        Self(Vector::new(x, y, z))
     }
 }
 
@@ -421,13 +421,13 @@ impl ConstantLocalForce {
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Component, Debug, Default, PartialEq)]
 #[cfg(feature = "3d")]
-pub struct ConstantLocalTorque(pub AngularVectorF32);
+pub struct ConstantLocalTorque(pub AngularVector);
 
 #[cfg(feature = "3d")]
 impl ConstantLocalTorque {
     /// Creates a new [`ConstantLocalTorque`] with the given `x`, `y`, and `z` components.
     pub fn new(x: f32, y: f32, z: f32) -> Self {
-        Self(VectorF32::new(x, y, z))
+        Self(Vector::new(x, y, z))
     }
 }
 
@@ -475,19 +475,19 @@ impl ConstantLocalTorque {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Component, Debug, Default, PartialEq)]
-pub struct ConstantLinearAcceleration(pub VectorF32);
+pub struct ConstantLinearAcceleration(pub Vector);
 
 impl ConstantLinearAcceleration {
     /// Creates a new [`ConstantLinearAcceleration`] with the given `x` and `y` components.
     #[cfg(feature = "2d")]
     pub fn new(x: f32, y: f32) -> Self {
-        Self(VectorF32::new(x, y))
+        Self(Vector::new(x, y))
     }
 
     /// Creates a new [`ConstantLinearAcceleration`] with the given `x`, `y`, and `z` components.
     #[cfg(feature = "3d")]
     pub fn new(x: f32, y: f32, z: f32) -> Self {
-        Self(VectorF32::new(x, y, z))
+        Self(Vector::new(x, y, z))
     }
 }
 
@@ -535,13 +535,13 @@ impl ConstantLinearAcceleration {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Component, Debug, Default, PartialEq)]
-pub struct ConstantAngularAcceleration(pub AngularVectorF32);
+pub struct ConstantAngularAcceleration(pub AngularVector);
 
 #[cfg(feature = "3d")]
 impl ConstantAngularAcceleration {
     /// Creates a new [`ConstantAngularAcceleration`] with the given `x`, `y`, and `z` components.
     pub fn new(x: f32, y: f32, z: f32) -> Self {
-        Self(VectorF32::new(x, y, z))
+        Self(Vector::new(x, y, z))
     }
 }
 
@@ -595,19 +595,19 @@ impl ConstantAngularAcceleration {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Component, Debug, Default, PartialEq)]
-pub struct ConstantLocalLinearAcceleration(pub VectorF32);
+pub struct ConstantLocalLinearAcceleration(pub Vector);
 
 impl ConstantLocalLinearAcceleration {
     /// Creates a new [`ConstantLocalLinearAcceleration`] with the given `x` and `y` components.
     #[cfg(feature = "2d")]
     pub fn new(x: f32, y: f32) -> Self {
-        Self(VectorF32::new(x, y))
+        Self(Vector::new(x, y))
     }
 
     /// Creates a new [`ConstantLocalLinearAcceleration`] with the given `x`, `y`, and `z` components.
     #[cfg(feature = "3d")]
     pub fn new(x: f32, y: f32, z: f32) -> Self {
-        Self(VectorF32::new(x, y, z))
+        Self(Vector::new(x, y, z))
     }
 }
 
@@ -648,13 +648,13 @@ impl ConstantLocalLinearAcceleration {
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Component, Debug, Default, PartialEq)]
 #[cfg(feature = "3d")]
-pub struct ConstantLocalAngularAcceleration(pub AngularVectorF32);
+pub struct ConstantLocalAngularAcceleration(pub AngularVector);
 
 #[cfg(feature = "3d")]
 impl ConstantLocalAngularAcceleration {
     /// Creates a new [`ConstantLocalAngularAcceleration`] with the given `x`, `y`, and `z` components.
     pub fn new(x: f32, y: f32, z: f32) -> Self {
-        Self(VectorF32::new(x, y, z))
+        Self(Vector::new(x, y, z))
     }
 }
 
@@ -666,8 +666,8 @@ impl ConstantLocalAngularAcceleration {
 #[reflect(Component, Debug, Default, PartialEq)]
 pub struct AccumulatedLocalAcceleration {
     /// The accumulated linear acceleration in local space.
-    pub linear: VectorF32,
+    pub linear: Vector,
     /// The accumulated angular acceleration in local space.
     #[cfg(feature = "3d")]
-    pub angular: VectorF32,
+    pub angular: Vector,
 }

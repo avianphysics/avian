@@ -189,7 +189,7 @@ pub fn update_hits(
                 let point = ray.get_point(distance);
 
                 spatial_query.point_intersections_callback(
-                    point.xy().adjust_precision(),
+                    point.xy().real(),
                     &filter.0,
                     |entity| {
                         let marker_requirement =
@@ -218,7 +218,7 @@ pub fn update_hits(
         {
             if let Some((entity, hit_data)) = spatial_query
                 .cast_ray_predicate(
-                    ray.origin.adjust_precision(),
+                    ray.origin.real(),
                     ray.direction,
                     f32::MAX,
                     true,

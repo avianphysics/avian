@@ -77,10 +77,10 @@ pub struct RayCaster {
     /// The local origin of the ray relative to the [`Position`] and [`Rotation`] of the ray entity or its parent.
     ///
     /// To get the global origin, use the `global_origin` method.
-    pub origin: Vector,
+    pub origin: RVector,
 
     /// The global origin of the ray.
-    global_origin: Vector,
+    global_origin: RVector,
 
     /// The local direction of the ray relative to the [`Rotation`] of the ray entity or its parent.
     ///
@@ -121,8 +121,8 @@ impl Default for RayCaster {
     fn default() -> Self {
         Self {
             enabled: true,
-            origin: Vector::ZERO,
-            global_origin: Vector::ZERO,
+            origin: RVector::ZERO,
+            global_origin: RVector::ZERO,
             direction: Dir::X,
             global_direction: Dir::X,
             max_distance: f32::MAX,
@@ -142,7 +142,7 @@ impl From<Ray> for RayCaster {
 
 impl RayCaster {
     /// Creates a new [`RayCaster`] with a given origin and direction.
-    pub fn new(origin: Vector, direction: Dir) -> Self {
+    pub fn new(origin: RVector, direction: Dir) -> Self {
         Self {
             origin,
             direction,
@@ -153,14 +153,14 @@ impl RayCaster {
     /// Creates a new [`RayCaster`] from a ray.
     pub fn from_ray(ray: Ray) -> Self {
         Self {
-            origin: ray.origin.adjust_precision(),
+            origin: ray.origin.real(),
             direction: ray.direction,
             ..default()
         }
     }
 
     /// Sets the ray origin.
-    pub fn with_origin(mut self, origin: Vector) -> Self {
+    pub fn with_origin(mut self, origin: RVector) -> Self {
         self.origin = origin;
         self
     }
@@ -219,7 +219,7 @@ impl RayCaster {
     }
 
     /// Returns the global origin of the ray.
-    pub fn global_origin(&self) -> Vector {
+    pub fn global_origin(&self) -> RVector {
         self.global_origin
     }
 
@@ -229,7 +229,7 @@ impl RayCaster {
     }
 
     /// Sets the global origin of the ray.
-    pub(crate) fn set_global_origin(&mut self, global_origin: Vector) {
+    pub(crate) fn set_global_origin(&mut self, global_origin: RVector) {
         self.global_origin = global_origin;
     }
 
@@ -282,14 +282,14 @@ impl RayCaster {
 
     /// Returns the point at a given distance along the ray.
     #[must_use]
-    pub fn get_point(&self, distance: f32) -> Vector {
-        self.origin + (self.direction * distance).adjust_precision()
+    pub fn get_point(&self, distance: f32) -> RVector {
+        self.origin + (self.direction * distance).real()
     }
 
     /// Like [`Self::get_point`], but returns the point in global coordinates.
     #[must_use]
-    pub fn get_global_point(&self, distance: f32) -> Vector {
-        self.global_origin + (self.global_direction * distance).adjust_precision()
+    pub fn get_global_point(&self, distance: f32) -> RVector {
+        self.global_origin + (self.global_direction * distance).real()
     }
 }
 
@@ -400,7 +400,7 @@ pub struct RayHitData {
     pub distance: f32,
 
     /// The normal at the point of intersection, expressed in world space.
-    pub normal: VectorF32,
+    pub normal: Vector,
 }
 
 impl MapEntities for RayHitData {

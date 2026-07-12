@@ -117,7 +117,7 @@ pub struct CharacterCollision {
     /// The collider that was hit by the character.
     pub collider: Entity,
     /// The point of contact in world space.
-    pub point: Vector,
+    pub point: RVector,
     /// The normal of the contact surface, pointing away from the character.
     pub normal: Dir2,
     /// The velocity of the character at the point of contact.
@@ -172,7 +172,7 @@ fn update_grounded(
         // Cast the shape downward to check for ground
         let hit = spatial_query.cast_shape(
             collider,
-            global_transform.translation().xy().adjust_precision(),
+            global_transform.translation().xy().real(),
             rotation,
             Dir2::new_unchecked(global_transform.down().xy()),
             &ShapeCastConfig::from_max_distance(ground_detection.max_distance),
@@ -303,7 +303,7 @@ fn move_and_slide(
             projected_velocity,
         } = move_and_slide.move_and_slide(
             collider,
-            transform.translation.xy().adjust_precision(),
+            transform.translation.xy().real(),
             Rotation::from(transform.rotation),
             lin_vel.0,
             time.delta(),

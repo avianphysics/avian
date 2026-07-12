@@ -6,9 +6,9 @@ use bevy::{
 use super::{SolverBody, SolverBodyInertia};
 use crate::{
     AngularVelocity, LinearVelocity, PhysicsSchedule, Position, RigidBody, RigidBodyActiveFilter,
-    RigidBodyDisabled, RotF32, Rotation, Sleeping, SolverSystems, VectorF32,
+    RigidBodyDisabled, Rot, Rotation, Sleeping, SolverSystems, Vector,
     dynamics::solver::{SolverDiagnostics, solver_body::SolverBodyFlags},
-    math::{AdjustPrecision, AsF32},
+    math::{ToF32Precision, ToRealPrecision},
     prelude::{
         AppDiagnosticsExt, ComputedAngularInertia, ComputedCenterOfMass, ComputedMass, Dominance,
         LockedAxes,
@@ -209,8 +209,8 @@ fn prepare_solver_bodies(
         )| {
             solver_body.linear_velocity = linear_velocity.0.f32();
             solver_body.angular_velocity = angular_velocity.0.f32();
-            solver_body.delta_position = VectorF32::ZERO;
-            solver_body.delta_rotation = RotF32::IDENTITY;
+            solver_body.delta_position = Vector::ZERO;
+            solver_body.delta_rotation = Rot::IDENTITY;
 
             let locked_axes = locked_axes.copied().unwrap_or_default();
             *inertial_properties = SolverBodyInertia::new(
@@ -283,8 +283,7 @@ fn writeback_solver_bodies(
                 .fast_renormalize()
                 .into();
             let new_world_com = *rot * com.0;
-            pos.0 +=
-                (solver_body.delta_position + (old_world_com - new_world_com)).adjust_precision();
+            pos.0 += (solver_body.delta_position + (old_world_com - new_world_com)).real();
 
             // Write back velocities.
             lin_vel.0 = solver_body.linear_velocity;

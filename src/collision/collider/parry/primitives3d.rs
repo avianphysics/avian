@@ -1,10 +1,13 @@
-use bevy_math::primitives::{
-    Capsule3d, Cone, Cuboid, Cylinder, InfinitePlane3d, Line3d, Plane3d, Polyline3d, Segment3d,
-    Sphere,
+use bevy_math::{
+    Quat, Vec3,
+    primitives::{
+        Capsule3d, Cone, Cuboid, Cylinder, InfinitePlane3d, Line3d, Plane3d, Polyline3d, Segment3d,
+        Sphere,
+    },
 };
 use parry::shape::SharedShape;
 
-use crate::{AdjustPrecision, Collider, IntoCollider, Quaternion, Vector};
+use crate::{Collider, IntoCollider, RVector, ToRealPrecision};
 
 impl IntoCollider<Collider> for Sphere {
     fn collider(&self) -> Collider {
@@ -15,12 +18,12 @@ impl IntoCollider<Collider> for Sphere {
 impl IntoCollider<Collider> for InfinitePlane3d {
     fn collider(&self) -> Collider {
         let half_size = 10_000.0;
-        let rotation = Quaternion::from_rotation_arc(Vector::Y, self.normal.adjust_precision());
+        let rotation = Quat::from_rotation_arc(Vec3::Y, *self.normal).real();
         let vertices = vec![
-            rotation * Vector::new(half_size, 0.0, -half_size),
-            rotation * Vector::new(-half_size, 0.0, -half_size),
-            rotation * Vector::new(-half_size, 0.0, half_size),
-            rotation * Vector::new(half_size, 0.0, half_size),
+            rotation * RVector::new(half_size, 0.0, -half_size),
+            rotation * RVector::new(-half_size, 0.0, -half_size),
+            rotation * RVector::new(-half_size, 0.0, half_size),
+            rotation * RVector::new(half_size, 0.0, half_size),
         ];
 
         Collider::trimesh(vertices, vec![[0, 1, 2], [1, 2, 0]])
@@ -29,13 +32,13 @@ impl IntoCollider<Collider> for InfinitePlane3d {
 
 impl IntoCollider<Collider> for Plane3d {
     fn collider(&self) -> Collider {
-        let half_size = self.half_size.adjust_precision();
-        let rotation = Quaternion::from_rotation_arc(Vector::Y, self.normal.adjust_precision());
+        let half_size = self.half_size.real();
+        let rotation = Quat::from_rotation_arc(Vec3::Y, *self.normal).real();
         let vertices = vec![
-            rotation * Vector::new(half_size.x, 0.0, -half_size.y),
-            rotation * Vector::new(-half_size.x, 0.0, -half_size.y),
-            rotation * Vector::new(-half_size.x, 0.0, half_size.y),
-            rotation * Vector::new(half_size.x, 0.0, half_size.y),
+            rotation * RVector::new(half_size.x, 0.0, -half_size.y),
+            rotation * RVector::new(-half_size.x, 0.0, -half_size.y),
+            rotation * RVector::new(-half_size.x, 0.0, half_size.y),
+            rotation * RVector::new(half_size.x, 0.0, half_size.y),
         ];
 
         Collider::trimesh(vertices, vec![[0, 1, 2], [1, 2, 0]])
@@ -58,14 +61,14 @@ impl IntoCollider<Collider> for Segment3d {
 
 impl IntoCollider<Collider> for Polyline3d {
     fn collider(&self) -> Collider {
-        let vertices = self.vertices.iter().map(|v| v.adjust_precision()).collect();
+        let vertices = self.vertices.iter().map(|v| v.real()).collect();
         Collider::polyline(vertices, None)
     }
 }
 
 impl IntoCollider<Collider> for Cuboid {
     fn collider(&self) -> Collider {
-        let [hx, hy, hz] = self.half_size.adjust_precision().to_array();
+        let [hx, hy, hz] = self.half_size.real().to_array();
         Collider::from(SharedShape::cuboid(hx, hy, hz))
     }
 }
@@ -73,8 +76,8 @@ impl IntoCollider<Collider> for Cuboid {
 impl IntoCollider<Collider> for Cylinder {
     fn collider(&self) -> Collider {
         Collider::from(SharedShape::cylinder(
-            self.half_height.adjust_precision(),
-            self.radius.adjust_precision(),
+            self.half_height.real(),
+            self.radius.real(),
         ))
     }
 }

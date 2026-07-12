@@ -169,8 +169,8 @@ fn movement(
                 }
                 MovementAction::Offset(direction) => {
                     let speed = 100.0;
-                    position.x += (direction.x * speed * delta_time).adjust_precision();
-                    position.y += (direction.y * speed * delta_time).adjust_precision();
+                    position.x += (direction.x * speed * delta_time).real();
+                    position.y += (direction.y * speed * delta_time).real();
                 }
             }
         }

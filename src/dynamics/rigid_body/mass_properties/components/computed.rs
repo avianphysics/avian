@@ -327,13 +327,13 @@ impl ComputedAngularInertia {
 
     /// Computes the angular inertia shifted by the given offset, taking into account the given mass.
     #[inline]
-    pub fn shifted(&self, mass: f32, offset: VectorF32) -> f32 {
+    pub fn shifted(&self, mass: f32, offset: Vector) -> f32 {
         AngularInertia::from(*self).shifted(mass as f32, offset.f32()) as f32
     }
 
     /// Computes the angular inertia shifted by the given offset, taking into account the given mass.
     #[inline]
-    pub fn shifted_inverse(&self, mass: f32, offset: VectorF32) -> f32 {
+    pub fn shifted_inverse(&self, mass: f32, offset: Vector) -> f32 {
         self.shifted(mass, offset).recip_or_zero()
     }
 
@@ -456,9 +456,9 @@ impl ComputedAngularInertia {
     /// Panics if any component of the principal angular inertia is negative or NaN when `debug_assertions` are enabled.
     #[inline]
     #[doc(alias = "from_principal_angular_inertia")]
-    pub fn new(principal_angular_inertia: VectorF32) -> Self {
+    pub fn new(principal_angular_inertia: Vector) -> Self {
         debug_assert!(
-            principal_angular_inertia.cmpge(VectorF32::ZERO).all()
+            principal_angular_inertia.cmpge(Vector::ZERO).all()
                 && !principal_angular_inertia.is_nan(),
             "principal angular inertia must be positive or zero for all axes"
         );
@@ -480,10 +480,10 @@ impl ComputedAngularInertia {
     ///
     /// Returns [`Err(AngularInertiaError)`](AngularInertiaError) if any component of the principal angular inertia is negative or NaN.
     #[inline]
-    pub fn try_new(principal_angular_inertia: VectorF32) -> Result<Self, AngularInertiaError> {
+    pub fn try_new(principal_angular_inertia: Vector) -> Result<Self, AngularInertiaError> {
         if principal_angular_inertia.is_nan() {
             Err(AngularInertiaError::NaN)
-        } else if !principal_angular_inertia.cmpge(VectorF32::ZERO).all() {
+        } else if !principal_angular_inertia.cmpge(Vector::ZERO).all() {
             Err(AngularInertiaError::Negative)
         } else {
             Ok(Self::from_inverse_tensor(SymmetricTensor::from_diagonal(
@@ -505,17 +505,17 @@ impl ComputedAngularInertia {
     /// Panics if any component of the principal angular inertia is negative or NaN when `debug_assertions` are enabled.
     #[inline]
     #[doc(alias = "from_principal_angular_inertia_with_local_frame")]
-    pub fn new_with_local_frame(principal_angular_inertia: VectorF32, orientation: Quat) -> Self {
+    pub fn new_with_local_frame(principal_angular_inertia: Vector, orientation: Quat) -> Self {
         debug_assert!(
-            principal_angular_inertia.cmpge(VectorF32::ZERO).all()
+            principal_angular_inertia.cmpge(Vector::ZERO).all()
                 && !principal_angular_inertia.is_nan(),
             "principal angular inertia must be positive or zero for all axes"
         );
 
         Self::from_inverse_tensor(SymmetricTensor::from_mat3_unchecked(
-            MatrixF32::from_quat(orientation)
-                * MatrixF32::from_diagonal(principal_angular_inertia.recip_or_zero())
-                * MatrixF32::from_quat(orientation.inverse()),
+            Matrix::from_quat(orientation)
+                * Matrix::from_diagonal(principal_angular_inertia.recip_or_zero())
+                * Matrix::from_quat(orientation.inverse()),
         ))
     }
 
@@ -532,19 +532,19 @@ impl ComputedAngularInertia {
     /// Returns [`Err(AngularInertiaError)`](AngularInertiaError) if any component of the principal angular inertia is negative or NaN.
     #[inline]
     pub fn try_new_with_local_frame(
-        principal_angular_inertia: VectorF32,
+        principal_angular_inertia: Vector,
         orientation: Quat,
     ) -> Result<Self, AngularInertiaError> {
         if principal_angular_inertia.is_nan() {
             Err(AngularInertiaError::NaN)
-        } else if !principal_angular_inertia.cmpge(VectorF32::ZERO).all() {
+        } else if !principal_angular_inertia.cmpge(Vector::ZERO).all() {
             Err(AngularInertiaError::Negative)
         } else {
             Ok(Self::from_inverse_tensor(
                 SymmetricTensor::from_mat3_unchecked(
-                    MatrixF32::from_quat(orientation)
-                        * MatrixF32::from_diagonal(principal_angular_inertia.recip_or_zero())
-                        * MatrixF32::from_quat(orientation.inverse()),
+                    Matrix::from_quat(orientation)
+                        * Matrix::from_diagonal(principal_angular_inertia.recip_or_zero())
+                        * Matrix::from_quat(orientation.inverse()),
                 ),
             ))
         }
@@ -643,7 +643,7 @@ impl ComputedAngularInertia {
     /// The principal angular inertia represents the torque needed for a desired angular acceleration
     /// about the local coordinate axes defined by the local inertial frame.
     #[doc(alias = "diagonalize")]
-    pub fn principal_angular_inertia_with_local_frame(&self) -> (VectorF32, Quat) {
+    pub fn principal_angular_inertia_with_local_frame(&self) -> (Vector, Quat) {
         let angular_inertia = AngularInertia::from_tensor(self.tensor().f32());
         (angular_inertia.principal, angular_inertia.local_frame)
     }
@@ -653,7 +653,7 @@ impl ComputedAngularInertia {
     /// This can be used to transform local angular inertia to world space.
     #[inline]
     pub fn rotated(self, rotation: Quat) -> Self {
-        let rot_mat3 = MatrixF32::from_quat(rotation);
+        let rot_mat3 = Matrix::from_quat(rotation);
         Self::from_inverse_tensor(SymmetricTensor::from_mat3_unchecked(
             (rot_mat3 * self.inverse) * rot_mat3.transpose(),
         ))
@@ -661,12 +661,12 @@ impl ComputedAngularInertia {
 
     /// Computes the angular inertia tensor shifted by the given offset, taking into account the given mass.
     #[inline]
-    pub fn shifted_tensor(&self, mass: f32, offset: VectorF32) -> SymmetricTensor {
-        if mass > 0.0 && mass.is_finite() && offset != VectorF32::ZERO {
+    pub fn shifted_tensor(&self, mass: f32, offset: Vector) -> SymmetricTensor {
+        if mass > 0.0 && mass.is_finite() && offset != Vector::ZERO {
             let diagonal_element = offset.length_squared();
-            let diagonal_mat = MatrixF32::from_diagonal(VectorF32::splat(diagonal_element));
+            let diagonal_mat = Matrix::from_diagonal(Vector::splat(diagonal_element));
             let offset_outer_product =
-                MatrixF32::from_cols(offset * offset.x, offset * offset.y, offset * offset.z);
+                Matrix::from_cols(offset * offset.x, offset * offset.y, offset * offset.z);
             self.tensor()
                 + SymmetricTensor::from_mat3_unchecked((diagonal_mat + offset_outer_product) * mass)
         } else {
@@ -676,7 +676,7 @@ impl ComputedAngularInertia {
 
     /// Computes the inverse angular inertia tensor shifted by the given offset, taking into account the given mass.
     #[inline]
-    pub fn shifted_inverse_tensor(&self, mass: f32, offset: VectorF32) -> SymmetricTensor {
+    pub fn shifted_inverse_tensor(&self, mass: f32, offset: Vector) -> SymmetricTensor {
         self.shifted_tensor(mass, offset).inverse_or_zero()
     }
 
@@ -730,11 +730,11 @@ impl core::ops::Mul<f32> for ComputedAngularInertia {
     }
 }
 
-impl core::ops::Mul<VectorF32> for ComputedAngularInertia {
-    type Output = VectorF32;
+impl core::ops::Mul<Vector> for ComputedAngularInertia {
+    type Output = Vector;
 
     #[inline]
-    fn mul(self, rhs: VectorF32) -> VectorF32 {
+    fn mul(self, rhs: Vector) -> Vector {
         self.value() * rhs
     }
 }
@@ -762,24 +762,24 @@ impl core::ops::Mul<VectorF32> for ComputedAngularInertia {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, Component, Default, PartialEq)]
-pub struct ComputedCenterOfMass(pub VectorF32);
+pub struct ComputedCenterOfMass(pub Vector);
 
 impl ComputedCenterOfMass {
     /// A center of mass set at the local origin.
-    pub const ZERO: Self = Self(VectorF32::ZERO);
+    pub const ZERO: Self = Self(Vector::ZERO);
 
     /// Creates a new [`ComputedCenterOfMass`] at the given local position.
     #[inline]
     #[cfg(feature = "2d")]
     pub const fn new(x: f32, y: f32) -> Self {
-        Self(VectorF32::new(x, y))
+        Self(Vector::new(x, y))
     }
 
     /// Creates a new [`ComputedCenterOfMass`] at the given local position.
     #[inline]
     #[cfg(feature = "3d")]
     pub const fn new(x: f32, y: f32, z: f32) -> Self {
-        Self(VectorF32::new(x, y, z))
+        Self(Vector::new(x, y, z))
     }
 }
 
@@ -924,36 +924,36 @@ mod tests {
     #[test]
     #[cfg(feature = "3d")]
     fn angular_inertia_creation() {
-        let angular_inertia = ComputedAngularInertia::new(VectorF32::new(10.0, 20.0, 30.0));
+        let angular_inertia = ComputedAngularInertia::new(Vector::new(10.0, 20.0, 30.0));
         assert_relative_eq!(
             angular_inertia.inverse_tensor(),
             ComputedAngularInertia::from_inverse_tensor(SymmetricTensor::from_diagonal(
-                VectorF32::new(0.1, 0.05, 1.0 / 30.0)
+                Vector::new(0.1, 0.05, 1.0 / 30.0)
             ))
             .inverse_tensor()
         );
         assert_relative_eq!(
             angular_inertia.tensor(),
-            SymmetricTensor::from_diagonal(VectorF32::new(10.0, 20.0, 30.0))
+            SymmetricTensor::from_diagonal(Vector::new(10.0, 20.0, 30.0))
         );
         assert_relative_eq!(
             angular_inertia.inverse_tensor(),
-            SymmetricTensor::from_diagonal(VectorF32::new(0.1, 0.05, 1.0 / 30.0))
+            SymmetricTensor::from_diagonal(Vector::new(0.1, 0.05, 1.0 / 30.0))
         );
     }
 
     #[test]
     #[cfg(feature = "3d")]
     fn zero_angular_inertia() {
-        let angular_inertia = ComputedAngularInertia::new(VectorF32::ZERO);
+        let angular_inertia = ComputedAngularInertia::new(Vector::ZERO);
         assert_eq!(
             angular_inertia,
-            ComputedAngularInertia::new(VectorF32::INFINITY)
+            ComputedAngularInertia::new(Vector::INFINITY)
         );
         assert_eq!(
             angular_inertia,
             ComputedAngularInertia::from_inverse_tensor(SymmetricTensor::from_diagonal(
-                VectorF32::ZERO
+                Vector::ZERO
             ))
         );
         assert_relative_eq!(angular_inertia.tensor(), SymmetricTensor::ZERO);
@@ -969,7 +969,7 @@ mod tests {
         let angular_inertia = ComputedAngularInertia::INFINITY;
         assert_eq!(
             angular_inertia,
-            ComputedAngularInertia::new(VectorF32::INFINITY)
+            ComputedAngularInertia::new(Vector::INFINITY)
         );
         assert_eq!(
             angular_inertia,
@@ -986,14 +986,14 @@ mod tests {
     #[should_panic]
     #[cfg(feature = "3d")]
     fn negative_angular_inertia_panics() {
-        ComputedAngularInertia::new(VectorF32::new(-1.0, 2.0, 3.0));
+        ComputedAngularInertia::new(Vector::new(-1.0, 2.0, 3.0));
     }
 
     #[test]
     #[cfg(feature = "3d")]
     fn negative_angular_inertia_error() {
         assert_eq!(
-            ComputedAngularInertia::try_new(VectorF32::new(-1.0, 2.0, 3.0)),
+            ComputedAngularInertia::try_new(Vector::new(-1.0, 2.0, 3.0)),
             Err(AngularInertiaError::Negative),
             "negative angular inertia should return an error"
         );
@@ -1003,7 +1003,7 @@ mod tests {
     #[cfg(feature = "3d")]
     fn nan_angular_inertia_error() {
         assert_eq!(
-            ComputedAngularInertia::try_new(VectorF32::new(f32::NAN, 2.0, 3.0)),
+            ComputedAngularInertia::try_new(Vector::new(f32::NAN, 2.0, 3.0)),
             Err(AngularInertiaError::NaN),
             "NaN angular inertia should return an error"
         );

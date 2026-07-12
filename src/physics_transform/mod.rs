@@ -200,16 +200,16 @@ pub fn transform_to_position(
     };
 
     // If the `GlobalTransform` translation and `Position` differ by less than 0.01 mm, we ignore the change.
-    let distance_tolerance = length_unit.adjust_precision() * 1e-5;
+    let distance_tolerance = length_unit.real() * 1e-5;
     // If the `GlobalTransform` rotation and `Rotation` differ by less than 0.1 degrees, we ignore the change.
     let rotation_tolerance = 0.1f32.to_radians();
 
     for (global_transform, mut position, mut rotation) in &mut query {
         let global_transform = global_transform.compute_transform();
         #[cfg(feature = "2d")]
-        let transform_translation = global_transform.translation.truncate().adjust_precision();
+        let transform_translation = global_transform.translation.truncate().real();
         #[cfg(feature = "3d")]
-        let transform_translation = global_transform.translation.adjust_precision();
+        let transform_translation = global_transform.translation.real();
         let transform_rotation = Rotation::from(global_transform.rotation);
 
         let position_changed = !position.is_added()
