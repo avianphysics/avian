@@ -135,7 +135,7 @@ impl ContactConstraint {
             ),
             Ordering::Greater => (
                 Vector::ZERO,
-                default(),
+                SymmetricTensor::ZERO,
                 inertia2.effective_inv_mass(),
                 inertia2.effective_inv_angular_inertia(),
             ),
@@ -143,7 +143,7 @@ impl ContactConstraint {
                 inertia1.effective_inv_mass(),
                 inertia1.effective_inv_angular_inertia(),
                 Vector::ZERO,
-                default(),
+                SymmetricTensor::ZERO,
             ),
         };
 
