@@ -62,7 +62,7 @@ impl BoundedCollider for CircleCollider {
     // If your collider needs queries or resources to function, you can specify
     // a custom `SystemParam` here. In this case, we don't need any.
     type Context = ();
-    // If your collider needs Entity available, set this to NeedsEntity
+    // If your collider needs Entity available, set this to ()
     type EntityUsage = ();
 
     fn aabb_with_context(
