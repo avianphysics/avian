@@ -115,26 +115,6 @@ pub(crate) type AngularVector = f32;
 #[cfg(feature = "3d")]
 pub(crate) type AngularVector = Vector;
 
-/// The `f32` matrix type used by Avian.
-///
-/// This is a type alias for `Mat3` in 3D.
-#[cfg(feature = "3d")]
-pub(crate) type Matrix = Mat3;
-
-/// The symmetric tensor type used by Avian.
-/// Often used for angular inertia.
-///
-/// This is a type alias for `f32` in 2D and `SymmetricMat3` in 3D.
-#[cfg(feature = "2d")]
-pub(crate) type SymmetricTensor = f32;
-
-/// The symmetric tensor type used by Avian.
-/// Often used for angular inertia.
-///
-/// This is a type alias for `f32` in 2D and `SymmetricMat3` in 3D.
-#[cfg(feature = "3d")]
-pub(crate) type SymmetricTensor = SymmetricMat3;
-
 /// The `f32` rotation type used by Avian.
 ///
 /// This is a type alias for `Rot2` in 2D and `Quat` in 3D.
@@ -158,6 +138,20 @@ pub(crate) type Isometry = Isometry2d;
 /// This is a type alias for `Isometry2d` in 2D and `Isometry3d` in 3D.
 #[cfg(feature = "3d")]
 pub(crate) type Isometry = Isometry3d;
+
+/// The symmetric tensor type used by Avian.
+/// Often used for angular inertia.
+///
+/// This is a type alias for `f32` in 2D and [`SymmetricMat3`] in 3D.
+#[cfg(feature = "2d")]
+pub type SymmetricTensor = f32;
+
+/// The symmetric tensor type used by Avian.
+/// Often used for angular inertia.
+///
+/// This is a type alias for `f32` in 2D and [`SymmetricMat3`] in 3D.
+#[cfg(feature = "3d")]
+pub type SymmetricTensor = SymmetricMat3;
 
 /// Adjusts the precision of the math type to the [`Real`] number precision.
 pub trait ToRealPrecision {

@@ -513,9 +513,9 @@ impl ComputedAngularInertia {
         );
 
         Self::from_inverse_tensor(SymmetricTensor::from_mat3_unchecked(
-            Matrix::from_quat(orientation)
-                * Matrix::from_diagonal(principal_angular_inertia.recip_or_zero())
-                * Matrix::from_quat(orientation.inverse()),
+            Mat3::from_quat(orientation)
+                * Mat3::from_diagonal(principal_angular_inertia.recip_or_zero())
+                * Mat3::from_quat(orientation.inverse()),
         ))
     }
 
@@ -542,9 +542,9 @@ impl ComputedAngularInertia {
         } else {
             Ok(Self::from_inverse_tensor(
                 SymmetricTensor::from_mat3_unchecked(
-                    Matrix::from_quat(orientation)
-                        * Matrix::from_diagonal(principal_angular_inertia.recip_or_zero())
-                        * Matrix::from_quat(orientation.inverse()),
+                    Mat3::from_quat(orientation)
+                        * Mat3::from_diagonal(principal_angular_inertia.recip_or_zero())
+                        * Mat3::from_quat(orientation.inverse()),
                 ),
             ))
         }
@@ -653,7 +653,7 @@ impl ComputedAngularInertia {
     /// This can be used to transform local angular inertia to world space.
     #[inline]
     pub fn rotated(self, rotation: Quat) -> Self {
-        let rot_mat3 = Matrix::from_quat(rotation);
+        let rot_mat3 = Mat3::from_quat(rotation);
         Self::from_inverse_tensor(SymmetricTensor::from_mat3_unchecked(
             (rot_mat3 * self.inverse) * rot_mat3.transpose(),
         ))
@@ -664,9 +664,9 @@ impl ComputedAngularInertia {
     pub fn shifted_tensor(&self, mass: f32, offset: Vector) -> SymmetricTensor {
         if mass > 0.0 && mass.is_finite() && offset != Vector::ZERO {
             let diagonal_element = offset.length_squared();
-            let diagonal_mat = Matrix::from_diagonal(Vector::splat(diagonal_element));
+            let diagonal_mat = Mat3::from_diagonal(Vector::splat(diagonal_element));
             let offset_outer_product =
-                Matrix::from_cols(offset * offset.x, offset * offset.y, offset * offset.z);
+                Mat3::from_cols(offset * offset.x, offset * offset.y, offset * offset.z);
             self.tensor()
                 + SymmetricTensor::from_mat3_unchecked((diagonal_mat + offset_outer_product) * mass)
         } else {
