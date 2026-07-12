@@ -228,6 +228,20 @@ impl ToF32Precision for Vec4 {
     }
 }
 
+impl ToF32Precision for DRot2 {
+    type F32 = Rot2;
+    fn f32(&self) -> Self::F32 {
+        Rot2::from_sin_cos(self.sin as f32, self.cos as f32)
+    }
+}
+
+impl ToF32Precision for Rot2 {
+    type F32 = Self;
+    fn f32(&self) -> Self::F32 {
+        *self
+    }
+}
+
 impl ToF32Precision for DQuat {
     type F32 = Quat;
     fn f32(&self) -> Self::F32 {
@@ -303,29 +317,6 @@ impl ToF32Precision for SymmetricDMat3 {
 }
 
 impl ToF32Precision for SymmetricMat3 {
-    type F32 = Self;
-    fn f32(&self) -> Self::F32 {
-        *self
-    }
-}
-
-#[cfg(feature = "2d")]
-impl ToF32Precision for Rotation {
-    type F32 = Rot2;
-    fn f32(&self) -> Self::F32 {
-        Rot2::from_sin_cos(self.sin, self.cos)
-    }
-}
-
-#[cfg(feature = "3d")]
-impl ToF32Precision for Rotation {
-    type F32 = Quat;
-    fn f32(&self) -> Self::F32 {
-        self.0.f32()
-    }
-}
-
-impl ToF32Precision for Rot2 {
     type F32 = Self;
     fn f32(&self) -> Self::F32 {
         *self

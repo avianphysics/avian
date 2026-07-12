@@ -918,7 +918,7 @@ pub fn update_moved_collider_aabbs<C: AnyCollider>(
             // Update tight-fitting AABB.
             let context = ColliderContext::new(entity, &*collider_context);
             let growth = contact_tolerance + collision_margin;
-            *aabb = collider.aabb_with_context(pos.0, rot.f32(), growth, context);
+            *aabb = collider.aabb_with_context(pos.0, *rot, growth, context);
 
             // Recompute the cached AABB margin if the collider shape changed.
             if collider_changed {

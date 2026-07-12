@@ -6,7 +6,7 @@
 
 #![allow(clippy::type_complexity)]
 
-use avian2d::{math::*, prelude::*};
+use avian2d::prelude::*;
 use bevy::{
     ecs::{
         entity::hash_set::EntityHashSet,
@@ -126,7 +126,7 @@ fn setup(
 
     // Spawn an actor for the user to control
     let actor_size = Vec2::new(20.0, 20.0);
-    let actor_mesh = meshes.add(Rectangle::from_size(actor_size.f32()));
+    let actor_mesh = meshes.add(Rectangle::from_size(actor_size));
     let actor_material = materials.add(Color::srgb(0.2, 0.7, 0.9));
 
     commands.spawn((

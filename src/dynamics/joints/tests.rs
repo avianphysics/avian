@@ -535,7 +535,7 @@ fn prismatic_motor_respects_limits() {
     let position = body_ref.get::<Position>().unwrap();
 
     // The displacement along the slide axis (X) should be at or near the limit.
-    let displacement = position.0.x.f32();
+    let displacement = position.x.f32();
     assert!(
         displacement <= distance_limit + 0.001,
         "Displacement {} should not exceed limit {}",

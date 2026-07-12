@@ -337,7 +337,7 @@ fn update_shape_caster_positions(
             shape_caster.set_global_origin(origin);
         }
 
-        if let Some(global_rotation) = global_rotation.map(|rot| rot.f32()) {
+        if let Some(global_rotation) = global_rotation.map(Rot::from) {
             let global_direction = global_rotation * shape_caster.direction;
             shape_caster.set_global_direction(global_direction);
             #[cfg(feature = "2d")]
@@ -378,7 +378,7 @@ fn update_shape_caster_positions(
                 shape_caster.set_global_origin(position.0 + rotation.real() * origin);
             }
             if global_rotation.is_none()
-                && let Some(rotation) = parent_rotation.map(|rot| rot.f32())
+                && let Some(rotation) = parent_rotation.map(Rot::from)
             {
                 let global_direction = rotation * shape_caster.direction;
                 shape_caster.set_global_direction(global_direction);

@@ -156,9 +156,9 @@ impl ContactConstraint {
         let effective_inverse_mass_sum = inv_mass1 + inv_mass2;
 
         let tangents = compute_tangent_directions(
-            manifold.normal.f32(),
-            body1.linear_velocity.0.f32(),
-            body2.linear_velocity.0.f32(),
+            manifold.normal,
+            body1.linear_velocity.0,
+            body2.linear_velocity.0,
         );
 
         let mut points = Vec::with_capacity(manifold.points.len());
@@ -166,8 +166,8 @@ impl ContactConstraint {
         for point in manifold.points.iter() {
             // Use fixed world-space anchors.
             // This improves rolling behavior for shapes like balls and capsules.
-            let anchor1 = point.anchor1.f32();
-            let anchor2 = point.anchor2.f32();
+            let anchor1 = point.anchor1;
+            let anchor2 = point.anchor2;
 
             let point = ContactConstraintPoint {
                 // TODO: Apply warm starting scale here instead of in `warm_start`?
@@ -177,8 +177,8 @@ impl ContactConstraint {
                     &i2,
                     anchor1,
                     anchor2,
-                    manifold.normal.f32(),
-                    warm_start_enabled.then_some(point.warm_start_normal_impulse.f32()),
+                    manifold.normal,
+                    warm_start_enabled.then_some(point.warm_start_normal_impulse),
                     softness,
                 ),
                 // There should only be a friction part if the coefficient of friction is non-negative.
@@ -189,13 +189,12 @@ impl ContactConstraint {
                     anchor1,
                     anchor2,
                     tangents,
-                    warm_start_enabled.then_some(point.warm_start_tangent_impulse.f32()),
+                    warm_start_enabled.then_some(point.warm_start_tangent_impulse),
                 )),
                 anchor1,
                 anchor2,
-                normal_speed: point.normal_speed.f32(),
-                initial_separation: -point.penetration.f32()
-                    - (anchor2 - anchor1).dot(manifold.normal.f32()),
+                normal_speed: point.normal_speed,
+                initial_separation: -point.penetration - (anchor2 - anchor1).dot(manifold.normal),
             };
 
             points.push(point);
@@ -205,13 +204,13 @@ impl ContactConstraint {
             body1: body1_entity,
             body2: body2_entity,
             relative_dominance,
-            friction: manifold.friction.f32(),
-            restitution: manifold.restitution.f32(),
+            friction: manifold.friction,
+            restitution: manifold.restitution,
             #[cfg(feature = "2d")]
-            tangent_speed: manifold.tangent_speed.f32(),
+            tangent_speed: manifold.tangent_speed,
             #[cfg(feature = "3d")]
-            tangent_velocity: manifold.tangent_velocity.f32(),
-            normal: manifold.normal.f32(),
+            tangent_velocity: manifold.tangent_velocity,
+            normal: manifold.normal,
             #[cfg(feature = "3d")]
             tangent1: tangents[0],
             points,

@@ -63,7 +63,7 @@ fn render_rays(mut rays: Query<(&mut RayCaster, &mut RayHits)>, mut gizmos: Gizm
     for (ray, hits) in &mut rays {
         // Convert to Vec3 for lines
         let origin = ray.global_origin().f32();
-        let direction = ray.global_direction().f32();
+        let direction = ray.global_direction();
 
         for hit in hits.iter() {
             gizmos.line_2d(origin, origin + direction * hit.distance as f32, GREEN);

@@ -6,7 +6,7 @@
 #![allow(clippy::unnecessary_cast)]
 
 use avian3d::{
-    math::{RVec3, Real, ToF32Precision},
+    math::{RVec3, Real},
     prelude::*,
 };
 use bevy::{
@@ -53,7 +53,7 @@ fn setup(
         }
     }
 
-    let collider = Collider::voxels_from_points(voxel_size.f32(), &points);
+    let collider = Collider::voxels_from_points(voxel_size, &points);
 
     // Compute the mesh for rendering.
     let (vertices, indices) = collider.shape().as_voxels().unwrap().to_trimesh();
@@ -78,14 +78,11 @@ fn setup(
         Friction::new(0.2),
         Mesh3d(meshes.add(mesh)),
         MeshMaterial3d(materials.add(Color::srgb(0.4, 0.6, 0.4))),
-        Transform::from_translation(
-            RVec3::new(
-                -n as Real / 2.0 * voxel_size.x,
-                -5.0 * voxel_size.y,
-                -n as Real / 2.0 * voxel_size.z,
-            )
-            .f32(),
-        ),
+        Transform::from_translation(Vec3::new(
+            -n as f32 / 2.0 * voxel_size.x,
+            -5.0 * voxel_size.y,
+            -n as f32 / 2.0 * voxel_size.z,
+        )),
     ));
 
     // Spawn a grid of various dynamic primitives that will fall onto the surface.

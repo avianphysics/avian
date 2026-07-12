@@ -234,8 +234,8 @@ impl MassPropertiesExt for MassProperties {
         let angular_inertia = AngularInertia(self.angular_inertia);
         #[cfg(feature = "3d")]
         let angular_inertia = AngularInertia::new_with_local_frame(
-            self.principal_angular_inertia.f32(),
-            self.local_inertial_frame.f32(),
+            self.principal_angular_inertia,
+            self.local_inertial_frame,
         );
 
         MassPropertiesBundle {

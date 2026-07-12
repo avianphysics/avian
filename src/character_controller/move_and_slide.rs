@@ -502,7 +502,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         // 5. Repeat until we run out of iterations or time
         for _ in 0..config.move_and_slide_iterations {
             let sweep = time_left * velocity;
-            let Some((vel_dir, distance)) = Dir::new_and_length(sweep.f32()).ok() else {
+            let Some((vel_dir, distance)) = Dir::new_and_length(sweep).ok() else {
                 // No movement left
                 break;
             };
@@ -533,7 +533,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             // We need to add the sweep hit's plane explicitly, as `contact_manifolds` sometimes returns nothing
             // due to a Parry bug. Otherwise, `contact_manifolds` would pick up this normal anyways.
             // TODO: Remove this once the collision bug is fixed.
-            let mut first_normal = Dir::new_unchecked(sweep_hit.normal1.f32());
+            let mut first_normal = Dir::new_unchecked(sweep_hit.normal1);
             let hit_response = on_hit(MoveAndSlideHitData {
                 entity: sweep_hit.entity,
                 point,
@@ -812,11 +812,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// use bevy::prelude::*;
     #[cfg_attr(
         feature = "2d",
-        doc = "use avian2d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::{ToRealPrecision as _, ToF32Precision as _}};"
+        doc = "use avian2d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::ToRealPrecision};"
     )]
     #[cfg_attr(
         feature = "3d",
-        doc = "use avian3d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::{ToRealPrecision as _, ToF32Precision as _}};"
+        doc = "use avian3d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::ToRealPrecision};"
     )]
     /// fn depenetrate_player(
     ///     player: Single<(Entity, &Collider, &mut Transform)>,
@@ -840,9 +840,9 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///     );
     #[cfg_attr(
         feature = "2d",
-        doc = "     transform.translation += offset.f32().extend(0.0);"
+        doc = "     transform.translation += offset.extend(0.0);"
     )]
-    #[cfg_attr(feature = "3d", doc = "     transform.translation += offset.f32();")]
+    #[cfg_attr(feature = "3d", doc = "     transform.translation += offset;")]
     /// }
     /// ```
     ///
@@ -911,11 +911,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// use bevy::prelude::*;
     #[cfg_attr(
         feature = "2d",
-        doc = "use avian2d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::{ToRealPrecision as _, ToF32Precision as _}};"
+        doc = "use avian2d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::ToRealPrecision};"
     )]
     #[cfg_attr(
         feature = "3d",
-        doc = "use avian3d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::{ToRealPrecision as _, ToF32Precision as _}};"
+        doc = "use avian3d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::ToRealPrecision};"
     )]
     /// fn depenetrate_player_manually(
     ///     player: Single<(Entity, &Collider, &mut Transform)>,
@@ -946,9 +946,9 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///     let offset = move_and_slide.depenetrate_intersections(&config, &intersections);
     #[cfg_attr(
         feature = "2d",
-        doc = "     transform.translation += offset.f32().extend(0.0);"
+        doc = "     transform.translation += offset.extend(0.0);"
     )]
-    #[cfg_attr(feature = "3d", doc = "     transform.translation += offset.f32();")]
+    #[cfg_attr(feature = "3d", doc = "     transform.translation += offset;")]
     /// }
     /// ```
     ///
@@ -1046,7 +1046,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                     continue;
                 };
 
-                let normal = Dir::new_unchecked(-manifold.normal.f32());
+                let normal = Dir::new_unchecked(-manifold.normal);
 
                 if !callback(intersection_entity, deepest, normal) {
                     // Abort further processing.

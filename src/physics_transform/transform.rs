@@ -1146,13 +1146,13 @@ pub(crate) fn init_physics_transform(world: &mut DeferredWorld, ctx: &HookContex
                         Transform::from_translation(position.f32().extend(
                             parent_translation.z + transform.translation.z * parent_scale.z,
                         ))
-                        .with_rotation(Quat::from(rotation).f32()),
+                        .with_rotation(Quat::from(rotation)),
                     )
                     .reparented_to(&parent_global_transform)
                 };
             #[cfg(feature = "3d")]
             let new_transform = GlobalTransform::from(
-                Transform::from_translation(position.f32()).with_rotation(rotation.f32()),
+                Transform::from_translation(position.f32()).with_rotation(rotation.0),
             )
             .reparented_to(&parent_global_transform);
 
@@ -1169,7 +1169,7 @@ pub(crate) fn init_physics_transform(world: &mut DeferredWorld, ctx: &HookContex
                     transform.translation = position.f32().extend(transform.translation.z);
                 }
                 if !is_rot_placeholder {
-                    transform.rotation = Quat::from(rotation).f32();
+                    transform.rotation = Quat::from(rotation);
                 }
             }
             #[cfg(feature = "3d")]
@@ -1178,7 +1178,7 @@ pub(crate) fn init_physics_transform(world: &mut DeferredWorld, ctx: &HookContex
                     transform.translation = position.f32();
                 }
                 if !is_rot_placeholder {
-                    transform.rotation = rotation.f32();
+                    transform.rotation = rotation.0;
                 }
             }
         }

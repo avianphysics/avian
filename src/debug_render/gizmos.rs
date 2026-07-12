@@ -174,7 +174,7 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
             #[cfg(feature = "3d")]
             TypedShape::Ball(s) => {
                 self.sphere(
-                    Isometry3d::new(position.f32(), rotation.f32()),
+                    Isometry3d::new(position.f32(), rotation),
                     s.radius as f32,
                     color,
                 );
@@ -182,10 +182,7 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
             #[cfg(feature = "2d")]
             TypedShape::Cuboid(s) => {
                 self.rect_2d(
-                    Isometry2d::new(
-                        position.f32(),
-                        Rot2::from_sin_cos(rotation.sin as f32, rotation.cos as f32),
-                    ),
+                    Isometry2d::new(position.f32(), rotation),
                     2.0 * s.half_extents.f32(),
                     color,
                 );
@@ -196,7 +193,7 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
 
                 self.aabb_3d(
                     Aabb3d::new(Vec3A::ZERO, s.half_extents.f32()),
-                    Transform::from_translation(position.f32()).with_rotation(rotation.f32()),
+                    Transform::from_translation(position.f32()).with_rotation(rotation),
                     color,
                 );
             }
@@ -286,7 +283,7 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
                             sub_pos.rotation.cos().f32(),
                         );
                     #[cfg(feature = "3d")]
-                    let rot = rotation.mul_quat(sub_pos.rotation.f32()).normalize();
+                    let rot = rotation.mul_quat(sub_pos.rotation).normalize();
                     self.draw_collider(&Collider::from(shape.to_owned()), pos, rot, color);
                 }
             }
@@ -364,19 +361,13 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
                     if let Some(ellipse) =
                         collider.shape_scaled().as_shape::<EllipseColliderShape>()
                     {
-                        let isometry = Isometry2d::new(
-                            position.f32(),
-                            Rot2::from_sin_cos(rotation.sin as f32, rotation.cos as f32),
-                        );
+                        let isometry = Isometry2d::new(position.f32(), rotation);
                         self.primitive_2d(&ellipse.0, isometry, color);
                     } else if let Some(polygon) = collider
                         .shape_scaled()
                         .as_shape::<RegularPolygonColliderShape>()
                     {
-                        let isometry = Isometry2d::new(
-                            position.f32(),
-                            Rot2::from_sin_cos(rotation.sin as f32, rotation.cos as f32),
-                        );
+                        let isometry = Isometry2d::new(position.f32(), rotation);
                         self.primitive_2d(&polygon.0, isometry, color);
                     }
                 }

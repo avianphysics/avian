@@ -324,7 +324,7 @@ pub fn position_to_transform(
                 // Compute the global transform of the parent using its Position and Rotation
                 let parent_transform = parent_transform.compute_transform();
                 let parent_pos = parent_pos.map_or(parent_transform.translation, |pos| pos.f32());
-                let parent_rot = parent_rot.map_or(parent_transform.rotation, |rot| rot.f32());
+                let parent_rot = parent_rot.map_or(parent_transform.rotation, |rot| rot.0);
                 let parent_scale = parent_transform.scale;
                 let parent_transform = Transform::from_translation(parent_pos)
                     .with_rotation(parent_rot)
@@ -333,7 +333,7 @@ pub fn position_to_transform(
                 // The new local transform of the child body,
                 // computed from the its global transform and its parents global transform
                 let new_transform = GlobalTransform::from(
-                    Transform::from_translation(pos.f32()).with_rotation(rot.f32()),
+                    Transform::from_translation(pos.f32()).with_rotation(rot.0),
                 )
                 .reparented_to(&GlobalTransform::from(parent_transform));
 
@@ -342,7 +342,7 @@ pub fn position_to_transform(
             }
         } else {
             transform.translation = pos.f32();
-            transform.rotation = rot.f32();
+            transform.rotation = rot.0;
         }
     }
 }

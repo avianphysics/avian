@@ -328,7 +328,7 @@ impl ComputedAngularInertia {
     /// Computes the angular inertia shifted by the given offset, taking into account the given mass.
     #[inline]
     pub fn shifted(&self, mass: f32, offset: Vector) -> f32 {
-        AngularInertia::from(*self).shifted(mass as f32, offset.f32()) as f32
+        AngularInertia::from(*self).shifted(mass as f32, offset) as f32
     }
 
     /// Computes the angular inertia shifted by the given offset, taking into account the given mass.
@@ -644,7 +644,7 @@ impl ComputedAngularInertia {
     /// about the local coordinate axes defined by the local inertial frame.
     #[doc(alias = "diagonalize")]
     pub fn principal_angular_inertia_with_local_frame(&self) -> (Vector, Quat) {
-        let angular_inertia = AngularInertia::from_tensor(self.tensor().f32());
+        let angular_inertia = AngularInertia::from_tensor(self.tensor());
         (angular_inertia.principal, angular_inertia.local_frame)
     }
 
@@ -716,7 +716,7 @@ impl From<AngularInertia> for ComputedAngularInertia {
 #[cfg(feature = "3d")]
 impl From<ComputedAngularInertia> for AngularInertia {
     fn from(inertia: ComputedAngularInertia) -> Self {
-        Self::from_tensor(inertia.tensor().f32())
+        Self::from_tensor(inertia.tensor())
     }
 }
 

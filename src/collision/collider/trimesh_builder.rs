@@ -347,11 +347,7 @@ impl From<Trimesh> for Mesh {
         mesh.insert_attribute(
             Mesh::ATTRIBUTE_POSITION,
             VertexAttributeValues::Float32x3(
-                trimesh
-                    .vertices
-                    .into_iter()
-                    .map(|v| v.f32().to_array())
-                    .collect(),
+                trimesh.vertices.into_iter().map(|v| v.to_array()).collect(),
             ),
         );
         mesh.insert_indices(Indices::U32(

@@ -721,24 +721,19 @@ fn solve_continuous(
                 continue;
             };
 
-            let motion1 = collider_sweep_motion(
-                collider_pos1.0,
-                collider_rot1.f32(),
-                body_com_world,
-                body,
-                inv_dt,
-            );
+            let motion1 =
+                collider_sweep_motion(collider_pos1.0, collider_rot1, body_com_world, body, inv_dt);
 
             // Compute the collider's end-of-frame pose to build the swept AABB.
-            let collider_rot2 = (body.delta_rotation * collider_rot1.f32()).fast_renormalize();
+            let collider_rot2 = (body.delta_rotation * Rot::from(collider_rot1)).fast_renormalize();
             let collider_pos2 = body_com_world
                 + body.delta_position.real()
                 + body.delta_rotation.real() * (collider_pos1.0 - body_com_world);
             let swept_aabb = collider1.swept_aabb(
                 collider_pos1.0,
-                collider_rot1.f32(),
+                collider_rot1,
                 collider_pos2,
-                collider_rot2.f32(),
+                collider_rot2,
                 0.0,
             );
             let query_aabb = obvhs::aabb::Aabb::from(swept_aabb);
@@ -794,7 +789,7 @@ fn solve_continuous(
                                 (
                                     collider_sweep_motion(
                                         target_pos.0,
-                                        target_rot.f32(),
+                                        target_rot,
                                         target_com_world,
                                         body2.body,
                                         inv_dt,
@@ -802,15 +797,9 @@ fn solve_continuous(
                                     body2.ccd.map_or(SweepMode::NonLinear, |ccd| ccd.mode),
                                 )
                             }
-                            Err(_) => (
-                                static_motion(target_pos.0, target_rot.f32()),
-                                SweepMode::Linear,
-                            ),
+                            Err(_) => (static_motion(target_pos.0, target_rot), SweepMode::Linear),
                         },
-                        None => (
-                            static_motion(target_pos.0, target_rot.f32()),
-                            SweepMode::Linear,
-                        ),
+                        None => (static_motion(target_pos.0, target_rot), SweepMode::Linear),
                     };
 
                     // Use a non-linear sweep unless both bodies opt into linear sweeps.
@@ -925,18 +914,22 @@ fn solve_continuous(
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 fn collider_sweep_motion(
     collider_pos: RVector,
-    collider_rot: Rot,
+    collider_rot: impl Into<Rot>,
     com_world: RVector,
     solver_body: &SolverBody,
     inv_dt: f32,
 ) -> NonlinearRigidMotion {
+    let collider_rot = collider_rot.into();
+
     let lin_vel = solver_body.delta_position * inv_dt;
     #[cfg(feature = "2d")]
     let ang_vel = solver_body.delta_rotation.as_radians() * inv_dt;
     #[cfg(feature = "3d")]
     let ang_vel = solver_body.delta_rotation.to_scaled_axis() * inv_dt;
+
     // The body's center of mass expressed in the collider's local frame
     let local_center = collider_rot.inverse() * (com_world - collider_pos).f32();
+
     NonlinearRigidMotion::new(
         make_pose(collider_pos, collider_rot),
         local_center.real(),
@@ -947,7 +940,7 @@ fn collider_sweep_motion(
 
 /// A constant (non-moving) [`NonlinearRigidMotion`] at the given pose, for static targets.
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
-fn static_motion(pos: RVector, rot: Rot) -> NonlinearRigidMotion {
+fn static_motion(pos: RVector, rot: impl Into<Rot>) -> NonlinearRigidMotion {
     NonlinearRigidMotion::constant_position(make_pose(pos, rot))
 }
 

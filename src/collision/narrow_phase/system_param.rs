@@ -690,9 +690,9 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                 collider1.shape.contact_manifolds_with_context(
                     collider2.shape,
                     collider1.position.0,
-                    collider1.rotation.f32(),
+                    *collider1.rotation,
                     collider2.position.0,
-                    collider2.rotation.f32(),
+                    *collider2.rotation,
                     max_contact_distance,
                     &mut contacts.manifolds,
                     context,
@@ -717,8 +717,8 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     // Transform and prune contact points.
                     manifold.retain_points_mut(|point| {
                         // Transform contact points to be relative to the centers of mass of the bodies.
-                        point.anchor1 += (collider_offset1 - world_com1).f32();
-                        point.anchor2 += (collider_offset2 - world_com2).f32();
+                        point.anchor1 += collider_offset1 - world_com1;
+                        point.anchor2 += collider_offset2 - world_com2;
 
                         // Add the collision margin to the penetration depth.
                         point.penetration += collision_margin_sum;

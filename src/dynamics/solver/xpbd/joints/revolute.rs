@@ -98,18 +98,20 @@ impl XpbdConstraint<2> for RevoluteJoint {
         // Prepare the base rotation difference.
         #[cfg(feature = "2d")]
         {
-            solver_data.rotation_difference = (bodies[0].rotation.f32() * local_basis1)
-                .angle_to(bodies[1].rotation.f32() * local_basis2);
+            solver_data.rotation_difference = (Rot::from(*bodies[0].rotation) * local_basis1)
+                .angle_to(Rot::from(*bodies[1].rotation) * local_basis2);
         }
         #[cfg(feature = "3d")]
         {
             // Prepare the base axes.
-            solver_data.a1 = bodies[0].rotation.f32() * local_basis1 * self.hinge_axis;
-            solver_data.a2 = bodies[1].rotation.f32() * local_basis2 * self.hinge_axis;
-            solver_data.b1 =
-                bodies[0].rotation.f32() * local_basis1 * self.hinge_axis.any_orthonormal_vector();
-            solver_data.b2 =
-                bodies[1].rotation.f32() * local_basis2 * self.hinge_axis.any_orthonormal_vector();
+            solver_data.a1 = Rot::from(*bodies[0].rotation) * local_basis1 * self.hinge_axis;
+            solver_data.a2 = Rot::from(*bodies[1].rotation) * local_basis2 * self.hinge_axis;
+            solver_data.b1 = Rot::from(*bodies[0].rotation)
+                * local_basis1
+                * self.hinge_axis.any_orthonormal_vector();
+            solver_data.b2 = Rot::from(*bodies[1].rotation)
+                * local_basis2
+                * self.hinge_axis.any_orthonormal_vector();
         }
     }
 

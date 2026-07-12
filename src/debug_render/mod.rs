@@ -223,7 +223,7 @@ fn debug_render_aabbs(
                 }
             }
 
-            gizmos.rect_2d(aabb.center().f32(), aabb.size().f32(), color);
+            gizmos.rect_2d(aabb.center().f32(), aabb.size(), color);
         }
     }
 
@@ -246,8 +246,8 @@ fn debug_render_aabbs(
 
             gizmos.aabb_3d(
                 Aabb3d {
-                    min: Vec3A::from(aabb.min.f32()),
-                    max: Vec3A::from(aabb.max.f32()),
+                    min: Vec3A::from(aabb.min),
+                    max: Vec3A::from(aabb.max),
                 },
                 Transform::IDENTITY,
                 color,
@@ -550,7 +550,7 @@ fn debug_render_islands(
             // Render the island's AABB.
             #[cfg(feature = "2d")]
             {
-                gizmos.rect_2d(aabb.center().f32(), aabb.size().f32(), color);
+                gizmos.rect_2d(aabb.center().f32(), aabb.size(), color);
             }
             #[cfg(feature = "3d")]
             {
@@ -558,8 +558,8 @@ fn debug_render_islands(
 
                 gizmos.aabb_3d(
                     Aabb3d {
-                        min: Vec3A::from(aabb.min.f32()),
-                        max: Vec3A::from(aabb.max.f32()),
+                        min: Vec3A::from(aabb.min),
+                        max: Vec3A::from(aabb.max),
                     },
                     Transform::IDENTITY,
                     color,

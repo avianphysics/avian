@@ -383,14 +383,8 @@ fn update_local_frames(
             continue;
         };
 
-        let [frame1, frame2] = JointFrame::compute_local(
-            joint.frame1,
-            joint.frame2,
-            pos1.0,
-            pos2.0,
-            rot1.f32(),
-            rot2.f32(),
-        );
+        let [frame1, frame2] =
+            JointFrame::compute_local(joint.frame1, joint.frame2, pos1.0, pos2.0, *rot1, *rot2);
         joint.frame1 = frame1;
         joint.frame2 = frame2;
     }

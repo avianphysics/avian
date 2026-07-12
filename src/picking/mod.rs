@@ -242,7 +242,7 @@ pub fn update_hits(
                         ray_id.camera,
                         distance,
                         Some(ray.get_point(distance)),
-                        Some(ray_hit_data.normal.f32()),
+                        Some(ray_hit_data.normal),
                     );
                     (ray_hit_data.entity, hit_data)
                 })

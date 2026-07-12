@@ -73,7 +73,7 @@ impl RigidBodyQueryItem<'_, '_> {
         #[cfg(feature = "2d")]
         let mut angular_inertia = *self.angular_inertia;
         #[cfg(feature = "3d")]
-        let mut angular_inertia = self.angular_inertia.rotated(self.rotation.f32());
+        let mut angular_inertia = self.angular_inertia.rotated(self.rotation.0);
 
         if let Some(locked_axes) = self.locked_axes {
             angular_inertia = locked_axes.apply_to_angular_inertia(angular_inertia);
@@ -150,7 +150,7 @@ impl RigidBodyQueryReadOnlyItem<'_, '_> {
         #[cfg(feature = "2d")]
         let mut angular_inertia = *self.angular_inertia;
         #[cfg(feature = "3d")]
-        let mut angular_inertia = self.angular_inertia.rotated(self.rotation.f32());
+        let mut angular_inertia = self.angular_inertia.rotated(self.rotation.0);
 
         if let Some(locked_axes) = self.locked_axes {
             angular_inertia = locked_axes.apply_to_angular_inertia(angular_inertia);

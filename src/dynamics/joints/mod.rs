@@ -830,14 +830,11 @@ impl JointFrame {
     #[allow(clippy::unnecessary_cast)]
     pub fn get_local_isometry(&self) -> Option<Isometry> {
         let translation = match self.anchor {
-            JointAnchor::Local(anchor) => anchor.f32(),
+            JointAnchor::Local(anchor) => anchor,
             JointAnchor::FromGlobal(_) => return None,
         };
         let rotation = match self.basis {
-            #[cfg(feature = "2d")]
-            JointBasis::Local(basis) => Rot2::from_sin_cos(basis.sin as f32, basis.cos as f32),
-            #[cfg(feature = "3d")]
-            JointBasis::Local(basis) => basis.f32(),
+            JointBasis::Local(basis) => basis,
             JointBasis::FromGlobal(_) => return None,
         };
         Some(Isometry::new(translation, rotation))
@@ -854,10 +851,7 @@ impl JointFrame {
             JointAnchor::Local(_) => return None,
         };
         let rotation = match self.basis {
-            #[cfg(feature = "2d")]
-            JointBasis::FromGlobal(basis) => Rot2::from_sin_cos(basis.sin as f32, basis.cos as f32),
-            #[cfg(feature = "3d")]
-            JointBasis::FromGlobal(basis) => basis.f32(),
+            JointBasis::FromGlobal(basis) => basis,
             JointBasis::Local(_) => return None,
         };
         Some(Isometry::new(translation, rotation))
@@ -874,9 +868,12 @@ impl JointFrame {
         frame2: Self,
         pos1: RVector,
         pos2: RVector,
-        rot1: Rot,
-        rot2: Rot,
+        rot1: impl Into<Rot>,
+        rot2: impl Into<Rot>,
     ) -> [JointFrame; 2] {
+        let rot1 = rot1.into();
+        let rot2 = rot2.into();
+
         let [local_anchor1, local_anchor2] =
             JointAnchor::compute_local(frame1.anchor, frame2.anchor, pos1, pos2, rot1, rot2);
         let [local_basis1, local_basis2] =
@@ -934,9 +931,12 @@ impl JointAnchor {
         anchor2: Self,
         pos1: RVector,
         pos2: RVector,
-        rot1: Rot,
-        rot2: Rot,
+        rot1: impl Into<Rot>,
+        rot2: impl Into<Rot>,
     ) -> [Self; 2] {
+        let rot1 = rot1.into();
+        let rot2 = rot2.into();
+
         let [local_anchor1, local_anchor2] = match [anchor1, anchor2] {
             [JointAnchor::Local(anchor1), JointAnchor::Local(anchor2)] => [anchor1, anchor2],
             [
@@ -1096,7 +1096,15 @@ impl JointBasis {
 
     /// Computes a [`JointBasis::Local`] for the given [`JointBasis`]s
     /// corresponding to the transforms of two bodies constrained by a joint.
-    pub fn compute_local(rotation1: Self, rotation2: Self, rot1: Rot, rot2: Rot) -> [Self; 2] {
+    pub fn compute_local(
+        rotation1: Self,
+        rotation2: Self,
+        rot1: impl Into<Rot>,
+        rot2: impl Into<Rot>,
+    ) -> [Self; 2] {
+        let rot1 = rot1.into();
+        let rot2 = rot2.into();
+
         let [local_basis1, local_basis2] = match [rotation1, rotation2] {
             [JointBasis::Local(basis1), JointBasis::Local(basis2)] => [basis1, basis2],
             [

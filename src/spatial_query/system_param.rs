@@ -199,7 +199,7 @@ impl SpatialQuery<'_, '_> {
 
                 let Some((distance, normal)) = collider.cast_ray(
                     position.0,
-                    rotation.f32(),
+                    *rotation,
                     origin,
                     *direction,
                     max_distance,
@@ -376,7 +376,7 @@ impl SpatialQuery<'_, '_> {
 
                 let Some((distance, normal)) = collider.cast_ray(
                     position.0,
-                    rotation.f32(),
+                    *rotation,
                     origin,
                     *direction,
                     max_distance,
@@ -555,7 +555,7 @@ impl SpatialQuery<'_, '_> {
                         return f32::MAX;
                     };
 
-                    let pose1 = make_pose(position.0, rotation.f32());
+                    let pose1 = make_pose(position.0, *rotation);
                     let pose2 = make_pose(origin, shape_rotation);
 
                     let Ok(Some(hit)) = parry::query::cast_shapes(
@@ -771,7 +771,7 @@ impl SpatialQuery<'_, '_> {
                         return true;
                     };
 
-                    let pose1 = make_pose(position.0, rotation.f32());
+                    let pose1 = make_pose(position.0, *rotation);
                     let pose2 = make_pose(origin, shape_rotation);
 
                     let Ok(Some(hit)) = parry::query::cast_shapes(
@@ -915,7 +915,7 @@ impl SpatialQuery<'_, '_> {
                 };
 
                 let (projection, is_inside) =
-                    collider.project_point(position.0, rotation.f32(), point, solid);
+                    collider.project_point(position.0, *rotation, point, solid);
 
                 let distance_squared = (projection - point).length_squared().f32();
                 if distance_squared < closest_distance_squared {
@@ -1034,7 +1034,7 @@ impl SpatialQuery<'_, '_> {
                     return true;
                 };
 
-                if collider.contains_point(position.0, rotation.f32(), point) {
+                if collider.contains_point(position.0, *rotation, point) {
                     callback(proxy.collider)
                 } else {
                     true
@@ -1267,7 +1267,7 @@ impl SpatialQuery<'_, '_> {
                 if contact_query::intersection_test(
                     collider,
                     position.0,
-                    rotation.f32(),
+                    *rotation,
                     shape,
                     shape_position,
                     shape_rotation,

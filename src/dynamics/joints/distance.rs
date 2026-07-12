@@ -188,14 +188,8 @@ fn update_local_anchors(
             continue;
         };
 
-        let [anchor1, anchor2] = JointAnchor::compute_local(
-            joint.anchor1,
-            joint.anchor2,
-            pos1.0,
-            pos2.0,
-            rot1.f32(),
-            rot2.f32(),
-        );
+        let [anchor1, anchor2] =
+            JointAnchor::compute_local(joint.anchor1, joint.anchor2, pos1.0, pos2.0, *rot1, *rot2);
         joint.anchor1 = anchor1;
         joint.anchor2 = anchor2;
     }

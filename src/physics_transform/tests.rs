@@ -231,7 +231,7 @@ fn test_init_transforms_basics() {
             #[cfg(feature = "2d")]
             assert_eq!(*rot, Rotation::from(trans_4.rotation));
             #[cfg(feature = "3d")]
-            assert_relative_eq!(rot.f32(), trans_4.rotation);
+            assert_relative_eq!(rot.0, trans_4.rotation);
 
             assert!(app.world().get::<Position>(e_5_with_trans).is_some());
             let pos = app.world().get::<Position>(e_5_with_trans).unwrap();
@@ -251,7 +251,7 @@ fn test_init_transforms_basics() {
             #[cfg(feature = "2d")]
             assert_eq!(rot, &Rotation::from(trans_5.rotation));
             #[cfg(feature = "3d")]
-            assert_relative_eq!(rot.f32(), trans_5.rotation);
+            assert_relative_eq!(rot.0, trans_5.rotation);
 
             assert!(app.world().get::<Position>(e_6_without_trans).is_some());
             let pos = app.world().get::<Position>(e_6_without_trans).unwrap();

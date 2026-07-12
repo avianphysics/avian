@@ -47,11 +47,10 @@ impl XpbdConstraint<2> for DistanceJoint {
         };
 
         // Prepare the base rotation difference.
-        solver_data.world_r1 = body1.rotation.f32() * (local_anchor1 - body1.center_of_mass.0);
-        solver_data.world_r2 = body2.rotation.f32() * (local_anchor2 - body2.center_of_mass.0);
+        solver_data.world_r1 = body1.rotation * (local_anchor1 - body1.center_of_mass.0);
+        solver_data.world_r2 = body2.rotation * (local_anchor2 - body2.center_of_mass.0);
         solver_data.center_difference = (body2.position.0 - body1.position.0).f32()
-            + (body2.rotation.f32() * body2.center_of_mass.0
-                - body1.rotation.f32() * body1.center_of_mass.0);
+            + (body2.rotation * body2.center_of_mass.0 - body1.rotation * body1.center_of_mass.0);
     }
 
     fn solve(

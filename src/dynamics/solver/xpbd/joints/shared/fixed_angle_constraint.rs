@@ -37,8 +37,8 @@ impl FixedAngleConstraintShared {
     /// Prepares the constraint with the given rotations and local basis orientations.
     pub fn prepare(
         &mut self,
-        rotation1: &Rotation,
-        rotation2: &Rotation,
+        rotation1: Rot,
+        rotation2: Rot,
         local_basis1: Rot,
         local_basis2: Rot,
     ) {
@@ -46,12 +46,12 @@ impl FixedAngleConstraintShared {
         #[cfg(feature = "2d")]
         {
             self.rotation_difference =
-                (rotation1.f32() * local_basis1).angle_to(rotation2.f32() * local_basis2);
+                (rotation1 * local_basis1).angle_to(rotation2 * local_basis2);
         }
         #[cfg(feature = "3d")]
         {
             self.rotation_difference =
-                (rotation1.f32() * local_basis1) * (rotation2.f32() * local_basis2).inverse();
+                (rotation1 * local_basis1) * (rotation2 * local_basis2).inverse();
         }
     }
 

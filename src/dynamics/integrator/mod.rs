@@ -373,7 +373,7 @@ pub fn integrate_velocities(
                 //       This needs to be done because the gyroscopic torque relies on up-to-date rotations
                 //       and world-space angular inertia tensors. Omitting the change in orientation would
                 //       lead to worse accuracy and angular momentum not being conserved.
-                let rotation = body.solver_body.delta_rotation * body.rotation.f32();
+                let rotation = body.solver_body.delta_rotation * Rot::from(*body.rotation);
                 solve_gyroscopic_torque(
                     &mut body.solver_body.angular_velocity,
                     rotation,

@@ -727,7 +727,7 @@ impl Collider {
             .into_iter()
             .map(|(p, r, c)| {
                 (
-                    make_pose(p.into(), r.into().f32()),
+                    make_pose(p.into(), r.into()),
                     c.into().shape_scaled().clone(),
                 )
             })

@@ -8,7 +8,7 @@ use crate::{
     AngularVelocity, LinearVelocity, PhysicsSchedule, Position, RigidBody, RigidBodyActiveFilter,
     RigidBodyDisabled, Rot, Rotation, Sleeping, SolverSystems, Vector,
     dynamics::solver::{SolverDiagnostics, solver_body::SolverBodyFlags},
-    math::{ToF32Precision, ToRealPrecision},
+    math::ToRealPrecision,
     prelude::{
         AppDiagnosticsExt, ComputedAngularInertia, ComputedCenterOfMass, ComputedMass, Dominance,
         LockedAxes,
@@ -207,8 +207,8 @@ fn prepare_solver_bodies(
             locked_axes,
             dominance,
         )| {
-            solver_body.linear_velocity = linear_velocity.0.f32();
-            solver_body.angular_velocity = angular_velocity.0.f32();
+            solver_body.linear_velocity = linear_velocity.0;
+            solver_body.angular_velocity = angular_velocity.0;
             solver_body.delta_position = Vector::ZERO;
             solver_body.delta_rotation = Rot::IDENTITY;
 
@@ -218,7 +218,7 @@ fn prepare_solver_bodies(
                 #[cfg(feature = "2d")]
                 angular_inertia.inverse(),
                 #[cfg(feature = "3d")]
-                angular_inertia.rotated(rotation.f32()).inverse(),
+                angular_inertia.rotated(rotation.0).inverse(),
                 locked_axes,
                 dominance.map_or(0, |dominance| dominance.0),
                 rb.is_dynamic(),
@@ -279,7 +279,7 @@ fn writeback_solver_bodies(
             // Write back the position and rotation deltas,
             // rotating the body around its center of mass.
             let old_world_com = *rot * com.0;
-            *rot = (solver_body.delta_rotation * rot.f32())
+            *rot = (solver_body.delta_rotation * Rot::from(*rot))
                 .fast_renormalize()
                 .into();
             let new_world_com = *rot * com.0;
@@ -301,7 +301,7 @@ pub(crate) fn update_solver_body_angular_inertia(
     query
         .par_iter_mut()
         .for_each(|(mut inertia, angular_inertia, rotation)| {
-            inertia.update_effective_inv_angular_inertia(angular_inertia, rotation.f32());
+            inertia.update_effective_inv_angular_inertia(angular_inertia, rotation.0);
         });
 }
 

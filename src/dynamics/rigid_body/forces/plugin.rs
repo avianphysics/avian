@@ -219,7 +219,7 @@ fn apply_local_acceleration(
     bodies
         .iter_mut()
         .for_each(|(mut body, acceleration, rotation)| {
-            let rotation = body.delta_rotation * rotation.f32();
+            let rotation = body.delta_rotation * Rot::from(*rotation);
             let locked_axes = body.flags.locked_axes();
 
             // Compute the world space velocity increments with locked axes applied.

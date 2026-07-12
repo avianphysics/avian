@@ -225,7 +225,7 @@ pub trait ReadRigidBodyForces: ReadRigidBodyForcesInternal {
 
         // Return the total world-space linear acceleration.
         self.locked_axes()
-            .apply_to_vec(world_linear_acceleration + self.rot().f32() * local_linear_acceleration)
+            .apply_to_vec(world_linear_acceleration + self.rot() * local_linear_acceleration)
     }
 
     /// Returns the angular acceleration that the body has accumulated
@@ -257,7 +257,7 @@ pub trait ReadRigidBodyForces: ReadRigidBodyForcesInternal {
 
         // Return the total world-space angular acceleration.
         self.locked_axes().apply_to_angular_velocity(
-            world_angular_acceleration + self.rot().f32() * local_angular_acceleration,
+            world_angular_acceleration + self.rot() * local_angular_acceleration,
         )
     }
 
@@ -435,7 +435,7 @@ pub trait WriteRigidBodyForces: ReadRigidBodyForces + WriteRigidBodyForcesIntern
     #[inline]
     fn apply_local_linear_impulse(&mut self, impulse: Vector) {
         if impulse != Vector::ZERO && self.try_wake_up() {
-            let world_impulse = self.rot().f32() * impulse;
+            let world_impulse = self.rot() * impulse;
             let effective_inverse_mass = self
                 .locked_axes()
                 .apply_to_vec(Vector::splat(self.inverse_mass()));
@@ -469,7 +469,7 @@ pub trait WriteRigidBodyForces: ReadRigidBodyForces + WriteRigidBodyForcesIntern
     #[inline]
     fn apply_local_angular_impulse(&mut self, impulse: AngularVector) {
         if impulse != AngularVector::ZERO && self.try_wake_up() {
-            let world_impulse = self.rot().f32() * impulse;
+            let world_impulse = self.rot() * impulse;
             let effective_inverse_angular_inertia = self.effective_inverse_angular_inertia();
             let delta_vel = effective_inverse_angular_inertia * world_impulse;
             *self.angular_velocity_mut() += delta_vel;
@@ -623,7 +623,7 @@ impl ReadRigidBodyForcesInternal for ForcesItem<'_, '_> {
     }
     #[inline]
     fn rot(&self) -> Rot {
-        self.rotation.f32()
+        Rot::from(*self.rotation)
     }
     #[inline]
     fn lin_vel(&self) -> Vector {
@@ -674,7 +674,7 @@ impl WriteRigidBodyForcesInternal for ForcesItem<'_, '_> {
         #[cfg(feature = "2d")]
         let global_angular_inertia = *self.angular_inertia;
         #[cfg(feature = "3d")]
-        let global_angular_inertia = self.angular_inertia.rotated(self.rotation.f32());
+        let global_angular_inertia = self.angular_inertia.rotated(self.rotation.0);
         self.locked_axes()
             .apply_to_angular_inertia(global_angular_inertia)
             .inverse()
@@ -739,7 +739,7 @@ impl ReadRigidBodyForcesInternal for ForcesReadOnlyItem<'_, '_> {
     }
     #[inline]
     fn rot(&self) -> Rot {
-        self.rotation.f32()
+        Rot::from(*self.rotation)
     }
     #[inline]
     fn lin_vel(&self) -> Vector {
