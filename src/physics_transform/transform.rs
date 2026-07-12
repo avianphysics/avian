@@ -715,7 +715,6 @@ impl Ease for Rotation {
 /// use avian3d::prelude::*;
 /// use bevy::prelude::*;
 ///
-/// # #[cfg(feature = "f32")]
 /// fn setup(mut commands: Commands) {
 ///     // Spawn a dynamic rigid body rotated by 1.5 radians around the x axis
 ///     commands.spawn((RigidBody::Dynamic, Rotation(Quat::from_rotation_x(1.5))));

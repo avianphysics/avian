@@ -17,14 +17,12 @@ default = ["2d", "3d"]
 # Physics
 avian2d = { path = "../crates/avian2d", default-features = false, features = [
     "2d",
-    "f32",
     "parry-f32",
     "parallel",
     "simd",
 ], optional = true }
 avian3d = { path = "../crates/avian3d", default-features = false, features = [
     "3d",
-    "f32",
     "parry-f32",
     "parallel",
     "simd",

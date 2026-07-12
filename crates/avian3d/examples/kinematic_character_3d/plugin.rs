@@ -117,7 +117,7 @@ pub struct CharacterCollision {
     /// The collider that was hit by the character.
     pub collider: Entity,
     /// The point of contact in world space.
-    pub point: RVector,
+    pub point: RVec3,
     /// The normal of the contact surface, pointing away from the character.
     pub normal: Dir3,
     /// The velocity of the character at the point of contact.
@@ -423,7 +423,7 @@ struct VelocityDecomposition {
 }
 
 /// Decomposes a velocity vector into parts relative to a collision `normal` and an `up` direction.
-fn decompose_hit_velocity(velocity: Vec3, normal: Dir, up: Vec3) -> VelocityDecomposition {
+fn decompose_hit_velocity(velocity: Vec3, normal: Dir3, up: Vec3) -> VelocityDecomposition {
     let normal_part = normal * normal.dot(velocity);
     let tangent_part = velocity - normal_part;
 

@@ -59,7 +59,7 @@ impl AnyCollider for CircleCollider {
 
     fn aabb_with_context(
         &self,
-        position: RVector,
+        position: RVec2,
         _rotation: impl Into<Rot2>,
         margin: f32,
         _context: ColliderContext<Self::Context>,
@@ -72,9 +72,9 @@ impl AnyCollider for CircleCollider {
     fn contact_manifolds_with_context(
         &self,
         other: &Self,
-        position1: RVector,
+        position1: RVec2,
         rotation1: impl Into<Rot2>,
-        position2: RVector,
+        position2: RVec2,
         _rotation2: impl Into<Rot2>,
         prediction_distance: f32,
         manifolds: &mut Vec<ContactManifold>,

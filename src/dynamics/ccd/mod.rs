@@ -280,7 +280,6 @@ impl Plugin for CcdPlugin {
 #[cfg_attr(feature = "3d", doc = "use avian3d::prelude::*;")]
 /// use bevy::prelude::*;
 ///
-/// # #[cfg(feature = "f32")]
 /// fn setup(mut commands: Commands) {
 ///     // A fast dynamic body is swept against static and kinematic bodies automatically,
 ///     // so it needs no extra components.

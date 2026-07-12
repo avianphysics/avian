@@ -14,8 +14,7 @@ categories = ["game-development", "science", "simulation"]
 [features]
 default = [
     "3d",
-    "f64",
-    "parry-f64",
+    "parry-f32",
     "debug-plugin",
     "xpbd_joints",
     "parallel",

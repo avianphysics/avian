@@ -7,9 +7,9 @@
 mod drot2;
 pub use drot2::*;
 
-#[cfg(feature = "f32")]
+#[cfg(not(feature = "f64"))]
 mod single;
-#[cfg(feature = "f32")]
+#[cfg(not(feature = "f64"))]
 pub use single::*;
 
 #[cfg(feature = "f64")]
@@ -32,6 +32,28 @@ pub const DIM: usize = 2;
 /// This is a constant value of `2` in 2D and `3` in 3D.
 #[cfg(feature = "3d")]
 pub const DIM: usize = 3;
+
+/// The real number vector type used by Avian.
+///
+/// The type is chosen as follows:
+///
+/// | Precision | `2d`    | `3d`    |
+/// |-----------|---------|---------|
+/// | `f32`     | `Vec2`  | `Vec3`  |
+/// | `f64`     | `DVec2` | `DVec3` |
+#[cfg(feature = "2d")]
+pub(crate) type RVector = RVec2;
+
+/// The real number vector type used by Avian.
+///
+/// The type is chosen as follows:
+///
+/// | Precision | `2d`    | `3d`    |
+/// |-----------|---------|---------|
+/// | `f32`     | `Vec2`  | `Vec3`  |
+/// | `f64`     | `DVec2` | `DVec3` |
+#[cfg(feature = "3d")]
+pub(crate) type RVector = RVec3;
 
 /// The single-precision vector type used by Avian.
 ///
@@ -73,13 +95,13 @@ pub(crate) type Ray = Ray3d;
 ///
 /// This is a type alias for `Dir2` in 2D and `Dir3` in 3D.
 #[cfg(feature = "2d")]
-pub type Dir = Dir2;
+pub(crate) type Dir = Dir2;
 
 /// The direction type used by Avian.
 ///
 /// This is a type alias for `Dir2` in 2D and `Dir3` in 3D.
 #[cfg(feature = "3d")]
-pub type Dir = Dir3;
+pub(crate) type Dir = Dir3;
 
 /// The `f32` vector type for angular values used by Avian.
 ///
@@ -817,7 +839,7 @@ pub fn orthonormal_basis(axes: [Vector; DIM]) -> Rot {
 #[inline(always)]
 #[must_use]
 pub fn next_down_vector(vec: RVector) -> Vector {
-    #[cfg(feature = "f32")]
+    #[cfg(not(feature = "f64"))]
     {
         vec
     }
@@ -854,7 +876,7 @@ pub fn next_down_vector(vec: RVector) -> Vector {
 #[inline(always)]
 #[must_use]
 pub fn next_up_vector(vec: RVector) -> Vector {
-    #[cfg(feature = "f32")]
+    #[cfg(not(feature = "f64"))]
     {
         vec
     }

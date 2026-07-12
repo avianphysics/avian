@@ -46,13 +46,13 @@ use bevy::{
 /// use avian3d::prelude::*;
 /// use bevy::prelude::*;
 ///
-/// # #[cfg(all(feature = "3d", feature = "f32"))]
+/// # #[cfg(feature = "3d")]
 /// fn setup(mut commands: Commands) {
 ///     // Spawn a shape caster with a ball shape moving right starting from the origin
 ///     commands.spawn(ShapeCaster::new(
 #[cfg_attr(feature = "2d", doc = "        Collider::circle(0.5),")]
 #[cfg_attr(feature = "3d", doc = "        Collider::sphere(0.5),")]
-///         Vec3::ZERO,
+///         RVec3::ZERO,
 ///         Quat::default(),
 ///         Dir3::X,
 ///     ));

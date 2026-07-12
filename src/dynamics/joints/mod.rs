@@ -84,7 +84,6 @@ Therefore, they have 3 translational DOF and 3 rotational DOF, a total of 6 DOF.
 //! # use bevy::prelude::*;
 //! # use core::f32::consts::PI;
 //! #
-//! # #[cfg(feature = "f32")]
 //! # fn setup(mut commands: Commands) {
 //! #     let body1 = commands.spawn(RigidBody::Dynamic).id();
 //! #     let body2 = commands.spawn(RigidBody::Dynamic).id();
@@ -188,7 +187,6 @@ Therefore, they have 3 translational DOF and 3 rotational DOF, a total of 6 DOF.
 //! #
 //! const BREAK_THRESHOLD: f32 = 500.0; // Example threshold
 //!
-//! # #[cfg(feature = "f32")]
 //! fn break_joints(
 //!     mut commands: Commands,
 //!     query: Query<(Entity, &JointForces), Without<JointDisabled>>,
@@ -497,7 +495,6 @@ impl AngleLimit {
 /// #
 /// const BREAK_THRESHOLD: f32 = 500.0;
 ///
-/// # #[cfg(feature = "f32")]
 /// fn break_joints(
 ///     mut commands: Commands,
 ///     query: Query<(Entity, &JointForces), Without<JointDisabled>>,
@@ -753,7 +750,6 @@ impl JointForces {
 /// # use bevy::prelude::*;
 /// # use core::f32::consts::PI;
 /// #
-/// # #[cfg(feature = "f32")]
 /// # fn setup(mut commands: Commands) {
 /// #     let body1 = commands.spawn(RigidBody::Dynamic).id();
 /// #     let body2 = commands.spawn(RigidBody::Dynamic).id();

@@ -110,7 +110,7 @@ impl CharacterControllerBundle {
             collider,
             ground_caster: ShapeCaster::new(
                 caster_shape,
-                RVector::ZERO,
+                RVec3::ZERO,
                 Quat::default(),
                 Dir3::NEG_Y,
             )

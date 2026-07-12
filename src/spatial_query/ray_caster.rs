@@ -42,14 +42,14 @@ use bevy::{
 /// use avian3d::prelude::*;
 /// use bevy::prelude::*;
 ///
-/// # #[cfg(all(feature = "3d", feature = "f32"))]
+/// # #[cfg(feature = "3d")]
 /// fn setup(mut commands: Commands) {
 ///     // Spawn a ray at the center going right
-///     commands.spawn(RayCaster::new(Vec3::ZERO, Dir3::X));
+///     commands.spawn(RayCaster::new(RVec3::ZERO, Dir3::X));
 ///     // ...spawn colliders and other things
 /// }
 ///
-/// # #[cfg(all(feature = "3d", feature = "f32"))]
+/// # #[cfg(feature = "3d")]
 /// fn print_hits(query: Query<(&RayCaster, &RayHits)>) {
 ///     for (ray, hits) in &query {
 ///         // For the faster iterator that isn't sorted, use `.iter()`

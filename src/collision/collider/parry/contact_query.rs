@@ -35,7 +35,7 @@ pub type UnsupportedShape = Unsupported;
 /// use avian3d::{collision::collider::contact_query::contact, prelude::*};
 /// use bevy::prelude::*;
 ///
-/// # #[cfg(all(feature = "3d", feature = "f32"))]
+/// # #[cfg(feature = "3d")]
 /// # {
 /// let collider1 = Collider::sphere(0.5);
 /// let collider2 = Collider::cuboid(1.0, 1.0, 1.0);
@@ -44,11 +44,11 @@ pub type UnsupportedShape = Unsupported;
 /// let contact = contact(
 ///     // First collider
 ///     &collider1,
-///     Vec3::default(),
+///     RVec3::default(),
 ///     Quat::default(),
 ///     // Second collider
 ///     &collider2,
-///     Vec3::X * 0.5,
+///     RVec3::X * 0.5,
 ///     Quat::default(),
 ///     // Prediction distance
 ///     0.0,
@@ -130,7 +130,7 @@ pub fn contact(
 /// use avian3d::{collision::collider::contact_query::contact_manifolds, prelude::*};
 /// use bevy::prelude::*;
 ///
-/// # #[cfg(all(feature = "3d", feature = "f32"))]
+/// # #[cfg(feature = "3d")]
 /// # {
 /// let collider1 = Collider::sphere(0.5);
 /// let collider2 = Collider::cuboid(1.0, 1.0, 1.0);
@@ -140,11 +140,11 @@ pub fn contact(
 /// contact_manifolds(
 ///     // First collider
 ///     &collider1,
-///     Vec3::default(),
+///     RVec3::default(),
 ///     Quat::default(),
 ///     // Second collider
 ///     &collider2,
-///     Vec3::X * 0.25,
+///     RVec3::X * 0.25,
 ///     Quat::default(),
 ///     // Prediction distance
 ///     0.0,
@@ -291,7 +291,7 @@ pub enum ClosestPoints {
 /// use avian3d::{collision::collider::contact_query::*, prelude::*};
 /// use bevy::prelude::*;
 ///
-/// # #[cfg(all(feature = "3d", feature = "f32"))]
+/// # #[cfg(feature = "3d")]
 /// # {
 /// let collider1 = Collider::sphere(0.5);
 /// let collider2 = Collider::cuboid(1.0, 1.0, 1.0);
@@ -300,10 +300,10 @@ pub enum ClosestPoints {
 /// assert_eq!(
 ///     closest_points(
 ///         &collider1,
-///         Vec3::default(),
+///         RVec3::default(),
 ///         Quat::default(),
 ///         &collider2,
-///         Vec3::default(),
+///         RVec3::default(),
 ///         Quat::default(),
 ///         2.0,
 ///     )
@@ -315,25 +315,25 @@ pub enum ClosestPoints {
 /// assert_eq!(
 ///     closest_points(
 ///         &collider1,
-///         Vec3::default(),
+///         RVec3::default(),
 ///         Quat::default(),
 ///         &collider2,
-///         Vec3::X * 1.5,
+///         RVec3::X * 1.5,
 ///         Quat::default(),
 ///         2.0,
 ///     )
 ///     .expect("Unsupported collider shape"),
-///     ClosestPoints::WithinMargin(Vec3::X * 0.5, Vec3::X * 1.0),
+///     ClosestPoints::WithinMargin(RVec3::X * 0.5, RVec3::X * 1.0),
 /// );
 ///
 /// // The shapes are not intersecting and the distance between the closest points exceeds 2.0
 /// assert_eq!(
 ///     closest_points(
 ///         &collider1,
-///         Vec3::default(),
+///         RVec3::default(),
 ///         Quat::default(),
 ///         &collider2,
-///         Vec3::X * 5.0,
+///         RVec3::X * 5.0,
 ///         Quat::default(),
 ///         2.0,
 ///     )
@@ -386,7 +386,7 @@ pub fn closest_points(
 /// use avian3d::{collision::collider::contact_query::distance, prelude::*};
 /// use bevy::prelude::*;
 ///
-/// # #[cfg(all(feature = "3d", feature = "f32"))]
+/// # #[cfg(feature = "3d")]
 /// # {
 /// let collider1 = Collider::sphere(0.5);
 /// let collider2 = Collider::cuboid(1.0, 1.0, 1.0);
@@ -395,10 +395,10 @@ pub fn closest_points(
 /// assert_eq!(
 ///     distance(
 ///         &collider1,
-///         Vec3::default(),
+///         RVec3::default(),
 ///         Quat::default(),
 ///         &collider2,
-///         Vec3::X * 2.0,
+///         RVec3::X * 2.0,
 ///         Quat::default(),
 ///     )
 ///     .expect("Unsupported collider shape"),
@@ -409,10 +409,10 @@ pub fn closest_points(
 /// assert_eq!(
 ///     distance(
 ///         &collider1,
-///         Vec3::default(),
+///         RVec3::default(),
 ///         Quat::default(),
 ///         &collider2,
-///         Vec3::default(),
+///         RVec3::default(),
 ///         Quat::default(),
 ///     )
 ///     .expect("Unsupported collider shape"),
@@ -455,7 +455,7 @@ pub fn distance(
 /// use avian3d::{collision::collider::contact_query::intersection_test, prelude::*};
 /// use bevy::prelude::*;
 ///
-/// # #[cfg(all(feature = "3d", feature = "f32"))]
+/// # #[cfg(feature = "3d")]
 /// # {
 /// let collider1 = Collider::sphere(0.5);
 /// let collider2 = Collider::cuboid(1.0, 1.0, 1.0);
@@ -464,10 +464,10 @@ pub fn distance(
 /// assert_eq!(
 ///     intersection_test(
 ///         &collider1,
-///         Vec3::default(),
+///         RVec3::default(),
 ///         Quat::default(),
 ///         &collider2,
-///         Vec3::default(),
+///         RVec3::default(),
 ///         Quat::default(),
 ///     )
 ///     .expect("Unsupported collider shape"),
@@ -478,10 +478,10 @@ pub fn distance(
 /// assert_eq!(
 ///     intersection_test(
 ///         &collider1,
-///         Vec3::default(),
+///         RVec3::default(),
 ///         Quat::default(),
 ///         &collider2,
-///         Vec3::X * 5.0,
+///         RVec3::X * 5.0,
 ///         Quat::default(),
 ///     )
 ///     .expect("Unsupported collider shape"),
@@ -548,21 +548,21 @@ pub struct TimeOfImpact {
 /// use avian3d::{collision::collider::contact_query::time_of_impact, prelude::*};
 /// use bevy::prelude::*;
 ///
-/// # #[cfg(all(feature = "3d", feature = "f32"))]
+/// # #[cfg(feature = "3d"))]
 /// # {
 /// let collider1 = Collider::sphere(0.5);
 /// let collider2 = Collider::cuboid(1.0, 1.0, 1.0);
 ///
 /// let result = time_of_impact(
-///     &collider1,        // Collider 1
-///     Vec3::NEG_X * 5.0, // Position 1
-///     Quat::default(),   // Rotation 1
-///     Vec3::X,           // Linear velocity 1
-///     &collider2,        // Collider 2
-///     Vec3::X * 5.0,     // Position 2
-///     Quat::default(),   // Rotation 2
-///     Vec3::NEG_X,       // Linear velocity 2
-///     100.0,             // Maximum time of impact
+///     &collider1,         // Collider 1
+///     RVec3::NEG_X * 5.0, // Position 1
+///     Quat::default(),    // Rotation 1
+///     Vec3::X,            // Linear velocity 1
+///     &collider2,         // Collider 2
+///     RVec3::X * 5.0,     // Position 2
+///     Quat::default(),    // Rotation 2
+///     Vec3::NEG_X,        // Linear velocity 2
+///     100.0,              // Maximum time of impact
 /// )
 /// .expect("Unsupported collider shape");
 ///

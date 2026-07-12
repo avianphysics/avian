@@ -53,7 +53,7 @@ fn setup(
     commands.spawn((
         RigidBody::Kinematic,
         AngularVelocity(0.2),
-        RayCaster::new(RVector::ZERO, Dir2::X),
+        RayCaster::new(RVec2::ZERO, Dir2::X),
     ));
 }
 

@@ -9,49 +9,29 @@ use glam_matrix_extras::*;
 /// and `f64` in double-precision mode.
 pub type Real = f64;
 
-/// The real number vector type used by Avian.
+/// The real number 2D vector type used by Avian.
 ///
-/// The type is chosen as follows:
-///
-/// | Feature | `2d`    | `3d`    |
-/// |---------|---------|---------|
-/// | `f32`   | `Vec2`  | `Vec3`  |
-/// | `f64`   | `DVec2` | `DVec3` |
-#[cfg(feature = "2d")]
-pub type RVector = DVec2;
+/// This is a type alias for `Vec2` in single-precision mode
+/// and `DVec2` in double-precision mode.
+pub type RVec2 = DVec2;
 
-/// The real number vector type used by Avian.
+/// The real number 3D vector type used by Avian.
 ///
-/// The type is chosen as follows:
-///
-/// | Feature | `2d`    | `3d`    |
-/// |---------|---------|---------|
-/// | `f32`   | `Vec2`  | `Vec3`  |
-/// | `f64`   | `DVec2` | `DVec3` |
-#[cfg(feature = "3d")]
-pub type RVector = DVec3;
+/// This is a type alias for `Vec3` in single-precision mode
+/// and `DVec3` in double-precision mode.
+pub type RVec3 = DVec3;
 
-/// The real number matrix type used by Avian.
+/// The real number 2x2 matrix type used by Avian.
 ///
-/// The type is chosen as follows:
-///
-/// | Feature | `2d`    | `3d`    |
-/// |---------|---------|---------|
-/// | `f32`   | `Mat2`  | `Mat3`  |
-/// | `f64`   | `DMat2` | `DMat3` |
-#[cfg(feature = "2d")]
-pub type RMatrix = DMat2;
+/// This is a type alias for `Mat2` in single-precision mode
+/// and `DMat2` in double-precision mode.
+pub type RMat2 = DMat2;
 
-/// The real number matrix type used by Avian.
+/// The real number 3x3 matrix type used by Avian.
 ///
-/// The type is chosen as follows:
-///
-/// | Feature | `2d`    | `3d`    |
-/// |---------|---------|---------|
-/// | `f32`   | `Mat2`  | `Mat3`  |
-/// | `f64`   | `DMat2` | `DMat3` |
-#[cfg(feature = "3d")]
-pub type RMatrix = DMat3;
+/// This is a type alias for `Mat3` in single-precision mode
+/// and `DMat3` in double-precision mode.
+pub type RMat3 = DMat3;
 
 impl ToRealPrecision for f32 {
     type Adjusted = Real;

@@ -79,7 +79,6 @@
 #![cfg_attr(feature = "3d", doc = "# use avian3d::prelude::*;")]
 //! # use bevy::prelude::*;
 //! #
-//! # #[cfg(feature = "f32")]
 //! fn apply_forces(mut query: Query<Forces>) {
 //!     for mut forces in &mut query {
 //!         // Apply a force of 10 N in the positive Y direction to the entity.
@@ -142,7 +141,6 @@
 #![cfg_attr(feature = "3d", doc = "# use avian3d::prelude::*;")]
 //! # use bevy::prelude::*;
 //! #
-//! # #[cfg(feature = "f32")]
 //! fn radial_gravity(mut query: Query<(Forces, &GlobalTransform)>) {
 //!     for (mut forces, global_transform) in &mut query {
 //!         // Compute the direction towards the center of the world.
@@ -172,7 +170,6 @@
 //! # use bevy::prelude::*;
 //! #
 //! // In `FixedUpdate`
-//! # #[cfg(feature = "f32")]
 //! fn gravity(mut bodies: Query<&mut LinearVelocity>, time: Res<Time>) {
 //!     for mut velocity in &mut bodies {
 //!         // Apply a constant acceleration of 9.81 m/s² in the negative Y direction.

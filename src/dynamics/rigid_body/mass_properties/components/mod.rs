@@ -390,7 +390,6 @@ impl AngularInertia {
 /// # use avian3d::prelude::*;
 /// # use bevy::prelude::*;
 /// #
-/// # #[cfg(feature = "f32")]
 /// # fn setup(mut commands: Commands) {
 /// // Principal angular inertia: `2.0` for the local X and Z axes, and `5.0` for the Y axis.
 /// let inertia1 = AngularInertia::new(Vec3::new(2.0, 5.0, 2.0));
@@ -398,8 +397,6 @@ impl AngularInertia {
 /// // A local inertial frame rotated by 90 degrees about the X axis.
 /// let inertia2 = AngularInertia::new_with_local_frame(Vec3::new(2.0, 5.0, 2.0), Quat::from_rotation_x(PI / 2.0));
 /// # }
-/// # #[cfg(not(feature = "f32"))]
-/// # fn main() {}
 ///
 /// ```
 ///
@@ -413,7 +410,6 @@ impl AngularInertia {
 /// # use avian3d::prelude::*;
 /// # use bevy::prelude::*;
 /// #
-/// # #[cfg(feature = "f32")]
 /// # fn setup(mut commands: Commands) {
 /// // For simplicity, we use the same principal angular inertia as before, with an identity local frame.
 /// let inertia1 = AngularInertia::from_tensor(Mat3::from_diagonal(Vec3::new(2.0, 5.0, 2.0)));
@@ -421,8 +417,6 @@ impl AngularInertia {
 /// // The angular inertia tensor can be retrieved back from the principal angular inertia.
 /// let tensor = inertia1.tensor();
 /// # }
-/// # #[cfg(not(feature = "f32"))]
-/// # fn main() {}
 /// ```
 ///
 /// The [`AngularInertia`] component can be used to define the angular inertia of a [rigid body]
@@ -432,7 +426,6 @@ impl AngularInertia {
 /// # use avian3d::prelude::*;
 /// # use bevy::prelude::*;
 /// #
-/// # #[cfg(feature = "f32")]
 /// # fn setup(mut commands: Commands) {
 /// commands.spawn((
 ///     RigidBody::Dynamic,
@@ -440,8 +433,6 @@ impl AngularInertia {
 ///     AngularInertia::new(Vec3::new(2.0, 5.0, 2.0)),
 /// ));
 /// # }
-/// # #[cfg(not(feature = "f32"))]
-/// # fn main() {}
 /// ```
 ///
 /// If no [`AngularInertia`] is present, the [`ComputedAngularInertia`] will be computed from the collider
@@ -468,7 +459,6 @@ impl AngularInertia {
 /// # use avian3d::prelude::*;
 /// # use bevy::prelude::*;
 /// #
-/// # #[cfg(feature = "f32")]
 /// # fn setup(mut commands: Commands) {
 /// // Total angular inertia: [2.0, 5.0, 2.0] + [1.0, 2.0, 1.0] = [3.0, 7.0, 3.0]
 /// commands.spawn((
@@ -478,8 +468,6 @@ impl AngularInertia {
 /// ))
 /// .with_child((Collider::sphere(1.0), AngularInertia::new(Vec3::new(1.0, 2.0, 1.0))));
 /// # }
-/// # #[cfg(not(feature = "f32"))]
-/// # fn main() {}
 /// ```
 ///
 /// To prevent angular inertia of child entities from contributing to the total [`ComputedAngularInertia`],
@@ -489,7 +477,6 @@ impl AngularInertia {
 /// # use avian3d::prelude::*;
 /// # use bevy::prelude::*;
 /// #
-/// # #[cfg(feature = "f32")]
 /// # fn setup(mut commands: Commands) {
 /// // Total angular inertia: [2.0, 5.0, 2.0]
 /// commands.spawn((
@@ -500,8 +487,6 @@ impl AngularInertia {
 /// ))
 /// .with_child((Collider::sphere(1.0), AngularInertia::new(Vec3::new(1.0, 2.0, 1.0))));
 /// # }
-/// # #[cfg(not(feature = "f32"))]
-/// # fn main() {}
 /// ```
 ///
 /// # Angular Inertia Updates

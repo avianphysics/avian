@@ -31,10 +31,10 @@ use parry::query::ShapeCastOptions;
 /// use avian3d::prelude::*;
 /// use bevy::prelude::*;
 ///
-/// # #[cfg(all(feature = "3d", feature = "f32"))]
+/// # #[cfg(feature = "3d")]
 /// fn print_hits(spatial_query: SpatialQuery) {
 ///     // Ray origin and direction
-///     let origin = Vec3::ZERO;
+///     let origin = RVec3::ZERO;
 ///     let direction = Dir3::X;
 ///
 ///     // Configuration for the ray cast
@@ -85,10 +85,10 @@ impl SpatialQuery<'_, '_> {
     /// use avian3d::prelude::*;
     /// use bevy::prelude::*;
     ///
-    /// # #[cfg(all(feature = "3d", feature = "f32"))]
+    /// # #[cfg(feature = "3d")]
     /// fn print_hits(spatial_query: SpatialQuery) {
     ///     // Ray origin and direction
-    ///     let origin = Vec3::ZERO;
+    ///     let origin = RVec3::ZERO;
     ///     let direction = Dir3::X;
     ///
     ///     // Configuration for the ray cast
@@ -144,10 +144,10 @@ impl SpatialQuery<'_, '_> {
     /// #[derive(Component)]
     /// struct Invisible;
     ///
-    /// # #[cfg(all(feature = "3d", feature = "f32"))]
+    /// # #[cfg(feature = "3d")]
     /// fn print_hits(spatial_query: SpatialQuery, query: Query<&Invisible>) {
     ///     // Ray origin and direction
-    ///     let origin = Vec3::ZERO;
+    ///     let origin = RVec3::ZERO;
     ///     let direction = Dir3::X;
     ///
     ///     // Configuration for the ray cast
@@ -248,10 +248,10 @@ impl SpatialQuery<'_, '_> {
     /// use avian3d::prelude::*;
     /// use bevy::prelude::*;
     ///
-    /// # #[cfg(all(feature = "3d", feature = "f32"))]
+    /// # #[cfg(feature = "3d")]
     /// fn print_hits(spatial_query: SpatialQuery) {
     ///     // Ray origin and direction
-    ///     let origin = Vec3::ZERO;
+    ///     let origin = RVec3::ZERO;
     ///     let direction = Dir3::X;
     ///
     ///     // Configuration for the ray cast
@@ -321,10 +321,10 @@ impl SpatialQuery<'_, '_> {
     /// use avian3d::prelude::*;
     /// use bevy::prelude::*;
     ///
-    /// # #[cfg(all(feature = "3d", feature = "f32"))]
+    /// # #[cfg(feature = "3d")]
     /// fn print_hits(spatial_query: SpatialQuery) {
     ///     // Ray origin and direction
-    ///     let origin = Vec3::ZERO;
+    ///     let origin = RVec3::ZERO;
     ///     let direction = Dir3::X;
     ///
     ///     // Configuration for the ray cast
@@ -417,11 +417,11 @@ impl SpatialQuery<'_, '_> {
     /// use avian3d::prelude::*;
     /// use bevy::prelude::*;
     ///
-    /// # #[cfg(all(feature = "3d", feature = "f32"))]
+    /// # #[cfg(feature = "3d")]
     /// fn print_hits(spatial_query: SpatialQuery) {
     ///     // Shape properties
     ///     let shape = Collider::sphere(0.5);
-    ///     let origin = Vec3::ZERO;
+    ///     let origin = RVec3::ZERO;
     ///     let rotation = Quat::default();
     ///     let direction = Dir3::X;
     ///
@@ -490,11 +490,11 @@ impl SpatialQuery<'_, '_> {
     /// #[derive(Component)]
     /// struct Invisible;
     ///
-    /// # #[cfg(all(feature = "3d", feature = "f32"))]
+    /// # #[cfg(feature = "3d")]
     /// fn print_hits(spatial_query: SpatialQuery, query: Query<&Invisible>) {
     ///     // Shape properties
     ///     let shape = Collider::sphere(0.5);
-    ///     let origin = Vec3::ZERO;
+    ///     let origin = RVec3::ZERO;
     ///     let rotation = Quat::default();
     ///     let direction = Dir3::X;
     ///
@@ -622,11 +622,11 @@ impl SpatialQuery<'_, '_> {
     /// use avian3d::prelude::*;
     /// use bevy::prelude::*;
     ///
-    /// # #[cfg(all(feature = "3d", feature = "f32"))]
+    /// # #[cfg(feature = "3d")]
     /// fn print_hits(spatial_query: SpatialQuery) {
     ///     // Shape properties
     ///     let shape = Collider::sphere(0.5);
-    ///     let origin = Vec3::ZERO;
+    ///     let origin = RVec3::ZERO;
     ///     let rotation = Quat::default();
     ///     let direction = Dir3::X;
     ///
@@ -707,11 +707,11 @@ impl SpatialQuery<'_, '_> {
     /// use avian3d::prelude::*;
     /// use bevy::prelude::*;
     ///
-    /// # #[cfg(all(feature = "3d", feature = "f32"))]
+    /// # #[cfg(feature = "3d")]
     /// fn print_hits(spatial_query: SpatialQuery) {
     ///     // Shape properties
     ///     let shape = Collider::sphere(0.5);
-    ///     let origin = Vec3::ZERO;
+    ///     let origin = RVec3::ZERO;
     ///     let rotation = Quat::default();
     ///     let direction = Dir3::X;
     ///
@@ -825,11 +825,11 @@ impl SpatialQuery<'_, '_> {
     /// use avian3d::prelude::*;
     /// use bevy::prelude::*;
     ///
-    /// # #[cfg(all(feature = "3d", feature = "f32"))]
+    /// # #[cfg(feature = "3d")]
     /// fn print_point_projection(spatial_query: SpatialQuery) {
     ///     // Project a point and print the result
     ///     if let Some(projection) = spatial_query.project_point(
-    ///         Vec3::ZERO,                    // Point
+    ///         RVec3::ZERO,                   // Point
     ///         true,                          // Are colliders treated as "solid"
     ///         &SpatialQueryFilter::default(),// Query filter
     ///     ) {
@@ -873,11 +873,11 @@ impl SpatialQuery<'_, '_> {
     /// #[derive(Component)]
     /// struct Invisible;
     ///
-    /// # #[cfg(all(feature = "3d", feature = "f32"))]
+    /// # #[cfg(feature = "3d")]
     /// fn print_point_projection(spatial_query: SpatialQuery, query: Query<&Invisible>) {
     ///     // Project a point and print the result
     ///     if let Some(projection) = spatial_query.project_point_predicate(
-    ///         Vec3::ZERO,                    // Point
+    ///         RVec3::ZERO,                   // Point
     ///         true,                          // Are colliders treated as "solid"
     ///         SpatialQueryFilter::default(), // Query filter
     ///         &|entity| {                    // Predicate
@@ -950,10 +950,10 @@ impl SpatialQuery<'_, '_> {
     /// use avian3d::prelude::*;
     /// use bevy::prelude::*;
     ///
-    /// # #[cfg(all(feature = "3d", feature = "f32"))]
+    /// # #[cfg(feature = "3d")]
     /// fn print_point_intersections(spatial_query: SpatialQuery) {
     ///     let intersections =
-    ///         spatial_query.point_intersections(Vec3::ZERO, &SpatialQueryFilter::default());
+    ///         spatial_query.point_intersections(RVec3::ZERO, &SpatialQueryFilter::default());
     ///
     ///     for entity in intersections.iter() {
     ///         println!("Entity: {}", entity);
@@ -994,12 +994,12 @@ impl SpatialQuery<'_, '_> {
     /// use avian3d::prelude::*;
     /// use bevy::prelude::*;
     ///
-    /// # #[cfg(all(feature = "3d", feature = "f32"))]
+    /// # #[cfg(feature = "3d")]
     /// fn print_point_intersections(spatial_query: SpatialQuery) {
     ///     let mut intersections = vec![];
     ///     
     ///     spatial_query.point_intersections_callback(
-    ///         Vec3::ZERO,                     // Point
+    ///         RVec3::ZERO,                    // Point
     ///         &SpatialQueryFilter::default(), // Query filter
     ///         |entity| {                      // Callback function
     ///             intersections.push(entity);
@@ -1055,9 +1055,9 @@ impl SpatialQuery<'_, '_> {
     /// use avian3d::prelude::*;
     /// use bevy::prelude::*;
     ///
-    /// # #[cfg(all(feature = "3d", feature = "f32"))]
+    /// # #[cfg(feature = "3d")]
     /// fn print_aabb_intersections(spatial_query: SpatialQuery) {
-    ///     let aabb = Collider::sphere(0.5).aabb(Vec3::ZERO, Quat::default());
+    ///     let aabb = Collider::sphere(0.5).aabb(RVec3::ZERO, Quat::default());
     ///     let intersections = spatial_query.aabb_intersections_with_aabb(aabb);
     ///
     ///     for entity in intersections.iter() {
@@ -1093,12 +1093,12 @@ impl SpatialQuery<'_, '_> {
     /// use avian3d::prelude::*;
     /// use bevy::prelude::*;
     ///
-    /// # #[cfg(all(feature = "3d", feature = "f32"))]
+    /// # #[cfg(feature = "3d")]
     /// fn print_aabb_intersections(spatial_query: SpatialQuery) {
     ///     let mut intersections = vec![];
     ///
     ///     spatial_query.aabb_intersections_with_aabb_callback(
-    ///         Collider::sphere(0.5).aabb(Vec3::ZERO, Quat::default()),
+    ///         Collider::sphere(0.5).aabb(RVec3::ZERO, Quat::default()),
     ///         |entity| {
     ///             intersections.push(entity);
     ///             true
@@ -1155,11 +1155,11 @@ impl SpatialQuery<'_, '_> {
     /// use avian3d::prelude::*;
     /// use bevy::prelude::*;
     ///
-    /// # #[cfg(all(feature = "3d", feature = "f32"))]
+    /// # #[cfg(feature = "3d")]
     /// fn print_shape_intersections(spatial_query: SpatialQuery) {
     ///     let intersections = spatial_query.shape_intersections(
     ///         &Collider::sphere(0.5),          // Shape
-    ///         Vec3::ZERO,                      // Shape position
+    ///         RVec3::ZERO,                     // Shape position
     ///         Quat::default(),                 // Shape rotation
     ///         &SpatialQueryFilter::default(),  // Query filter
     ///     );
@@ -1217,13 +1217,13 @@ impl SpatialQuery<'_, '_> {
     /// use avian3d::prelude::*;
     /// use bevy::prelude::*;
     ///
-    /// # #[cfg(all(feature = "3d", feature = "f32"))]
+    /// # #[cfg(feature = "3d")]
     /// fn print_shape_intersections(spatial_query: SpatialQuery) {
     ///     let mut intersections = vec![];
     ///
     ///     spatial_query.shape_intersections_callback(
     ///         &Collider::sphere(0.5),          // Shape
-    ///         Vec3::ZERO,                      // Shape position
+    ///         RVec3::ZERO,                     // Shape position
     ///         Quat::default(),                 // Shape rotation
     ///         &SpatialQueryFilter::default(),  // Query filter
     ///         |entity| {                       // Callback function
