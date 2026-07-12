@@ -93,23 +93,10 @@ pub struct ShapeCaster {
     /// of the shape caster entity or its parent. Expressed in radians.
     ///
     /// To get the global shape rotation, use the `global_shape_rotation` method.
-    #[cfg(feature = "2d")]
-    pub shape_rotation: Scalar,
-
-    /// The local rotation of the shape being cast relative to the [`Rotation`]
-    /// of the shape caster entity or its parent.
-    ///
-    /// To get the global shape rotation, use the `global_shape_rotation` method.
-    #[cfg(feature = "3d")]
-    pub shape_rotation: Quaternion,
+    pub shape_rotation: RotF32,
 
     /// The global rotation of the shape.
-    #[cfg(feature = "2d")]
-    global_shape_rotation: Scalar,
-
-    /// The global rotation of the shape.
-    #[cfg(feature = "3d")]
-    global_shape_rotation: Quaternion,
+    global_shape_rotation: RotF32,
 
     /// The local direction of the shapecast relative to the [`Rotation`] of the shape caster entity or its parent.
     ///
@@ -126,7 +113,7 @@ pub struct ShapeCaster {
     ///
     /// By default, this is infinite.
     #[doc(alias = "max_time_of_impact")]
-    pub max_distance: Scalar,
+    pub max_distance: f32,
 
     /// The separation distance at which the shapes will be considered as impacting.
     ///
@@ -135,7 +122,7 @@ pub struct ShapeCaster {
     /// is set to `true`.
     ///
     /// By default, this is `0.0`, so the shapes will only be considered as impacting when they first touch.
-    pub target_distance: Scalar,
+    pub target_distance: f32,
 
     /// If `true`, contact points and normals will be calculated even when the cast distance is `0.0`.
     ///
@@ -165,18 +152,12 @@ impl Default for ShapeCaster {
             shape: Collider::sphere(0.0),
             origin: Vector::ZERO,
             global_origin: Vector::ZERO,
-            #[cfg(feature = "2d")]
-            shape_rotation: 0.0,
-            #[cfg(feature = "3d")]
-            shape_rotation: Quaternion::IDENTITY,
-            #[cfg(feature = "2d")]
-            global_shape_rotation: 0.0,
-            #[cfg(feature = "3d")]
-            global_shape_rotation: Quaternion::IDENTITY,
+            shape_rotation: RotF32::IDENTITY,
+            global_shape_rotation: RotF32::IDENTITY,
             direction: Dir::X,
             global_direction: Dir::X,
             max_hits: 1,
-            max_distance: Scalar::MAX,
+            max_distance: f32::MAX,
             target_distance: 0.0,
             compute_contact_on_penetration: true,
             ignore_origin_penetration: false,
@@ -188,33 +169,16 @@ impl Default for ShapeCaster {
 
 impl ShapeCaster {
     /// Creates a new [`ShapeCaster`] with a given shape, origin, shape rotation and direction.
-    #[cfg(feature = "2d")]
     pub fn new(
         shape: impl Into<Collider>,
         origin: Vector,
-        shape_rotation: Scalar,
+        shape_rotation: impl Into<RotF32>,
         direction: Dir,
     ) -> Self {
         Self {
             shape: shape.into(),
             origin,
-            shape_rotation,
-            direction,
-            ..default()
-        }
-    }
-    #[cfg(feature = "3d")]
-    /// Creates a new [`ShapeCaster`] with a given shape, origin, shape rotation and direction.
-    pub fn new(
-        shape: impl Into<Collider>,
-        origin: Vector,
-        shape_rotation: Quaternion,
-        direction: Dir,
-    ) -> Self {
-        Self {
-            shape: shape.into(),
-            origin,
-            shape_rotation,
+            shape_rotation: shape_rotation.into(),
             direction,
             ..default()
         }
@@ -239,7 +203,7 @@ impl ShapeCaster {
     /// is set to `true`.
     ///
     /// By default, this is `0.0`, so the shapes will only be considered as impacting when they first touch.
-    pub fn with_target_distance(mut self, target_distance: Scalar) -> Self {
+    pub fn with_target_distance(mut self, target_distance: f32) -> Self {
         self.target_distance = target_distance;
         self
     }
@@ -272,7 +236,7 @@ impl ShapeCaster {
     }
 
     /// Sets the maximum distance the shape can travel.
-    pub fn with_max_distance(mut self, max_distance: Scalar) -> Self {
+    pub fn with_max_distance(mut self, max_distance: f32) -> Self {
         self.max_distance = max_distance;
         self
     }
@@ -306,14 +270,7 @@ impl ShapeCaster {
     }
 
     /// Returns the global rotation of the shape.
-    #[cfg(feature = "2d")]
-    pub fn global_shape_rotation(&self) -> Scalar {
-        self.global_shape_rotation
-    }
-
-    /// Returns the global rotation of the shape.
-    #[cfg(feature = "3d")]
-    pub fn global_shape_rotation(&self) -> Quaternion {
+    pub fn global_shape_rotation(&self) -> RotF32 {
         self.global_shape_rotation
     }
 
@@ -328,15 +285,8 @@ impl ShapeCaster {
     }
 
     /// Sets the global rotation of the shape.
-    #[cfg(feature = "2d")]
-    pub(crate) fn set_global_shape_rotation(&mut self, global_rotation: Scalar) {
-        self.global_shape_rotation = global_rotation;
-    }
-
-    /// Sets the global rotation of the shape.
-    #[cfg(feature = "3d")]
-    pub(crate) fn set_global_shape_rotation(&mut self, global_rotation: Quaternion) {
-        self.global_shape_rotation = global_rotation;
+    pub(crate) fn set_global_shape_rotation(&mut self, global_rotation: impl Into<RotF32>) {
+        self.global_shape_rotation = global_rotation.into();
     }
 
     /// Sets the global direction of the ray.
@@ -414,7 +364,7 @@ pub struct ShapeCastConfig {
     ///
     /// By default, this is infinite.
     #[doc(alias = "max_time_of_impact")]
-    pub max_distance: Scalar,
+    pub max_distance: f32,
 
     /// The separation distance at which the shapes will be considered as impacting.
     ///
@@ -423,7 +373,7 @@ pub struct ShapeCastConfig {
     /// is set to `true`.
     ///
     /// By default, this is `0.0`, so the shapes will only be considered as impacting when they first touch.
-    pub target_distance: Scalar,
+    pub target_distance: f32,
 
     /// If `true`, contact points and normals will be calculated even when the cast distance is `0.0`.
     ///
@@ -446,7 +396,7 @@ impl Default for ShapeCastConfig {
 impl ShapeCastConfig {
     /// The default [`ShapeCastConfig`] configuration.
     pub const DEFAULT: Self = Self {
-        max_distance: Scalar::MAX,
+        max_distance: f32::MAX,
         target_distance: 0.0,
         compute_contact_on_penetration: true,
         ignore_origin_penetration: false,
@@ -454,7 +404,7 @@ impl ShapeCastConfig {
 
     /// Creates a new [`ShapeCastConfig`] with a given maximum distance the shape can travel.
     #[inline]
-    pub const fn from_max_distance(max_distance: Scalar) -> Self {
+    pub const fn from_max_distance(max_distance: f32) -> Self {
         Self {
             max_distance,
             target_distance: 0.0,
@@ -466,9 +416,9 @@ impl ShapeCastConfig {
     /// Creates a new [`ShapeCastConfig`] with a given separation distance at which
     /// the shapes will be considered as impacting.
     #[inline]
-    pub const fn from_target_distance(target_distance: Scalar) -> Self {
+    pub const fn from_target_distance(target_distance: f32) -> Self {
         Self {
-            max_distance: Scalar::MAX,
+            max_distance: f32::MAX,
             target_distance,
             compute_contact_on_penetration: true,
             ignore_origin_penetration: false,
@@ -477,14 +427,14 @@ impl ShapeCastConfig {
 
     /// Sets the maximum distance the shape can travel.
     #[inline]
-    pub const fn with_max_distance(mut self, max_distance: Scalar) -> Self {
+    pub const fn with_max_distance(mut self, max_distance: f32) -> Self {
         self.max_distance = max_distance;
         self
     }
 
     /// Sets the separation distance at which the shapes will be considered as impacting.
     #[inline]
-    pub const fn with_target_distance(mut self, target_distance: Scalar) -> Self {
+    pub const fn with_target_distance(mut self, target_distance: f32) -> Self {
         self.target_distance = target_distance;
         self
     }
@@ -584,7 +534,7 @@ pub struct ShapeHitData {
 
     /// How far the shape travelled before the initial hit.
     #[doc(alias = "time_of_impact")]
-    pub distance: Scalar,
+    pub distance: f32,
 
     /// The closest point on the shape that was hit, expressed in world space.
     ///
@@ -599,10 +549,10 @@ pub struct ShapeHitData {
     pub point2: Vector,
 
     /// The outward surface normal on the hit shape at `point1`, expressed in world space.
-    pub normal1: Vector,
+    pub normal1: VectorF32,
 
     /// The outward surface normal on the cast shape at `point2`, expressed in world space.
-    pub normal2: Vector,
+    pub normal2: VectorF32,
 }
 
 impl MapEntities for ShapeHitData {

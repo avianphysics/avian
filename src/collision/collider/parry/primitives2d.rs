@@ -1,4 +1,4 @@
-use crate::{AdjustPrecision, FRAC_PI_2, PI, Scalar, TAU, Vector, math};
+use crate::{AdjustPrecision, Scalar, Vector, math};
 
 use super::{AsF32, Collider, IntoCollider};
 use bevy::prelude::{Deref, DerefMut};
@@ -16,9 +16,13 @@ use parry::{
     },
 };
 
+const PI: Scalar = core::f64::consts::PI as Scalar;
+const TAU: Scalar = core::f64::consts::TAU as Scalar;
+const FRAC_PI_2: Scalar = core::f64::consts::FRAC_PI_2 as Scalar;
+
 impl IntoCollider<Collider> for Circle {
     fn collider(&self) -> Collider {
-        Collider::circle(self.radius.adjust_precision())
+        Collider::circle(self.radius)
     }
 }
 
@@ -117,7 +121,7 @@ impl Shape for EllipseColliderShape {
     }
 
     fn ccd_angular_thickness(&self) -> Scalar {
-        crate::math::PI
+        core::f64::consts::PI.adjust_precision()
     }
 
     fn as_support_map(&self) -> Option<&dyn SupportMap> {
@@ -157,14 +161,14 @@ impl PointQuery for EllipseColliderShape {
 
 impl IntoCollider<Collider> for Plane2d {
     fn collider(&self) -> Collider {
-        let vec = self.normal.perp().adjust_precision() * 100_000.0 / 2.0;
+        let vec = self.normal.perp() * 100_000.0 / 2.0;
         Collider::segment(-vec, vec)
     }
 }
 
 impl IntoCollider<Collider> for Line2d {
     fn collider(&self) -> Collider {
-        let vec = self.direction.adjust_precision() * 100_000.0 / 2.0;
+        let vec = self.direction * 100_000.0 / 2.0;
         Collider::segment(-vec, vec)
     }
 }
@@ -172,17 +176,13 @@ impl IntoCollider<Collider> for Line2d {
 impl IntoCollider<Collider> for Segment2d {
     fn collider(&self) -> Collider {
         let (point1, point2) = (self.point1(), self.point2());
-        Collider::segment(point1.adjust_precision(), point2.adjust_precision())
+        Collider::segment(point1, point2)
     }
 }
 
 impl IntoCollider<Collider> for Triangle2d {
     fn collider(&self) -> Collider {
-        Collider::triangle(
-            self.vertices[0].adjust_precision(),
-            self.vertices[1].adjust_precision(),
-            self.vertices[2].adjust_precision(),
-        )
+        Collider::triangle(self.vertices[0], self.vertices[1], self.vertices[2])
     }
 }
 
@@ -371,7 +371,7 @@ impl Shape for RegularPolygonColliderShape {
     }
 
     fn ccd_angular_thickness(&self) -> Scalar {
-        crate::math::PI - self.internal_angle_radians().adjust_precision()
+        core::f64::consts::PI.adjust_precision() - self.internal_angle_radians().adjust_precision()
     }
 
     fn as_support_map(&self) -> Option<&dyn SupportMap> {
@@ -431,9 +431,6 @@ impl PointQuery for RegularPolygonColliderShape {
 
 impl IntoCollider<Collider> for Capsule2d {
     fn collider(&self) -> Collider {
-        Collider::capsule(
-            self.radius.adjust_precision(),
-            2.0 * self.half_length.adjust_precision(),
-        )
+        Collider::capsule(self.radius, 2.0 * self.half_length)
     }
 }

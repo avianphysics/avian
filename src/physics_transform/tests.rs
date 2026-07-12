@@ -31,7 +31,7 @@ fn test_init_transforms_basics() {
             {
                 (
                     Position::from_xyz(1., 2., 3.),
-                    Rotation(Quaternion::from_axis_angle(Vector::Y, 0.5)),
+                    Rotation(Quat::from_axis_angle(Vec3::Y, 0.5)),
                 )
             }
         };
@@ -49,7 +49,7 @@ fn test_init_transforms_basics() {
             {
                 (
                     Position::from_xyz(-1., 3., -3.),
-                    Rotation(Quaternion::from_axis_angle(Vector::X, 0.1)),
+                    Rotation(Quat::from_axis_angle(Vec3::X, 0.1)),
                 )
             }
         };
@@ -79,7 +79,7 @@ fn test_init_transforms_basics() {
             }
             #[cfg(feature = "3d")]
             {
-                Rotation(Quaternion::from_axis_angle(Vector::Z, 0.4))
+                Rotation(Quat::from_axis_angle(Vec3::Z, 0.4))
             }
         };
         let e_3_with_rot = app.world_mut().spawn((RigidBody::Dynamic, rot_3)).id();
@@ -127,7 +127,7 @@ fn test_init_transforms_basics() {
                 }
             };
             assert_eq!(transform.translation, expected);
-            let expected = Quaternion::from(rot_0).f32();
+            let expected = Quat::from(rot_0);
             assert_eq!(transform.rotation, expected);
 
             assert!(app.world().get::<Transform>(e_1_with_pos_and_rot).is_some());
@@ -143,7 +143,7 @@ fn test_init_transforms_basics() {
                 }
             };
             assert_eq!(transform.translation, expected);
-            let expected = Quaternion::from(rot_1).f32();
+            let expected = Quat::from(rot_1);
             assert_eq!(transform.rotation, expected);
 
             assert!(app.world().get::<Transform>(e_2_with_pos).is_some());
@@ -166,7 +166,7 @@ fn test_init_transforms_basics() {
             let transform = app.world().get::<Transform>(e_3_with_rot).unwrap();
             let expected: Vec3 = Vec3::default();
             assert_eq!(transform.translation, expected);
-            let expected = Quaternion::from(rot_3).f32();
+            let expected = Quat::from(rot_3);
             assert_eq!(transform.rotation, expected);
 
             assert!(app.world().get::<Transform>(e_4_with_trans).is_some());

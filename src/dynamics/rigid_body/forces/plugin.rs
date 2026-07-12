@@ -214,12 +214,12 @@ fn apply_local_acceleration(
 ) {
     let start = crate::utils::Instant::now();
 
-    let delta_secs = time.delta_secs_f64() as Scalar;
+    let delta_secs = time.delta_secs();
 
     bodies
         .iter_mut()
         .for_each(|(mut body, acceleration, rotation)| {
-            let rotation = body.delta_rotation * *rotation;
+            let rotation = body.delta_rotation * rotation.f32();
             let locked_axes = body.flags.locked_axes();
 
             // Compute the world space velocity increments with locked axes applied.
@@ -242,10 +242,10 @@ fn apply_local_acceleration(
 
 fn clear_accumulated_local_acceleration(mut query: Query<&mut AccumulatedLocalAcceleration>) {
     query.iter_mut().for_each(|mut acceleration| {
-        acceleration.linear = Vector::ZERO;
+        acceleration.linear = VectorF32::ZERO;
         #[cfg(feature = "3d")]
         {
-            acceleration.angular = Vector::ZERO;
+            acceleration.angular = AngularVectorF32::ZERO;
         }
     });
 }

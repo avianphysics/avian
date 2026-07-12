@@ -346,7 +346,7 @@ pub struct SweptCcd {
     /// at the cost of more overhead as sweeps are performed even at lower speeds.
     ///
     /// **Default**: `0.5`
-    pub threshold: Scalar,
+    pub threshold: f32,
 }
 
 impl Default for SweptCcd {
@@ -389,7 +389,7 @@ impl SweptCcd {
     /// Sets the fraction of this body's minimum CCD thickness it may travel in a timestep
     /// before being treated as a fast-moving body.
     #[inline]
-    pub const fn with_threshold(mut self, threshold: Scalar) -> Self {
+    pub const fn with_threshold(mut self, threshold: f32) -> Self {
         self.threshold = threshold;
         self
     }
@@ -513,8 +513,8 @@ pub struct SpeculativeCcd {
     /// and a higher risk of [ghost collisions](self#caveats-of-speculative-collision).
     /// A value of `0.0` effectively disables speculative collision for this body.
     ///
-    /// **Default**: [`Scalar::MAX`] (unbounded)
-    pub max_distance: Scalar,
+    /// **Default**: [`f32::MAX`] (unbounded)
+    pub max_distance: f32,
 }
 
 impl Default for SpeculativeCcd {
@@ -530,11 +530,11 @@ impl SpeculativeCcd {
 
     /// An unbounded speculative margin. Speculative contacts are generated as far ahead
     /// as the body's velocity reaches, and the AABB is expanded by the full per-timestep motion.
-    pub const MAX: Self = Self::new(Scalar::MAX);
+    pub const MAX: Self = Self::new(f32::MAX);
 
     /// Creates a [`SpeculativeCcd`] configuration with the given maximum speculative distance.
     #[inline]
-    pub const fn new(max_distance: Scalar) -> Self {
+    pub const fn new(max_distance: f32) -> Self {
         Self { max_distance }
     }
 }
@@ -559,7 +559,7 @@ struct CcdResult {
     /// The fast body that was swept.
     entity: Entity,
     /// The time of impact fraction in `[0, 1]`,
-    fraction: Scalar,
+    fraction: f32,
     /// Details of the earliest impact, if one was found.
     impact: Option<CcdImpact>,
 }
@@ -576,7 +576,7 @@ struct CcdImpact {
     ///
     /// This is typically only relevant for dynamic-dynamic and dynamic-kinematic impacts
     /// where the final pose of the other shape ended up separated from the TOI impact point.
-    distance: Scalar,
+    distance: f32,
 }
 
 /// Performs [Continuous Collision Detection](self).
@@ -597,7 +597,7 @@ fn solve_continuous(
 ) {
     let start = crate::utils::Instant::now();
 
-    let delta_secs = time.delta_seconds_adjusted();
+    let delta_secs = time.delta_secs();
     if delta_secs <= 0.0 {
         return;
     }
@@ -690,7 +690,7 @@ fn solve_continuous(
         };
 
         let mode1 = ccd.mode;
-        let body_com_world = fast.position.0 + fast.rotation * fast.com.0;
+        let body_com_world = fast.position.0 + (fast.rotation * fast.com.0).adjust_precision();
 
         // Determine which trees to sweep against based on the body's filter.
         let trees_to_query: [Option<&ColliderTree>; 4] = [
@@ -722,16 +722,26 @@ fn solve_continuous(
                 continue;
             };
 
-            let motion1 =
-                collider_sweep_motion(collider_pos1, collider_rot1, body_com_world, body, inv_dt);
+            let motion1 = collider_sweep_motion(
+                collider_pos1.0,
+                collider_rot1.f32(),
+                body_com_world,
+                body,
+                inv_dt,
+            );
 
             // Compute the collider's end-of-frame pose to build the swept AABB.
-            let collider_rot2 = (body.delta_rotation * collider_rot1).fast_renormalize();
+            let collider_rot2 = (body.delta_rotation * collider_rot1.f32()).fast_renormalize();
             let collider_pos2 = body_com_world
-                + body.delta_position
-                + body.delta_rotation * (collider_pos1.0 - body_com_world);
-            let swept_aabb =
-                collider1.swept_aabb(collider_pos1.0, collider_rot1, collider_pos2, collider_rot2);
+                + body.delta_position.adjust_precision()
+                + body.delta_rotation.adjust_precision() * (collider_pos1.0 - body_com_world);
+            let swept_aabb = collider1.swept_aabb(
+                collider_pos1.0,
+                collider_rot1.f32(),
+                collider_pos2,
+                collider_rot2.f32(),
+                0.0,
+            );
             let query_aabb = obvhs::aabb::Aabb::from(swept_aabb);
 
             // Sweep the collider against the relevant trees.
@@ -780,12 +790,12 @@ fn solve_continuous(
                     let (motion2, mode2) = match proxy.body {
                         Some(body2_entity) => match ccd_query.get(body2_entity) {
                             Ok(body2) => {
-                                let target_com_world =
-                                    body2.position.0 + body2.rotation * body2.com.0;
+                                let target_com_world = body2.position.0
+                                    + (body2.rotation * body2.com.0).adjust_precision();
                                 (
                                     collider_sweep_motion(
-                                        target_pos,
-                                        target_rot,
+                                        target_pos.0,
+                                        target_rot.f32(),
                                         target_com_world,
                                         body2.body,
                                         inv_dt,
@@ -793,9 +803,15 @@ fn solve_continuous(
                                     body2.ccd.map_or(SweepMode::NonLinear, |ccd| ccd.mode),
                                 )
                             }
-                            Err(_) => (static_motion(target_pos, target_rot), SweepMode::Linear),
+                            Err(_) => (
+                                static_motion(target_pos.0, target_rot.f32()),
+                                SweepMode::Linear,
+                            ),
                         },
-                        None => (static_motion(target_pos, target_rot), SweepMode::Linear),
+                        None => (
+                            static_motion(target_pos.0, target_rot.f32()),
+                            SweepMode::Linear,
+                        ),
                     };
 
                     // Use a non-linear sweep unless both bodies opt into linear sweeps.
@@ -811,7 +827,7 @@ fn solve_continuous(
                     if let Some(hit) = compute_ccd_toi(
                         sweep_mode, &motion1, collider1, &motion2, collider2, min_toi,
                     ) {
-                        min_toi = hit.time_of_impact;
+                        min_toi = hit.time_of_impact.f32();
                         best_impact = Some(CcdImpact {
                             collider1: collider_entity,
                             collider2: collider_entity2,
@@ -866,8 +882,16 @@ fn solve_continuous(
 
                     // Scale back the body's motion to the time of impact.
                     solver_body.delta_position *= t;
-                    solver_body.delta_rotation =
-                        Rotation::IDENTITY.nlerp(solver_body.delta_rotation, t);
+                    #[cfg(feature = "2d")]
+                    {
+                        solver_body.delta_rotation =
+                            Rot2::IDENTITY.nlerp(solver_body.delta_rotation, t);
+                    }
+                    #[cfg(feature = "3d")]
+                    {
+                        solver_body.delta_rotation =
+                            Quat::IDENTITY.lerp(solver_body.delta_rotation, t);
+                    }
                 }
             }
 
@@ -901,30 +925,30 @@ fn solve_continuous(
 /// mass, so this supports colliders offset from the body origin (i.e. child colliders).
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 fn collider_sweep_motion(
-    collider_pos: Position,
-    collider_rot: Rotation,
+    collider_pos: Vector,
+    collider_rot: RotF32,
     com_world: Vector,
     solver_body: &SolverBody,
-    inv_dt: Scalar,
+    inv_dt: f32,
 ) -> NonlinearRigidMotion {
     let lin_vel = solver_body.delta_position * inv_dt;
     #[cfg(feature = "2d")]
     let ang_vel = solver_body.delta_rotation.as_radians() * inv_dt;
     #[cfg(feature = "3d")]
-    let ang_vel = solver_body.delta_rotation.0.to_scaled_axis() * inv_dt;
+    let ang_vel = solver_body.delta_rotation.to_scaled_axis() * inv_dt;
     // The body's center of mass expressed in the collider's local frame
-    let local_center = collider_rot.inverse() * (com_world - collider_pos.0);
+    let local_center = collider_rot.inverse() * (com_world - collider_pos).f32();
     NonlinearRigidMotion::new(
         make_pose(collider_pos, collider_rot),
-        local_center,
-        lin_vel,
-        ang_vel,
+        local_center.adjust_precision(),
+        lin_vel.adjust_precision(),
+        ang_vel.adjust_precision(),
     )
 }
 
 /// A constant (non-moving) [`NonlinearRigidMotion`] at the given pose, for static targets.
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
-fn static_motion(pos: Position, rot: Rotation) -> NonlinearRigidMotion {
+fn static_motion(pos: Vector, rot: RotF32) -> NonlinearRigidMotion {
     NonlinearRigidMotion::constant_position(make_pose(pos, rot))
 }
 
@@ -939,7 +963,7 @@ fn compute_ccd_toi(
     collider1: &Collider,
     motion2: &NonlinearRigidMotion,
     collider2: &Collider,
-    min_toi: Scalar,
+    min_toi: f32,
 ) -> Option<ShapeCastHit> {
     let shape1 = collider1.shape_scaled();
     let shape2 = collider2.shape_scaled();
@@ -953,7 +977,7 @@ fn compute_ccd_toi(
             motion2.linvel,
             shape2.as_ref(),
             ShapeCastOptions {
-                max_time_of_impact: min_toi,
+                max_time_of_impact: min_toi.adjust_precision(),
                 stop_at_penetration: false,
                 ..default()
             },
@@ -966,11 +990,11 @@ fn compute_ccd_toi(
             motion2,
             shape2.as_ref(),
             0.0,
-            min_toi,
+            min_toi.adjust_precision(),
             false,
         )
         .ok()??
     };
 
-    (hit.time_of_impact > 0.0 && hit.time_of_impact < min_toi).then_some(hit)
+    (hit.time_of_impact > 0.0 && hit.time_of_impact < min_toi.adjust_precision()).then_some(hit)
 }

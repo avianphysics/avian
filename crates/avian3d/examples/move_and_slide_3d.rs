@@ -194,14 +194,13 @@ fn player_movement(
         movement_velocity = camera.rotation * movement_velocity;
 
         // Add to current velocity
-        lin_vel.0 += movement_velocity.adjust_precision();
+        lin_vel.0 += movement_velocity;
 
         let current_speed = lin_vel.length();
         if current_speed > 0.0 {
             // Apply friction
             lin_vel.0 = lin_vel.0 / current_speed
-                * (current_speed - current_speed * 20.0 * time.delta_secs().adjust_precision())
-                    .max(0.0)
+                * (current_speed - current_speed * 20.0 * time.delta_secs()).max(0.0)
         }
     }
 }
@@ -235,7 +234,7 @@ fn run_move_and_slide(
         } = move_and_slide.move_and_slide(
             collider,
             transform.translation.adjust_precision(),
-            transform.rotation.adjust_precision(),
+            transform.rotation,
             lin_vel.0,
             time.delta(),
             &MoveAndSlideConfig::default(),
@@ -247,10 +246,7 @@ fn run_move_and_slide(
                 } else {
                     gizmos.arrow(
                         hit.point.f32(),
-                        (hit.point
-                            + hit.normal.adjust_precision() * hit.collision_distance
-                                / time.delta_secs().adjust_precision())
-                        .f32(),
+                        hit.point.f32() + *hit.normal * hit.collision_distance / time.delta_secs(),
                         tailwind::EMERALD_400,
                     );
                 }
@@ -289,7 +285,7 @@ fn update_camera_transform(
     if let Some(hit) = spatial.cast_ray(
         player_transform.translation.adjust_precision(),
         camera.back(),
-        MAX_DISTANCE.adjust_precision(),
+        MAX_DISTANCE,
         true,
         &SpatialQueryFilter::from_excluded_entities([player_entity]),
     ) {

@@ -7,7 +7,7 @@
 //! The scene spawns a grid of colliders that move randomly each frame.
 //! The size of the grid and the movement parameters can be adjusted via GUI controls.
 
-use avian3d::{math::*, prelude::*};
+use avian3d::prelude::*;
 use bevy::{
     color::palettes::tailwind::GRAY_400,
     feathers::{
@@ -126,7 +126,7 @@ fn setup_scene(mut commands: Commands, settings: Res<BvhExampleSettings>) {
                     (y as f32 + 0.5) * 3.0 * PARTICLE_RADIUS,
                     0.0,
                 ),
-                Collider::sphere(PARTICLE_RADIUS.adjust_precision()),
+                Collider::sphere(PARTICLE_RADIUS),
                 CollisionLayers::new(LayerMask::DEFAULT, LayerMask::NONE),
             ));
         }

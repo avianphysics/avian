@@ -20,7 +20,9 @@
 //! but a proper fix would require a substepping CCD solver, which is not currently
 //! implemented in Avian due to its high overhead and complexity.
 
-use avian2d::{math::*, prelude::*};
+use core::f32::consts::PI;
+
+use avian2d::prelude::*;
 use bevy::prelude::*;
 use examples_common_2d::ExampleCommonPlugin;
 
@@ -32,7 +34,7 @@ fn main() {
             PhysicsPlugins::default(),
         ))
         .insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.1)))
-        .insert_resource(Gravity(Vector::NEG_Y * 9.81 * 100.0))
+        .insert_resource(Gravity(Vec2::NEG_Y * 9.81 * 100.0))
         .init_resource::<ActiveSweepMode>()
         .init_resource::<SpeculativeCcdEnabled>()
         .add_systems(Startup, setup)
@@ -189,8 +191,8 @@ fn spawn_balls(
     let circle = Circle::new(2.0);
 
     // Compute the shooting direction.
-    let (sin, cos) = (0.5 * time.elapsed_secs_f64().adjust_precision().sin() - PI / 2.0).sin_cos();
-    let direction = Vector::new(cos, sin).rotate(Vector::X);
+    let (sin, cos) = (0.5 * time.elapsed_secs().sin() - PI / 2.0).sin_cos();
+    let direction = Vec2::new(cos, sin).rotate(Vec2::X);
 
     let mut ball = commands.spawn((
         Name::new("Ball"),

@@ -29,7 +29,7 @@ pub struct RigidBodyQuery {
 
 impl RigidBodyQueryItem<'_, '_> {
     /// Computes the velocity at the given `point` relative to the center of the body.
-    pub fn velocity_at_point(&self, point: Vector) -> Vector {
+    pub fn velocity_at_point(&self, point: VectorF32) -> VectorF32 {
         #[cfg(feature = "2d")]
         {
             self.linear_velocity.0 + self.angular_velocity.0 * point.perp()
@@ -41,12 +41,12 @@ impl RigidBodyQueryItem<'_, '_> {
     }
 
     /// Computes the effective inverse mass, taking into account any translation locking.
-    pub fn effective_inverse_mass(&self) -> Vector {
+    pub fn effective_inverse_mass(&self) -> VectorF32 {
         if !self.rb.is_dynamic() {
-            return Vector::ZERO;
+            return VectorF32::ZERO;
         }
 
-        let mut inv_mass = Vector::splat(self.mass.inverse());
+        let mut inv_mass = VectorF32::splat(self.mass.inverse());
 
         if let Some(locked_axes) = self.locked_axes {
             inv_mass = locked_axes.apply_to_vec(inv_mass);
@@ -73,7 +73,7 @@ impl RigidBodyQueryItem<'_, '_> {
         #[cfg(feature = "2d")]
         let mut angular_inertia = *self.angular_inertia;
         #[cfg(feature = "3d")]
-        let mut angular_inertia = self.angular_inertia.rotated(self.rotation.0);
+        let mut angular_inertia = self.angular_inertia.rotated(self.rotation.f32());
 
         if let Some(locked_axes) = self.locked_axes {
             angular_inertia = locked_axes.apply_to_angular_inertia(angular_inertia);
@@ -97,7 +97,7 @@ impl RigidBodyQueryItem<'_, '_> {
 
 impl RigidBodyQueryReadOnlyItem<'_, '_> {
     /// Computes the velocity at the given `point` relative to the center of mass.
-    pub fn velocity_at_point(&self, point: Vector) -> Vector {
+    pub fn velocity_at_point(&self, point: VectorF32) -> VectorF32 {
         #[cfg(feature = "2d")]
         {
             self.linear_velocity.0 + self.angular_velocity.0 * point.perp()
@@ -118,12 +118,12 @@ impl RigidBodyQueryReadOnlyItem<'_, '_> {
     }
 
     /// Computes the effective inverse mass, taking into account any translation locking.
-    pub fn effective_inverse_mass(&self) -> Vector {
+    pub fn effective_inverse_mass(&self) -> VectorF32 {
         if !self.rb.is_dynamic() {
-            return Vector::ZERO;
+            return VectorF32::ZERO;
         }
 
-        let mut inv_mass = Vector::splat(self.mass.inverse());
+        let mut inv_mass = VectorF32::splat(self.mass.inverse());
 
         if let Some(locked_axes) = self.locked_axes {
             inv_mass = locked_axes.apply_to_vec(inv_mass);
@@ -150,7 +150,7 @@ impl RigidBodyQueryReadOnlyItem<'_, '_> {
         #[cfg(feature = "2d")]
         let mut angular_inertia = *self.angular_inertia;
         #[cfg(feature = "3d")]
-        let mut angular_inertia = self.angular_inertia.rotated(self.rotation.0);
+        let mut angular_inertia = self.angular_inertia.rotated(self.rotation.f32());
 
         if let Some(locked_axes) = self.locked_axes {
             angular_inertia = locked_axes.apply_to_angular_inertia(angular_inertia);

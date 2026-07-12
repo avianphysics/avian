@@ -1,6 +1,6 @@
 #![allow(clippy::unnecessary_cast)]
 
-use avian3d::{math::*, prelude::*};
+use avian3d::prelude::*;
 use bevy::prelude::*;
 use examples_common_3d::ExampleCommonPlugin;
 
@@ -19,7 +19,7 @@ fn main() {
 
 /// The acceleration used for movement.
 #[derive(Component)]
-struct MovementAcceleration(Scalar);
+struct MovementAcceleration(f32);
 
 fn setup(
     mut commands: Commands,
@@ -80,7 +80,7 @@ fn movement(
 ) {
     // Precision is adjusted so that the example works with
     // both the `f32` and `f64` features. Otherwise you don't need this.
-    let delta_time = time.delta_secs_f64().adjust_precision();
+    let delta_time = time.delta_secs();
 
     for (movement_acceleration, mut linear_velocity) in &mut query {
         let up = keyboard_input.any_pressed([KeyCode::KeyW, KeyCode::ArrowUp]);
@@ -90,11 +90,10 @@ fn movement(
 
         let horizontal = right as i8 - left as i8;
         let vertical = down as i8 - up as i8;
-        let direction =
-            Vector::new(horizontal as Scalar, 0.0, vertical as Scalar).normalize_or_zero();
+        let direction = Vec3::new(horizontal as f32, 0.0, vertical as f32).normalize_or_zero();
 
         // Move in input direction
-        if direction != Vector::ZERO {
+        if direction != Vec3::ZERO {
             linear_velocity.x += direction.x * movement_acceleration.0 * delta_time;
             linear_velocity.z += direction.z * movement_acceleration.0 * delta_time;
         }

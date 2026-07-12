@@ -52,7 +52,7 @@ fn tick_app(app: &mut App, timestep: f64) {
 fn setup_cubes_simulation(mut commands: Commands) {
     let mut next_id = 0;
     // copied from "cubes" example
-    let floor_size = Vector::new(80.0, 1.0, 80.0);
+    let floor_size = Vec3::new(80.0, 1.0, 80.0);
     commands.spawn((
         RigidBody::Static,
         Position(Vector::NEG_Y),
@@ -67,9 +67,9 @@ fn setup_cubes_simulation(mut commands: Commands) {
         for x in 0..count_x {
             for z in 0..count_z {
                 let pos = Vector::new(
-                    (x as Scalar - count_x as Scalar * 0.5) * 2.1 * radius,
-                    10.0 * radius * y as Scalar,
-                    (z as Scalar - count_z as Scalar * 0.5) * 2.1 * radius,
+                    (x as Scalar - count_x as Scalar * 0.5) * 2.1 * radius as Scalar,
+                    10.0 * radius as Scalar * y as Scalar,
+                    (z as Scalar - count_z as Scalar * 0.5) * 2.1 * radius as Scalar,
                 );
                 commands.spawn((
                     Transform::default(),
@@ -110,7 +110,7 @@ fn body_with_velocity_moves() {
         commands.spawn((
             Transform::default(),
             RigidBody::Dynamic,
-            LinearVelocity(Vector::X),
+            LinearVelocity(VectorF32::X),
             #[cfg(feature = "2d")]
             MassPropertiesBundle::from_shape(&Circle::new(0.5), 1.0),
             #[cfg(feature = "3d")]

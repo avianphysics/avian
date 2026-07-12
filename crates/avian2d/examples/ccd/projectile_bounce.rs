@@ -15,7 +15,7 @@
 //! the velocity-based AABB expansion is opt-in, but it can be useful for fast-moving
 //! bodies that do need to collide with each other at high speeds, such as projectiles.
 
-use avian2d::{math::*, prelude::*};
+use avian2d::prelude::*;
 use bevy::{camera::ScalingMode, input::common_conditions::input_just_pressed, prelude::*};
 use examples_common_2d::ExampleCommonPlugin;
 
@@ -28,7 +28,7 @@ fn main() {
         ))
         .insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.1)))
         // Zero gravity, so the circles travel in straight lines until they collide.
-        .insert_resource(Gravity(Vector::ZERO))
+        .insert_resource(Gravity::ZERO)
         .add_systems(Startup, (setup_camera, setup_scene))
         .add_systems(
             Update,
@@ -38,7 +38,7 @@ fn main() {
 }
 
 const START_DISTANCE: f32 = 9.0;
-const SPEED: Scalar = 150.0;
+const SPEED: f32 = 150.0;
 const RADIUS: f32 = 0.5;
 
 fn setup_camera(mut commands: Commands) {
@@ -61,7 +61,7 @@ fn setup_scene(
     let circle = Circle::new(RADIUS);
     let mesh = meshes.add(circle);
 
-    let mut projectile = |position: Vec2, velocity: Vector, color: Color| {
+    let mut projectile = |position: Vec2, velocity: Vec2, color: Color| {
         (
             Name::new("Projectile"),
             Transform::from_xyz(position.x, position.y, 0.0),
@@ -83,14 +83,14 @@ fn setup_scene(
     // Comes in from the left, moving right.
     commands.spawn(projectile(
         Vec2::new(-START_DISTANCE, 0.0),
-        Vector::X * SPEED,
+        Vec2::X * SPEED,
         Color::srgb(0.2, 0.7, 0.9),
     ));
 
     // Comes in from the bottom, moving up.
     commands.spawn(projectile(
         Vec2::new(0.0, -START_DISTANCE),
-        Vector::Y * SPEED,
+        Vec2::Y * SPEED,
         Color::srgb(0.9, 0.3, 0.3),
     ));
 

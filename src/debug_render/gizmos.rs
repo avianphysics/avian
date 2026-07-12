@@ -17,8 +17,8 @@ pub trait PhysicsGizmoExt {
     fn draw_line_strip(
         &mut self,
         points: Vec<Vector>,
-        position: impl Into<Position>,
-        rotation: impl Into<Rotation>,
+        position: Vector,
+        rotation: impl Into<RotF32>,
         closed: bool,
         color: Color,
     );
@@ -28,13 +28,13 @@ pub trait PhysicsGizmoExt {
         &mut self,
         vertices: &[Vector],
         indices: &[[u32; 2]],
-        position: impl Into<Position>,
-        rotation: impl Into<Rotation>,
+        position: Vector,
+        rotation: impl Into<RotF32>,
         color: Color,
     );
 
     /// Draws an arrow from `a` to `b` with an arrowhead that has a length of `head_length`.
-    fn draw_arrow(&mut self, a: Vector, b: Vector, head_length: Scalar, color: Color);
+    fn draw_arrow(&mut self, a: Vector, b: Vector, head_length: f32, color: Color);
 
     /// Draws a [`Collider`] shape.
     #[cfg(all(
@@ -44,8 +44,8 @@ pub trait PhysicsGizmoExt {
     fn draw_collider(
         &mut self,
         collider: &Collider,
-        position: impl Into<Position>,
-        rotation: impl Into<Rotation>,
+        position: Vector,
+        rotation: impl Into<RotF32>,
         color: Color,
     );
 
@@ -55,12 +55,12 @@ pub trait PhysicsGizmoExt {
         &mut self,
         origin: Vector,
         direction: Dir,
-        max_distance: Scalar,
+        max_distance: f32,
         hits: &[RayHitData],
         ray_color: Color,
         point_color: Color,
         normal_color: Color,
-        length_unit: Scalar,
+        length_unit: f32,
     );
 
     /// Draws the results of a [shapecast](SpatialQuery#shapecasting).
@@ -73,15 +73,15 @@ pub trait PhysicsGizmoExt {
         &mut self,
         shape: &Collider,
         origin: Vector,
-        shape_rotation: impl Into<Rotation>,
+        shape_rotation: impl Into<RotF32>,
         direction: Dir,
-        max_distance: Scalar,
+        max_distance: f32,
         hits: &[ShapeHitData],
         ray_color: Color,
         shape_color: Color,
         point_color: Color,
         normal_color: Color,
-        length_unit: Scalar,
+        length_unit: f32,
     );
 }
 
@@ -98,23 +98,22 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
     fn draw_line_strip(
         &mut self,
         points: Vec<Vector>,
-        position: impl Into<Position>,
-        rotation: impl Into<Rotation>,
+        position: Vector,
+        rotation: impl Into<RotF32>,
         closed: bool,
         color: Color,
     ) {
-        let position: Position = position.into();
-        let rotation: Rotation = rotation.into();
+        let rotation = rotation.into();
 
         let pos = position.f32();
         #[cfg(feature = "2d")]
-        self.linestrip_2d(points.iter().map(|p| pos + (rotation * p).f32()), color);
+        self.linestrip_2d(points.iter().map(|p| pos + rotation * p.f32()), color);
         #[cfg(feature = "3d")]
-        self.linestrip(points.iter().map(|p| pos + (rotation * p).f32()), color);
+        self.linestrip(points.iter().map(|p| pos + rotation * p.f32()), color);
 
         if closed && points.len() > 2 {
-            let a = position.0 + rotation * points[0];
-            let b = position.0 + rotation * points.last().unwrap();
+            let a = position + rotation.adjust_precision() * points[0];
+            let b = position + rotation.adjust_precision() * *points.last().unwrap();
             self.draw_line(a, b, color);
         }
     }
@@ -124,23 +123,22 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
         &mut self,
         vertices: &[Vector],
         indices: &[[u32; 2]],
-        position: impl Into<Position>,
-        rotation: impl Into<Rotation>,
+        position: Vector,
+        rotation: impl Into<RotF32>,
         color: Color,
     ) {
-        let position: Position = position.into();
-        let rotation: Rotation = rotation.into();
+        let rotation = rotation.into().adjust_precision();
 
         for [i1, i2] in indices {
-            let a = position.0 + rotation * vertices[*i1 as usize];
-            let b = position.0 + rotation * vertices[*i2 as usize];
+            let a = position + rotation * vertices[*i1 as usize];
+            let b = position + rotation * vertices[*i2 as usize];
             self.draw_line(a, b, color);
         }
     }
 
     /// Draws an arrow from `a` to `b` with an arrowhead that has a length of `head_length`
     /// and a width of `head_width`.
-    fn draw_arrow(&mut self, a: Vector, b: Vector, head_length: Scalar, color: Color) {
+    fn draw_arrow(&mut self, a: Vector, b: Vector, head_length: f32, color: Color) {
         #[cfg(feature = "2d")]
         {
             self.arrow_2d(a.f32(), b.f32(), color)
@@ -162,12 +160,11 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
     fn draw_collider(
         &mut self,
         collider: &Collider,
-        position: impl Into<Position>,
-        rotation: impl Into<Rotation>,
+        position: Vector,
+        rotation: impl Into<RotF32>,
         color: Color,
     ) {
-        let position: Position = position.into();
-        let rotation: Rotation = rotation.into();
+        let rotation: RotF32 = rotation.into();
 
         match collider.shape_scaled().as_typed_shape() {
             #[cfg(feature = "2d")]
@@ -281,11 +278,15 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
             }
             TypedShape::Compound(s) => {
                 for (sub_pos, shape) in s.shapes() {
-                    let pos = Position(position.0 + rotation * sub_pos.translation);
+                    let pos = position + rotation.adjust_precision() * sub_pos.translation;
                     #[cfg(feature = "2d")]
-                    let rot = rotation * Rotation::radians(sub_pos.rotation.angle());
+                    let rot = rotation
+                        * Rot2::from_sin_cos(
+                            sub_pos.rotation.sin().f32(),
+                            sub_pos.rotation.cos().f32(),
+                        );
                     #[cfg(feature = "3d")]
-                    let rot = Rotation((rotation.mul_quat(sub_pos.rotation)).normalize());
+                    let rot = rotation.mul_quat(sub_pos.rotation.f32()).normalize();
                     self.draw_collider(&Collider::from(shape.to_owned()), pos, rot, color);
                 }
             }
@@ -389,29 +390,29 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
         &mut self,
         origin: Vector,
         direction: Dir,
-        max_distance: Scalar,
+        max_distance: f32,
         hits: &[RayHitData],
         ray_color: Color,
         point_color: Color,
         normal_color: Color,
-        length_unit: Scalar,
+        length_unit: f32,
     ) {
         let max_distance = hits
             .iter()
             .max_by(|a, b| a.distance.total_cmp(&b.distance))
-            .map_or(max_distance, |hit| hit.distance);
+            .map_or(max_distance, |hit| hit.distance.f32());
 
         // Draw ray as arrow
         self.draw_arrow(
             origin,
-            origin + direction.adjust_precision() * max_distance,
+            origin + (direction * max_distance).adjust_precision(),
             0.1 * length_unit,
             ray_color,
         );
 
         // Draw all hit points and normals
         for hit in hits {
-            let point = origin + direction.adjust_precision() * hit.distance;
+            let point = origin + (direction * hit.distance).adjust_precision();
 
             // Draw hit point
             #[cfg(feature = "2d")]
@@ -422,7 +423,7 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
             // Draw hit normal as arrow
             self.draw_arrow(
                 point,
-                point + hit.normal * 0.5 * length_unit,
+                point + (hit.normal * 0.5 * length_unit).adjust_precision(),
                 0.1 * length_unit,
                 normal_color,
             );
@@ -439,19 +440,19 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
         &mut self,
         shape: &Collider,
         origin: Vector,
-        shape_rotation: impl Into<Rotation>,
+        shape_rotation: impl Into<RotF32>,
         direction: Dir,
-        max_distance: Scalar,
+        max_distance: f32,
         hits: &[ShapeHitData],
         ray_color: Color,
         shape_color: Color,
         point_color: Color,
         normal_color: Color,
-        length_unit: Scalar,
+        length_unit: f32,
     ) {
         let shape_rotation = shape_rotation.into();
         #[cfg(feature = "3d")]
-        let shape_rotation = Rotation(shape_rotation.normalize());
+        let shape_rotation = shape_rotation.normalize();
 
         let max_distance = hits
             .iter()
@@ -465,7 +466,7 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
         // TODO: We could render the swept collider outline instead
         self.draw_arrow(
             origin,
-            origin + max_distance * direction.adjust_precision(),
+            origin + (max_distance * direction).adjust_precision(),
             0.1 * length_unit,
             ray_color,
         );
@@ -481,7 +482,7 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
             // Draw hit normal as arrow
             self.draw_arrow(
                 hit.point1,
-                hit.point1 + hit.normal1 * 0.5 * length_unit,
+                hit.point1 + (hit.normal1 * 0.5 * length_unit).adjust_precision(),
                 0.1 * length_unit,
                 normal_color,
             );
@@ -489,7 +490,7 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
             // Draw collider at hit point
             self.draw_collider(
                 shape,
-                origin + hit.distance * direction.adjust_precision(),
+                origin + (hit.distance * direction).adjust_precision(),
                 shape_rotation,
                 shape_color.with_alpha(0.3),
             );

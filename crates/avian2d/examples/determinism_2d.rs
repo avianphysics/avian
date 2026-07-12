@@ -14,10 +14,9 @@
 //! This test is based on the `FallingHinges` test in the Box2D physics engine:
 //! <https://github.com/erincatto/box2d/blob/90c2781f64775085035655661d5fe6542bf0fbd5/samples/sample_determinism.cpp>
 
-use avian2d::{
-    math::{AdjustPrecision, PI, Scalar, Vector},
-    prelude::*,
-};
+use core::f32::consts::PI;
+
+use avian2d::{math::Vector, prelude::*};
 use bevy::{
     camera::ScalingMode, color::palettes::tailwind::CYAN_400,
     input::common_conditions::input_just_pressed, prelude::*,
@@ -123,8 +122,8 @@ fn setup_scene(
                     RevoluteJoint::new(prev_entity.unwrap(), entity)
                         .with_angle_limits(-0.1 * PI, 0.2 * PI)
                         .with_point_compliance(0.0001)
-                        .with_local_anchor1(Vec2::splat(half_size).adjust_precision())
-                        .with_local_anchor2(Vec2::new(offset, -half_size).adjust_precision()),
+                        .with_local_anchor1(Vec2::splat(half_size))
+                        .with_local_anchor2(Vec2::new(offset, -half_size)),
                     JointCollisionDisabled,
                 ));
                 prev_entity = None;
@@ -206,7 +205,7 @@ fn clear_scene(
 #[repr(C)]
 struct Isometry {
     translation: Vector,
-    rotation: Scalar,
+    rotation: f32,
 }
 
 fn update_hash(

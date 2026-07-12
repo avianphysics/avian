@@ -19,17 +19,17 @@ use bevy::prelude::*;
 #[reflect(Debug, Component, PartialEq)]
 pub struct ColliderTransform {
     /// The translation of a collider in a rigid body's frame of reference.
-    pub translation: Vector,
+    pub translation: VectorF32,
     /// The rotation of a collider in a rigid body's frame of reference.
-    pub rotation: Rotation,
+    pub rotation: RotF32,
     /// The global scale of a collider. Equivalent to the `GlobalTransform` scale.
-    pub scale: Vector,
+    pub scale: VectorF32,
 }
 
 impl ColliderTransform {
     /// Transforms a given point by applying the translation, rotation and scale of
     /// this [`ColliderTransform`].
-    pub fn transform_point(&self, mut point: Vector) -> Vector {
+    pub fn transform_point(&self, mut point: VectorF32) -> VectorF32 {
         point *= self.scale;
         point = self.rotation * point;
         point += self.translation;
@@ -40,9 +40,9 @@ impl ColliderTransform {
 impl Default for ColliderTransform {
     fn default() -> Self {
         Self {
-            translation: Vector::ZERO,
-            rotation: Rotation::default(),
-            scale: Vector::ONE,
+            translation: VectorF32::ZERO,
+            rotation: RotF32::default(),
+            scale: VectorF32::ONE,
         }
     }
 }
@@ -51,14 +51,17 @@ impl From<Transform> for ColliderTransform {
     fn from(value: Transform) -> Self {
         Self {
             #[cfg(feature = "2d")]
-            translation: value.translation.truncate().adjust_precision(),
+            translation: value.translation.truncate(),
             #[cfg(feature = "3d")]
-            translation: value.translation.adjust_precision(),
-            rotation: Rotation::from(value.rotation.adjust_precision()),
+            translation: value.translation,
             #[cfg(feature = "2d")]
-            scale: value.scale.truncate().adjust_precision(),
+            rotation: RotF32::radians(value.rotation.to_euler(EulerRot::XYZ).2),
             #[cfg(feature = "3d")]
-            scale: value.scale.adjust_precision(),
+            rotation: value.rotation,
+            #[cfg(feature = "2d")]
+            scale: value.scale.truncate(),
+            #[cfg(feature = "3d")]
+            scale: value.scale,
         }
     }
 }

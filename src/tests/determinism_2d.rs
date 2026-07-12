@@ -74,7 +74,7 @@ fn cross_platform_determinism_2d() {
 #[repr(C)]
 struct Isometry {
     translation: Vector,
-    rotation: Scalar,
+    rotation: f32,
 }
 
 fn compute_hash(world: &World, mut query: QueryState<(&Position, &Rotation)>) -> u32 {
@@ -105,7 +105,7 @@ fn setup_scene(mut commands: Commands) {
     ));
 
     let half_size = 0.25;
-    let square_collider = Collider::rectangle(2.0 * half_size as Scalar, 2.0 * half_size as Scalar);
+    let square_collider = Collider::rectangle(2.0 * half_size, 2.0 * half_size);
 
     let offset = 0.4 * half_size;
     let delta_x = 10.0 * half_size;
@@ -143,8 +143,8 @@ fn setup_scene(mut commands: Commands) {
                     RevoluteJoint::new(prev_entity.unwrap(), entity)
                         .with_angle_limits(-0.1 * PI, 0.2 * PI)
                         .with_point_compliance(0.0001)
-                        .with_local_anchor1(Vec2::splat(half_size).adjust_precision())
-                        .with_local_anchor2(Vec2::new(offset, -half_size).adjust_precision()),
+                        .with_local_anchor1(Vec2::splat(half_size))
+                        .with_local_anchor2(Vec2::new(offset, -half_size)),
                     JointCollisionDisabled,
                 ));
                 prev_entity = None;

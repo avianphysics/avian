@@ -11,43 +11,45 @@ use crate::{
 };
 use bevy::prelude::*;
 
+use core::f32::consts::TAU;
+
 /// Constraint data required by the XPBD constraint solver for a [`PrismaticJoint`].
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Component, Debug, PartialEq)]
 pub struct PrismaticJointSolverData {
-    pub(super) world_r1: Vector,
-    pub(super) world_r2: Vector,
-    pub(super) center_difference: Vector,
-    pub(super) free_axis1: Vector,
-    pub(super) total_position_lagrange: Vector,
+    pub(super) world_r1: VectorF32,
+    pub(super) world_r2: VectorF32,
+    pub(super) center_difference: VectorF32,
+    pub(super) free_axis1: VectorF32,
+    pub(super) total_position_lagrange: VectorF32,
     pub(super) angle_constraint: FixedAngleConstraintShared,
     /// Accumulated motor Lagrange multiplier for this frame.
-    pub(super) total_motor_lagrange: Scalar,
+    pub(super) total_motor_lagrange: f32,
     /// Motor Lagrange multiplier from the previous frame, used for warm starting.
     /// This is zeroed after being applied in the first substep.
-    pub(super) warm_start_motor_lagrange: Scalar,
+    pub(super) warm_start_motor_lagrange: f32,
 }
 
 impl XpbdConstraintSolverData for PrismaticJointSolverData {
     fn clear_lagrange_multipliers(&mut self) {
-        self.total_position_lagrange = Vector::ZERO;
+        self.total_position_lagrange = VectorF32::ZERO;
         self.angle_constraint.clear_lagrange_multipliers();
         // Save motor lagrange for warm starting before clearing.
         self.warm_start_motor_lagrange = self.total_motor_lagrange;
         self.total_motor_lagrange = 0.0;
     }
 
-    fn total_position_lagrange(&self) -> Vector {
+    fn total_position_lagrange(&self) -> VectorF32 {
         self.total_position_lagrange
     }
 
-    fn total_rotation_lagrange(&self) -> AngularVector {
+    fn total_rotation_lagrange(&self) -> AngularVectorF32 {
         self.angle_constraint.total_rotation_lagrange()
     }
 
-    fn total_motor_lagrange(&self) -> Scalar {
+    fn total_motor_lagrange(&self) -> f32 {
         self.total_motor_lagrange
     }
 }
@@ -84,11 +86,12 @@ impl XpbdConstraint<2> for PrismaticJoint {
         );
 
         // Prepare the prismatic joint.
-        solver_data.world_r1 = body1.rotation * (local_anchor1 - body1.center_of_mass.0);
-        solver_data.world_r2 = body2.rotation * (local_anchor2 - body2.center_of_mass.0);
-        solver_data.center_difference = (body2.position.0 - body1.position.0)
-            + (body2.rotation * body2.center_of_mass.0 - body1.rotation * body1.center_of_mass.0);
-        solver_data.free_axis1 = *body1.rotation * local_basis1 * self.slider_axis;
+        solver_data.world_r1 = body1.rotation.f32() * (local_anchor1 - body1.center_of_mass.0);
+        solver_data.world_r2 = body2.rotation.f32() * (local_anchor2 - body2.center_of_mass.0);
+        solver_data.center_difference = (body2.position.0 - body1.position.0).f32()
+            + (body2.rotation.f32() * body2.center_of_mass.0
+                - body1.rotation.f32() * body1.center_of_mass.0);
+        solver_data.free_axis1 = body1.rotation.f32() * local_basis1 * self.slider_axis;
     }
 
     fn solve(
@@ -96,7 +99,7 @@ impl XpbdConstraint<2> for PrismaticJoint {
         bodies: [&mut SolverBody; 2],
         inertias: [&SolverBodyInertia; 2],
         solver_data: &mut PrismaticJointSolverData,
-        dt: Scalar,
+        dt: f32,
     ) {
         let [body1, body2] = bodies;
 
@@ -117,8 +120,8 @@ impl XpbdConstraint<2> for PrismaticJoint {
         bodies: [&mut SolverBody; 2],
         inertias: [&SolverBodyInertia; 2],
         solver_data: &mut PrismaticJointSolverData,
-        _dt: Scalar,
-        warm_start_coefficient: Scalar,
+        _dt: f32,
+        warm_start_coefficient: f32,
     ) {
         if !self.motor.enabled {
             return;
@@ -158,7 +161,7 @@ impl PrismaticJoint {
         inertia1: &SolverBodyInertia,
         inertia2: &SolverBodyInertia,
         solver_data: &mut PrismaticJointSolverData,
-        dt: Scalar,
+        dt: f32,
     ) {
         // Compute the effective inverse masses and angular inertias of the bodies.
         let inv_mass1 = inertia1.effective_inv_mass();
@@ -169,7 +172,7 @@ impl PrismaticJoint {
         let world_r1 = body1.delta_rotation * solver_data.world_r1;
         let world_r2 = body2.delta_rotation * solver_data.world_r2;
 
-        let mut delta_x = Vector::ZERO;
+        let mut delta_x = VectorF32::ZERO;
 
         let axis1 = body1.delta_rotation * solver_data.free_axis1;
         if let Some(limits) = self.limits {
@@ -183,7 +186,7 @@ impl PrismaticJoint {
 
         #[cfg(feature = "2d")]
         {
-            let axis2 = Vector::new(axis1.y, -axis1.x);
+            let axis2 = Vec2::new(axis1.y, -axis1.x);
 
             let separation = (body2.delta_position - body1.delta_position)
                 + (world_r2 - world_r1)
@@ -208,7 +211,7 @@ impl PrismaticJoint {
 
         let magnitude = delta_x.length();
 
-        if magnitude <= Scalar::EPSILON {
+        if magnitude <= f32::EPSILON {
             return;
         }
 
@@ -252,7 +255,7 @@ impl PrismaticJoint {
         inertia1: &SolverBodyInertia,
         inertia2: &SolverBodyInertia,
         solver_data: &mut PrismaticJointSolverData,
-        dt: Scalar,
+        dt: f32,
     ) {
         let motor = &self.motor;
 
@@ -291,7 +294,7 @@ impl PrismaticJoint {
         );
 
         let w_sum = w1 + w2;
-        if w_sum <= Scalar::EPSILON {
+        if w_sum <= f32::EPSILON {
             return;
         }
 
@@ -320,14 +323,14 @@ impl PrismaticJoint {
         };
 
         let correction = target_velocity_change * dt;
-        if correction.abs() <= Scalar::EPSILON {
+        if correction.abs() <= f32::EPSILON {
             return;
         }
 
         let delta_lagrange = correction / w_sum;
 
         // Clamp to limit instantaneous force per substep.
-        let delta_lagrange = if motor.max_force < Scalar::MAX && motor.max_force > 0.0 {
+        let delta_lagrange = if motor.max_force < f32::MAX && motor.max_force > 0.0 {
             let max_delta = motor.max_force * dt * dt;
             delta_lagrange.clamp(-max_delta, max_delta)
         } else {

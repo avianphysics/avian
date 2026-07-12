@@ -56,8 +56,8 @@ fn main() {
 struct CenterDistanceConstraint {
     entity1: Entity,
     entity2: Entity,
-    rest_distance: Scalar,
-    compliance: Scalar,
+    rest_distance: f32,
+    compliance: f32,
 }
 
 /// Solver data for the [`CenterDistanceConstraint`].
@@ -65,7 +65,7 @@ struct CenterDistanceConstraint {
 struct CenterDistanceConstraintSolverData {
     /// The world-space vector from the center of mass of body 1
     /// to the center of mass of body 2.
-    center_difference: Vector,
+    center_difference: Vec3,
 }
 
 impl XpbdConstraintSolverData for CenterDistanceConstraintSolverData {}
@@ -73,7 +73,7 @@ impl XpbdConstraintSolverData for CenterDistanceConstraintSolverData {}
 impl CenterDistanceConstraint {
     /// Creates a new [`CenterDistanceConstraint`] with the given entities and rest distance.
     /// The compliance is set to `0.0` by default.
-    pub const fn new(entity1: Entity, entity2: Entity, rest_distance: Scalar) -> Self {
+    pub const fn new(entity1: Entity, entity2: Entity, rest_distance: f32) -> Self {
         Self {
             entity1,
             entity2,
@@ -101,7 +101,7 @@ impl XpbdConstraint<2> for CenterDistanceConstraint {
 
         // Prepare the base center difference.
         // The solver will compute the updated version based on the position deltas of the bodies.
-        solver_data.center_difference = (body2.position.0 - body1.position.0)
+        solver_data.center_difference = (body2.position.0 - body1.position.0).f32()
             + (body2.rotation * body2.center_of_mass.0 - body1.rotation * body1.center_of_mass.0);
     }
 
@@ -115,7 +115,7 @@ impl XpbdConstraint<2> for CenterDistanceConstraint {
         bodies: [&mut SolverBody; 2],
         inertias: [&SolverBodyInertia; 2],
         solver_data: &mut CenterDistanceConstraintSolverData,
-        dt: Scalar,
+        dt: f32,
     ) {
         let [body1, body2] = bodies;
         let [inertia1, inertia2] = inertias;
@@ -149,8 +149,8 @@ impl XpbdConstraint<2> for CenterDistanceConstraint {
 
         // The world-space anchor points relative to the centers of mass of the bodies.
         // In this case, the offset from the center of mass is just zero.
-        let r1 = Vector::ZERO;
-        let r2 = Vector::ZERO;
+        let r1 = Vec3::ZERO;
+        let r2 = Vec3::ZERO;
 
         // Compute generalized inverse masses (method from PositionConstraint).
         // In this case, the offset from the center of mass is zero.

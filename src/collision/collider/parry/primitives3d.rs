@@ -8,7 +8,7 @@ use crate::{AdjustPrecision, Collider, IntoCollider, Quaternion, Vector};
 
 impl IntoCollider<Collider> for Sphere {
     fn collider(&self) -> Collider {
-        Collider::sphere(self.radius.adjust_precision())
+        Collider::sphere(self.radius)
     }
 }
 
@@ -44,7 +44,7 @@ impl IntoCollider<Collider> for Plane3d {
 
 impl IntoCollider<Collider> for Line3d {
     fn collider(&self) -> Collider {
-        let vec = self.direction.adjust_precision() * 10_000.0;
+        let vec = self.direction * 10_000.0;
         Collider::segment(-vec, vec)
     }
 }
@@ -52,7 +52,7 @@ impl IntoCollider<Collider> for Line3d {
 impl IntoCollider<Collider> for Segment3d {
     fn collider(&self) -> Collider {
         let (point1, point2) = (self.point1(), self.point2());
-        Collider::segment(point1.adjust_precision(), point2.adjust_precision())
+        Collider::segment(point1, point2)
     }
 }
 
@@ -81,19 +81,13 @@ impl IntoCollider<Collider> for Cylinder {
 
 impl IntoCollider<Collider> for Capsule3d {
     fn collider(&self) -> Collider {
-        Collider::capsule(
-            self.radius.adjust_precision(),
-            2.0 * self.half_length.adjust_precision(),
-        )
+        Collider::capsule(self.radius, 2.0 * self.half_length)
     }
 }
 
 impl IntoCollider<Collider> for Cone {
     fn collider(&self) -> Collider {
-        Collider::cone(
-            self.radius.adjust_precision(),
-            self.height.adjust_precision(),
-        )
+        Collider::cone(self.radius, self.height)
     }
 }
 

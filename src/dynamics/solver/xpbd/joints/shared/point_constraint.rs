@@ -14,21 +14,21 @@ use bevy::prelude::*;
 #[reflect(Debug, PartialEq)]
 pub struct PointConstraintShared {
     /// The world-space anchor point relative to the center of mass of the first body.
-    pub world_r1: Vector,
+    pub world_r1: VectorF32,
     /// The world-space anchor point relative to the center of mass of the second body.
-    pub world_r2: Vector,
+    pub world_r2: VectorF32,
     /// The difference in center of mass positions between the two bodies.
-    pub center_difference: Vector,
+    pub center_difference: VectorF32,
     /// The total Lagrange multiplier across the whole time step.
-    pub total_lagrange: Vector,
+    pub total_lagrange: VectorF32,
 }
 
 impl XpbdConstraintSolverData for PointConstraintShared {
     fn clear_lagrange_multipliers(&mut self) {
-        self.total_lagrange = Vector::ZERO;
+        self.total_lagrange = VectorF32::ZERO;
     }
 
-    fn total_position_lagrange(&self) -> Vector {
+    fn total_position_lagrange(&self) -> VectorF32 {
         self.total_lagrange
     }
 }
@@ -38,15 +38,16 @@ impl PointConstraintShared {
     pub fn prepare(
         &mut self,
         bodies: [&RigidBodyQueryReadOnlyItem; 2],
-        local_anchor1: Vector,
-        local_anchor2: Vector,
+        local_anchor1: VectorF32,
+        local_anchor2: VectorF32,
     ) {
         let [body1, body2] = bodies;
 
-        self.world_r1 = body1.rotation * (local_anchor1 - body1.center_of_mass.0);
-        self.world_r2 = body2.rotation * (local_anchor2 - body2.center_of_mass.0);
-        self.center_difference = (body2.position.0 - body1.position.0)
-            + (body2.rotation * body2.center_of_mass.0 - body1.rotation * body1.center_of_mass.0);
+        self.world_r1 = body1.rotation.f32() * (local_anchor1 - body1.center_of_mass.0);
+        self.world_r2 = body2.rotation.f32() * (local_anchor2 - body2.center_of_mass.0);
+        self.center_difference = (body2.position.0 - body1.position.0).f32()
+            + (body2.rotation.f32() * body2.center_of_mass.0
+                - body1.rotation.f32() * body1.center_of_mass.0);
     }
 
     /// Solves the constraint for the given bodies.
@@ -54,8 +55,8 @@ impl PointConstraintShared {
         &mut self,
         bodies: [&mut SolverBody; 2],
         inertias: [&SolverBodyInertia; 2],
-        compliance: Scalar,
-        dt: Scalar,
+        compliance: f32,
+        dt: f32,
     ) {
         let [body1, body2] = bodies;
         let [inertia1, inertia2] = inertias;

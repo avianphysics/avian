@@ -179,17 +179,17 @@ fn debug_render_axes(
                 Color::hsla(120.0 * mul[0], 1.0 * mul[1], 0.4 * mul[2], 1.0 * mul[3]),
                 Color::hsla(220.0 * mul[0], 1.0 * mul[1], 0.6 * mul[2], 1.0 * mul[3]),
             ];
-            let global_com = pos.0 + rot * local_com.0;
+            let global_com = pos.0 + (rot * local_com.0).adjust_precision();
 
-            let x = rot * (Vector::X * lengths.x);
+            let x = (rot * (VectorF32::X * lengths.x)).adjust_precision();
             gizmos.draw_line(global_com - x, global_com + x, x_color);
 
-            let y = rot * (Vector::Y * lengths.y);
+            let y = (rot * (VectorF32::Y * lengths.y)).adjust_precision();
             gizmos.draw_line(global_com - y, global_com + y, y_color);
 
             #[cfg(feature = "3d")]
             {
-                let z = rot * (Vector::Z * lengths.z);
+                let z = (rot * (VectorF32::Z * lengths.z)).adjust_precision();
                 gizmos.draw_line(global_com - z, global_com + z, _z_color);
             }
         }
@@ -331,7 +331,7 @@ fn debug_render_colliders(
                 }
             }
 
-            gizmos.draw_collider(collider, position, rotation, color);
+            gizmos.draw_collider(collider, position.0, rotation, color);
         }
     }
 }
@@ -343,6 +343,7 @@ fn debug_render_contacts(
     time: Res<Time<Substeps>>,
     length_unit: Res<PhysicsLengthUnit>,
 ) {
+    let delta_secs = time.delta_secs();
     let config = store.config::<PhysicsGizmos>().1;
 
     if config.contact_point_color.is_none() && config.contact_normal_color.is_none() {
@@ -353,7 +354,7 @@ fn debug_render_contacts(
         for manifold in contacts.manifolds.iter() {
             for contact in manifold.points.iter() {
                 // Don't render contacts that aren't penetrating
-                if contact.penetration <= Scalar::EPSILON {
+                if contact.penetration <= f32::EPSILON {
                     continue;
                 }
 
@@ -376,14 +377,13 @@ fn debug_render_contacts(
                         * match config.contact_normal_scale {
                             ContactGizmoScale::Constant(length) => length,
                             ContactGizmoScale::Scaled(scale) => {
-                                scale * contact.normal_impulse
-                                    / time.delta_secs_f64().adjust_precision()
+                                scale * contact.normal_impulse / delta_secs
                             }
                         };
 
                     gizmos.draw_arrow(
                         contact.point,
-                        contact.point + manifold.normal * length,
+                        contact.point + (manifold.normal * length).adjust_precision(),
                         0.1 * length_unit.0,
                         color,
                     );

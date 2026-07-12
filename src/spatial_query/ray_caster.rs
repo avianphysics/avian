@@ -101,7 +101,7 @@ pub struct RayCaster {
     ///
     /// By default this is infinite, so the ray will travel until all hits up to `max_hits` have been checked.
     #[doc(alias = "max_time_of_impact")]
-    pub max_distance: Scalar,
+    pub max_distance: f32,
 
     /// Controls how the ray behaves when the ray origin is inside of a [collider](Collider).
     ///
@@ -125,7 +125,7 @@ impl Default for RayCaster {
             global_origin: Vector::ZERO,
             direction: Dir::X,
             global_direction: Dir::X,
-            max_distance: Scalar::MAX,
+            max_distance: f32::MAX,
             max_hits: u32::MAX,
             solid: true,
             ignore_self: true,
@@ -190,7 +190,7 @@ impl RayCaster {
     }
 
     /// Sets the maximum distance the ray can travel.
-    pub fn with_max_distance(mut self, max_distance: Scalar) -> Self {
+    pub fn with_max_distance(mut self, max_distance: f32) -> Self {
         self.max_distance = max_distance;
         self
     }
@@ -282,14 +282,14 @@ impl RayCaster {
 
     /// Returns the point at a given distance along the ray.
     #[must_use]
-    pub fn get_point(&self, distance: Scalar) -> Vector {
-        self.origin + self.direction.adjust_precision() * distance
+    pub fn get_point(&self, distance: f32) -> Vector {
+        self.origin + (self.direction * distance).adjust_precision()
     }
 
     /// Like [`Self::get_point`], but returns the point in global coordinates.
     #[must_use]
-    pub fn get_global_point(&self, distance: Scalar) -> Vector {
-        self.global_origin + self.global_direction.adjust_precision() * distance
+    pub fn get_global_point(&self, distance: f32) -> Vector {
+        self.global_origin + (self.global_direction * distance).adjust_precision()
     }
 }
 
@@ -397,10 +397,10 @@ pub struct RayHitData {
     pub entity: Entity,
 
     /// How far the ray travelled. This is the distance between the ray origin and the point of intersection.
-    pub distance: Scalar,
+    pub distance: f32,
 
     /// The normal at the point of intersection, expressed in world space.
-    pub normal: Vector,
+    pub normal: VectorF32,
 }
 
 impl MapEntities for RayHitData {

@@ -1,4 +1,4 @@
-use avian3d::{math::*, prelude::*};
+use avian3d::prelude::*;
 use bevy::prelude::*;
 use examples_common_3d::ExampleCommonPlugin;
 
@@ -29,7 +29,7 @@ fn setup(
             Mesh3d(cube_mesh.clone()),
             MeshMaterial3d(cube_material.clone()),
             RigidBody::Kinematic,
-            AngularVelocity(Vector::Z * 1.5),
+            AngularVelocity(Vec3::Z * 1.5),
         ))
         .id();
 
@@ -47,7 +47,7 @@ fn setup(
     // Connect anchor and dynamic object
     commands.spawn(
         RevoluteJoint::new(anchor, object)
-            .with_local_anchor2(Vector::Y * 2.0)
+            .with_local_anchor2(Vec3::Y * 2.0)
             .with_angle_limits(-1.0, 1.0),
     );
 

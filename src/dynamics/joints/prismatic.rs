@@ -42,15 +42,15 @@ pub struct PrismaticJoint {
     /// The local axis along which the bodies can translate relative to each other.
     ///
     /// By default, this is the x-axis.
-    pub slider_axis: Vector,
+    pub slider_axis: VectorF32,
     /// The extents of the allowed relative translation along the [`slider_axis`](Self::slider_axis).
     pub limits: Option<DistanceLimit>,
     /// The compliance used for aligning the positions of the bodies to the [`slider_axis`](Self::slider_axis) (inverse of stiffness, m / N).
-    pub align_compliance: Scalar,
+    pub align_compliance: f32,
     /// The compliance of the angular constraint (inverse of stiffness, N * m / rad).
-    pub angle_compliance: Scalar,
+    pub angle_compliance: f32,
     /// The compliance of the distance limit (inverse of stiffness, m / N).
-    pub limit_compliance: Scalar,
+    pub limit_compliance: f32,
     /// A motor for driving the joint.
     pub motor: LinearMotor,
 }
@@ -63,7 +63,7 @@ impl EntityConstraint<2> for PrismaticJoint {
 
 impl PrismaticJoint {
     /// The default [`slider_axis`](Self::slider_axis) for a prismatic joint.
-    pub const DEFAULT_SLIDER_AXIS: Vector = Vector::X;
+    pub const DEFAULT_SLIDER_AXIS: VectorF32 = VectorF32::X;
 
     /// Creates a new [`PrismaticJoint`] between two entities.
     #[inline]
@@ -86,7 +86,7 @@ impl PrismaticJoint {
     ///
     /// The axis should be a unit vector. By default, this is the x-axis.
     #[inline]
-    pub const fn with_slider_axis(mut self, axis: Vector) -> Self {
+    pub const fn with_slider_axis(mut self, axis: VectorF32) -> Self {
         self.slider_axis = axis;
         self
     }
@@ -98,7 +98,7 @@ impl PrismaticJoint {
     /// This method is deprecated in favor of [`with_slider_axis`](Self::with_slider_axis).
     #[inline]
     #[deprecated(since = "0.4.0", note = "Use `with_slider_axis` instead.")]
-    pub const fn with_free_axis(self, axis: Vector) -> Self {
+    pub const fn with_free_axis(self, axis: VectorF32) -> Self {
         self.with_slider_axis(axis)
     }
 
@@ -130,7 +130,7 @@ impl PrismaticJoint {
     ///
     /// This configures the [`JointAnchor`] of the first [`JointFrame`].
     #[inline]
-    pub const fn with_local_anchor1(mut self, anchor: Vector) -> Self {
+    pub const fn with_local_anchor1(mut self, anchor: VectorF32) -> Self {
         self.frame1.anchor = JointAnchor::Local(anchor);
         self
     }
@@ -139,7 +139,7 @@ impl PrismaticJoint {
     ///
     /// This configures the [`JointAnchor`] of the second [`JointFrame`].
     #[inline]
-    pub const fn with_local_anchor2(mut self, anchor: Vector) -> Self {
+    pub const fn with_local_anchor2(mut self, anchor: VectorF32) -> Self {
         self.frame2.anchor = JointAnchor::Local(anchor);
         self
     }
@@ -148,7 +148,7 @@ impl PrismaticJoint {
     ///
     /// This configures the [`JointBasis`] of each [`JointFrame`].
     #[inline]
-    pub fn with_basis(mut self, basis: impl Into<Rot>) -> Self {
+    pub fn with_basis(mut self, basis: impl Into<RotF32>) -> Self {
         let basis = basis.into();
         self.frame1.basis = JointBasis::FromGlobal(basis);
         self.frame2.basis = JointBasis::FromGlobal(basis);
@@ -159,7 +159,7 @@ impl PrismaticJoint {
     ///
     /// This configures the [`JointBasis`] of the first [`JointFrame`].
     #[inline]
-    pub fn with_local_basis1(mut self, basis: impl Into<Rot>) -> Self {
+    pub fn with_local_basis1(mut self, basis: impl Into<RotF32>) -> Self {
         self.frame1.basis = JointBasis::Local(basis.into());
         self
     }
@@ -168,7 +168,7 @@ impl PrismaticJoint {
     ///
     /// This configures the [`JointBasis`] of the second [`JointFrame`].
     #[inline]
-    pub fn with_local_basis2(mut self, basis: impl Into<Rot>) -> Self {
+    pub fn with_local_basis2(mut self, basis: impl Into<RotF32>) -> Self {
         self.frame2.basis = JointBasis::Local(basis.into());
         self
     }
@@ -200,7 +200,7 @@ impl PrismaticJoint {
     /// If the [`JointAnchor`] is set to [`FromGlobal`](JointAnchor::FromGlobal),
     /// and the local anchor has not yet been computed, this will return `None`.
     #[inline]
-    pub const fn local_anchor1(&self) -> Option<Vector> {
+    pub const fn local_anchor1(&self) -> Option<VectorF32> {
         match self.frame1.anchor {
             JointAnchor::Local(anchor) => Some(anchor),
             _ => None,
@@ -212,7 +212,7 @@ impl PrismaticJoint {
     /// If the [`JointAnchor`] is set to [`FromGlobal`](JointAnchor::FromGlobal),
     /// and the local anchor has not yet been computed, this will return `None`.
     #[inline]
-    pub const fn local_anchor2(&self) -> Option<Vector> {
+    pub const fn local_anchor2(&self) -> Option<VectorF32> {
         match self.frame2.anchor {
             JointAnchor::Local(anchor) => Some(anchor),
             _ => None,
@@ -224,7 +224,7 @@ impl PrismaticJoint {
     /// If the [`JointBasis`] is set to [`FromGlobal`](JointBasis::FromGlobal),
     /// and the local basis has not yet been computed, this will return `None`.
     #[inline]
-    pub fn local_basis1(&self) -> Option<Rot> {
+    pub fn local_basis1(&self) -> Option<RotF32> {
         match self.frame1.basis {
             JointBasis::Local(basis) => Some(basis),
             _ => None,
@@ -236,7 +236,7 @@ impl PrismaticJoint {
     /// If the [`JointBasis`] is set to [`FromGlobal`](JointBasis::FromGlobal),
     /// and the local basis has not yet been computed, this will return `None`.
     #[inline]
-    pub fn local_basis2(&self) -> Option<Rot> {
+    pub fn local_basis2(&self) -> Option<RotF32> {
         match self.frame2.basis {
             JointBasis::Local(basis) => Some(basis),
             _ => None,
@@ -251,7 +251,7 @@ impl PrismaticJoint {
     /// If the [`JointBasis`] is set to [`FromGlobal`](JointBasis::FromGlobal),
     /// and the local basis has not yet been computed, this will return `None`.
     #[inline]
-    pub fn local_slider_axis1(&self) -> Option<Vector> {
+    pub fn local_slider_axis1(&self) -> Option<VectorF32> {
         match self.frame1.basis {
             JointBasis::Local(basis) => Some(basis * self.slider_axis),
             _ => None,
@@ -266,7 +266,7 @@ impl PrismaticJoint {
     /// If the [`JointBasis`] is set to [`FromGlobal`](JointBasis::FromGlobal),
     /// and the local basis has not yet been computed, this will return `None`.
     #[inline]
-    pub fn local_slider_axis2(&self) -> Option<Vector> {
+    pub fn local_slider_axis2(&self) -> Option<VectorF32> {
         match self.frame2.basis {
             JointBasis::Local(basis) => Some(basis * self.slider_axis),
             _ => None,
@@ -275,7 +275,7 @@ impl PrismaticJoint {
 
     /// Sets the translational limits along the [`slider_axis`](Self::slider_axis).
     #[inline]
-    pub const fn with_limits(mut self, min: Scalar, max: Scalar) -> Self {
+    pub const fn with_limits(mut self, min: f32, max: f32) -> Self {
         self.limits = Some(DistanceLimit::new(min, max));
         self
     }
@@ -286,7 +286,7 @@ impl PrismaticJoint {
         since = "0.4.0",
         note = "Use `with_align_compliance`, `with_limit_compliance`, and `with_angle_compliance` instead."
     )]
-    pub const fn with_compliance(mut self, compliance: Scalar) -> Self {
+    pub const fn with_compliance(mut self, compliance: f32) -> Self {
         self.align_compliance = compliance;
         self.angle_compliance = compliance;
         self.limit_compliance = compliance;
@@ -295,21 +295,21 @@ impl PrismaticJoint {
 
     /// Sets the compliance of the axis alignment constraint (inverse of stiffness, m / N).
     #[inline]
-    pub const fn with_align_compliance(mut self, compliance: Scalar) -> Self {
+    pub const fn with_align_compliance(mut self, compliance: f32) -> Self {
         self.align_compliance = compliance;
         self
     }
 
     /// Sets the compliance of the angular constraint (inverse of stiffness, N * m / rad).
     #[inline]
-    pub const fn with_angle_compliance(mut self, compliance: Scalar) -> Self {
+    pub const fn with_angle_compliance(mut self, compliance: f32) -> Self {
         self.angle_compliance = compliance;
         self
     }
 
     /// Sets the compliance of the distance limit (inverse of stiffness, m / N).
     #[inline]
-    pub const fn with_limit_compliance(mut self, compliance: Scalar) -> Self {
+    pub const fn with_limit_compliance(mut self, compliance: f32) -> Self {
         self.limit_compliance = compliance;
         self
     }
@@ -353,8 +353,14 @@ fn update_local_frames(
             continue;
         };
 
-        let [frame1, frame2] =
-            JointFrame::compute_local(joint.frame1, joint.frame2, pos1.0, pos2.0, rot1, rot2);
+        let [frame1, frame2] = JointFrame::compute_local(
+            joint.frame1,
+            joint.frame2,
+            pos1.0,
+            pos2.0,
+            rot1.f32(),
+            rot2.f32(),
+        );
         joint.frame1 = frame1;
         joint.frame2 = frame2;
     }
@@ -382,8 +388,8 @@ impl DebugRenderConstraint<2> for PrismaticJoint {
             return;
         };
 
-        let anchor1 = pos1 + rot1 * local_anchor1;
-        let anchor2 = pos2 + rot2 * local_anchor2;
+        let anchor1 = pos1 + (rot1 * local_anchor1).adjust_precision();
+        let anchor2 = pos2 + (rot2 * local_anchor2).adjust_precision();
 
         if let Some(anchor_color) = config.joint_anchor_color {
             gizmos.draw_line(pos1, anchor1, anchor_color);

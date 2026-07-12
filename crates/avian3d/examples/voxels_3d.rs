@@ -6,7 +6,7 @@
 #![allow(clippy::unnecessary_cast)]
 
 use avian3d::{
-    math::{AsF32, PI, Scalar, Vector},
+    math::{AsF32, Scalar, Vector},
     prelude::*,
 };
 use bevy::{
@@ -19,6 +19,8 @@ use bevy::{
     prelude::*,
 };
 use examples_common_3d::ExampleCommonPlugin;
+
+const PI: Scalar = core::f64::consts::PI as Scalar;
 
 fn main() {
     App::new()
@@ -51,7 +53,7 @@ fn setup(
         }
     }
 
-    let collider = Collider::voxels_from_points(voxel_size, &points);
+    let collider = Collider::voxels_from_points(voxel_size.f32(), &points);
 
     // Compute the mesh for rendering.
     let (vertices, indices) = collider.shape().as_voxels().unwrap().to_trimesh();

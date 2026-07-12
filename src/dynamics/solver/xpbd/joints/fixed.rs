@@ -24,11 +24,11 @@ impl XpbdConstraintSolverData for FixedJointSolverData {
         self.angle_constraint.clear_lagrange_multipliers();
     }
 
-    fn total_position_lagrange(&self) -> Vector {
+    fn total_position_lagrange(&self) -> VectorF32 {
         self.point_constraint.total_position_lagrange()
     }
 
-    fn total_rotation_lagrange(&self) -> AngularVector {
+    fn total_rotation_lagrange(&self) -> AngularVectorF32 {
         self.angle_constraint.total_rotation_lagrange()
     }
 }
@@ -75,7 +75,7 @@ impl XpbdConstraint<2> for FixedJoint {
         bodies: [&mut SolverBody; 2],
         inertias: [&SolverBodyInertia; 2],
         solver_data: &mut FixedJointSolverData,
-        dt: Scalar,
+        dt: f32,
     ) {
         let [body1, body2] = bodies;
 

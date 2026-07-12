@@ -60,16 +60,16 @@ pub struct RevoluteJoint {
     ///
     /// By default, this is the z-axis.
     #[cfg(feature = "3d")]
-    pub hinge_axis: Vector,
+    pub hinge_axis: Vec3,
     /// The extents of the allowed relative rotation of the bodies.
     pub angle_limit: Option<AngleLimit>,
     /// The compliance of the point-to-point constraint (inverse of stiffness, m / N).
-    pub point_compliance: Scalar,
+    pub point_compliance: f32,
     /// The compliance used for aligning the bodies along the [`hinge_axis`](Self::hinge_axis) (inverse of stiffness, N * m / rad).
     #[cfg(feature = "3d")]
-    pub align_compliance: Scalar,
+    pub align_compliance: f32,
     /// The compliance of the angle limit (inverse of stiffness, N * m / rad).
-    pub limit_compliance: Scalar,
+    pub limit_compliance: f32,
     /// A motor for driving the joint.
     pub motor: AngularMotor,
 }
@@ -83,7 +83,7 @@ impl EntityConstraint<2> for RevoluteJoint {
 impl RevoluteJoint {
     /// The default [`hinge_axis`](Self::hinge_axis) for a revolute joint.
     #[cfg(feature = "3d")]
-    pub const DEFAULT_HINGE_AXIS: Vector = Vector::Z;
+    pub const DEFAULT_HINGE_AXIS: Vec3 = Vec3::Z;
 
     /// Creates a new [`RevoluteJoint`] between two entities.
     #[inline]
@@ -109,20 +109,20 @@ impl RevoluteJoint {
     /// The axis should be a unit vector. By default, this is the z-axis.
     #[inline]
     #[cfg(feature = "3d")]
-    pub const fn with_hinge_axis(mut self, axis: Vector) -> Self {
+    pub const fn with_hinge_axis(mut self, axis: Vec3) -> Self {
         self.hinge_axis = axis;
         self
     }
 
     /// Sets the [`hinge_axis`](Self::hinge_axis) about which the bodies can rotate relative to each other.
     ///
-    /// The axis should be a unit vector. By default, this is the x-axis.
+    /// The axis should be a unit vector. By default, this is the z-axis.
     ///
     /// This method is deprecated in favor of [`with_hinge_axis`](Self::with_hinge_axis).
     #[inline]
     #[deprecated(since = "0.4.0", note = "Use `with_hinge_axis` instead.")]
     #[cfg(feature = "3d")]
-    pub const fn with_aligned_axis(self, axis: Vector) -> Self {
+    pub const fn with_aligned_axis(self, axis: Vec3) -> Self {
         self.with_hinge_axis(axis)
     }
 
@@ -154,7 +154,7 @@ impl RevoluteJoint {
     ///
     /// This configures the [`JointAnchor`] of the first [`JointFrame`].
     #[inline]
-    pub const fn with_local_anchor1(mut self, anchor: Vector) -> Self {
+    pub const fn with_local_anchor1(mut self, anchor: VectorF32) -> Self {
         self.frame1.anchor = JointAnchor::Local(anchor);
         self
     }
@@ -163,7 +163,7 @@ impl RevoluteJoint {
     ///
     /// This configures the [`JointAnchor`] of the second [`JointFrame`].
     #[inline]
-    pub const fn with_local_anchor2(mut self, anchor: Vector) -> Self {
+    pub const fn with_local_anchor2(mut self, anchor: VectorF32) -> Self {
         self.frame2.anchor = JointAnchor::Local(anchor);
         self
     }
@@ -172,7 +172,7 @@ impl RevoluteJoint {
     ///
     /// This configures the [`JointBasis`] of each [`JointFrame`].
     #[inline]
-    pub fn with_basis(mut self, basis: impl Into<Rot>) -> Self {
+    pub fn with_basis(mut self, basis: impl Into<RotF32>) -> Self {
         let basis = basis.into();
         self.frame1.basis = JointBasis::FromGlobal(basis);
         self.frame2.basis = JointBasis::FromGlobal(basis);
@@ -183,7 +183,7 @@ impl RevoluteJoint {
     ///
     /// This configures the [`JointBasis`] of the first [`JointFrame`].
     #[inline]
-    pub fn with_local_basis1(mut self, basis: impl Into<Rot>) -> Self {
+    pub fn with_local_basis1(mut self, basis: impl Into<RotF32>) -> Self {
         self.frame1.basis = JointBasis::Local(basis.into());
         self
     }
@@ -192,7 +192,7 @@ impl RevoluteJoint {
     ///
     /// This configures the [`JointBasis`] of the second [`JointFrame`].
     #[inline]
-    pub fn with_local_basis2(mut self, basis: impl Into<Rot>) -> Self {
+    pub fn with_local_basis2(mut self, basis: impl Into<RotF32>) -> Self {
         self.frame2.basis = JointBasis::Local(basis.into());
         self
     }
@@ -224,7 +224,7 @@ impl RevoluteJoint {
     /// If the [`JointAnchor`] is set to [`FromGlobal`](JointAnchor::FromGlobal),
     /// and the local anchor has not yet been computed, this will return `None`.
     #[inline]
-    pub const fn local_anchor1(&self) -> Option<Vector> {
+    pub const fn local_anchor1(&self) -> Option<VectorF32> {
         match self.frame1.anchor {
             JointAnchor::Local(anchor) => Some(anchor),
             _ => None,
@@ -236,7 +236,7 @@ impl RevoluteJoint {
     /// If the [`JointAnchor`] is set to [`FromGlobal`](JointAnchor::FromGlobal),
     /// and the local anchor has not yet been computed, this will return `None`.
     #[inline]
-    pub const fn local_anchor2(&self) -> Option<Vector> {
+    pub const fn local_anchor2(&self) -> Option<VectorF32> {
         match self.frame2.anchor {
             JointAnchor::Local(anchor) => Some(anchor),
             _ => None,
@@ -248,7 +248,7 @@ impl RevoluteJoint {
     /// If the [`JointBasis`] is set to [`FromGlobal`](JointBasis::FromGlobal),
     /// and the local basis has not yet been computed, this will return `None`.
     #[inline]
-    pub fn local_basis1(&self) -> Option<Rot> {
+    pub fn local_basis1(&self) -> Option<RotF32> {
         match self.frame1.basis {
             JointBasis::Local(basis) => Some(basis),
             _ => None,
@@ -260,7 +260,7 @@ impl RevoluteJoint {
     /// If the [`JointBasis`] is set to [`FromGlobal`](JointBasis::FromGlobal),
     /// and the local basis has not yet been computed, this will return `None`.
     #[inline]
-    pub fn local_basis2(&self) -> Option<Rot> {
+    pub fn local_basis2(&self) -> Option<RotF32> {
         match self.frame2.basis {
             JointBasis::Local(basis) => Some(basis),
             _ => None,
@@ -276,7 +276,7 @@ impl RevoluteJoint {
     /// and the local basis has not yet been computed, this will return `None`.
     #[inline]
     #[cfg(feature = "3d")]
-    pub fn local_hinge_axis1(&self) -> Option<Vector> {
+    pub fn local_hinge_axis1(&self) -> Option<Vec3> {
         match self.frame1.basis {
             JointBasis::Local(basis) => Some(basis * self.hinge_axis),
             _ => None,
@@ -292,7 +292,7 @@ impl RevoluteJoint {
     /// and the local basis has not yet been computed, this will return `None`.
     #[inline]
     #[cfg(feature = "3d")]
-    pub fn local_hinge_axis2(&self) -> Option<Vector> {
+    pub fn local_hinge_axis2(&self) -> Option<Vec3> {
         match self.frame2.basis {
             JointBasis::Local(basis) => Some(basis * self.hinge_axis),
             _ => None,
@@ -301,7 +301,7 @@ impl RevoluteJoint {
 
     /// Sets the limits of the allowed relative rotation.
     #[inline]
-    pub const fn with_angle_limits(mut self, min: Scalar, max: Scalar) -> Self {
+    pub const fn with_angle_limits(mut self, min: f32, max: f32) -> Self {
         self.angle_limit = Some(AngleLimit::new(min, max));
         self
     }
@@ -312,7 +312,7 @@ impl RevoluteJoint {
         since = "0.4.0",
         note = "Use `with_point_compliance`, `with_align_compliance`, and `with_limit_compliance` instead."
     )]
-    pub const fn with_compliance(mut self, compliance: Scalar) -> Self {
+    pub const fn with_compliance(mut self, compliance: f32) -> Self {
         self.point_compliance = compliance;
         #[cfg(feature = "3d")]
         {
@@ -324,7 +324,7 @@ impl RevoluteJoint {
 
     /// Sets the compliance of the point-to-point constraint (inverse of stiffness, m / N).
     #[inline]
-    pub const fn with_point_compliance(mut self, compliance: Scalar) -> Self {
+    pub const fn with_point_compliance(mut self, compliance: f32) -> Self {
         self.point_compliance = compliance;
         self
     }
@@ -332,14 +332,14 @@ impl RevoluteJoint {
     /// Sets the compliance of the axis alignment constraint (inverse of stiffness, N * m / rad).
     #[inline]
     #[cfg(feature = "3d")]
-    pub const fn with_align_compliance(mut self, compliance: Scalar) -> Self {
+    pub const fn with_align_compliance(mut self, compliance: f32) -> Self {
         self.align_compliance = compliance;
         self
     }
 
     /// Sets the compliance of the angle limit (inverse of stiffness, N * m / rad).
     #[inline]
-    pub const fn with_limit_compliance(mut self, compliance: Scalar) -> Self {
+    pub const fn with_limit_compliance(mut self, compliance: f32) -> Self {
         self.limit_compliance = compliance;
         self
     }
@@ -383,8 +383,14 @@ fn update_local_frames(
             continue;
         };
 
-        let [frame1, frame2] =
-            JointFrame::compute_local(joint.frame1, joint.frame2, pos1.0, pos2.0, rot1, rot2);
+        let [frame1, frame2] = JointFrame::compute_local(
+            joint.frame1,
+            joint.frame2,
+            pos1.0,
+            pos2.0,
+            rot1.f32(),
+            rot2.f32(),
+        );
         joint.frame1 = frame1;
         joint.frame2 = frame2;
     }
@@ -412,8 +418,8 @@ impl DebugRenderConstraint<2> for RevoluteJoint {
             return;
         };
 
-        let anchor1 = pos1 + rot1 * local_anchor1;
-        let anchor2 = pos2 + rot2 * local_anchor2;
+        let anchor1 = pos1 + (rot1 * local_anchor1).adjust_precision();
+        let anchor2 = pos2 + (rot2 * local_anchor2).adjust_precision();
 
         if let Some(anchor_color) = config.joint_anchor_color {
             gizmos.draw_line(pos1, anchor1, anchor_color);

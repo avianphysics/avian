@@ -210,7 +210,7 @@ pub struct NarrowPhaseConfig {
     /// This is implicitly scaled by the [`PhysicsLengthUnit`].
     ///
     /// Default: `0.02`
-    pub contact_tolerance: Scalar,
+    pub contact_tolerance: f32,
 
     /// If `true`, the current contacts will be matched with the previous contacts
     /// based on feature IDs or contact positions, and the contact impulses from
@@ -265,7 +265,7 @@ fn update_narrow_phase<C: AnyCollider, H: CollisionHooks + 'static>(
     narrow_phase.update::<H>(
         &mut collision_started_writer,
         &mut collision_ended_writer,
-        time.delta_seconds_adjusted(),
+        time.delta_secs(),
         &hooks,
         &context,
         &mut commands,

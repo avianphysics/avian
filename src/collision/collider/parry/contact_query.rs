@@ -63,15 +63,15 @@ pub type UnsupportedShape = Unsupported;
 /// ```
 pub fn contact(
     collider1: &Collider,
-    position1: impl Into<Position>,
-    rotation1: impl Into<Rotation>,
+    position1: Vector,
+    rotation1: impl Into<RotF32>,
     collider2: &Collider,
-    position2: impl Into<Position>,
-    rotation2: impl Into<Rotation>,
-    prediction_distance: Scalar,
+    position2: Vector,
+    rotation2: impl Into<RotF32>,
+    prediction_distance: f32,
 ) -> Result<Option<SingleContact>, UnsupportedShape> {
-    let rotation1: Rotation = rotation1.into();
-    let rotation2: Rotation = rotation2.into();
+    let rotation1: RotF32 = rotation1.into();
+    let rotation2: RotF32 = rotation2.into();
     let isometry1 = make_pose(position1, rotation1);
     let isometry2 = make_pose(position2, rotation2);
 
@@ -80,15 +80,17 @@ pub fn contact(
         collider1.shape_scaled().0.as_ref(),
         &isometry2,
         collider2.shape_scaled().0.as_ref(),
-        prediction_distance,
+        prediction_distance.adjust_precision(),
     )
     .map(|contact| {
         if let Some(contact) = contact {
             // Transform contact data into local space
-            let point1: Vector = rotation1.inverse() * contact.point1;
-            let point2: Vector = rotation2.inverse() * contact.point2;
-            let normal1: Vector = (rotation1.inverse() * contact.normal1).normalize();
-            let normal2: Vector = (rotation2.inverse() * contact.normal2).normalize();
+            let inv_rotation1 = rotation1.inverse();
+            let inv_rotation2 = rotation2.inverse();
+            let point1: VectorF32 = inv_rotation1 * contact.point1.f32();
+            let point2: VectorF32 = inv_rotation2 * contact.point2.f32();
+            let normal1: VectorF32 = (inv_rotation1 * contact.normal1.f32()).normalize();
+            let normal2: VectorF32 = (inv_rotation2 * contact.normal2.f32()).normalize();
 
             // Make sure the normals are valid
             if !normal1.is_normalized() || !normal2.is_normalized() {
@@ -100,7 +102,7 @@ pub fn contact(
                 point2,
                 normal1,
                 normal2,
-                -contact.dist,
+                -contact.dist.f32(),
             ))
         } else {
             None
@@ -155,18 +157,18 @@ pub fn contact(
 /// ```
 pub fn contact_manifolds(
     collider1: &Collider,
-    position1: impl Into<Position>,
-    rotation1: impl Into<Rotation>,
+    position1: Vector,
+    rotation1: impl Into<RotF32>,
     collider2: &Collider,
-    position2: impl Into<Position>,
-    rotation2: impl Into<Rotation>,
-    prediction_distance: Scalar,
+    position2: Vector,
+    rotation2: impl Into<RotF32>,
+    prediction_distance: f32,
     manifolds: &mut Vec<ContactManifold>,
 ) {
     let position1: Position = position1.into();
     let position2: Position = position2.into();
-    let rotation1: Rotation = rotation1.into();
-    let rotation2: Rotation = rotation2.into();
+    let rotation1: RotF32 = rotation1.into();
+    let rotation2: RotF32 = rotation2.into();
     let isometry1 = make_pose(position1, rotation1);
     let isometry2 = make_pose(position2, rotation2);
     let isometry12 = isometry1.inv_mul(&isometry2);
@@ -178,7 +180,7 @@ pub fn contact_manifolds(
         &isometry12,
         collider1.shape_scaled().0.as_ref(),
         collider2.shape_scaled().0.as_ref(),
-        prediction_distance,
+        prediction_distance.adjust_precision(),
         &mut new_manifolds,
         &mut None,
     );
@@ -196,29 +198,29 @@ pub fn contact_manifolds(
             &isometry12,
             shape1,
             shape2,
-            prediction_distance,
+            prediction_distance.adjust_precision(),
         )
     {
-        let normal = rotation1 * contact.normal1;
+        let normal = rotation1 * contact.normal1.f32();
 
         // Make sure the normal is valid
         if !normal.is_normalized() {
             return;
         }
 
-        let local_point1: Vector = contact.point1;
+        let local_point1: VectorF32 = contact.point1.f32();
 
         // The contact point is the midpoint of the two points in world space.
         // The anchors are relative to the positions of the colliders.
         let point1 = rotation1 * local_point1;
-        let anchor1 = point1 + normal * contact.dist * 0.5;
-        let anchor2 = anchor1 + (position1.0 - position2.0);
-        let world_point = position1.0 + anchor1;
+        let anchor1 = point1 + normal * contact.dist.f32() * 0.5;
+        let anchor2 = anchor1 + (position1.0 - position2.0).f32();
+        let world_point = position1.0 + anchor1.adjust_precision();
         let points = [ContactPoint::new(
             anchor1,
             anchor2,
             world_point,
-            -contact.dist,
+            -contact.dist.f32(),
         )];
 
         manifolds.push(ContactManifold::new(points, normal));
@@ -232,7 +234,7 @@ pub fn contact_manifolds(
 
         let subpos1 = manifold.subshape_pos1.unwrap_or_default();
         let local_normal: Vector = (subpos1.rotation * manifold.local_n1).normalize();
-        let normal = rotation1 * local_normal;
+        let normal = rotation1 * local_normal.f32();
 
         // Make sure the normal is valid
         if !normal.is_normalized() {
@@ -242,11 +244,11 @@ pub fn contact_manifolds(
         let points = manifold.contacts().iter().map(|contact| {
             // The contact point is the midpoint of the two points in world space.
             // The anchors are relative to the positions of the colliders.
-            let point1 = rotation1 * subpos1.transform_point(contact.local_p1);
-            let anchor1 = point1 + normal * contact.dist * 0.5;
-            let anchor2 = anchor1 + (position1.0 - position2.0);
-            let world_point = position1.0 + anchor1;
-            ContactPoint::new(anchor1, anchor2, world_point, -contact.dist)
+            let point1 = rotation1 * subpos1.transform_point(contact.local_p1).f32();
+            let anchor1 = point1 + normal * contact.dist.f32() * 0.5;
+            let anchor2 = anchor1 + (position1.0 - position2.0).f32();
+            let world_point = position1.0 + anchor1.adjust_precision();
+            ContactPoint::new(anchor1, anchor2, world_point, -contact.dist.f32())
                 .with_feature_ids(contact.fid1.into(), contact.fid2.into())
         });
 
@@ -342,15 +344,15 @@ pub enum ClosestPoints {
 /// ```
 pub fn closest_points(
     collider1: &Collider,
-    position1: impl Into<Position>,
-    rotation1: impl Into<Rotation>,
+    position1: Vector,
+    rotation1: impl Into<RotF32>,
     collider2: &Collider,
-    position2: impl Into<Position>,
-    rotation2: impl Into<Rotation>,
-    max_distance: Scalar,
+    position2: Vector,
+    rotation2: impl Into<RotF32>,
+    max_distance: f32,
 ) -> Result<ClosestPoints, UnsupportedShape> {
-    let rotation1: Rotation = rotation1.into();
-    let rotation2: Rotation = rotation2.into();
+    let rotation1: RotF32 = rotation1.into();
+    let rotation2: RotF32 = rotation2.into();
     let isometry1 = make_pose(position1, rotation1);
     let isometry2 = make_pose(position2, rotation2);
 
@@ -359,7 +361,7 @@ pub fn closest_points(
         collider1.shape_scaled().0.as_ref(),
         &isometry2,
         collider2.shape_scaled().0.as_ref(),
-        max_distance,
+        max_distance.adjust_precision(),
     )
     .map(|closest_points| match closest_points {
         parry::query::ClosestPoints::Intersecting => ClosestPoints::Intersecting,
@@ -420,14 +422,14 @@ pub fn closest_points(
 /// ```
 pub fn distance(
     collider1: &Collider,
-    position1: impl Into<Position>,
-    rotation1: impl Into<Rotation>,
+    position1: Vector,
+    rotation1: impl Into<RotF32>,
     collider2: &Collider,
-    position2: impl Into<Position>,
-    rotation2: impl Into<Rotation>,
-) -> Result<Scalar, UnsupportedShape> {
-    let rotation1: Rotation = rotation1.into();
-    let rotation2: Rotation = rotation2.into();
+    position2: Vector,
+    rotation2: impl Into<RotF32>,
+) -> Result<f32, UnsupportedShape> {
+    let rotation1: RotF32 = rotation1.into();
+    let rotation2: RotF32 = rotation2.into();
     let isometry1 = make_pose(position1, rotation1);
     let isometry2 = make_pose(position2, rotation2);
 
@@ -437,6 +439,7 @@ pub fn distance(
         &isometry2,
         collider2.shape_scaled().0.as_ref(),
     )
+    .map(|distance| distance.f32())
 }
 
 /// Tests whether two [`Collider`]s are intersecting each other.
@@ -488,14 +491,14 @@ pub fn distance(
 /// ```
 pub fn intersection_test(
     collider1: &Collider,
-    position1: impl Into<Position>,
-    rotation1: impl Into<Rotation>,
+    position1: Vector,
+    rotation1: impl Into<RotF32>,
     collider2: &Collider,
-    position2: impl Into<Position>,
-    rotation2: impl Into<Rotation>,
+    position2: Vector,
+    rotation2: impl Into<RotF32>,
 ) -> Result<bool, UnsupportedShape> {
-    let rotation1: Rotation = rotation1.into();
-    let rotation2: Rotation = rotation2.into();
+    let rotation1: RotF32 = rotation1.into();
+    let rotation2: RotF32 = rotation2.into();
     let isometry1 = make_pose(position1, rotation1);
     let isometry2 = make_pose(position2, rotation2);
 
@@ -514,19 +517,19 @@ pub type TimeOfImpactStatus = parry::query::details::ShapeCastStatus;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TimeOfImpact {
     /// The time at which the colliders come into contact.
-    pub time_of_impact: Scalar,
+    pub time_of_impact: f32,
     /// The closest point on the first collider, at the time of impact,
     /// expressed in local space.
-    pub point1: Vector,
+    pub point1: VectorF32,
     /// The closest point on the second collider, at the time of impact,
     /// expressed in local space.
-    pub point2: Vector,
+    pub point2: VectorF32,
     /// The outward normal on the first collider, at the time of impact,
     /// expressed in local space.
-    pub normal1: Vector,
+    pub normal1: VectorF32,
     /// The outward normal on the second collider, at the time of impact,
     /// expressed in local space.
-    pub normal2: Vector,
+    pub normal2: VectorF32,
     /// The way the time of impact computation was terminated.
     pub status: TimeOfImpactStatus,
 }
@@ -569,44 +572,41 @@ pub struct TimeOfImpact {
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn time_of_impact(
     collider1: &Collider,
-    position1: impl Into<Position>,
-    rotation1: impl Into<Rotation>,
-    velocity1: impl Into<LinearVelocity>,
+    position1: Vector,
+    rotation1: impl Into<RotF32>,
+    velocity1: VectorF32,
     collider2: &Collider,
-    position2: impl Into<Position>,
-    rotation2: impl Into<Rotation>,
-    velocity2: impl Into<LinearVelocity>,
-    max_time_of_impact: Scalar,
+    position2: Vector,
+    rotation2: impl Into<RotF32>,
+    velocity2: VectorF32,
+    max_time_of_impact: f32,
 ) -> Result<Option<TimeOfImpact>, UnsupportedShape> {
-    let rotation1: Rotation = rotation1.into();
-    let rotation2: Rotation = rotation2.into();
-
-    let velocity1: LinearVelocity = velocity1.into();
-    let velocity2: LinearVelocity = velocity2.into();
+    let rotation1: RotF32 = rotation1.into();
+    let rotation2: RotF32 = rotation2.into();
 
     let isometry1 = make_pose(position1, rotation1);
     let isometry2 = make_pose(position2, rotation2);
 
     parry::query::cast_shapes(
         &isometry1,
-        velocity1.0,
+        velocity1.adjust_precision(),
         collider1.shape_scaled().0.as_ref(),
         &isometry2,
-        velocity2.0,
+        velocity2.adjust_precision(),
         collider2.shape_scaled().0.as_ref(),
         ShapeCastOptions {
-            max_time_of_impact,
+            max_time_of_impact: max_time_of_impact.adjust_precision(),
             stop_at_penetration: true,
             ..default()
         },
     )
     .map(|toi| {
         toi.map(|toi| TimeOfImpact {
-            time_of_impact: toi.time_of_impact,
-            point1: toi.witness1,
-            point2: toi.witness2,
-            normal1: toi.normal1,
-            normal2: toi.normal2,
+            time_of_impact: toi.time_of_impact.f32(),
+            point1: toi.witness1.f32(),
+            point2: toi.witness2.f32(),
+            normal1: toi.normal1.f32(),
+            normal2: toi.normal2.f32(),
             status: toi.status,
         })
     })

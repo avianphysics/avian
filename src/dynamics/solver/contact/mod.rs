@@ -39,18 +39,18 @@ pub struct ContactConstraintPoint {
     pub tangent_part: Option<ContactTangentPart>,
 
     /// The world-space contact point relative to the center of mass of the first body.
-    pub anchor1: Vector,
+    pub anchor1: VectorF32,
 
     /// The world-space contact point relative to the center of mass of the second body.
-    pub anchor2: Vector,
+    pub anchor2: VectorF32,
 
     /// The pre-solve relative velocity of the bodies along the normal at the contact point.
-    pub normal_speed: Scalar,
+    pub normal_speed: f32,
 
     /// The pre-solve separation distance between the bodies.
     ///
     /// A negative separation indicates penetration.
-    pub initial_separation: Scalar,
+    pub initial_separation: f32,
 }
 
 /// A contact constraint used for resolving inter-penetration between two bodies.
@@ -72,28 +72,28 @@ pub struct ContactConstraint {
     /// and is considered to have infinite mass.
     pub relative_dominance: i16,
     /// The combined coefficient of dynamic [friction](Friction) of the bodies.
-    pub friction: Scalar,
+    pub friction: f32,
     /// The combined coefficient of [restitution](Restitution) of the bodies.
-    pub restitution: Scalar,
+    pub restitution: f32,
     /// The desired relative linear speed of the bodies along the surface,
     /// expressed in world space as `tangent_speed2 - tangent_speed1`.
     ///
     /// Defaults to zero. If set to a non-zero value, this can be used to simulate effects
     /// such as conveyor belts.
     #[cfg(feature = "2d")]
-    pub tangent_speed: Scalar,
+    pub tangent_speed: f32,
     /// The desired relative linear velocity of the bodies along the surface,
     /// expressed in world space as `tangent_velocity2 - tangent_velocity1`.
     ///
     /// Defaults to zero. If set to a non-zero value, this can be used to simulate effects
     /// such as conveyor belts.
     #[cfg(feature = "3d")]
-    pub tangent_velocity: Vector,
+    pub tangent_velocity: VectorF32,
     /// The world-space contact normal shared by all points in the contact manifold.
-    pub normal: Vector,
+    pub normal: VectorF32,
     /// The first world-space tangent direction shared by all points in the contact manifold.
     #[cfg(feature = "3d")]
-    pub tangent1: Vector,
+    pub tangent1: VectorF32,
     /// The contact points in the manifold. Each point shares the same `normal`.
     // TODO: Use a `SmallVec`
     pub points: Vec<ContactConstraintPoint>,
@@ -134,16 +134,16 @@ impl ContactConstraint {
                 inertia2.effective_inv_angular_inertia(),
             ),
             Ordering::Greater => (
-                Vector::ZERO,
-                SymmetricTensor::ZERO,
+                VectorF32::ZERO,
+                default(),
                 inertia2.effective_inv_mass(),
                 inertia2.effective_inv_angular_inertia(),
             ),
             Ordering::Less => (
                 inertia1.effective_inv_mass(),
                 inertia1.effective_inv_angular_inertia(),
-                Vector::ZERO,
-                SymmetricTensor::ZERO,
+                VectorF32::ZERO,
+                default(),
             ),
         };
 
@@ -156,9 +156,9 @@ impl ContactConstraint {
         let effective_inverse_mass_sum = inv_mass1 + inv_mass2;
 
         let tangents = compute_tangent_directions(
-            manifold.normal,
-            body1.linear_velocity.0,
-            body2.linear_velocity.0,
+            manifold.normal.f32(),
+            body1.linear_velocity.0.f32(),
+            body2.linear_velocity.0.f32(),
         );
 
         let mut points = Vec::with_capacity(manifold.points.len());
@@ -166,8 +166,8 @@ impl ContactConstraint {
         for point in manifold.points.iter() {
             // Use fixed world-space anchors.
             // This improves rolling behavior for shapes like balls and capsules.
-            let anchor1 = point.anchor1;
-            let anchor2 = point.anchor2;
+            let anchor1 = point.anchor1.f32();
+            let anchor2 = point.anchor2.f32();
 
             let point = ContactConstraintPoint {
                 // TODO: Apply warm starting scale here instead of in `warm_start`?
@@ -177,8 +177,8 @@ impl ContactConstraint {
                     &i2,
                     anchor1,
                     anchor2,
-                    manifold.normal,
-                    warm_start_enabled.then_some(point.warm_start_normal_impulse),
+                    manifold.normal.f32(),
+                    warm_start_enabled.then_some(point.warm_start_normal_impulse.f32()),
                     softness,
                 ),
                 // There should only be a friction part if the coefficient of friction is non-negative.
@@ -189,12 +189,13 @@ impl ContactConstraint {
                     anchor1,
                     anchor2,
                     tangents,
-                    warm_start_enabled.then_some(point.warm_start_tangent_impulse),
+                    warm_start_enabled.then_some(point.warm_start_tangent_impulse.f32()),
                 )),
                 anchor1,
                 anchor2,
-                normal_speed: point.normal_speed,
-                initial_separation: -point.penetration - (anchor2 - anchor1).dot(manifold.normal),
+                normal_speed: point.normal_speed.f32(),
+                initial_separation: -point.penetration.f32()
+                    - (anchor2 - anchor1).dot(manifold.normal.f32()),
             };
 
             points.push(point);
@@ -204,13 +205,13 @@ impl ContactConstraint {
             body1: body1_entity,
             body2: body2_entity,
             relative_dominance,
-            friction: manifold.friction,
-            restitution: manifold.restitution,
+            friction: manifold.friction.f32(),
+            restitution: manifold.restitution.f32(),
             #[cfg(feature = "2d")]
-            tangent_speed: manifold.tangent_speed,
+            tangent_speed: manifold.tangent_speed.f32(),
             #[cfg(feature = "3d")]
-            tangent_velocity: manifold.tangent_velocity,
-            normal: manifold.normal,
+            tangent_velocity: manifold.tangent_velocity.f32(),
+            normal: manifold.normal.f32(),
             #[cfg(feature = "3d")]
             tangent1: tangents[0],
             points,
@@ -226,7 +227,7 @@ impl ContactConstraint {
         body2: &mut SolverBody,
         inertia1: &SolverBodyInertia,
         inertia2: &SolverBodyInertia,
-        warm_start_coefficient: Scalar,
+        warm_start_coefficient: f32,
     ) {
         let inv_mass1 = inertia1.effective_inv_mass();
         let inv_mass2 = inertia2.effective_inv_mass();
@@ -270,9 +271,9 @@ impl ContactConstraint {
         body2: &mut SolverBody,
         inertia1: &SolverBodyInertia,
         inertia2: &SolverBodyInertia,
-        delta_secs: Scalar,
+        delta_secs: f32,
         use_bias: bool,
-        max_overlap_solve_speed: Scalar,
+        max_overlap_solve_speed: f32,
     ) {
         let inv_mass1 = inertia1.effective_inv_mass();
         let inv_mass2 = inertia2.effective_inv_mass();
@@ -361,7 +362,7 @@ impl ContactConstraint {
         body2: &mut SolverBody,
         inertia1: &SolverBodyInertia,
         inertia2: &SolverBodyInertia,
-        threshold: Scalar,
+        threshold: f32,
     ) {
         let inv_mass1 = inertia1.effective_inv_mass();
         let inv_mass2 = inertia2.effective_inv_mass();
@@ -408,10 +409,10 @@ impl ContactConstraint {
 
     /// Returns the tangent directions for the contact constraint.
     #[inline(always)]
-    pub fn tangent_directions(&self) -> [Vector; DIM - 1] {
+    pub fn tangent_directions(&self) -> [VectorF32; DIM - 1] {
         #[cfg(feature = "2d")]
         {
-            [Vector::new(self.normal.y, -self.normal.x)]
+            [VectorF32::new(self.normal.y, -self.normal.x)]
         }
         #[cfg(feature = "3d")]
         {
@@ -425,13 +426,13 @@ impl ContactConstraint {
 #[allow(unused_variables)]
 #[inline(always)]
 fn compute_tangent_directions(
-    normal: Vector,
-    velocity1: Vector,
-    velocity2: Vector,
-) -> [Vector; DIM - 1] {
+    normal: VectorF32,
+    velocity1: VectorF32,
+    velocity2: VectorF32,
+) -> [VectorF32; DIM - 1] {
     #[cfg(feature = "2d")]
     {
-        [Vector::new(normal.y, -normal.x)]
+        [VectorF32::new(normal.y, -normal.x)]
     }
     #[cfg(feature = "3d")]
     {

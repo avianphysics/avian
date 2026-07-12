@@ -11,7 +11,7 @@
 //!
 //! Avian handles gyroscopic motion automatically. No special setup is required.
 
-use avian3d::{math::*, prelude::*};
+use avian3d::prelude::*;
 use bevy::prelude::*;
 use core::f32::consts::FRAC_PI_2;
 use examples_common_3d::ExampleCommonPlugin;
@@ -51,7 +51,7 @@ fn setup(
         Name::new("T-handle"),
         THandle,
         RigidBody::Dynamic,
-        AngularVelocity(Vector::Z * 10.0),
+        AngularVelocity(Vec3::Z * 10.0),
         Transform::from_xyz(-4.0, 0.0, 0.0).with_rotation(Quat::from_rotation_y(FRAC_PI_2)),
         Collider::from(large_cylinder),
         Mesh3d(meshes.add(large_cylinder)),
@@ -72,7 +72,7 @@ fn setup(
         Racket,
         RigidBody::Dynamic,
         Transform::from_xyz(4.0, 0.0, 0.0).with_rotation(Quat::from_rotation_y(0.001)),
-        AngularVelocity(Vector::X * 10.0),
+        AngularVelocity(Vec3::X * 10.0),
         Visibility::default(),
         children![
             (
@@ -115,7 +115,7 @@ fn log_racket_angular_momentum(
 ) {
     for (angular_velocity, global_transform, inertia) in &query {
         // Compute the up-to-date inertia tensor in world space.
-        let world_inertia = inertia.rotated(global_transform.rotation().adjust_precision());
+        let world_inertia = inertia.rotated(global_transform.rotation());
 
         // Compute the angular momentum.
         let angular_momentum = world_inertia.tensor() * angular_velocity.0;

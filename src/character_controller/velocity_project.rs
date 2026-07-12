@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 /// Needed to improve stability when `n.dot(dir)` happens to be very close to zero.
-const DOT_EPSILON: Scalar = 0.005;
+const DOT_EPSILON: f32 = 0.005;
 
 /// Projects input velocity `v` onto the planes defined by the given `normals`.
 /// This ensures that `velocity` does not point into any of the planes, but along them.
@@ -12,7 +12,7 @@ const DOT_EPSILON: Scalar = 0.005;
 /// This is a brute-force implementation that tests all possible projections.
 /// Consider using [`project_velocity`] for better performance on larger sets of normals.
 #[must_use]
-pub fn project_velocity_bruteforce(v: Vector, normals: &[Dir]) -> Vector {
+pub fn project_velocity_bruteforce(v: VectorF32, normals: &[Dir]) -> VectorF32 {
     // NOTE: This brute-force method is primarily intended for testing and validation purposes.
     //       A more complex but faster `project_velocity` function can be found after this one.
 
@@ -31,32 +31,25 @@ pub fn project_velocity_bruteforce(v: Vector, normals: &[Dir]) -> Vector {
     // 3. If no valid projection is found, return the apex of the cone (the origin)
 
     // Case 1: Check if v is inside the cone
-    if normals
-        .iter()
-        .all(|normal| normal.adjust_precision().dot(v) >= -DOT_EPSILON)
-    {
+    if normals.iter().all(|normal| normal.dot(v) >= -DOT_EPSILON) {
         return v;
     }
 
     // Best candidate so far
-    let mut best_projection = Vector::ZERO;
-    let mut best_distance_sq = Scalar::INFINITY;
+    let mut best_projection = VectorF32::ZERO;
+    let mut best_distance_sq = f32::INFINITY;
 
     // Helper to test halfspace validity
-    let is_valid = |projection: Vector| {
-        normals
-            .iter()
-            .all(|n| projection.dot(n.adjust_precision()) >= -DOT_EPSILON)
-    };
+    let is_valid =
+        |projection: VectorF32| normals.iter().all(|n| projection.dot(**n) >= -DOT_EPSILON);
 
     // Case 2a: Face projections (single-plane active set)
     for n in normals {
-        let n = n.adjust_precision();
         let n_dot_v = n.dot(v);
         if n_dot_v < -DOT_EPSILON {
             // Project v onto the plane defined by n:
             // projection = v - (v · n) n
-            let projection = v - n_dot_v * n;
+            let projection = v - n_dot_v * *n;
 
             // Check if better than previous best and valid
             let distance_sq = v.distance_squared(projection);
@@ -72,15 +65,10 @@ pub fn project_velocity_bruteforce(v: Vector, normals: &[Dir]) -> Vector {
     {
         let n = normals.len();
         for i in 0..n {
-            let ni = normals[i].adjust_precision();
-            for nj in normals
-                .iter()
-                .take(n)
-                .skip(i + 1)
-                .map(|n| n.adjust_precision())
-            {
+            let ni = normals[i];
+            for nj in normals.iter().take(n).skip(i + 1) {
                 // Compute edge direction e = ni x nj
-                let e = ni.cross(nj);
+                let e = ni.cross(**nj);
                 let e_length_sq = e.length_squared();
                 if e_length_sq < DOT_EPSILON {
                     // Nearly parallel edge
@@ -103,7 +91,7 @@ pub fn project_velocity_bruteforce(v: Vector, normals: &[Dir]) -> Vector {
 
     // Case 3: If no candidate is found, the projection is at the apex (the origin)
     if best_distance_sq.is_infinite() {
-        Vector::ZERO
+        VectorF32::ZERO
     } else {
         best_projection
     }
@@ -119,7 +107,7 @@ pub fn project_velocity_bruteforce(v: Vector, normals: &[Dir]) -> Vector {
 /// from which obtaining the solution of the primal problem is simple.
 /// See <https://benspiers.co.uk/Games/Velocity-Projection> for the full mathematical details.
 #[must_use]
-pub fn project_velocity(v: Vector, normals: &[Dir]) -> Vector {
+pub fn project_velocity(v: VectorF32, normals: &[Dir]) -> VectorF32 {
     -project_onto_conical_hull(-v, normals)
 }
 
@@ -160,7 +148,7 @@ enum SimplicialCone {
 /// Projects the input point `x0` onto the convex cone defined by the given `normals`.
 /// This runs a variant of GJK, specialised for point vs. convex cone computation.
 #[must_use]
-fn project_onto_conical_hull(x0: Vector, normals: &[Dir]) -> Vector {
+fn project_onto_conical_hull(x0: VectorF32, normals: &[Dir]) -> VectorF32 {
     // The current simplicial cone.
     let mut maybe_cone = Some(SimplicialCone::Origin);
 
@@ -177,13 +165,11 @@ fn project_onto_conical_hull(x0: Vector, normals: &[Dir]) -> Vector {
         }
 
         // Find the normal that best improves the projection (maximises the dot product).
-        let n_dots = normals
-            .iter()
-            .map(|n| n.adjust_precision().dot(search_vector));
+        let n_dots = normals.iter().map(|n| n.dot(search_vector));
 
         let Some((best_idx, best_dot)) = n_dots
             .enumerate()
-            .max_by(|(_, dot1), (_, dot2)| Scalar::total_cmp(dot1, dot2))
+            .max_by(|(_, dot1), (_, dot2)| f32::total_cmp(dot1, dot2))
         else {
             // No normals provided.
             break;
@@ -225,10 +211,14 @@ impl SimplicialCone {
     /// This method makes various assumptions about its inputs that match the implementation of
     /// [`project_onto_conical_hull`]. For example, the dot product of `new_direction`
     /// and the search direction from `self` to `x0` should not be negative.
-    fn project_point(self, x0: Vector, new_direction: Dir) -> (Option<SimplicialCone>, Vector) {
+    fn project_point(
+        self,
+        x0: VectorF32,
+        new_direction: Dir,
+    ) -> (Option<SimplicialCone>, VectorF32) {
         // See https://benspiers.co.uk/Games/Velocity-Projection
 
-        let new_direction_vec = new_direction.adjust_precision();
+        let new_direction_vec = new_direction;
 
         match self {
             SimplicialCone::Origin => {
@@ -252,10 +242,10 @@ impl SimplicialCone {
             //   - the two rays must be on either side of x0
             // Therefore can deduce that x0 falls within the wedge, so we can just return (None, ZERO)
             // without any more checking.
-            SimplicialCone::Ray() => (None, Vector::ZERO),
+            SimplicialCone::Ray() => (None, VectorF32::ZERO),
             #[cfg(feature = "3d")]
             SimplicialCone::Ray(previous_direction) => {
-                let cross = new_direction_vec.cross(previous_direction.adjust_precision());
+                let cross = new_direction_vec.cross(*previous_direction);
                 let dot = x0.dot(cross);
                 let new_search_vector = dot * cross / cross.length_squared();
 
@@ -278,7 +268,7 @@ impl SimplicialCone {
                 //   so they point away from the interior of the solid wedge
 
                 // cross1 points away from n2
-                let cross1 = n1.adjust_precision().cross(new_direction_vec);
+                let cross1 = n1.cross(*new_direction_vec);
                 let cross1_sq = cross1.length_squared();
 
                 // Distance of x0 from the wedge facet (n1, new_direction)
@@ -287,7 +277,7 @@ impl SimplicialCone {
                 let inside1 = dot1 <= 0.0;
 
                 // cross2 points away from n1
-                let cross2 = new_direction_vec.cross(n2.adjust_precision());
+                let cross2 = new_direction_vec.cross(*n2);
                 let cross2_sq = cross2.length_squared();
 
                 // Distance of x0 away from the wedge facet (new_direction, n2)
@@ -300,7 +290,7 @@ impl SimplicialCone {
                     // The previous iteration of this method will have established that it's on
                     // the current "inside" side of (n2, n1) as well, so x0 is inside the overall
                     // solid wedge, and our work here is done.
-                    (None, Vector::ZERO)
+                    (None, VectorF32::ZERO)
                 } else if dot1 * dot1.abs() * cross2_sq > dot2 * dot2.abs() * cross1_sq {
                     // The above is `if dot1 / cross1.length() > dot2 / cross2.length()`,
                     // but written to avoid square roots.
@@ -333,6 +323,7 @@ pub mod test {
 
     use super::DOT_EPSILON;
     use crate::prelude::*;
+    use core::f32::consts::PI;
 
     /// Tests that `project_velocity` agrees with `project_velocity_bruteforce`.
     #[test]
@@ -370,11 +361,11 @@ pub mod test {
         for n in 1..=normals.len() {
             let selected_normals = &normals[..n];
             let velocities = QuasiRandomDirection::default();
-            let mut worst_result = (Scalar::NEG_INFINITY, Vector::ZERO);
+            let mut worst_result = (f32::NEG_INFINITY, VectorF32::ZERO);
             for vel in velocities.take(1000) {
                 let new_result = super::project_velocity(vel, selected_normals);
                 for (k, normal) in selected_normals.iter().enumerate() {
-                    let intrusion = -new_result.dot(normal.adjust_precision());
+                    let intrusion = -new_result.dot(**normal);
                     assert!(
                         intrusion <= DOT_EPSILON,
                         "velocity still points into constraint plane after projection: \
@@ -414,23 +405,23 @@ pub mod test {
     #[derive(Default)]
     pub struct QuasiRandomDirection {
         #[cfg(feature = "3d")]
-        i: Scalar,
-        j: Scalar,
+        i: f32,
+        j: f32,
     }
 
     #[cfg(feature = "3d")]
     impl QuasiRandomDirection {
         #[allow(clippy::excessive_precision)]
-        const PLASTIC: Scalar = 1.32471795724475;
-        const INV_PLASTIC: Scalar = 1.0 / Self::PLASTIC;
-        const INV_PLASTIC_SQ: Scalar = Self::INV_PLASTIC * Self::INV_PLASTIC;
+        const PLASTIC: f32 = 1.32471795724475;
+        const INV_PLASTIC: f32 = 1.0 / Self::PLASTIC;
+        const INV_PLASTIC_SQ: f32 = Self::INV_PLASTIC * Self::INV_PLASTIC;
     }
 
     #[cfg(feature = "2d")]
     impl QuasiRandomDirection {
         #[allow(clippy::excessive_precision)]
-        const GOLDEN: Scalar = 1.61803398875;
-        const INV_GOLDEN: Scalar = 1.0 / Self::GOLDEN;
+        const GOLDEN: f32 = 1.61803398875;
+        const INV_GOLDEN: f32 = 1.0 / Self::GOLDEN;
     }
 
     impl QuasiRandomDirection {
@@ -444,7 +435,7 @@ pub mod test {
     }
 
     impl Iterator for QuasiRandomDirection {
-        type Item = Vector;
+        type Item = VectorF32;
 
         fn next(&mut self) -> Option<Self::Item> {
             let phi = 2.0 * PI * self.j;
@@ -456,12 +447,12 @@ pub mod test {
                 let rho = (1.0 - z * z).sqrt();
                 self.i = (self.i + Self::INV_PLASTIC) % 1.0;
                 self.j = (self.j + Self::INV_PLASTIC_SQ) % 1.0;
-                Some(Vector::new(rho * x, rho * y, z))
+                Some(VectorF32::new(rho * x, rho * y, z))
             }
             #[cfg(feature = "2d")]
             {
                 self.j = (self.j + Self::INV_GOLDEN) % 1.0;
-                Some(Vector::new(x, y))
+                Some(VectorF32::new(x, y))
             }
         }
     }

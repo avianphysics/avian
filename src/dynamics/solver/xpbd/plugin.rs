@@ -167,7 +167,7 @@ pub fn solve_xpbd_joint<
 ) where
     C::SolverData: Component<Mutability = Mutable>,
 {
-    let delta_secs = time.delta_seconds_adjusted();
+    let delta_secs = time.delta_secs();
 
     let mut dummy_body1 = SolverBody::default();
     let mut dummy_body2 = SolverBody::default();
@@ -218,7 +218,7 @@ pub fn warm_start_xpbd_motors<
 ) where
     C::SolverData: Component<Mutability = Mutable>,
 {
-    let delta_secs = time.delta_seconds_adjusted();
+    let delta_secs = time.delta_secs();
 
     let mut dummy_body1 = SolverBody::default();
     let mut dummy_body2 = SolverBody::default();
@@ -260,7 +260,7 @@ fn project_linear_velocity(
     mut bodies: Query<(&mut SolverBody, &PreSolveDeltaPosition), RigidBodyActiveFilter>,
     time: Res<Time>,
 ) {
-    let delta_secs = time.delta_seconds_adjusted();
+    let delta_secs = time.delta_secs();
 
     for (mut body, pre_solve_delta_pos) in &mut bodies {
         // v = (x - x_prev) / h
@@ -275,10 +275,10 @@ fn project_angular_velocity(
     mut bodies: Query<(&mut SolverBody, &PreSolveDeltaRotation), RigidBodyActiveFilter>,
     time: Res<Time>,
 ) {
-    let delta_secs = time.delta_seconds_adjusted();
+    let delta_secs = time.delta_secs();
 
     for (mut body, pre_solve_delta_rot) in &mut bodies {
-        let new_ang_vel = pre_solve_delta_rot.angle_between(body.delta_rotation) / delta_secs;
+        let new_ang_vel = pre_solve_delta_rot.angle_to(body.delta_rotation) / delta_secs;
         body.angular_velocity += new_ang_vel;
     }
 }
@@ -289,12 +289,10 @@ fn project_angular_velocity(
     mut bodies: Query<(&mut SolverBody, &PreSolveDeltaRotation), RigidBodyActiveFilter>,
     time: Res<Time>,
 ) {
-    let delta_secs = time.delta_seconds_adjusted();
+    let delta_secs = time.delta_secs();
 
     for (mut body, pre_solve_delta_rot) in &mut bodies {
-        let delta_rot = body
-            .delta_rotation
-            .mul_quat(pre_solve_delta_rot.inverse().0);
+        let delta_rot = body.delta_rotation.mul_quat(pre_solve_delta_rot.inverse());
 
         let mut new_ang_vel = 2.0 * delta_rot.xyz() / delta_secs;
 
@@ -313,12 +311,12 @@ fn writeback_joint_forces<C: Component + EntityConstraint<2> + XpbdConstraint<2>
 ) where
     C::SolverData: Component<Mutability = Mutable>,
 {
-    let delta_secs = time.delta_seconds_adjusted();
+    let delta_secs = time.delta_secs();
 
     // Detailed Rigid Body Simulation with Extended Position Based Dynamics by Müller et al.
     // states that  `f = λ * n / h²`. However, with substepping, it seems that we need to accumulate
     // Lagrange multipliers across substeps, and use the formula `f = λ * n / dt^2 * substep_count`.
-    let rhs = (delta_secs * delta_secs).recip_or_zero() * substep_count.0 as Scalar;
+    let rhs = (delta_secs * delta_secs).recip_or_zero() * substep_count.0 as f32;
 
     for (solver_data, mut forces) in &mut joints {
         forces.set_force(solver_data.total_position_lagrange() * rhs);

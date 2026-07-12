@@ -1,17 +1,10 @@
 use super::AdjustPrecision;
+use crate::{math::DRot2, physics_transform::Rotation};
 use bevy_math::*;
 use glam_matrix_extras::*;
 
 /// The floating point number type used by Avian.
 pub type Scalar = f64;
-/// The PI/2 constant.
-pub const FRAC_PI_2: Scalar = core::f64::consts::FRAC_PI_2;
-/// The PI constant.
-pub const PI: Scalar = core::f64::consts::PI;
-/// The TAU constant.
-pub const TAU: Scalar = core::f64::consts::TAU;
-/// 1/sqrt(2)
-pub const FRAC_1_SQRT_2: Scalar = core::f64::consts::FRAC_1_SQRT_2;
 
 /// The vector type used by Avian.
 #[cfg(feature = "2d")]
@@ -34,16 +27,9 @@ pub type Matrix = DMat3;
 pub type Matrix2 = DMat2;
 /// The 3x3 matrix type used by Avian.
 pub type Matrix3 = DMat3;
-/// The dimension-specific matrix type used by Avian.
-#[cfg(feature = "2d")]
-pub type SymmetricMatrix = SymmetricDMat2;
-/// The dimension-specific matrix type used by Avian.
-#[cfg(feature = "3d")]
-pub type SymmetricMatrix = SymmetricDMat3;
-/// The 2x2 matrix type used by Avian.
-pub type SymmetricMatrix2 = SymmetricDMat2;
-/// The 3x3 matrix type used by Avian.
-pub type SymmetricMatrix3 = SymmetricDMat3;
+
+/// The 2D rotation type used by Avian.
+pub type Rotation2 = DRot2;
 /// The quaternion type used by Avian.
 pub type Quaternion = DQuat;
 
@@ -117,30 +103,32 @@ impl AdjustPrecision for DMat3 {
     }
 }
 
-impl AdjustPrecision for SymmetricMat2 {
-    type Adjusted = SymmetricMatrix2;
+impl AdjustPrecision for Rot2 {
+    type Adjusted = DRot2;
     fn adjust_precision(&self) -> Self::Adjusted {
-        self.as_symmetric_dmat2()
+        DRot2::from_sin_cos(self.sin as f64, self.cos as f64)
     }
 }
 
-impl AdjustPrecision for SymmetricDMat2 {
-    type Adjusted = SymmetricMatrix2;
+impl AdjustPrecision for DRot2 {
+    type Adjusted = DRot2;
     fn adjust_precision(&self) -> Self::Adjusted {
         *self
     }
 }
 
-impl AdjustPrecision for SymmetricMat3 {
-    type Adjusted = SymmetricMatrix3;
+#[cfg(feature = "2d")]
+impl AdjustPrecision for Rotation {
+    type Adjusted = DRot2;
     fn adjust_precision(&self) -> Self::Adjusted {
-        self.as_symmetric_dmat3()
+        DRot2::from_sin_cos(self.sin as f64, self.cos as f64)
     }
 }
 
-impl AdjustPrecision for SymmetricDMat3 {
-    type Adjusted = SymmetricMatrix3;
+#[cfg(feature = "3d")]
+impl AdjustPrecision for Rotation {
+    type Adjusted = DQuat;
     fn adjust_precision(&self) -> Self::Adjusted {
-        *self
+        self.as_dquat()
     }
 }

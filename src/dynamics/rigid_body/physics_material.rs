@@ -1,4 +1,3 @@
-use crate::prelude::*;
 use bevy::prelude::*;
 
 /// Determines how coefficients are combined for [`Restitution`] and [`Friction`].
@@ -25,7 +24,7 @@ pub enum CoefficientCombine {
 
 impl CoefficientCombine {
     /// Combines two coefficients according to the combine rule.
-    pub fn mix(&self, a: Scalar, b: Scalar) -> Scalar {
+    pub fn mix(&self, a: f32, b: f32) -> f32 {
         match self {
             CoefficientCombine::Average => (a + b) * 0.5,
             CoefficientCombine::GeometricMean => (a * b).sqrt(),
@@ -138,11 +137,11 @@ pub struct Friction {
     /// Coefficient of dynamic friction. Applied when bodies are sliding relative to each other.
     ///
     /// Defaults to `0.5`.
-    pub dynamic_coefficient: Scalar,
+    pub dynamic_coefficient: f32,
     /// Coefficient of static friction. Applied when bodies are at rest relative to each other.
     ///
     /// Defaults to `0.5`.
-    pub static_coefficient: Scalar,
+    pub static_coefficient: f32,
     /// The rule used for computing the combined coefficients of friction when two bodies collide.
     ///
     /// Defaults to [`CoefficientCombine::Average`].
@@ -169,7 +168,7 @@ impl Friction {
     };
 
     /// Creates a new [`Friction`] component with the same dynamic and static friction coefficients.
-    pub fn new(friction_coefficient: Scalar) -> Self {
+    pub fn new(friction_coefficient: f32) -> Self {
         Self {
             dynamic_coefficient: friction_coefficient,
             static_coefficient: friction_coefficient,
@@ -186,7 +185,7 @@ impl Friction {
     }
 
     /// Sets the coefficient of dynamic friction.
-    pub fn with_dynamic_coefficient(&self, coefficient: Scalar) -> Self {
+    pub fn with_dynamic_coefficient(&self, coefficient: f32) -> Self {
         Self {
             dynamic_coefficient: coefficient,
             ..*self
@@ -194,7 +193,7 @@ impl Friction {
     }
 
     /// Sets the coefficient of static friction.
-    pub fn with_static_coefficient(&self, coefficient: Scalar) -> Self {
+    pub fn with_static_coefficient(&self, coefficient: f32) -> Self {
         Self {
             static_coefficient: coefficient,
             ..*self
@@ -214,8 +213,8 @@ impl Friction {
     }
 }
 
-impl From<Scalar> for Friction {
-    fn from(coefficient: Scalar) -> Self {
+impl From<f32> for Friction {
+    fn from(coefficient: f32) -> Self {
         Self {
             dynamic_coefficient: coefficient,
             static_coefficient: coefficient,
@@ -309,7 +308,7 @@ pub struct Restitution {
     /// Values larger than 1 can result in unstable or explosive behavior.
     ///
     /// Defaults to `0.0`.
-    pub coefficient: Scalar,
+    pub coefficient: f32,
     /// The rule used for computing the combined coefficient of restitution when two bodies collide.
     ///
     /// Defaults to [`CoefficientCombine::Average`].
@@ -352,7 +351,7 @@ impl Restitution {
     };
 
     /// Creates a new [`Restitution`] component with the given restitution coefficient.
-    pub fn new(coefficient: Scalar) -> Self {
+    pub fn new(coefficient: f32) -> Self {
         Self {
             coefficient,
             combine_rule: CoefficientCombine::Average,
@@ -379,8 +378,8 @@ impl Restitution {
     }
 }
 
-impl From<Scalar> for Restitution {
-    fn from(coefficient: Scalar) -> Self {
+impl From<f32> for Restitution {
+    fn from(coefficient: f32) -> Self {
         Self {
             coefficient,
             ..default()

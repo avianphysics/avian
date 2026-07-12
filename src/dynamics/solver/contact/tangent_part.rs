@@ -2,11 +2,13 @@ use crate::prelude::*;
 use bevy::reflect::Reflect;
 #[cfg(feature = "serialize")]
 use bevy::reflect::{ReflectDeserialize, ReflectSerialize};
+#[cfg(feature = "3d")]
+use bevy_math::Vec2;
 
 #[cfg(feature = "2d")]
-pub type TangentImpulse = Scalar;
+pub type TangentImpulse = f32;
 #[cfg(feature = "3d")]
-pub type TangentImpulse = Vector2;
+pub type TangentImpulse = Vec2;
 
 // TODO: One-body constraint version
 /// The tangential friction part of a [`ContactConstraintPoint`](super::ContactConstraintPoint).
@@ -23,22 +25,22 @@ pub struct ContactTangentPart {
     /// The inertial properties of the bodies projected onto the contact tangent,
     /// or in other words, the mass "seen" by the constraint along the tangent.
     #[cfg(feature = "2d")]
-    pub effective_mass: Scalar,
+    pub effective_mass: f32,
     /// The inverse of the inertial properties of the bodies projected onto the contact tangents,
     /// or in other words, the inverse mass "seen" by the constraint along the tangents.
     #[cfg(feature = "3d")]
-    pub effective_inverse_mass: [Scalar; 3],
+    pub effective_inverse_mass: [f32; 3],
 }
 
 impl ContactTangentPart {
     /// Generates a new [`ContactTangentPart`].
     pub fn generate(
-        effective_inverse_mass_sum: Vector,
+        effective_inverse_mass_sum: VectorF32,
         inverse_angular_inertia1: &SymmetricTensor,
         inverse_angular_inertia2: &SymmetricTensor,
-        r1: Vector,
-        r2: Vector,
-        tangents: [Vector; DIM - 1],
+        r1: VectorF32,
+        r2: VectorF32,
+        tangents: [VectorF32; DIM - 1],
         warm_start_impulse: Option<TangentImpulse>,
     ) -> Self {
         let i1 = inverse_angular_inertia1;
@@ -154,14 +156,14 @@ impl ContactTangentPart {
     /// the incremental impulse to apply to each body.
     pub fn solve_impulse(
         &mut self,
-        tangent_directions: [Vector; DIM - 1],
-        relative_velocity: Vector,
+        tangent_directions: [VectorF32; DIM - 1],
+        relative_velocity: VectorF32,
         // The desired relative velocity along the contact surface, used to simulate things like conveyor belts.
-        #[cfg(feature = "2d")] surface_speed: Scalar,
-        #[cfg(feature = "3d")] surface_velocity: Vector,
-        friction: Scalar,
-        normal_impulse: Scalar,
-    ) -> Vector {
+        #[cfg(feature = "2d")] surface_speed: f32,
+        #[cfg(feature = "3d")] surface_velocity: VectorF32,
+        friction: f32,
+        normal_impulse: f32,
+    ) -> VectorF32 {
         // Compute the maximum bound for the friction impulse.
         //
         // According to the Coulomb friction law:
@@ -226,11 +228,11 @@ impl ContactTangentPart {
 
             // TODO: Could this be handled earlier reliably?
             if !effective_mass.is_finite() {
-                return Vector::ZERO;
+                return VectorF32::ZERO;
             }
 
             // Compute the incremental tangent impoulse.
-            let delta_impulse = effective_mass * Vector2::new(tangent_speed1, tangent_speed2);
+            let delta_impulse = effective_mass * Vec2::new(tangent_speed1, tangent_speed2);
 
             // Clamp the accumulated impulse.
             let new_impulse = (self.impulse - delta_impulse).clamp_length_max(impulse_limit);

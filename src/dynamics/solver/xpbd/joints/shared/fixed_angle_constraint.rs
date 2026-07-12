@@ -15,20 +15,20 @@ use bevy::prelude::*;
 pub struct FixedAngleConstraintShared {
     /// The target rotation difference between the two bodies.
     #[cfg(feature = "2d")]
-    pub rotation_difference: Scalar,
+    pub rotation_difference: f32,
     /// The target rotation difference between the two bodies.
     #[cfg(feature = "3d")]
-    pub rotation_difference: Quaternion,
+    pub rotation_difference: Quat,
     /// The total Lagrange multiplier across the whole time step.
-    pub total_lagrange: AngularVector,
+    pub total_lagrange: AngularVectorF32,
 }
 
 impl XpbdConstraintSolverData for FixedAngleConstraintShared {
     fn clear_lagrange_multipliers(&mut self) {
-        self.total_lagrange = AngularVector::ZERO;
+        self.total_lagrange = AngularVectorF32::default();
     }
 
-    fn total_rotation_lagrange(&self) -> AngularVector {
+    fn total_rotation_lagrange(&self) -> AngularVectorF32 {
         self.total_lagrange
     }
 }
@@ -39,19 +39,19 @@ impl FixedAngleConstraintShared {
         &mut self,
         rotation1: &Rotation,
         rotation2: &Rotation,
-        local_basis1: Rot,
-        local_basis2: Rot,
+        local_basis1: RotF32,
+        local_basis2: RotF32,
     ) {
         // Prepare the base rotation difference.
         #[cfg(feature = "2d")]
         {
             self.rotation_difference =
-                (*rotation1 * local_basis1).angle_between(*rotation2 * local_basis2);
+                (rotation1.f32() * local_basis1).angle_to(rotation2.f32() * local_basis2);
         }
         #[cfg(feature = "3d")]
         {
             self.rotation_difference =
-                (rotation1.0 * local_basis1) * (rotation2.0 * local_basis2).inverse();
+                (rotation1.f32() * local_basis1) * (rotation2.f32() * local_basis2).inverse();
         }
     }
 
@@ -60,8 +60,8 @@ impl FixedAngleConstraintShared {
         &mut self,
         bodies: [&mut SolverBody; 2],
         inertias: [&SolverBodyInertia; 2],
-        compliance: Scalar,
-        dt: Scalar,
+        compliance: f32,
+        dt: f32,
     ) {
         let [body1, body2] = bodies;
         let [inertia1, inertia2] = inertias;
@@ -71,15 +71,13 @@ impl FixedAngleConstraintShared {
 
         #[cfg(feature = "2d")]
         let difference =
-            self.rotation_difference + body1.delta_rotation.angle_between(body2.delta_rotation);
+            self.rotation_difference + body1.delta_rotation.angle_to(body2.delta_rotation);
         #[cfg(feature = "3d")]
         // TODO: The XPBD paper doesn't have this minus sign, but it seems to be needed for stability.
         //       The angular correction code might have a wrong sign elsewhere.
         let difference = -2.0
-            * (self.rotation_difference
-                * body1.delta_rotation.0
-                * body2.delta_rotation.0.inverse())
-            .xyz();
+            * (self.rotation_difference * body1.delta_rotation * body2.delta_rotation.inverse())
+                .xyz();
 
         // Align orientation
         self.total_lagrange += self.align_orientation(

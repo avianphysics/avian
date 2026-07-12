@@ -45,7 +45,7 @@ use bevy::{app::PluginGroupBuilder, prelude::*};
 /// Refer to the documentation of the plugins for more information about their responsibilities and implementations.
 #[derive(Debug, Default)]
 pub struct SolverPlugins {
-    length_unit: Scalar,
+    length_unit: f32,
 }
 
 impl SolverPlugins {
@@ -53,7 +53,7 @@ impl SolverPlugins {
     ///
     /// The length unit will be used for initializing the [`PhysicsLengthUnit`]
     /// resource unless it already exists.
-    pub fn new_with_length_unit(unit: Scalar) -> Self {
+    pub fn new_with_length_unit(unit: f32) -> Self {
         Self { length_unit: unit }
     }
 }

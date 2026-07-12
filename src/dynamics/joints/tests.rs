@@ -23,7 +23,7 @@ fn create_app() -> App {
 
     app.insert_resource(SubstepCount(20));
 
-    app.insert_resource(Gravity(Vector::ZERO));
+    app.insert_resource(Gravity(VectorF32::ZERO));
 
     app.insert_resource(Time::<Fixed>::from_duration(Duration::from_secs_f32(
         TIMESTEP,
@@ -126,7 +126,7 @@ fn prismatic_motor_moves_body() {
 
     app.world_mut().spawn(
         PrismaticJoint::new(anchor, dynamic)
-            .with_local_anchor1(Vector::X * 2.0)
+            .with_local_anchor1(VectorF32::X * 2.0)
             .with_motor(LinearMotor {
                 target_velocity: 1.0,
                 max_force: 100.0,
@@ -256,7 +256,7 @@ fn revolute_motor_position_target() {
     app.world_mut().spawn(
         RevoluteJoint::new(anchor, dynamic).with_motor(AngularMotor {
             target_position: target_angle,
-            max_torque: Scalar::MAX,
+            max_torque: f32::MAX,
             motor_model: MotorModel::AccelerationBased {
                 stiffness: 50.0,
                 damping: 20.0,
@@ -330,7 +330,7 @@ fn prismatic_motor_position_target() {
     let target_position = 1.0; // Target is 1 meter along the slider axis
     app.world_mut().spawn(
         PrismaticJoint::new(anchor, dynamic)
-            .with_local_anchor1(Vector::X * 2.0)
+            .with_local_anchor1(VectorF32::X * 2.0)
             .with_motor(LinearMotor {
                 target_position,
                 max_force: 100.0,
@@ -377,7 +377,7 @@ fn prismatic_motor_position_target() {
 /// when it reaches the angle limit.
 #[test]
 fn revolute_motor_respects_angle_limits() {
-    use crate::math::PI;
+    use core::f32::consts::PI;
 
     let mut app = create_app();
     app.finish();
@@ -516,7 +516,7 @@ fn prismatic_motor_respects_limits() {
         let body_ref = app.world().entity(dynamic);
         let position = body_ref.get::<Position>().unwrap();
         assert!(
-            (position.0.x - distance_limit).abs() > 0.1,
+            (position.0.x - distance_limit.adjust_precision()).abs() > 0.1,
             "Displacement {} should not be near the limit {} at the start of the test",
             position.0.x,
             distance_limit
@@ -535,7 +535,7 @@ fn prismatic_motor_respects_limits() {
     let position = body_ref.get::<Position>().unwrap();
 
     // The displacement along the slide axis (X) should be at or near the limit.
-    let displacement = position.0.x;
+    let displacement = position.0.x.f32();
     assert!(
         displacement <= distance_limit + 0.001,
         "Displacement {} should not exceed limit {}",
@@ -665,7 +665,7 @@ fn revolute_motor_spring_damper() {
     app.world_mut().spawn(
         RevoluteJoint::new(anchor, dynamic).with_motor(AngularMotor {
             target_position: target_angle,
-            max_torque: Scalar::MAX,
+            max_torque: f32::MAX,
             motor_model: MotorModel::SpringDamper {
                 frequency: 2.0,
                 damping_ratio: 1.0,
@@ -815,7 +815,7 @@ fn prismatic_motor_combined_position_velocity() {
     // Motor with both position and velocity targeting.
     app.world_mut().spawn(
         PrismaticJoint::new(anchor, dynamic)
-            .with_local_anchor1(Vector::X * 2.0)
+            .with_local_anchor1(VectorF32::X * 2.0)
             .with_motor(LinearMotor {
                 enabled: true,
                 target_position: 1.0,

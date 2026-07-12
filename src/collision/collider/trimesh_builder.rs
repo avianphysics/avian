@@ -53,9 +53,9 @@ pub struct TrimeshBuilder {
     /// The shape to be converted into a triangle mesh.
     pub shape: SharedShape,
     /// The position of the shape. The default is [0, 0, 0].
-    pub position: Position,
+    pub position: Vector,
     /// The rotation of the shape. The default is the identity rotation.
-    pub rotation: Rotation,
+    pub rotation: RotF32,
     /// Whether a failure to trimesh a subshape in a compound shape should fail the entire build process.
     /// Default is true.
     pub fail_on_compound_error: bool,
@@ -79,9 +79,9 @@ pub struct TrimeshBuilder {
 /// A generic triangle mesh representation.
 #[derive(Debug, Clone, PartialEq, Reflect, Default)]
 pub struct Trimesh {
-    /// The vertices in
+    /// The vertices of the mesh.
     pub vertices: Vec<Vector>,
-    /// The indices in counter-clockwise winding
+    /// The triangle indices in counterclockwise winding.
     pub indices: Vec<[u32; 3]>,
 }
 
@@ -126,13 +126,13 @@ impl TrimeshBuilder {
     }
 
     /// Translates the mesh. Subsequent calls to this method will add to the previous translation.
-    pub fn translated(&mut self, position: impl Into<Position>) -> &mut Self {
-        self.position.0 += position.into().0;
+    pub fn translated(&mut self, position: Vector) -> &mut Self {
+        self.position += position;
         self
     }
 
     /// Rotates the mesh. Subsequent calls to this method will add to the previous rotation.
-    pub fn rotated(&mut self, rotation: impl Into<Rotation>) -> &mut Self {
+    pub fn rotated(&mut self, rotation: impl Into<RotF32>) -> &mut Self {
         self.rotation = rotation.into() * self.rotation;
         self
     }
@@ -255,14 +255,14 @@ impl TrimeshBuilder {
             // Compounds need to be unpacked
             TypedShape::Compound(compound) => {
                 let mut sub_builder = self.clone();
+                let rot = self.rotation.adjust_precision();
                 return compound.shapes().iter().try_fold(
                     Trimesh::default(),
                     move |mut compound_trimesh, (sub_pos, shape)| {
                         sub_builder.shape = shape.clone();
-                        sub_builder.position =
-                            Position(self.position.0 + self.rotation * sub_pos.translation);
+                        sub_builder.position = self.position + rot * sub_pos.translation;
                         sub_builder.rotation =
-                            self.rotation.mul_quat(sub_pos.rotation).normalize().into();
+                            self.rotation.mul_quat(sub_pos.rotation.f32()).normalize();
                         let trimesh = match sub_builder.build() {
                             Ok(trimesh) => trimesh,
                             Err(error) => {
@@ -319,11 +319,9 @@ impl TrimeshBuilder {
             }
         };
         let pos = self.position;
+        let rot = self.rotation.adjust_precision();
         Ok(Trimesh {
-            vertices: vertices
-                .into_iter()
-                .map(|v| pos.0 + self.rotation * v)
-                .collect(),
+            vertices: vertices.into_iter().map(|v| pos + rot * v).collect(),
             indices,
         })
     }

@@ -220,7 +220,7 @@ pub fn update_hits(
                 .cast_ray_predicate(
                     ray.origin.adjust_precision(),
                     ray.direction,
-                    Scalar::MAX,
+                    f32::MAX,
                     true,
                     &filter.0,
                     &|entity| {

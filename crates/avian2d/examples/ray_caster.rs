@@ -44,7 +44,7 @@ fn setup(
                 Mesh2d(meshes.add(Circle::new(radius))),
                 MeshMaterial2d(materials.add(Color::srgb(0.2, 0.7, 0.9))),
                 Transform::from_xyz(x as f32 * radius * 3.0, y as f32 * radius * 3.0, 0.0),
-                Collider::circle(radius as Scalar),
+                Collider::circle(radius),
             ));
         }
     }

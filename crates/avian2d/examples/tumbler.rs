@@ -7,7 +7,7 @@
 
 #![allow(clippy::unnecessary_cast)]
 
-use avian2d::{math::*, prelude::*};
+use avian2d::prelude::*;
 use bevy::prelude::*;
 use examples_common_2d::ExampleCommonPlugin;
 
@@ -37,7 +37,7 @@ fn spawn_tumbler(
 
     commands.spawn((
         RigidBody::Kinematic,
-        AngularVelocity((25.0 as Scalar).to_radians()),
+        AngularVelocity(25f32.to_radians()),
         Transform::default(),
         Visibility::default(),
         children![

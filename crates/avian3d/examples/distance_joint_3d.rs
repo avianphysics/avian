@@ -1,4 +1,4 @@
-use avian3d::{math::*, prelude::*};
+use avian3d::prelude::*;
 use bevy::prelude::*;
 use examples_common_3d::ExampleCommonPlugin;
 
@@ -44,7 +44,7 @@ fn setup(
     // Add a distance joint to keep the cubes at a certain distance from each other.
     commands.spawn(
         DistanceJoint::new(static_cube, dynamic_cube)
-            .with_local_anchor2(Vector::splat(0.5))
+            .with_local_anchor2(Vec3::splat(0.5))
             .with_limits(1.5, 1.5)
             .with_compliance(1.0 / 400.0),
     );

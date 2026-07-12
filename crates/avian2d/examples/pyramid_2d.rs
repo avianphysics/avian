@@ -1,4 +1,4 @@
-use avian2d::{math::Scalar, prelude::*};
+use avian2d::prelude::*;
 use bevy::{camera::ScalingMode, prelude::*};
 use examples_common_2d::ExampleCommonPlugin;
 
@@ -44,7 +44,7 @@ fn setup(
     let base_count = 50;
     let h = 0.5;
     let box_size = 2.0 * h;
-    let collider = Collider::rectangle(box_size as Scalar, box_size as Scalar);
+    let collider = Collider::rectangle(box_size, box_size);
     let shift = h;
     for i in 0..base_count {
         let y = (2.0 * i as f32 + 1.0) * shift * 0.99;

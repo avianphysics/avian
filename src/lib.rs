@@ -537,8 +537,6 @@ pub mod prelude {
     pub use crate::diagnostics::PhysicsDiagnosticsPlugin;
     #[cfg(feature = "diagnostic_ui")]
     pub use crate::diagnostics::ui::{PhysicsDiagnosticsUiPlugin, PhysicsDiagnosticsUiSettings};
-    #[cfg(feature = "default-collider")]
-    pub(crate) use crate::physics_transform::RotationValue;
     #[cfg(feature = "bevy_picking")]
     pub use crate::picking::{
         PhysicsPickable, PhysicsPickingFilter, PhysicsPickingPlugin, PhysicsPickingSettings,
@@ -567,7 +565,6 @@ pub mod prelude {
         diagnostics::AppDiagnosticsExt,
         math::*,
         physics_transform::{PreSolveDeltaPosition, PreSolveDeltaRotation},
-        schedule::TimePrecisionAdjusted,
     };
     pub use avian_derive::*;
 }
@@ -681,7 +678,7 @@ use prelude::*;
 /// ```
 pub struct PhysicsPlugins {
     schedule: Interned<dyn ScheduleLabel>,
-    length_unit: Scalar,
+    length_unit: f32,
 }
 
 impl PhysicsPlugins {
@@ -743,7 +740,7 @@ impl PhysicsPlugins {
     /// # #[cfg(not(feature = "2d"))]
     /// # fn main() {} // Doc test needs main
     /// ```
-    pub fn with_length_unit(mut self, unit: Scalar) -> Self {
+    pub fn with_length_unit(mut self, unit: f32) -> Self {
         self.length_unit = unit;
         self
     }
@@ -814,7 +811,7 @@ impl<H: CollisionHooks> PhysicsPluginsWithHooks<H> {
     /// that adjusts the engine's internal properties to the scale of the world.
     ///
     /// See [`PhysicsPlugins::with_length_unit`] for more information.
-    pub fn with_length_unit(mut self, unit: Scalar) -> Self {
+    pub fn with_length_unit(mut self, unit: f32) -> Self {
         self.plugins.length_unit = unit;
         self
     }

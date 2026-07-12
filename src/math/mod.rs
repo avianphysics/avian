@@ -4,10 +4,11 @@
 
 #![allow(unused_imports)]
 
+mod drot2;
+pub use drot2::*;
+
 #[cfg(feature = "f32")]
 mod single;
-use approx::abs_diff_ne;
-use glam_matrix_extras::{SymmetricDMat2, SymmetricDMat3, SymmetricMat2, SymmetricMat3};
 #[cfg(feature = "f32")]
 pub use single::*;
 
@@ -16,7 +17,9 @@ mod double;
 #[cfg(feature = "f64")]
 pub use double::*;
 
+use approx::abs_diff_ne;
 use bevy_math::{prelude::*, *};
+use glam_matrix_extras::{SymmetricDMat2, SymmetricDMat3, SymmetricMat2, SymmetricMat3};
 
 /// The active dimension.
 #[cfg(feature = "2d")]
@@ -58,35 +61,39 @@ pub type Dir = Dir2;
 #[cfg(feature = "3d")]
 pub type Dir = Dir3;
 
-/// The vector type for angular values chosen based on the dimension.
+/// The `f32` vector type for angular values chosen based on the dimension.
 #[cfg(feature = "2d")]
-pub(crate) type AngularVector = Scalar;
+pub(crate) type AngularVectorF32 = f32;
 
-/// The vector type for angular values chosen based on the dimension.
+/// The `f32` vector type for angular values chosen based on the dimension.
 #[cfg(feature = "3d")]
-pub(crate) type AngularVector = Vector;
+pub(crate) type AngularVectorF32 = VectorF32;
+
+/// The `f32` matrix type chosen based on the dimension.
+#[cfg(feature = "3d")]
+pub(crate) type MatrixF32 = Mat3;
 
 /// The symmetric tensor type chosen based on the dimension.
 /// Often used for angular inertia.
 ///
 /// In 2D, this is a scalar, while in 3D, it is a 3x3 matrix.
 #[cfg(feature = "2d")]
-pub(crate) type SymmetricTensor = Scalar;
+pub(crate) type SymmetricTensor = f32;
 
 /// The symmetric tensor type chosen based on the dimension.
 /// Often used for angular inertia.
 ///
 /// In 2D, this is a scalar, while in 3D, it is a 3x3 matrix.
 #[cfg(feature = "3d")]
-pub(crate) type SymmetricTensor = SymmetricMatrix;
+pub(crate) type SymmetricTensor = SymmetricMat3;
 
-/// The rotation type chosen based on the dimension.
+/// The `f32` rotation type chosen based on the dimension.
 #[cfg(feature = "2d")]
-pub(crate) type Rot = crate::physics_transform::Rotation;
+pub(crate) type RotF32 = Rot2;
 
-/// The rotation type chosen based on the dimension.
+/// The `f32` rotation type chosen based on the dimension.
 #[cfg(feature = "3d")]
-pub(crate) type Rot = Quaternion;
+pub(crate) type RotF32 = Quat;
 
 /// The isometry type chosen based on the dimension.
 #[cfg(feature = "2d")]
@@ -110,6 +117,20 @@ pub trait AsF32 {
     type F32;
     /// Returns the `f32` version of this type.
     fn f32(&self) -> Self::F32;
+}
+
+impl AsF32 for f32 {
+    type F32 = Self;
+    fn f32(&self) -> Self::F32 {
+        *self
+    }
+}
+
+impl AsF32 for f64 {
+    type F32 = f32;
+    fn f32(&self) -> Self::F32 {
+        *self as f32
+    }
 }
 
 impl AsF32 for DVec3 {
@@ -229,12 +250,35 @@ impl AsF32 for SymmetricMat3 {
 }
 
 #[cfg(feature = "2d")]
-pub(crate) fn cross(a: Vector, b: Vector) -> Scalar {
+impl AsF32 for Rotation {
+    type F32 = Rot2;
+    fn f32(&self) -> Self::F32 {
+        Rot2::from_sin_cos(self.sin, self.cos)
+    }
+}
+
+#[cfg(feature = "3d")]
+impl AsF32 for Rotation {
+    type F32 = Quat;
+    fn f32(&self) -> Self::F32 {
+        self.0.f32()
+    }
+}
+
+impl AsF32 for Rot2 {
+    type F32 = Self;
+    fn f32(&self) -> Self::F32 {
+        *self
+    }
+}
+
+#[cfg(feature = "2d")]
+pub(crate) fn cross(a: Vec2, b: Vec2) -> f32 {
     a.perp_dot(b)
 }
 
 #[cfg(feature = "3d")]
-pub(crate) fn cross(a: Vector, b: Vector) -> Vector {
+pub(crate) fn cross(a: Vec3, b: Vec3) -> Vec3 {
     a.cross(b)
 }
 
@@ -576,6 +620,75 @@ impl MatExt for SymmetricDMat3 {
     }
 }
 
+#[cfg(feature = "2d")]
+pub(crate) trait Rot2Ext {
+    /// Computes the chord length of the rotation, which is the straight-line
+    /// distance between the start and end points of the rotation on a unit circle.
+    fn chord_length(self) -> f32;
+
+    /// Adds the given counterclockiwise angle in radians to the [`Rotation`].
+    /// Uses small-angle approximation.
+    #[must_use]
+    fn add_angle_fast(&self, radians: f32) -> Self;
+}
+
+#[cfg(feature = "2d")]
+impl Rot2Ext for Rot2 {
+    #[inline]
+    fn chord_length(self) -> f32 {
+        // The chord length traveled by a point rotated by `θ` on a unit circle
+        // is `2 * sin(θ / 2)`.
+        //
+        // In 2D, `2 * sin(θ / 2) = sqrt(2 * (1 - cos(θ)))`, using the stored cosine.
+        //
+        // TODO: A "2D quaternion" that stores cos(theta / 2) and sin(theta / 2)
+        //       could avoid the sqrt and be more accurate in some places.
+        (2.0 * (1.0 - self.cos)).max(0.0).sqrt()
+    }
+
+    #[inline]
+    fn add_angle_fast(&self, radians: f32) -> Self {
+        let (sin, cos) = (self.sin + radians * self.cos, self.cos - radians * self.sin);
+        let magnitude_squared = sin * sin + cos * cos;
+        let magnitude_recip = if magnitude_squared > 0.0 {
+            magnitude_squared.sqrt().recip()
+        } else {
+            0.0
+        };
+        Rot2::from_sin_cos(sin * magnitude_recip, cos * magnitude_recip)
+    }
+}
+
+#[cfg(feature = "3d")]
+pub(crate) trait QuatExt {
+    /// Computes the chord length of the rotation, which is the straight-line
+    /// distance between the start and end points of the rotation on a unit sphere.
+    fn chord_length(self) -> f32;
+
+    /// Returns `self` after an approximate normalization,
+    /// assuming the value is already nearly normalized.
+    /// Useful for preventing numerical error accumulation.
+    #[must_use]
+    fn fast_renormalize(self) -> Self;
+}
+
+#[cfg(feature = "3d")]
+impl QuatExt for Quat {
+    #[inline]
+    fn chord_length(self) -> f32 {
+        2.0 * self.xyz().length()
+    }
+
+    #[inline]
+    fn fast_renormalize(self) -> Self {
+        // First-order Tayor approximation
+        // 1/L = (L^2)^(-1/2) ≈ 1 - (L^2 - 1) / 2 = (3 - L^2) / 2
+        let length_squared = self.length_squared();
+        let approx_inv_length = 0.5 * (3.0 - length_squared);
+        self * approx_inv_length
+    }
+}
+
 #[allow(clippy::unnecessary_cast)]
 #[cfg(all(feature = "2d", any(feature = "parry-f32", feature = "parry-f64")))]
 pub(crate) fn pose_to_isometry(pose: &parry::math::Pose) -> Isometry2d {
@@ -596,11 +709,17 @@ use crate::prelude::*;
 ))]
 pub(crate) fn make_pose(
     position: impl Into<Position>,
-    rotation: impl Into<Rotation>,
+    rotation: impl Into<RotF32>,
 ) -> parry::math::Pose2 {
     let position: Position = position.into();
-    let rotation: Rotation = rotation.into();
-    parry::math::Pose2::new(position.0, rotation.as_radians())
+    let rotation: RotF32 = rotation.into();
+    parry::math::Pose2::from_parts(
+        position.0,
+        parry::math::Rot2::from_cos_sin_unchecked(
+            rotation.cos.adjust_precision(),
+            rotation.sin.adjust_precision(),
+        ),
+    )
 }
 
 #[cfg(all(
@@ -610,11 +729,11 @@ pub(crate) fn make_pose(
 ))]
 pub(crate) fn make_pose(
     position: impl Into<Position>,
-    rotation: impl Into<Rotation>,
+    rotation: impl Into<RotF32>,
 ) -> parry::math::Pose3 {
     let position: Position = position.into();
-    let rotation: Rotation = rotation.into();
-    parry::math::Pose3::from_parts(position.0, rotation.0)
+    let rotation: RotF32 = rotation.into();
+    parry::math::Pose3::from_parts(position.0, rotation.adjust_precision())
 }
 
 /// Computes the skew-symmetric matrix corresponding to the given vector.
@@ -636,7 +755,7 @@ pub fn skew_symmetric_mat3(v: Vector3) -> Matrix3 {
 /// The `axis` must be a unit vector.
 #[inline]
 #[must_use]
-pub fn orthonormal_basis_from_vec(axis: Vector) -> Rot {
+pub fn orthonormal_basis_from_vec(axis: VectorF32) -> RotF32 {
     #[cfg(feature = "2d")]
     {
         let normal = axis.perp();
@@ -654,15 +773,88 @@ pub fn orthonormal_basis_from_vec(axis: Vector) -> Rot {
 /// Each axis must be a unit vector.
 #[inline]
 #[must_use]
-pub fn orthonormal_basis(axes: [Vector; DIM]) -> Rot {
+pub fn orthonormal_basis(axes: [VectorF32; DIM]) -> RotF32 {
     #[cfg(feature = "2d")]
     {
-        let mat = Matrix2::from_cols(axes[0], axes[1]);
-        crate::physics_transform::Rotation::from(mat)
+        Rot2::from_sin_cos(axes[1].x, axes[0].x)
     }
     #[cfg(feature = "3d")]
     {
-        let mat = Matrix3::from_cols(axes[0], axes[1], axes[2]);
-        Quaternion::from_mat3(&mat)
+        let mat = Mat3::from_cols(axes[0], axes[1], axes[2]);
+        Quat::from_mat3(&mat)
+    }
+}
+
+/// Returns a single-precision vector with each component
+/// being at least as small as the corresponding component
+/// of the input vector.
+///
+/// This is used for converting double-precision vectors
+/// to single-precision vectors for the minimum coordinates
+/// of bounding boxes, where they must contain the original
+/// shape even after precision loss far from the origin.
+#[inline(always)]
+#[must_use]
+pub fn next_down_vector(vec: Vector) -> VectorF32 {
+    #[cfg(feature = "f32")]
+    {
+        vec
+    }
+    #[cfg(feature = "f64")]
+    {
+        #[cfg(feature = "2d")]
+        {
+            let [x, y] = [vec.x as f32, vec.y as f32];
+            VectorF32::new(
+                if x as f64 <= vec.x { x } else { x.next_down() },
+                if y as f64 <= vec.y { y } else { y.next_down() },
+            )
+        }
+        #[cfg(feature = "3d")]
+        {
+            let [x, y, z] = [vec.x as f32, vec.y as f32, vec.z as f32];
+            VectorF32::new(
+                if x as f64 <= vec.x { x } else { x.next_down() },
+                if y as f64 <= vec.y { y } else { y.next_down() },
+                if z as f64 <= vec.z { z } else { z.next_down() },
+            )
+        }
+    }
+}
+
+/// Returns a single-precision vector with each component
+/// being at least as large as the corresponding component
+/// of the input vector.
+///
+/// This is used for converting double-precision vectors
+/// to single-precision vectors for the maximum coordinates
+/// of bounding boxes, where they must contain the original
+/// shape even after precision loss far from the origin.
+#[inline(always)]
+#[must_use]
+pub fn next_up_vector(vec: Vector) -> VectorF32 {
+    #[cfg(feature = "f32")]
+    {
+        vec
+    }
+    #[cfg(feature = "f64")]
+    {
+        #[cfg(feature = "2d")]
+        {
+            let [x, y] = [vec.x as f32, vec.y as f32];
+            VectorF32::new(
+                if x as f64 >= vec.x { x } else { x.next_up() },
+                if y as f64 >= vec.y { y } else { y.next_up() },
+            )
+        }
+        #[cfg(feature = "3d")]
+        {
+            let [x, y, z] = [vec.x as f32, vec.y as f32, vec.z as f32];
+            VectorF32::new(
+                if x as f64 >= vec.x { x } else { x.next_up() },
+                if y as f64 >= vec.y { y } else { y.next_up() },
+                if z as f64 >= vec.z { z } else { z.next_up() },
+            )
+        }
     }
 }
