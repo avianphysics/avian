@@ -22,7 +22,6 @@ default = [
     "bevy_picking",
 ]
 2d = []
-f32 = []
 f64 = []
 
 debug-plugin = ["bevy/bevy_gizmos", "bevy/bevy_render"]
@@ -37,8 +36,6 @@ enhanced-determinism = [
 ]
 
 default-collider = []
-# We unfortunately can't reuse the f32 and f64 features for this,
-# because Parry uses separate crates for f32 and f64.
 parry-f32 = ["dep:parry2d", "default-collider"]
 parry-f64 = ["f64", "dep:parry2d-f64", "default-collider"]
 

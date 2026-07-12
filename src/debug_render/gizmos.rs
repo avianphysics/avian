@@ -283,7 +283,7 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
                             sub_pos.rotation.cos().f32(),
                         );
                     #[cfg(feature = "3d")]
-                    let rot = rotation.mul_quat(sub_pos.rotation).normalize();
+                    let rot = rotation.mul_quat(sub_pos.rotation.f32()).normalize();
                     self.draw_collider(&Collider::from(shape.to_owned()), pos, rot, color);
                 }
             }

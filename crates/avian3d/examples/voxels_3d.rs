@@ -6,7 +6,7 @@
 #![allow(clippy::unnecessary_cast)]
 
 use avian3d::{
-    math::{RVec3, Real},
+    math::{RVec3, Real, ToRealPrecision},
     prelude::*,
 };
 use bevy::{
@@ -41,7 +41,7 @@ fn setup(
 ) {
     // Create a voxelized bowl-like surface by sampling points.
     let mut points = vec![];
-    let voxel_size = RVec3::splat(0.25);
+    let voxel_size = Vec3::splat(0.25);
     let n = 200;
     for i in 0..n {
         for j in 0..n {
@@ -49,7 +49,7 @@ fn setup(
             let z = j as Real;
             let y =
                 -40.0 * ((x / n as Real * PI).sin() * (z / n as Real * PI).sin()).clamp(0.1, 0.9);
-            points.push(voxel_size * RVec3::new(x, y, z));
+            points.push(voxel_size.real() * RVec3::new(x, y, z));
         }
     }
 

@@ -8,7 +8,7 @@ use bevy::reflect::prelude::*;
 use bevy::reflect::{ReflectDeserialize, ReflectSerialize};
 
 /// A double-precision version of [`DRot2`].
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[doc(alias = "drotation", alias = "drotation2d", alias = "drotation_2d")]

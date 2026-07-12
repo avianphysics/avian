@@ -15,10 +15,10 @@
 
 #![allow(clippy::doc_markdown)]
 
-use core::time::Duration;
+use core::{f32::consts::PI, time::Duration};
 
 use crate::{
-    math::{PI, RVector},
+    math::{RVector, Real},
     prelude::*,
 };
 use bevy::{prelude::*, time::TimeUpdateStrategy};
@@ -60,7 +60,7 @@ fn cross_platform_determinism_2d() {
     let hash = compute_hash(app.world(), query);
 
     // Update this value if simulation behavior changes.
-    let expected = 0x89ba82f7;
+    let expected = 0x19d28f3;
 
     assert!(
         hash == expected,
@@ -74,7 +74,7 @@ fn cross_platform_determinism_2d() {
 #[repr(C)]
 struct Isometry {
     translation: RVector,
-    rotation: f32,
+    rotation: Real,
 }
 
 fn compute_hash(world: &World, mut query: QueryState<(&Position, &Rotation)>) -> u32 {
@@ -82,7 +82,7 @@ fn compute_hash(world: &World, mut query: QueryState<(&Position, &Rotation)>) ->
     for (position, rotation) in query.iter(world) {
         let isometry = Isometry {
             translation: position.0,
-            rotation: rotation.as_radians(),
+            rotation: rotation.as_radians() as Real,
         };
         hash = djb2_hash(hash, bytemuck::bytes_of(&isometry));
     }
