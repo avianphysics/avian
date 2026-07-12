@@ -3,10 +3,7 @@
 #![allow(clippy::unnecessary_cast)]
 
 use avian2d::{
-    collision::{
-        collider::{BoundedCollider, NoEntity},
-        contact_types::PackedFeatureId,
-    },
+    collision::{collider::BoundedCollider, contact_types::PackedFeatureId},
     math::*,
     prelude::*,
 };
@@ -66,7 +63,7 @@ impl BoundedCollider for CircleCollider {
     // a custom `SystemParam` here. In this case, we don't need any.
     type Context = ();
     // If your collider needs Entity available, set this to NeedsEntity
-    type EntityUsage = NoEntity;
+    type EntityUsage = ();
 
     fn aabb_with_context(
         &self,

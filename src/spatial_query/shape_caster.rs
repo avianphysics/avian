@@ -587,6 +587,33 @@ impl MapEntities for ShapeHits {
 }
 
 /// Data related to a hit during a [shapecast](spatial_query#shapecasting).
+/// See [`ShapeHitData`] for the more common type
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ShapeHitDataWithoutEntity {
+    /// How far the shape travelled before the hit.
+    pub distance: Scalar,
+    /// The point where the shapes touch
+    pub point: Vector,
+    /// The normal from the collider to the cast shape
+    pub normal: Vector,
+    /// How far the shapes penetrate
+    pub penetration: f32,
+}
+
+impl ShapeHitDataWithoutEntity {
+    /// Convert to a [`ShapeHitData`] by filling in the [`Entity`]
+    pub fn with_entity(self, entity: Entity) -> ShapeHitData {
+        ShapeHitData {
+            entity,
+            distance: self.distance,
+            point: self.point,
+            normal: self.normal,
+            penetration: self.penetration,
+        }
+    }
+}
+
+/// Data related to a hit during a [shapecast](spatial_query#shapecasting).
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
@@ -594,28 +621,15 @@ impl MapEntities for ShapeHits {
 pub struct ShapeHitData {
     /// The entity of the collider that was hit by the shape.
     pub entity: Entity,
-
     /// How far the shape travelled before the initial hit.
     #[doc(alias = "time_of_impact")]
     pub distance: Scalar,
-
-    /// The closest point on the shape that was hit, expressed in world space.
-    ///
-    /// If the shapes are penetrating or the target distance is greater than zero,
-    /// this will be different from `point2`.
-    pub point1: Vector,
-
-    /// The closest point on the shape that was cast, expressed in world space.
-    ///
-    /// If the shapes are penetrating or the target distance is greater than zero,
-    /// this will be different from `point1`.
-    pub point2: Vector,
-
-    /// The outward surface normal on the hit shape at `point1`, expressed in world space.
-    pub normal1: Vector,
-
-    /// The outward surface normal on the cast shape at `point2`, expressed in world space.
-    pub normal2: Vector,
+    /// The closest point where the shapes touch
+    pub point: Vector,
+    /// The normal from the collider to the cast shape
+    pub normal: Vector,
+    /// How far the shapes penetrate
+    pub penetration: f32,
 }
 
 impl MapEntities for ShapeHitData {

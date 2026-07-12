@@ -57,7 +57,7 @@ pub trait IntoCollider<C: AnyCollider> {
 #[derive(Deref)]
 pub struct ColliderContext<'a, 'w, 's, T: ReadOnlySystemParam, E: EntityUsage> {
     /// The collider entity involved in the operation.
-    pub collider: E::Entity,
+    pub collider: E,
     #[deref]
     item: &'a SystemParamItem<'w, 's, T>,
 }
@@ -81,7 +81,7 @@ impl<'a, 'w, 's, T: ReadOnlySystemParam, E: EntityUsage> ColliderContext<'a, 'w,
     }
 }
 
-impl ColliderContext<'_, '_, '_, (), NoEntity> {
+impl ColliderContext<'_, '_, '_, (), ()> {
     /// No context is needed for this collider.
     const NO_CONTEXT: Self = Self {
         collider: (),
@@ -89,7 +89,7 @@ impl ColliderContext<'_, '_, '_, (), NoEntity> {
     };
 }
 
-impl<'a, 'w, 's, T: ReadOnlySystemParam> ColliderContext<'a, 'w, 's, T, NoEntity> {
+impl<'a, 'w, 's, T: ReadOnlySystemParam> ColliderContext<'a, 'w, 's, T, ()> {
     /// Constructs a [`ColliderContext`]
     pub fn no_entity(item: &'a <T as SystemParam>::Item<'w, 's>) -> Self {
         Self { collider: (), item }
@@ -100,9 +100,9 @@ impl<'a, 'w, 's, T: ReadOnlySystemParam> ColliderContext<'a, 'w, 's, T, NoEntity
 #[derive(Deref)]
 pub struct ColliderPairContext<'a, 'w, 's, T: ReadOnlySystemParam, E: EntityUsage> {
     /// The first collider entity involved in the operation.
-    pub collider1: E::Entity,
+    pub collider1: E,
     /// The second collider entity involved in the operation.
-    pub collider2: E::Entity,
+    pub collider2: E,
     #[deref]
     item: &'a SystemParamItem<'w, 's, T>,
 }
@@ -122,7 +122,7 @@ impl<'a, 'w, 's, T: ReadOnlySystemParam, E: EntityUsage> ColliderPairContext<'a,
     }
 }
 
-impl ColliderPairContext<'_, '_, '_, (), NoEntity> {
+impl ColliderPairContext<'_, '_, '_, (), ()> {
     /// No context is needed for this collider pair.
     const NO_CONTEXT: Self = Self {
         collider1: (),
@@ -131,28 +131,22 @@ impl ColliderPairContext<'_, '_, '_, (), NoEntity> {
     };
 }
 
-/// A trait to indicate the [`Entity`] usage of a [`BoundedCollider`] `Context`. See [`NoEntity`] and [`NeedsEntity`].
-pub trait EntityUsage {
-    /// The type the [`Entity`] is stored in (`()` vs [`Entity`])
-    type Entity: Clone + Copy;
+/// A trait to indicate the [`Entity`] usage of a [`BoundedCollider`] `Context`. Use [`Entity`] or `()`.
+pub trait EntityUsage: Clone + Copy {
     /// Convert an [`Entity`] to the stored type
-    fn to_field(e: Entity) -> Self::Entity;
+    fn to_field(e: Entity) -> Self;
 }
 
-/// A type indicating an entity is required for a [`BoundedCollider`]'s `Context`
-pub struct NeedsEntity;
-impl EntityUsage for NeedsEntity {
-    type Entity = Entity;
-    fn to_field(e: Entity) -> Self::Entity {
+impl EntityUsage for Entity {
+    fn to_field(e: Entity) -> Self {
         e
     }
 }
 
-/// A type indicating no entity is used for a [`BoundedCollider`]'s `Context`
-pub struct NoEntity;
-impl EntityUsage for NoEntity {
-    type Entity = ();
-    fn to_field(_: Entity) {}
+impl EntityUsage for () {
+    fn to_field(_: Entity) -> Self {
+        ()
+    }
 }
 
 /// A collider type that can be bounded by a volume. Required by [`AnyCollider`], but seperately useful
@@ -339,9 +333,7 @@ pub trait AnyCollider:
 
 /// A simplified wrapper around [`AnyCollider`] that doesn't require passing in the context for
 /// implementations that don't need context
-pub trait SimpleCollider:
-    BoundedCollider<Context = (), EntityUsage = NoEntity> + AnyCollider
-{
+pub trait SimpleCollider: BoundedCollider<Context = (), EntityUsage = ()> + AnyCollider {
     /// Computes the [Axis-Aligned Bounding Box](ColliderAabb) of the collider
     /// with the given position and rotation.
     ///
@@ -423,7 +415,7 @@ pub trait SimpleCollider:
     }
 }
 
-impl<C: BoundedCollider<Context = (), EntityUsage = NoEntity> + AnyCollider> SimpleCollider for C {}
+impl<C: BoundedCollider<Context = (), EntityUsage = ()> + AnyCollider> SimpleCollider for C {}
 
 /// A trait for colliders that support scaling.
 pub trait ScalableCollider: AnyCollider {
@@ -456,9 +448,9 @@ pub trait ShapeCastSettings {
 /// A trait for spatial query support for a collider type
 pub trait QueryCollider: BoundedCollider + AnyCollider {
     /// The shape type that is used when casting a collider, if possible this should be `Self`
-    type CastShape: BoundedCollider<Context = Self::Context, EntityUsage = NoEntity>;
+    type CastShape: BoundedCollider<Context = Self::Context, EntityUsage = ()>;
     /// The shape type that is used when casting a collider, if possible this should be `Self`
-    type IntersectionShape: BoundedCollider<Context = Self::Context, EntityUsage = NoEntity>;
+    type IntersectionShape: BoundedCollider<Context = Self::Context, EntityUsage = ()>;
 
     /// A type to used as settings for shape casting queries
     type ShapeCastSettings: ShapeCastSettings;
@@ -576,7 +568,7 @@ pub trait QueryCollider: BoundedCollider + AnyCollider {
         shape_direction: Vector,
         settings: &Self::ShapeCastSettings,
         context: ColliderContext<Self::Context, Self::EntityUsage>,
-    ) -> Option<ShapeHitData>;
+    ) -> Option<ShapeHitDataWithoutEntity>;
 }
 
 /// A marker component that indicates that a [collider](Collider) is disabled

@@ -574,7 +574,7 @@ impl<C: QueryCollider> SpatialQuery<'_, '_, C> {
                     };
                     let context = ColliderContext::new(proxy.collider, &*self.context);
 
-                    let Some(mut hit) = collider.intersects_cast_shape(
+                    let Some(hit) = collider.intersects_cast_shape(
                         *position,
                         *rotation,
                         shape,
@@ -588,8 +588,7 @@ impl<C: QueryCollider> SpatialQuery<'_, '_, C> {
                     };
                     if hit.distance < closest_distance {
                         closest_distance = hit.distance;
-                        hit.entity = proxy.collider;
-                        closest_hit = Some(hit);
+                        closest_hit = Some(hit.with_entity(proxy.collider));
                     }
 
                     hit.distance
@@ -778,7 +777,7 @@ impl<C: QueryCollider> SpatialQuery<'_, '_, C> {
                     };
                     let context = ColliderContext::new(proxy.collider, &*self.context);
 
-                    let Some(mut hit) = collider.intersects_cast_shape(
+                    let Some(hit) = collider.intersects_cast_shape(
                         position.0,
                         *rotation,
                         shape,
@@ -790,9 +789,8 @@ impl<C: QueryCollider> SpatialQuery<'_, '_, C> {
                     ) else {
                         return true;
                     };
-                    hit.entity = proxy.collider;
 
-                    callback(hit)
+                    callback(hit.with_entity(proxy.collider))
                 },
             );
         });

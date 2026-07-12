@@ -759,7 +759,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     )]
     ///         // Then project the velocity to make sure it no longer points towards the contact plane.
     ///         controller.velocity =
-    ///             MoveAndSlide::project_velocity(velocity, &[Dir::new_unchecked(hit.normal1.f32())])
+    ///             MoveAndSlide::project_velocity(velocity, &[Dir::new_unchecked(hit.normal.f32())])
     ///     } else {
     ///         // We traveled the full distance without colliding.
     #[cfg_attr(
@@ -813,10 +813,10 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             distance: safe_distance,
             collision_distance: distance,
             entity: shape_hit.entity,
-            point1: shape_hit.point1,
-            point2: shape_hit.point2,
-            normal1: shape_hit.normal1,
-            normal2: shape_hit.normal2,
+            point1: shape_hit.point,
+            point2: shape_hit.point,
+            normal1: shape_hit.normal,
+            normal2: -shape_hit.normal,
         })
     }
 
@@ -824,7 +824,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// The result will never be negative, so if the hit is already closer than `skin_width`, the returned distance will be zero.
     #[must_use]
     fn pull_back(hit: ShapeHitData, dir: Dir, skin_width: Scalar) -> Scalar {
-        let dot = dir.adjust_precision().dot(-hit.normal1).max(DOT_EPSILON);
+        let dot = dir.adjust_precision().dot(-hit.normal).max(DOT_EPSILON);
         let skin_distance = skin_width / dot;
         (hit.distance - skin_distance).max(0.0)
     }

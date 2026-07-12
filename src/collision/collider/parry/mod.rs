@@ -12,7 +12,7 @@ pub use primitives2d::{EllipseColliderShape, RegularPolygonColliderShape};
 
 use super::EnlargedAabb;
 use crate::{
-    collision::collider::{BoundedCollider, NoEntity, QueryCollider},
+    collision::collider::{BoundedCollider, QueryCollider},
     make_pose,
     prelude::*,
 };
@@ -407,13 +407,13 @@ impl Default for Collider {
 
 impl BoundedCollider for Collider {
     type Context = ();
-    type EntityUsage = NoEntity;
+    type EntityUsage = ();
 
     fn aabb_with_context(
         &self,
         position: Vector,
         rotation: impl Into<Rotation>,
-        _: ColliderContext<(), NoEntity>,
+        _: ColliderContext<(), ()>,
     ) -> ColliderAabb {
         let aabb = self
             .shape_scaled()
@@ -435,7 +435,7 @@ impl AnyCollider for Collider {
         rotation2: impl Into<Rotation>,
         prediction_distance: Scalar,
         manifolds: &mut Vec<ContactManifold>,
-        _: ColliderPairContext<(), NoEntity>,
+        _: ColliderPairContext<(), ()>,
     ) {
         contact_query::contact_manifolds(
             self,
@@ -449,20 +449,20 @@ impl AnyCollider for Collider {
         )
     }
 
-    fn ccd_thickness_with_context(&self, _context: ColliderContext<(), NoEntity>) -> Scalar {
+    fn ccd_thickness_with_context(&self, _context: ColliderContext<(), ()>) -> Scalar {
         self.shape_scaled().ccd_thickness()
     }
 
     fn max_distance_to_point_with_context(
         &self,
         point: Vector,
-        _context: ColliderContext<(), NoEntity>,
+        _context: ColliderContext<(), ()>,
     ) -> Scalar {
         let bounding_sphere = self.shape_scaled().compute_local_bounding_sphere();
         point.distance(bounding_sphere.center) + bounding_sphere.radius
     }
 
-    fn bounding_radius_with_context(&self, _context: ColliderContext<(), NoEntity>) -> Scalar {
+    fn bounding_radius_with_context(&self, _context: ColliderContext<(), ()>) -> Scalar {
         let center_of_mass = self.center_of_mass().adjust_precision();
         self.max_distance_to_point(center_of_mass)
     }
@@ -479,7 +479,7 @@ impl QueryCollider for Collider {
         rotation: impl Into<Rotation>,
         point: Vector,
         solid: bool,
-        _: ColliderContext<(), NoEntity>,
+        _: ColliderContext<(), ()>,
     ) -> (Vector, bool) {
         let projection =
             self.shape_scaled()
@@ -493,7 +493,7 @@ impl QueryCollider for Collider {
         rotation: impl Into<Rotation>,
         point: Vector,
         solid: bool,
-        _: ColliderContext<(), NoEntity>,
+        _: ColliderContext<(), ()>,
     ) -> Scalar {
         self.shape_scaled()
             .distance_to_point(&make_pose(translation, rotation), point, solid)
@@ -504,7 +504,7 @@ impl QueryCollider for Collider {
         translation: impl Into<Position>,
         rotation: impl Into<Rotation>,
         point: Vector,
-        _: ColliderContext<(), NoEntity>,
+        _: ColliderContext<(), ()>,
     ) -> bool {
         self.shape_scaled()
             .contains_point(&make_pose(translation, rotation), point)
@@ -518,7 +518,7 @@ impl QueryCollider for Collider {
         ray_direction: Vector,
         max_distance: Scalar,
         solid: bool,
-        _: ColliderContext<(), NoEntity>,
+        _: ColliderContext<(), ()>,
     ) -> Option<(Scalar, Vector)> {
         let hit = self.shape_scaled().cast_ray_and_get_normal(
             &make_pose(translation, rotation),
@@ -536,7 +536,7 @@ impl QueryCollider for Collider {
         ray_origin: Vector,
         ray_direction: Vector,
         max_distance: Scalar,
-        _: ColliderContext<(), NoEntity>,
+        _: ColliderContext<(), ()>,
     ) -> bool {
         self.shape_scaled().intersects_ray(
             &make_pose(translation, rotation),
@@ -552,7 +552,7 @@ impl QueryCollider for Collider {
         shape: &Self::IntersectionShape,
         shape_position: impl Into<Position>,
         shape_rotation: impl Into<Rotation>,
-        _: ColliderContext<(), NoEntity>,
+        _: ColliderContext<(), ()>,
     ) -> bool {
         _ = (translation, rotation, shape, shape_position, shape_rotation);
         todo!()
@@ -567,8 +567,8 @@ impl QueryCollider for Collider {
         shape_rotation: impl Into<Rotation>,
         shape_direction: Vector,
         settings: &Self::ShapeCastSettings,
-        _: ColliderContext<(), NoEntity>,
-    ) -> Option<ShapeHitData> {
+        _: ColliderContext<(), ()>,
+    ) -> Option<ShapeHitDataWithoutEntity> {
         let pose1 = make_pose(translation, rotation);
         let pose2 = make_pose(shape_origin, shape_rotation);
 
@@ -588,13 +588,16 @@ impl QueryCollider for Collider {
         )
         .ok()
         .flatten()
-        .map(|hit| ShapeHitData {
-            entity: Entity::PLACEHOLDER,
-            point1: pose1 * hit.witness1,
-            point2: pose2 * hit.witness2 + shape_direction.adjust_precision() * hit.time_of_impact,
-            normal1: pose1.rotation * hit.normal1,
-            normal2: pose2.rotation * hit.normal2,
-            distance: hit.time_of_impact,
+        .map(|hit| {
+            let p1 = pose1 * hit.witness1;
+            let p2 = pose2 * hit.witness2 + shape_direction.adjust_precision() * hit.time_of_impact;
+            let normal = pose1.rotation * hit.normal1;
+            ShapeHitDataWithoutEntity {
+                point: p1,
+                normal,
+                distance: hit.time_of_impact,
+                penetration: (p2 - p1).dot(normal),
+            }
         })
     }
 }
