@@ -7,7 +7,7 @@ use bevy::reflect::prelude::*;
 #[cfg(feature = "serialize")]
 use bevy::reflect::{ReflectDeserialize, ReflectSerialize};
 
-/// A double-precision version of [`DRot2`].
+/// A double-precision version of [`Rot2`].
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
