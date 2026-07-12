@@ -63,7 +63,7 @@ jobs:
             - name: Install Linux dependencies
               run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev libx264-164 libx264-dev
             - name: Run cargo check
-              run: cargo check --locked --all-targets --no-default-features --features 2d,3d,f32
+              run: cargo check --locked --all-targets --no-default-features --features 2d,3d
 
     docs:
         name: Check Documentation
