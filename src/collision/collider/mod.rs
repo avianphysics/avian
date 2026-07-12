@@ -144,9 +144,7 @@ impl EntityUsage for Entity {
 }
 
 impl EntityUsage for () {
-    fn to_field(_: Entity) -> Self {
-        ()
-    }
+    fn to_field(_: Entity) -> Self {}
 }
 
 /// A collider type that can be bounded by a volume. Required by [`AnyCollider`], but seperately useful
