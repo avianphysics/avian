@@ -55,11 +55,11 @@
 //! ```
 #![cfg_attr(
     feature = "2d",
-    doc = "# use avian2d::{dynamics::{joints::EntityConstraint, solver::{solver_body::{SolverBody, SolverBodyInertia}, xpbd::{XpbdConstraint, XpbdConstraintSolverData}}}, math::Vector, prelude::*};"
+    doc = "# use avian2d::{dynamics::{joints::EntityConstraint, solver::{solver_body::{SolverBody, SolverBodyInertia}, xpbd::{XpbdConstraint, XpbdConstraintSolverData}}}, math::RVector, prelude::*};"
 )]
 #![cfg_attr(
     feature = "3d",
-    doc = "# use avian3d::{dynamics::{joints::EntityConstraint, solver::{solver_body::{SolverBody, SolverBodyInertia}, xpbd::{XpbdConstraint, XpbdConstraintSolverData}}}, math::Vector, prelude::*};"
+    doc = "# use avian3d::{dynamics::{joints::EntityConstraint, solver::{solver_body::{SolverBody, SolverBodyInertia}, xpbd::{XpbdConstraint, XpbdConstraintSolverData}}}, math::RVector, prelude::*};"
 )]
 //! # use bevy::{ecs::entity::{EntityMapper, MapEntities}, prelude::*};
 //! #
@@ -71,15 +71,22 @@
 //! // Store additional internal solver data for the constraint.
 //! struct CustomConstraintSolverData {
 //!     // Accumulated Lagrange multipliers for the `JointForces` component.
-//!     total_lagrange: Vector,
+//!     total_lagrange: Vec3,
 //! }
 //!
 //! impl XpbdConstraintSolverData for CustomConstraintSolverData {
 //!     fn clear_lagrange_multipliers(&mut self) {
-//!         self.total_lagrange = Vector::ZERO;
+//!         self.total_lagrange = Vec3::ZERO;
 //!     }
 //!
-//!     fn total_position_lagrange(&self) -> Vector {
+#![cfg_attr(
+    feature = "2d",
+    doc = "    fn total_position_lagrange(&self) -> Vec2 {"
+)]
+#![cfg_attr(
+    feature = "3d",
+    doc = "    fn total_position_lagrange(&self) -> Vec3 {"
+)]
 //!         self.total_lagrange
 //!     }
 //! }

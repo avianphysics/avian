@@ -42,7 +42,7 @@ pub const DIM: usize = 3;
 /// | `f32`     | `Vec2`  | `Vec3`  |
 /// | `f64`     | `DVec2` | `DVec3` |
 #[cfg(feature = "2d")]
-pub(crate) type RVector = RVec2;
+pub type RVector = RVec2;
 
 /// The real number vector type used by Avian.
 ///
@@ -53,7 +53,7 @@ pub(crate) type RVector = RVec2;
 /// | `f32`     | `Vec2`  | `Vec3`  |
 /// | `f64`     | `DVec2` | `DVec3` |
 #[cfg(feature = "3d")]
-pub(crate) type RVector = RVec3;
+pub type RVector = RVec3;
 
 /// The single-precision vector type used by Avian.
 ///
@@ -665,6 +665,11 @@ impl MatExt for SymmetricDMat3 {
     }
 }
 
+// TODO: Remove or refactor this
+#[allow(
+    dead_code,
+    reason = "Some internals need this, but only with specific features enabled."
+)]
 #[cfg(feature = "2d")]
 pub(crate) trait Rot2Ext {
     /// Computes the chord length of the rotation, which is the straight-line
@@ -708,6 +713,10 @@ impl Rot2Ext for Rot2 {
 pub(crate) trait QuatExt {
     /// Computes the chord length of the rotation, which is the straight-line
     /// distance between the start and end points of the rotation on a unit sphere.
+    #[allow(
+        dead_code,
+        reason = "Some internals need this, but only with specific features enabled."
+    )]
     fn chord_length(self) -> f32;
 
     /// Returns `self` after an approximate normalization,

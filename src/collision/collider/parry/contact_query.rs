@@ -548,7 +548,7 @@ pub struct TimeOfImpact {
 /// use avian3d::{collision::collider::contact_query::time_of_impact, prelude::*};
 /// use bevy::prelude::*;
 ///
-/// # #[cfg(feature = "3d"))]
+/// # #[cfg(feature = "3d")]
 /// # {
 /// let collider1 = Collider::sphere(0.5);
 /// let collider2 = Collider::cuboid(1.0, 1.0, 1.0);

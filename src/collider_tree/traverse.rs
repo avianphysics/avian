@@ -6,7 +6,7 @@ use crate::{
         obvhs_ext::{Sweep, SweepHit},
         obvhs_ray,
     },
-    math::{ToF32Precision, Dir, RVector, Ray, Vector},
+    math::{Dir, RVector, Ray, ToF32Precision, Vector},
 };
 
 impl ColliderTree {

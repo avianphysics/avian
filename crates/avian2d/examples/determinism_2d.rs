@@ -14,9 +14,14 @@
 //! This test is based on the `FallingHinges` test in the Box2D physics engine:
 //! <https://github.com/erincatto/box2d/blob/90c2781f64775085035655661d5fe6542bf0fbd5/samples/sample_determinism.cpp>
 
+#![allow(clippy::type_complexity)]
+
 use core::f32::consts::PI;
 
-use avian2d::{math::RVector, prelude::*};
+use avian2d::{
+    math::{RVec2, Real},
+    prelude::*,
+};
 use bevy::{
     camera::ScalingMode, color::palettes::tailwind::CYAN_400,
     input::common_conditions::input_just_pressed, prelude::*,
@@ -204,8 +209,8 @@ fn clear_scene(
 #[derive(Pod, Zeroable, Clone, Copy)]
 #[repr(C)]
 struct Isometry {
-    translation: RVector,
-    rotation: f32,
+    translation: RVec2,
+    rotation: Real,
 }
 
 fn update_hash(
@@ -225,7 +230,7 @@ fn update_hash(
     for (position, rotation) in &transforms {
         let isometry = Isometry {
             translation: position.0,
-            rotation: rotation.as_radians(),
+            rotation: rotation.as_radians() as Real,
         };
         hash = djb2_hash(hash, bytemuck::bytes_of(&isometry));
     }

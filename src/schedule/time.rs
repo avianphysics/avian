@@ -10,6 +10,8 @@ use bevy::prelude::*;
 /// [`Time<Physics>`](Physics) is automatically set as the generic [`Time`] resource for
 /// the [`PhysicsSchedule`].
 ///
+/// [`PhysicsSchedule`]: crate::schedule::PhysicsSchedule
+///
 /// # Usage
 ///
 /// ## Physics Speed
@@ -266,5 +268,8 @@ impl PhysicsTime for Time<Physics> {
 ///
 /// The clock is automatically set as the generic `Time` resource for
 /// the [`SubstepSchedule`].
+///
+/// [`SubstepCount`]: crate::dynamics::solver::schedule::SubstepCount
+/// [`SubstepSchedule`]: crate::schedule::SubstepSchedule
 #[derive(Reflect, Clone, Copy, Debug, Default, PartialEq)]
 pub struct Substeps;

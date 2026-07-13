@@ -1,4 +1,4 @@
-#[cfg(feature = "3d")]
+#[cfg(all(feature = "3d", feature = "default-collider"))]
 use crate::math::Real;
 use crate::prelude::*;
 #[cfg(all(

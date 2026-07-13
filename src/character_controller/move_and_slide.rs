@@ -418,16 +418,17 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// use std::collections::HashSet;
     #[cfg_attr(
         feature = "2d",
-        doc = "use avian2d::{prelude::*, math::{RVector, ToRealPrecision as _, ToF32Precision as _}};"
+        doc = "use avian2d::{prelude::*, math::{RVec2, ToRealPrecision as _, ToF32Precision as _}};"
     )]
     #[cfg_attr(
         feature = "3d",
-        doc = "use avian3d::{prelude::*, math::{RVector, ToRealPrecision as _, ToF32Precision as _}};"
+        doc = "use avian3d::{prelude::*, math::{RVec3, ToRealPrecision as _, ToF32Precision as _}};"
     )]
     ///
     /// #[derive(Component)]
     /// struct CharacterController {
-    ///     velocity: RVector,
+    #[cfg_attr(feature = "2d", doc = "    velocity: RVec2,")]
+    #[cfg_attr(feature = "3d", doc = "    velocity: RVec3,")]
     /// }
     ///
     /// fn perform_move_and_slide(
@@ -436,18 +437,25 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///     time: Res<Time>
     /// ) {
     ///     let (entity, collider, mut controller, mut transform) = player.into_inner();
-    ///     let velocity = controller.velocity + RVector::X * 10.0;
+    #[cfg_attr(
+        feature = "2d",
+        doc = "    let velocity = controller.velocity + RVec2::X * 10.0;"
+    )]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "    let velocity = controller.velocity + RVec3::X * 10.0;"
+    )]
     ///     let filter = SpatialQueryFilter::from_excluded_entities([entity]);
     ///     let mut collisions = HashSet::new();
     ///     let out = move_and_slide.move_and_slide(
     ///         collider,
-    #[cfg_attr(feature = "2d", doc = "         transform.translation.xy().real(),")]
-    #[cfg_attr(feature = "3d", doc = "         transform.translation.real(),")]
+    #[cfg_attr(feature = "2d", doc = "        transform.translation.xy().real(),")]
+    #[cfg_attr(feature = "3d", doc = "        transform.translation.real(),")]
     #[cfg_attr(
         feature = "2d",
-        doc = "         transform.rotation.to_euler(EulerRot::XYZ).2,"
+        doc = "        transform.rotation.to_euler(EulerRot::XYZ).2,"
     )]
-    #[cfg_attr(feature = "3d", doc = "         transform.rotation,")]
+    #[cfg_attr(feature = "3d", doc = "        transform.rotation,")]
     ///         velocity,
     ///         time.delta(),
     ///         &MoveAndSlideConfig::default(),
@@ -459,11 +467,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///     );
     #[cfg_attr(
         feature = "2d",
-        doc = "     transform.translation = out.position.f32().extend(0.0);"
+        doc = "    transform.translation = out.position.f32().extend(0.0);"
     )]
     #[cfg_attr(
         feature = "3d",
-        doc = "     transform.translation = out.position.f32();"
+        doc = "    transform.translation = out.position.f32();"
     )]
     ///     controller.velocity = out.projected_velocity;
     ///     info!("Colliding with entities: {:?}", collisions);
@@ -655,16 +663,17 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// use bevy::prelude::*;
     #[cfg_attr(
         feature = "2d",
-        doc = "use avian2d::{prelude::*, math::{Vector, Dir}};"
+        doc = "use avian2d::{prelude::*, math::{RVec2, ToRealPrecision as _}};"
     )]
     #[cfg_attr(
         feature = "3d",
-        doc = "use avian3d::{prelude::*, math::{Vector, Dir}};"
+        doc = "use avian3d::{prelude::*, math::{RVec3, ToRealPrecision as _}};"
     )]
     ///
     /// #[derive(Component)]
     /// struct CharacterController {
-    ///     velocity: Vector,
+    #[cfg_attr(feature = "2d", doc = "    velocity: RVec2,")]
+    #[cfg_attr(feature = "3d", doc = "    velocity: RVec3,")]
     /// }
     ///
     /// fn perform_cast_move(
@@ -679,13 +688,13 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///     // Ensure that the character is not intersecting with any colliders.
     ///     let offset = move_and_slide.depenetrate(
     ///         collider,
-    #[cfg_attr(feature = "2d", doc = "         transform.translation.xy(),")]
-    #[cfg_attr(feature = "3d", doc = "         transform.translation,")]
+    #[cfg_attr(feature = "2d", doc = "        transform.translation.xy().real(),")]
+    #[cfg_attr(feature = "3d", doc = "        transform.translation.real(),")]
     #[cfg_attr(
         feature = "2d",
-        doc = "         transform.rotation.to_euler(EulerRot::XYZ).2,"
+        doc = "        transform.rotation.to_euler(EulerRot::XYZ).2,"
     )]
-    #[cfg_attr(feature = "3d", doc = "         transform.rotation,")]
+    #[cfg_attr(feature = "3d", doc = "        transform.rotation,")]
     ///         &((&config).into()),
     ///         &filter,
     ///     );
@@ -693,18 +702,18 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         feature = "2d",
         doc = "     transform.translation += offset.extend(0.0);"
     )]
-    #[cfg_attr(feature = "3d", doc = "     transform.translation += offset;")]
+    #[cfg_attr(feature = "3d", doc = "    transform.translation += offset;")]
     ///     let velocity = controller.velocity;
     ///
     ///     let hit = move_and_slide.cast_move(
     ///         collider,
-    #[cfg_attr(feature = "2d", doc = "         transform.translation.xy(),")]
-    #[cfg_attr(feature = "3d", doc = "         transform.translation,")]
+    #[cfg_attr(feature = "2d", doc = "        transform.translation.xy().real(),")]
+    #[cfg_attr(feature = "3d", doc = "        transform.translation.real(),")]
     #[cfg_attr(
         feature = "2d",
-        doc = "         transform.rotation.to_euler(EulerRot::XYZ).2,"
+        doc = "        transform.rotation.to_euler(EulerRot::XYZ).2,"
     )]
-    #[cfg_attr(feature = "3d", doc = "         transform.rotation,")]
+    #[cfg_attr(feature = "3d", doc = "        transform.rotation,")]
     ///         velocity * time.delta_secs(),
     ///         config.skin_width,
     ///         &filter,
@@ -713,22 +722,29 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///         // We collided with something on the way. Advance as much as possible.
     #[cfg_attr(
         feature = "2d",
-        doc = "         transform.translation += (velocity.normalize_or_zero() * hit.distance).extend(0.0);"
+        doc = "        transform.translation += (velocity.normalize_or_zero() * hit.distance).extend(0.0);"
     )]
     #[cfg_attr(
         feature = "3d",
-        doc = "         transform.translation += velocity.normalize_or_zero() * hit.distance;"
+        doc = "        transform.translation += velocity.normalize_or_zero() * hit.distance;"
     )]
     ///         // Then project the velocity to make sure it no longer points towards the contact plane.
     ///         controller.velocity =
-    ///             MoveAndSlide::project_velocity(velocity, &[Dir::new_unchecked(hit.normal1)])
+    #[cfg_attr(
+        feature = "2d",
+        doc = "            MoveAndSlide::project_velocity(velocity, &[Dir2::new_unchecked(hit.normal1)])"
+    )]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "            MoveAndSlide::project_velocity(velocity, &[Dir3::new_unchecked(hit.normal1)])"
+    )]
     ///     } else {
     ///         // We traveled the full distance without colliding.
     #[cfg_attr(
         feature = "2d",
-        doc = "         transform.translation += velocity.extend(0.0);"
+        doc = "        transform.translation += velocity.extend(0.0);"
     )]
-    #[cfg_attr(feature = "3d", doc = "         transform.translation += velocity;")]
+    #[cfg_attr(feature = "3d", doc = "        transform.translation += velocity;")]
     ///     }
     /// }
     /// ```
@@ -742,7 +758,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         &self,
         shape: &Collider,
         shape_position: RVector,
-        shape_rotation: Rot,
+        shape_rotation: impl Into<Rot>,
         movement: Vector,
         skin_width: f32,
         filter: &SpatialQueryFilter,
@@ -828,21 +844,21 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///
     ///     let offset = move_and_slide.depenetrate(
     ///         collider,
-    #[cfg_attr(feature = "2d", doc = "         transform.translation.xy().real(),")]
-    #[cfg_attr(feature = "3d", doc = "         transform.translation.real(),")]
+    #[cfg_attr(feature = "2d", doc = "        transform.translation.xy().real(),")]
+    #[cfg_attr(feature = "3d", doc = "        transform.translation.real(),")]
     #[cfg_attr(
         feature = "2d",
-        doc = "         transform.rotation.to_euler(EulerRot::XYZ).2,"
+        doc = "        transform.rotation.to_euler(EulerRot::XYZ).2,"
     )]
-    #[cfg_attr(feature = "3d", doc = "         transform.rotation,")]
+    #[cfg_attr(feature = "3d", doc = "        transform.rotation,")]
     ///         &DepenetrationConfig::default(),
     ///         &filter,
     ///     );
     #[cfg_attr(
         feature = "2d",
-        doc = "     transform.translation += offset.extend(0.0);"
+        doc = "    transform.translation += offset.extend(0.0);"
     )]
-    #[cfg_attr(feature = "3d", doc = "     transform.translation += offset;")]
+    #[cfg_attr(feature = "3d", doc = "    transform.translation += offset;")]
     /// }
     /// ```
     ///
@@ -856,7 +872,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         &self,
         shape: &Collider,
         shape_position: RVector,
-        shape_rotation: Rot,
+        shape_rotation: impl Into<Rot>,
         config: &DepenetrationConfig,
         filter: &SpatialQueryFilter,
     ) -> Vector {
@@ -929,13 +945,13 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///     let mut intersections = Vec::new();
     ///     move_and_slide.intersections(
     ///         collider,
-    #[cfg_attr(feature = "2d", doc = "         transform.translation.xy().real(),")]
-    #[cfg_attr(feature = "3d", doc = "         transform.translation.real(),")]
+    #[cfg_attr(feature = "2d", doc = "        transform.translation.xy().real(),")]
+    #[cfg_attr(feature = "3d", doc = "        transform.translation.real(),")]
     #[cfg_attr(
         feature = "2d",
-        doc = "         transform.rotation.to_euler(EulerRot::XYZ).2,"
+        doc = "        transform.rotation.to_euler(EulerRot::XYZ).2,"
     )]
-    #[cfg_attr(feature = "3d", doc = "         transform.rotation,")]
+    #[cfg_attr(feature = "3d", doc = "        transform.rotation,")]
     ///         config.skin_width,
     ///         &filter,
     ///         |_entity, contact_point, normal| {
@@ -946,9 +962,9 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///     let offset = move_and_slide.depenetrate_intersections(&config, &intersections);
     #[cfg_attr(
         feature = "2d",
-        doc = "     transform.translation += offset.extend(0.0);"
+        doc = "    transform.translation += offset.extend(0.0);"
     )]
-    #[cfg_attr(feature = "3d", doc = "     transform.translation += offset;")]
+    #[cfg_attr(feature = "3d", doc = "    transform.translation += offset;")]
     /// }
     /// ```
     ///
@@ -1010,11 +1026,12 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         &self,
         shape: &Collider,
         shape_position: RVector,
-        shape_rotation: Rot,
+        shape_rotation: impl Into<Rot>,
         prediction_distance: f32,
         filter: &SpatialQueryFilter,
         mut callback: impl FnMut(Entity, &ContactPoint, Dir) -> bool,
     ) {
+        let shape_rotation = shape_rotation.into();
         let expanded_aabb = shape.aabb(shape_position, shape_rotation, prediction_distance);
         let aabb_intersections = self
             .spatial_query

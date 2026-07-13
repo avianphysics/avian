@@ -116,6 +116,8 @@ impl MotorModel {
 ///         .with_target_position(target_angle)
 ///     )
 /// ```
+///
+/// [`RevoluteJoint`]: crate::dynamics::joints::revolute::RevoluteJoint
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
@@ -220,6 +222,8 @@ impl AngularMotor {
 ///         .with_target_position(target_position)
 ///     )
 /// ```
+///
+/// [`PrismaticJoint`]: crate::dynamics::joints::prismatic::PrismaticJoint
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]

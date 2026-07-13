@@ -216,6 +216,7 @@
 
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 use super::solver::solver_body::{SolverBody, SolverBodyFlags};
+#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 use crate::prelude::*;
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 use crate::{

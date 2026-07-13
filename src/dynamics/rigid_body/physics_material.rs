@@ -57,7 +57,7 @@ pub struct DefaultFriction(pub Friction);
 #[reflect(Debug, Default, PartialEq)]
 pub struct DefaultRestitution(pub Restitution);
 
-/// A component for [dry friction], controlling how strongly a [rigid body](RigidBody) or [collider](Collider)
+/// A component for [dry friction], controlling how strongly a [rigid body] or [collider]
 /// opposes sliding along other surfaces while in contact.
 ///
 /// For surfaces that are at rest relative to each other, **static friction** is used.
@@ -72,6 +72,8 @@ pub struct DefaultRestitution(pub Restitution);
 /// coefficients are set to `0.5`.
 ///
 /// [dry friction]: https://en.wikipedia.org/wiki/Friction#Dry_friction
+/// [rigid body]: crate::dynamics::RigidBody
+/// [collider]: crate::dynamics::Collider
 /// [Coulomb friction model]: https://en.wikipedia.org/wiki/Friction#Dry_friction
 ///
 /// # Combine Rule
@@ -223,7 +225,7 @@ impl From<f32> for Friction {
     }
 }
 
-/// A component for [restitution], controlling how bouncy a [rigid body](RigidBody) or [collider](Collider) is.
+/// A component for [restitution], controlling how bouncy a [rigid body] or [collider] is.
 ///
 /// The coefficient should be between 0 and 1, where 0 corresponds to a **perfectly inelastic** collision with zero bounce,
 /// and 1 corresponds to a **perfectly elastic** collision that tries to preserve all kinetic energy.
@@ -234,6 +236,8 @@ impl From<f32> for Friction {
 /// meaning that objects are not bouncy by default.
 ///
 /// [restitution]: https://en.wikipedia.org/wiki/Coefficient_of_restitution
+/// [rigid body]: crate::dynamics::RigidBody
+/// [collider]: crate::dynamics::Collider
 ///
 /// # Combine Rule
 ///
@@ -274,20 +278,22 @@ impl From<f32> for Friction {
 ///
 /// # Accuracy
 ///
-/// Restitution is not guaranteed to be entirely accurate, especially for fast-moving bodies or when there are multiple contact points.
+/// Restitution is not guaranteed to be entirely accurate, especially for fast-moving bodies
+/// or when there are multiple contact points.
 ///
 /// - Even with a coefficient of 1, some kinetic energy can be lost over long periods of time for bouncing objects.
-///   This can be caused by [friction](Friction), [damping](LinearDamping), or simulation inaccuracies.
+///   This can be caused by [friction](Friction), [damping](crate::dynamics::LinearDamping), or simulation inaccuracies.
 ///
 /// - Collisions can have more or less bounce than expected, especially when objects are moving very fast.
-///   This is largely due to the the sequential solver and [continuous collision](dynamics::ccd) scheme.
+///   This is largely due to the the sequential solver and [continuous collision](crate::dynamics::ccd) scheme.
 ///
 /// - An object falling flat on the ground with multiple contact points may tip over on one side or corner a bit.
 ///   This is because contact points are solved sequentially, and the order of contact points affects the result.
-///   Configuring [`SolverConfig::restitution_iterations`](dynamics::solver::SolverConfig::restitution_iterations) may help mitigate this.
+///   Configuring [`SolverConfig::restitution_iterations`](crate::dynamics::solver::SolverConfig::restitution_iterations)
+///   may help mitigate this.
 ///
-/// - When collision velocity is small, collisions are treated as inelastic to prevent jitter. The velocity threshold can be configured
-///   using [`SolverConfig::restitution_threshold`](dynamics::solver::SolverConfig::restitution_threshold).
+/// - When collision velocity is small, collisions are treated as inelastic to prevent jitter. The velocity threshold can be
+///   configured using [`SolverConfig::restitution_threshold`](crate::dynamics::solver::SolverConfig::restitution_threshold).
 ///
 /// For game purposes however, restitution should still be reasonably accurate.
 ///
