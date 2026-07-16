@@ -145,16 +145,12 @@ mod tests {
 
         let world = app.world_mut();
 
-        // [`ColliderBackendPlugin`] should have registered [`ColliderMarker`] as
-        // a required component of [`Collider`], so the [`ColliderHierarchyPlugin`]
-        // should pick up these colliders.
+        let body_id = world.spawn((RigidBody::Static, ColliderMarker)).id();
 
-        let body_id = world.spawn((RigidBody::Static, Collider::default())).id();
-
-        let child_id = world.spawn((Collider::default(), ChildOf(body_id))).id();
+        let child_id = world.spawn((ColliderMarker, ChildOf(body_id))).id();
 
         let other_id = world
-            .spawn((Collider::default(), ColliderOf { body: body_id }))
+            .spawn((ColliderMarker, ColliderOf { body: body_id }))
             .id();
 
         app.update();
