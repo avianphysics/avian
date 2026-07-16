@@ -8,9 +8,7 @@ pub use plugin::ColliderHierarchyPlugin;
 use crate::prelude::*;
 use bevy::{
     ecs::{
-        lifecycle::HookContext,
-        relationship::{Relationship, RelationshipHookMode, RelationshipSourceCollection},
-        world::DeferredWorld,
+        lifecycle::HookContext, relationship::RelationshipSourceCollection, world::DeferredWorld,
     },
     prelude::*,
 };
@@ -45,7 +43,8 @@ use bevy::{
 ///
 /// [`Relationship`]: bevy::ecs::relationship::Relationship
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq, Reflect)]
-#[component(immutable, on_insert = <ColliderOf as Relationship>::on_insert, on_discard = <ColliderOf as Relationship>::on_discard)]
+#[component(immutable, on_insert = Self::on_insert)]
+#[relationship(relationship_target = RigidBodyColliders, allow_self_referential)]
 #[require(ColliderTransform)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
@@ -64,39 +63,19 @@ impl FromWorld for ColliderOf {
     }
 }
 
-// Bevy does not currently allow relationships that point to their own entity,
-// so we implement the relationship manually to work around this limitation.
-impl Relationship for ColliderOf {
-    type RelationshipTarget = RigidBodyColliders;
-
-    const ALLOW_SELF_REFERENTIAL: bool = true;
-
-    fn get(&self) -> Entity {
-        self.body
-    }
-
-    fn from(entity: Entity) -> Self {
-        ColliderOf { body: entity }
-    }
-
-    fn on_insert(
-        mut world: DeferredWorld,
-        HookContext {
-            entity,
-            caller,
-            relationship_hook_mode,
-            ..
-        }: HookContext,
-    ) {
+impl ColliderOf {
+    fn on_insert(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
         let collider_ref = world.entity(entity);
 
         let &ColliderOf { body } = collider_ref.get::<ColliderOf>().unwrap();
+
+        let body_ref = world.entity(body);
 
         // Get the global transform of the collider and its rigid body.
         let Some(collider_global_transform) = collider_ref.get::<GlobalTransform>() else {
             return;
         };
-        let Some(body_global_transform) = world.get::<GlobalTransform>(body) else {
+        let Some(body_global_transform) = body_ref.get::<GlobalTransform>() else {
             return;
         };
 
@@ -106,92 +85,6 @@ impl Relationship for ColliderOf {
         // Update the collider transform.
         *world.get_mut::<ColliderTransform>(entity).unwrap() =
             ColliderTransform::from(collider_transform);
-
-        // The rest is largely the same as the default implementation,
-        // but allows relationships to point to their own entity.
-
-        match relationship_hook_mode {
-            RelationshipHookMode::Run => {}
-            RelationshipHookMode::Skip => return,
-            RelationshipHookMode::RunIfNotLinked => {
-                if RigidBodyColliders::LINKED_SPAWN {
-                    return;
-                }
-            }
-        }
-
-        let collider = entity;
-        let body = world.entity(collider).get::<ColliderOf>().unwrap().body;
-
-        if let Some(mut body_mut) = world
-            .get_entity_mut(body)
-            .ok()
-            .filter(|e| e.contains::<RigidBody>())
-        {
-            // Attach the collider to the rigid body.
-            if let Some(mut colliders) = body_mut.get_mut::<RigidBodyColliders>() {
-                colliders.0.push(collider);
-            } else {
-                world
-                    .commands()
-                    .entity(body)
-                    .insert(RigidBodyColliders(vec![collider]));
-            }
-        } else {
-            warn!(
-                "{}Tried to attach collider on entity {collider} to rigid body on entity {body}, but the rigid body does not exist.",
-                caller
-                    .map(|location| format!("{location}: "))
-                    .unwrap_or_default(),
-            );
-        }
-    }
-
-    fn on_discard(
-        mut world: DeferredWorld,
-        HookContext {
-            entity,
-            relationship_hook_mode,
-            ..
-        }: HookContext,
-    ) {
-        // This is largely the same as the default implementation,
-        // but does not panic if the relationship target does not exist.
-
-        match relationship_hook_mode {
-            RelationshipHookMode::Run => {}
-            RelationshipHookMode::Skip => return,
-            RelationshipHookMode::RunIfNotLinked => {
-                if <Self::RelationshipTarget as RelationshipTarget>::LINKED_SPAWN {
-                    return;
-                }
-            }
-        }
-        let body = world.entity(entity).get::<Self>().unwrap().get();
-        if let Ok(mut body_mut) = world.get_entity_mut(body)
-            && let Some(mut relationship_target) = body_mut.get_mut::<Self::RelationshipTarget>()
-        {
-            RelationshipSourceCollection::remove(
-                relationship_target.collection_mut_risky(),
-                entity,
-            );
-            if relationship_target.is_empty() {
-                let command = |mut entity: EntityWorldMut| {
-                    if entity
-                        .get::<Self::RelationshipTarget>()
-                        .is_some_and(RelationshipTarget::is_empty)
-                    {
-                        entity.remove::<Self::RelationshipTarget>();
-                    }
-                };
-
-                world.commands().queue_silenced(command.with_entity(body));
-            }
-        }
-    }
-
-    fn set_risky(&mut self, entity: Entity) {
-        self.body = entity;
     }
 }
 
@@ -227,5 +120,60 @@ impl core::ops::Deref for RigidBodyColliders {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::mesh::MeshPlugin;
+    #[cfg(feature = "bevy_scene")]
+    use bevy::world_serialization::WorldSerializationPlugin;
+
+    #[test]
+    fn relationship_behavior() {
+        let mut app = App::new();
+
+        app.add_plugins((
+            MinimalPlugins,
+            AssetPlugin::default(),
+            #[cfg(feature = "bevy_scene")]
+            WorldSerializationPlugin,
+            MeshPlugin,
+            PhysicsPlugins::default(),
+        ));
+
+        let world = app.world_mut();
+
+        // [`ColliderBackendPlugin`] should have registered [`ColliderMarker`] as
+        // a required component of [`Collider`], so the [`ColliderHierarchyPlugin`]
+        // should pick up these colliders.
+
+        let body_id = world.spawn((RigidBody::Static, Collider::default())).id();
+
+        let child_id = world.spawn((Collider::default(), ChildOf(body_id))).id();
+
+        let other_id = world
+            .spawn((Collider::default(), ColliderOf { body: body_id }))
+            .id();
+
+        app.update();
+
+        let world = app.world();
+
+        let body_of_body = world.entity(body_id).get::<ColliderOf>().unwrap().body;
+        let body_of_child = world.entity(child_id).get::<ColliderOf>().unwrap().body;
+        let body_of_other = world.entity(other_id).get::<ColliderOf>().unwrap().body;
+
+        assert_eq!(body_of_body, body_id);
+        assert_eq!(body_of_child, body_id);
+        assert_eq!(body_of_other, body_id);
+
+        let colliders = world.entity(body_id).get::<RigidBodyColliders>().unwrap();
+
+        assert!(colliders.contains(&body_id));
+        assert!(colliders.contains(&child_id));
+        assert!(colliders.contains(&other_id));
+        assert_eq!(colliders.len(), 3);
     }
 }
