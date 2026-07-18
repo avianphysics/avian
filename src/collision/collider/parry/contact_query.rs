@@ -32,7 +32,7 @@ pub type UnsupportedShape = Unsupported;
 /// # #[cfg(feature = "2d")]
 /// # use avian2d::{collision::collider::contact_query::contact, prelude::*};
 /// # #[cfg(feature = "3d")]
-/// use avian3d::{collision::collider::contact_query::contact, prelude::*};
+/// use avian3d::{collision::collider::contact_query::contact, math::RVec3, prelude::*};
 /// use bevy::prelude::*;
 ///
 /// # #[cfg(feature = "3d")]
@@ -127,7 +127,7 @@ pub fn contact(
 /// # #[cfg(feature = "2d")]
 /// # use avian2d::{collision::collider::contact_query::contact_manifolds, prelude::*};
 /// # #[cfg(feature = "3d")]
-/// use avian3d::{collision::collider::contact_query::contact_manifolds, prelude::*};
+/// use avian3d::{collision::collider::contact_query::contact_manifolds, math::RVec3, prelude::*};
 /// use bevy::prelude::*;
 ///
 /// # #[cfg(feature = "3d")]
@@ -288,7 +288,7 @@ pub enum ClosestPoints {
 /// # #[cfg(feature = "2d")]
 /// # use avian2d::{collision::collider::contact_query::*, prelude::*};
 /// # #[cfg(feature = "3d")]
-/// use avian3d::{collision::collider::contact_query::*, prelude::*};
+/// use avian3d::{collision::collider::contact_query::*, math::RVec3, prelude::*};
 /// use bevy::prelude::*;
 ///
 /// # #[cfg(feature = "3d")]
@@ -383,7 +383,7 @@ pub fn closest_points(
 /// # #[cfg(feature = "2d")]
 /// # use avian2d::{collision::collider::contact_query::distance, prelude::*};
 /// # #[cfg(feature = "3d")]
-/// use avian3d::{collision::collider::contact_query::distance, prelude::*};
+/// use avian3d::{collision::collider::contact_query::distance, math::RVec3, prelude::*};
 /// use bevy::prelude::*;
 ///
 /// # #[cfg(feature = "3d")]
@@ -452,7 +452,7 @@ pub fn distance(
 /// # #[cfg(feature = "2d")]
 /// # use avian2d::{collision::collider::contact_query::intersection_test, prelude::*};
 /// # #[cfg(feature = "3d")]
-/// use avian3d::{collision::collider::contact_query::intersection_test, prelude::*};
+/// use avian3d::{collision::collider::contact_query::intersection_test, math::RVec3, prelude::*};
 /// use bevy::prelude::*;
 ///
 /// # #[cfg(feature = "3d")]
@@ -545,7 +545,7 @@ pub struct TimeOfImpact {
 /// # #[cfg(feature = "2d")]
 /// # use avian2d::{collision::collider::contact_query::time_of_impact, prelude::*};
 /// # #[cfg(feature = "3d")]
-/// use avian3d::{collision::collider::contact_query::time_of_impact, prelude::*};
+/// use avian3d::{collision::collider::contact_query::time_of_impact, math::RVec3, prelude::*};
 /// use bevy::prelude::*;
 ///
 /// # #[cfg(feature = "3d")]

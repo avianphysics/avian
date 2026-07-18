@@ -28,7 +28,7 @@ use parry::query::ShapeCastOptions;
 /// # #[cfg(feature = "2d")]
 /// # use avian2d::prelude::*;
 /// # #[cfg(feature = "3d")]
-/// use avian3d::prelude::*;
+/// use avian3d::{math::RVec3, prelude::*};
 /// use bevy::prelude::*;
 ///
 /// # #[cfg(feature = "3d")]
@@ -82,7 +82,7 @@ impl SpatialQuery<'_, '_> {
     /// # #[cfg(feature = "2d")]
     /// # use avian2d::prelude::*;
     /// # #[cfg(feature = "3d")]
-    /// use avian3d::prelude::*;
+    /// use avian3d::{math::RVec3, prelude::*};
     /// use bevy::prelude::*;
     ///
     /// # #[cfg(feature = "3d")]
@@ -138,7 +138,7 @@ impl SpatialQuery<'_, '_> {
     /// # #[cfg(feature = "2d")]
     /// # use avian2d::prelude::*;
     /// # #[cfg(feature = "3d")]
-    /// use avian3d::prelude::*;
+    /// use avian3d::{math::RVec3, prelude::*};
     /// use bevy::prelude::*;
     ///
     /// #[derive(Component)]
@@ -245,7 +245,7 @@ impl SpatialQuery<'_, '_> {
     /// # #[cfg(feature = "2d")]
     /// # use avian2d::prelude::*;
     /// # #[cfg(feature = "3d")]
-    /// use avian3d::prelude::*;
+    /// use avian3d::{math::RVec3, prelude::*};
     /// use bevy::prelude::*;
     ///
     /// # #[cfg(feature = "3d")]
@@ -318,7 +318,7 @@ impl SpatialQuery<'_, '_> {
     /// # #[cfg(feature = "2d")]
     /// # use avian2d::prelude::*;
     /// # #[cfg(feature = "3d")]
-    /// use avian3d::prelude::*;
+    /// use avian3d::{math::RVec3, prelude::*};
     /// use bevy::prelude::*;
     ///
     /// # #[cfg(feature = "3d")]
@@ -332,11 +332,11 @@ impl SpatialQuery<'_, '_> {
     ///     let solid = true;
     ///     let filter = SpatialQueryFilter::default();
     ///
-    ///     // Cast ray and get all hits
+    ///     // Cast ray and get up to 20 hits
     ///     let mut hits = vec![];
-    ///     spatial_query.ray_hits_callback(origin, direction, max_distance, 20, solid, &filter, |hit| {
+    ///     spatial_query.ray_hits_callback(origin, direction, max_distance, solid, &filter, |hit| {
     ///         hits.push(hit);
-    ///         true
+    ///         hits.len() < 20
     ///     });
     ///
     ///     // Print hits
@@ -414,7 +414,7 @@ impl SpatialQuery<'_, '_> {
     /// # #[cfg(feature = "2d")]
     /// # use avian2d::prelude::*;
     /// # #[cfg(feature = "3d")]
-    /// use avian3d::prelude::*;
+    /// use avian3d::{math::RVec3, prelude::*};
     /// use bevy::prelude::*;
     ///
     /// # #[cfg(feature = "3d")]
@@ -484,7 +484,7 @@ impl SpatialQuery<'_, '_> {
     /// # #[cfg(feature = "2d")]
     /// # use avian2d::prelude::*;
     /// # #[cfg(feature = "3d")]
-    /// use avian3d::prelude::*;
+    /// use avian3d::{math::RVec3, prelude::*};
     /// use bevy::prelude::*;
     ///
     /// #[derive(Component)]
@@ -503,7 +503,7 @@ impl SpatialQuery<'_, '_> {
     ///     let filter = SpatialQueryFilter::default();
     ///
     ///     // Cast shape and get the first hit that matches the predicate
-    ///     let hit = spatial_query.cast_shape(&shape, origin, rotation, direction, &config, &filter, &|entity| {
+    ///     let hit = spatial_query.cast_shape_predicate(&shape, origin, rotation, direction, &config, &filter, &|entity| {
     ///        // Skip entities with the `Invisible` component.
     ///        !query.contains(entity)
     ///     });
@@ -619,7 +619,7 @@ impl SpatialQuery<'_, '_> {
     /// # #[cfg(feature = "2d")]
     /// # use avian2d::prelude::*;
     /// # #[cfg(feature = "3d")]
-    /// use avian3d::prelude::*;
+    /// use avian3d::{math::RVec3, prelude::*};
     /// use bevy::prelude::*;
     ///
     /// # #[cfg(feature = "3d")]
@@ -704,7 +704,7 @@ impl SpatialQuery<'_, '_> {
     /// # #[cfg(feature = "2d")]
     /// # use avian2d::prelude::*;
     /// # #[cfg(feature = "3d")]
-    /// use avian3d::prelude::*;
+    /// use avian3d::{math::RVec3, prelude::*};
     /// use bevy::prelude::*;
     ///
     /// # #[cfg(feature = "3d")]
@@ -721,9 +721,9 @@ impl SpatialQuery<'_, '_> {
     ///
     ///     // Cast shape and get up to 20 hits
     ///     let mut hits = vec![];
-    ///     spatial_query.shape_hits_callback(&shape, origin, rotation, direction, 20, &config, &filter, |hit| {
+    ///     spatial_query.shape_hits_callback(&shape, origin, rotation, direction, &config, &filter, |hit| {
     ///         hits.push(hit);
-    ///         true
+    ///         hits.len() < 20
     ///     });
     ///
     ///     // Print hits
@@ -822,7 +822,7 @@ impl SpatialQuery<'_, '_> {
     /// # #[cfg(feature = "2d")]
     /// # use avian2d::prelude::*;
     /// # #[cfg(feature = "3d")]
-    /// use avian3d::prelude::*;
+    /// use avian3d::{math::RVec3, prelude::*};
     /// use bevy::prelude::*;
     ///
     /// # #[cfg(feature = "3d")]
@@ -867,7 +867,7 @@ impl SpatialQuery<'_, '_> {
     /// # #[cfg(feature = "2d")]
     /// # use avian2d::prelude::*;
     /// # #[cfg(feature = "3d")]
-    /// use avian3d::prelude::*;
+    /// use avian3d::{math::RVec3, prelude::*};
     /// use bevy::prelude::*;
     ///
     /// #[derive(Component)]
@@ -877,10 +877,10 @@ impl SpatialQuery<'_, '_> {
     /// fn print_point_projection(spatial_query: SpatialQuery, query: Query<&Invisible>) {
     ///     // Project a point and print the result
     ///     if let Some(projection) = spatial_query.project_point_predicate(
-    ///         RVec3::ZERO,                   // Point
-    ///         true,                          // Are colliders treated as "solid"
-    ///         SpatialQueryFilter::default(), // Query filter
-    ///         &|entity| {                    // Predicate
+    ///         RVec3::ZERO,                    // Point
+    ///         true,                           // Are colliders treated as "solid"
+    ///         &SpatialQueryFilter::default(), // Query filter
+    ///         &|entity| {                     // Predicate
     ///             // Skip entities with the `Invisible` component.
     ///             !query.contains(entity)
     ///         }
@@ -947,7 +947,7 @@ impl SpatialQuery<'_, '_> {
     /// # #[cfg(feature = "2d")]
     /// # use avian2d::prelude::*;
     /// # #[cfg(feature = "3d")]
-    /// use avian3d::prelude::*;
+    /// use avian3d::{math::RVec3, prelude::*};
     /// use bevy::prelude::*;
     ///
     /// # #[cfg(feature = "3d")]
@@ -991,7 +991,7 @@ impl SpatialQuery<'_, '_> {
     /// # #[cfg(feature = "2d")]
     /// # use avian2d::prelude::*;
     /// # #[cfg(feature = "3d")]
-    /// use avian3d::prelude::*;
+    /// use avian3d::{math::RVec3, prelude::*};
     /// use bevy::prelude::*;
     ///
     /// # #[cfg(feature = "3d")]
@@ -1052,12 +1052,12 @@ impl SpatialQuery<'_, '_> {
     /// # #[cfg(feature = "2d")]
     /// # use avian2d::prelude::*;
     /// # #[cfg(feature = "3d")]
-    /// use avian3d::prelude::*;
+    /// use avian3d::{math::RVec3, prelude::*};
     /// use bevy::prelude::*;
     ///
     /// # #[cfg(feature = "3d")]
     /// fn print_aabb_intersections(spatial_query: SpatialQuery) {
-    ///     let aabb = Collider::sphere(0.5).aabb(RVec3::ZERO, Quat::default());
+    ///     let aabb = Collider::sphere(0.5).aabb(RVec3::ZERO, Quat::default(), 0.0);
     ///     let intersections = spatial_query.aabb_intersections_with_aabb(aabb);
     ///
     ///     for entity in intersections.iter() {
@@ -1090,7 +1090,7 @@ impl SpatialQuery<'_, '_> {
     /// # #[cfg(feature = "2d")]
     /// # use avian2d::prelude::*;
     /// # #[cfg(feature = "3d")]
-    /// use avian3d::prelude::*;
+    /// use avian3d::{math::RVec3, prelude::*};
     /// use bevy::prelude::*;
     ///
     /// # #[cfg(feature = "3d")]
@@ -1098,7 +1098,7 @@ impl SpatialQuery<'_, '_> {
     ///     let mut intersections = vec![];
     ///
     ///     spatial_query.aabb_intersections_with_aabb_callback(
-    ///         Collider::sphere(0.5).aabb(RVec3::ZERO, Quat::default()),
+    ///         Collider::sphere(0.5).aabb(RVec3::ZERO, Quat::default(), 0.0),
     ///         |entity| {
     ///             intersections.push(entity);
     ///             true
@@ -1152,7 +1152,7 @@ impl SpatialQuery<'_, '_> {
     /// # #[cfg(feature = "2d")]
     /// # use avian2d::prelude::*;
     /// # #[cfg(feature = "3d")]
-    /// use avian3d::prelude::*;
+    /// use avian3d::{math::RVec3, prelude::*};
     /// use bevy::prelude::*;
     ///
     /// # #[cfg(feature = "3d")]
@@ -1214,7 +1214,7 @@ impl SpatialQuery<'_, '_> {
     /// # #[cfg(feature = "2d")]
     /// # use avian2d::prelude::*;
     /// # #[cfg(feature = "3d")]
-    /// use avian3d::prelude::*;
+    /// use avian3d::{math::RVec3, prelude::*};
     /// use bevy::prelude::*;
     ///
     /// # #[cfg(feature = "3d")]

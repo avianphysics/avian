@@ -40,7 +40,7 @@
 //! # #[cfg(feature = "2d")]
 //! # use avian2d::prelude::*;
 //! # #[cfg(feature = "3d")]
-//! use avian3d::prelude::*;
+//! use avian3d::{math::RVec3, prelude::*};
 //! use bevy::prelude::*;
 //!
 //! # #[cfg(feature = "3d")]
@@ -95,7 +95,7 @@
 //! # #[cfg(feature = "2d")]
 //! # use avian2d::prelude::*;
 //! # #[cfg(feature = "3d")]
-//! use avian3d::prelude::*;
+//! use avian3d::{math::RVec3, prelude::*};
 //! use bevy::prelude::*;
 //!
 //! # #[cfg(feature = "3d")]

@@ -412,7 +412,7 @@ impl AngularInertia {
 /// #
 /// # fn setup(mut commands: Commands) {
 /// // For simplicity, we use the same principal angular inertia as before, with an identity local frame.
-/// let inertia1 = AngularInertia::from_tensor(Mat3::from_diagonal(Vec3::new(2.0, 5.0, 2.0)));
+/// let inertia1 = AngularInertia::from_tensor(AngularInertiaTensor::new(Vec3::new(2.0, 5.0, 2.0)));
 ///
 /// // The angular inertia tensor can be retrieved back from the principal angular inertia.
 /// let tensor = inertia1.tensor();
