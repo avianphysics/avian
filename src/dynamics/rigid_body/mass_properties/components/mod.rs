@@ -389,6 +389,7 @@ impl AngularInertia {
 /// ```
 /// # use avian3d::prelude::*;
 /// # use bevy::prelude::*;
+/// # use core::f32::consts::PI;
 /// #
 /// # fn setup(mut commands: Commands) {
 /// // Principal angular inertia: `2.0` for the local X and Z axes, and `5.0` for the Y axis.
