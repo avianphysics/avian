@@ -134,14 +134,8 @@ pub trait AnyCollider: Component<Mutability = Mutable> + ComputeMassProperties {
     /// # Example
     ///
     /// ```
-    #[cfg_attr(
-        feature = "2d",
-        doc = "# use avian2d::{prelude::*, math::{Rot, RVector}};"
-    )]
-    #[cfg_attr(
-        feature = "3d",
-        doc = "# use avian3d::{prelude::*, math::{Rot, RVector}};"
-    )]
+    #[cfg_attr(feature = "2d", doc = "# use avian2d::{prelude::*, math::RVector};")]
+    #[cfg_attr(feature = "3d", doc = "# use avian3d::{prelude::*, math::RVector};")]
     /// # use bevy::prelude::*;
     /// # use bevy::ecs::system::{SystemParam, lifetimeless::{SRes, SQuery}};
     /// #
@@ -176,7 +170,8 @@ pub trait AnyCollider: Component<Mutability = Mutable> + ComputeMassProperties {
     /// #   fn aabb_with_context(
     /// #       &self,
     /// #       _: RVector,
-    /// #       _: impl Into<Rot>,
+    #[cfg_attr(feature = "2d", doc = "#       _: impl Into<Rot2>,")]
+    #[cfg_attr(feature = "3d", doc = "#       _: impl Into<Quat>,")]
     /// #       _: f32,
     /// #       _: ColliderContext<Self::Context>,
     /// #   ) -> ColliderAabb { unimplemented!() }
@@ -185,9 +180,11 @@ pub trait AnyCollider: Component<Mutability = Mutable> + ComputeMassProperties {
     ///         &self,
     ///         other: &Self,
     ///         position1: RVector,
-    ///         rotation1: impl Into<Rot>,
+    #[cfg_attr(feature = "2d", doc = "        rotation1: impl Into<Rot2>,")]
+    #[cfg_attr(feature = "3d", doc = "        rotation1: impl Into<Quat>,")]
     ///         position2: RVector,
-    ///         rotation2: impl Into<Rot>,
+    #[cfg_attr(feature = "2d", doc = "        rotation2: impl Into<Rot2>,")]
+    #[cfg_attr(feature = "3d", doc = "        rotation2: impl Into<Quat>,")]
     ///         prediction_distance: f32,
     ///         manifolds: &mut Vec<ContactManifold>,
     ///         context: ColliderPairContext<Self::Context>,

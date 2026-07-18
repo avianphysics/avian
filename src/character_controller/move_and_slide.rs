@@ -418,17 +418,17 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// use std::collections::HashSet;
     #[cfg_attr(
         feature = "2d",
-        doc = "use avian2d::{prelude::*, math::{RVec2, ToRealPrecision as _, ToF32Precision as _}};"
+        doc = "use avian2d::{prelude::*, math::{ToRealPrecision as _, ToF32Precision as _}};"
     )]
     #[cfg_attr(
         feature = "3d",
-        doc = "use avian3d::{prelude::*, math::{RVec3, ToRealPrecision as _, ToF32Precision as _}};"
+        doc = "use avian3d::{prelude::*, math::{ToRealPrecision as _, ToF32Precision as _}};"
     )]
     ///
     /// #[derive(Component)]
     /// struct CharacterController {
-    #[cfg_attr(feature = "2d", doc = "    velocity: RVec2,")]
-    #[cfg_attr(feature = "3d", doc = "    velocity: RVec3,")]
+    #[cfg_attr(feature = "2d", doc = "    velocity: Vec2,")]
+    #[cfg_attr(feature = "3d", doc = "    velocity: Vec3,")]
     /// }
     ///
     /// fn perform_move_and_slide(
@@ -439,11 +439,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///     let (entity, collider, mut controller, mut transform) = player.into_inner();
     #[cfg_attr(
         feature = "2d",
-        doc = "    let velocity = controller.velocity + RVec2::X * 10.0;"
+        doc = "    let velocity = controller.velocity + Vec2::X * 10.0;"
     )]
     #[cfg_attr(
         feature = "3d",
-        doc = "    let velocity = controller.velocity + RVec3::X * 10.0;"
+        doc = "    let velocity = controller.velocity + Vec3::X * 10.0;"
     )]
     ///     let filter = SpatialQueryFilter::from_excluded_entities([entity]);
     ///     let mut collisions = HashSet::new();
@@ -663,17 +663,17 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// use bevy::prelude::*;
     #[cfg_attr(
         feature = "2d",
-        doc = "use avian2d::{prelude::*, math::{RVec2, ToRealPrecision as _}};"
+        doc = "use avian2d::{prelude::*, math::ToRealPrecision};"
     )]
     #[cfg_attr(
         feature = "3d",
-        doc = "use avian3d::{prelude::*, math::{RVec3, ToRealPrecision as _}};"
+        doc = "use avian3d::{prelude::*, math::ToRealPrecision};"
     )]
     ///
     /// #[derive(Component)]
     /// struct CharacterController {
-    #[cfg_attr(feature = "2d", doc = "    velocity: RVec2,")]
-    #[cfg_attr(feature = "3d", doc = "    velocity: RVec3,")]
+    #[cfg_attr(feature = "2d", doc = "    velocity: Vec2,")]
+    #[cfg_attr(feature = "3d", doc = "    velocity: Vec3,")]
     /// }
     ///
     /// fn perform_cast_move(

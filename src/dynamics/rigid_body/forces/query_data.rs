@@ -44,13 +44,19 @@ use super::AccumulatedLocalAcceleration;
 /// that allows applying forces to a body without waking it up.
 ///
 /// ```
-#[cfg_attr(feature = "2d", doc = "# use avian2d::{math::Vector, prelude::*};")]
-#[cfg_attr(feature = "3d", doc = "# use avian3d::{math::Vector, prelude::*};")]
+#[cfg_attr(
+    feature = "2d",
+    doc = "# use avian2d::{math::{RVector, ToF32Precision}, prelude::*};"
+)]
+#[cfg_attr(
+    feature = "3d",
+    doc = "# use avian3d::{math::{RVector, ToF32Precision}, prelude::*};"
+)]
 /// # use bevy::prelude::*;
 /// #
 /// # fn apply_impulses(mut query: Query<Forces>) {
 /// #     for mut forces in &mut query {
-/// #         let force = Vector::default();
+/// #         let force = RVector::default().f32();
 /// // Apply a force without waking up the body if it is sleeping.
 /// forces.non_waking().apply_force(force);
 /// #     }
@@ -61,13 +67,19 @@ use super::AccumulatedLocalAcceleration;
 /// with the [center of mass](CenterOfMass), it will apply a torque to the body.
 ///
 /// ```
-#[cfg_attr(feature = "2d", doc = "# use avian2d::{math::Vector, prelude::*};")]
-#[cfg_attr(feature = "3d", doc = "# use avian3d::{math::Vector, prelude::*};")]
+#[cfg_attr(
+    feature = "2d",
+    doc = "# use avian2d::{math::{RVector, ToF32Precision}, prelude::*};"
+)]
+#[cfg_attr(
+    feature = "3d",
+    doc = "# use avian3d::{math::{RVector, ToF32Precision}, prelude::*};"
+)]
 /// # use bevy::prelude::*;
 /// #
 /// # fn apply_impulses(mut query: Query<Forces>) {
 /// #     for mut forces in &mut query {
-/// #         let force = Vector::default();
+/// #         let force = RVector::default().f32();
 /// #         let point = RVector::default();
 /// // Apply an impulse at a specific point in the world.
 /// // Unlike forces, impulses are applied immediately to the velocity.

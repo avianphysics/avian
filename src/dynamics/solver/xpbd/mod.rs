@@ -71,12 +71,14 @@
 //! // Store additional internal solver data for the constraint.
 //! struct CustomConstraintSolverData {
 //!     // Accumulated Lagrange multipliers for the `JointForces` component.
-//!     total_lagrange: Vec3,
+#![cfg_attr(feature = "2d", doc = "    total_lagrange: Vec2,")]
+#![cfg_attr(feature = "3d", doc = "    total_lagrange: Vec3,")]
 //! }
 //!
 //! impl XpbdConstraintSolverData for CustomConstraintSolverData {
 //!     fn clear_lagrange_multipliers(&mut self) {
-//!         self.total_lagrange = Vec3::ZERO;
+#![cfg_attr(feature = "2d", doc = "        self.total_lagrange = Vec2::ZERO;")]
+#![cfg_attr(feature = "3d", doc = "        self.total_lagrange = Vec3::ZERO;")]
 //!     }
 //!
 #![cfg_attr(

@@ -101,8 +101,14 @@
 //! that allows applying forces to a body without waking it up.
 //!
 //! ```
-#![cfg_attr(feature = "2d", doc = "# use avian2d::{math::RVector, prelude::*};")]
-#![cfg_attr(feature = "3d", doc = "# use avian3d::{math::RVector, prelude::*};")]
+#![cfg_attr(
+    feature = "2d",
+    doc = "# use avian2d::{math::{RVector, ToF32Precision}, prelude::*};"
+)]
+#![cfg_attr(
+    feature = "3d",
+    doc = "# use avian3d::{math::{RVector, ToF32Precision}, prelude::*};"
+)]
 //! # use bevy::prelude::*;
 //! #
 //! # fn apply_forces(mut query: Query<Forces>) {
@@ -118,14 +124,20 @@
 //! with the [center of mass](CenterOfMass), it will apply a torque to the body.
 //!
 //! ```
-#![cfg_attr(feature = "2d", doc = "# use avian2d::{math::RVector, prelude::*};")]
-#![cfg_attr(feature = "3d", doc = "# use avian3d::{math::RVector, prelude::*};")]
+#![cfg_attr(
+    feature = "2d",
+    doc = "# use avian2d::{math::{RVector, ToF32Precision}, prelude::*};"
+)]
+#![cfg_attr(
+    feature = "3d",
+    doc = "# use avian3d::{math::{RVector, ToF32Precision}, prelude::*};"
+)]
 //! # use bevy::prelude::*;
 //! #
 //! # fn apply_impulses(mut query: Query<Forces>) {
 //! #     for mut forces in &mut query {
 //! #         let force = RVector::default().f32();
-//! #         let point = RVector::default().f32();
+//! #         let point = RVector::default();
 //! // Apply an impulse at a specific point in the world.
 //! // Unlike forces, impulses are applied immediately to the velocity.
 //! forces.apply_linear_impulse_at_point(force, point);

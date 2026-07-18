@@ -748,8 +748,8 @@ impl JointForces {
 /// # Example
 ///
 /// ```
-#[cfg_attr(feature = "2d", doc = "# use avian2d::prelude::*;")]
-#[cfg_attr(feature = "3d", doc = "# use avian3d::prelude::*;")]
+#[cfg_attr(feature = "2d", doc = "# use avian2d::{math::RVec2, prelude::*};")]
+#[cfg_attr(feature = "3d", doc = "# use avian3d::{math::RVec3, prelude::*};")]
 /// # use bevy::prelude::*;
 /// # use core::f32::consts::PI;
 /// #
@@ -761,8 +761,11 @@ impl JointForces {
 /// // Set the global anchor point and rotate the first frame by 45 degrees about the local z axis.
 /// commands.spawn((
 ///     RevoluteJoint::new(body1, body2)
-#[cfg_attr(feature = "2d", doc = "        .with_anchor(Vec2::new(5.0, 2.0))")]
-#[cfg_attr(feature = "3d", doc = "        .with_anchor(Vec3::new(5.0, 2.0, 0.0))")]
+#[cfg_attr(feature = "2d", doc = "        .with_anchor(RVec2::new(5.0, 2.0))")]
+#[cfg_attr(
+    feature = "3d",
+    doc = "        .with_anchor(RVec3::new(5.0, 2.0, 0.0))"
+)]
 #[cfg_attr(feature = "2d", doc = "        .with_local_basis1(PI / 4.0),")]
 #[cfg_attr(
     feature = "3d",
