@@ -1,6 +1,12 @@
 use core::hint::unreachable_unchecked;
 
-use bevy::{ecs::component::Component, reflect::Reflect};
+use bevy::{
+    ecs::{
+        component::Component,
+        entity::{ComponentCloneCtx, SourceComponent},
+    },
+    reflect::Reflect,
+};
 
 use crate::prelude::RigidBody;
 
@@ -12,7 +18,13 @@ use crate::prelude::RigidBody;
 ///
 /// [`ColliderTree`]: crate::collider_tree::ColliderTree
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq, Hash, Reflect)]
+#[component(clone_behavior = Custom(clone_placeholder_proxy_key))]
 pub struct ColliderTreeProxyKey(u32);
+
+// Avoid aliasing keys when cloning colliders
+fn clone_placeholder_proxy_key(_source: &SourceComponent, ctx: &mut ComponentCloneCtx) {
+    ctx.write_target_component(ColliderTreeProxyKey::PLACEHOLDER);
+}
 
 impl ColliderTreeProxyKey {
     /// A placeholder proxy key used before the proxy is actually created.

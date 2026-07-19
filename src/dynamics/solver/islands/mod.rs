@@ -46,7 +46,12 @@ mod sleeping;
 pub use sleeping::{IslandSleepingPlugin, SleepBody, SleepIslands, WakeBody, WakeIslands};
 
 use bevy::{
-    ecs::{entity_disabling::Disabled, lifecycle::HookContext, world::DeferredWorld},
+    ecs::{
+        entity::{ComponentCloneCtx, SourceComponent},
+        entity_disabling::Disabled,
+        lifecycle::HookContext,
+        world::DeferredWorld,
+    },
     prelude::*,
 };
 
@@ -1309,8 +1314,17 @@ impl<Id: Copy> Copy for IslandNode<Id> {}
 /// A component that stores [`PhysicsIsland`] connectivity data for a rigid body.
 #[derive(Component, Clone, Debug, Default, Deref, DerefMut, PartialEq, Eq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[component(on_add = BodyIslandNode::on_add, on_remove = BodyIslandNode::on_remove)]
+#[component(
+    on_add = BodyIslandNode::on_add,
+    on_remove = BodyIslandNode::on_remove,
+    clone_behavior = Custom(clone_placeholder_body_island_node),
+)]
 pub struct BodyIslandNode(IslandNode<Entity>);
+
+// Avoid incorrect prev/next links when cloning a rigid body
+fn clone_placeholder_body_island_node(_source: &SourceComponent, ctx: &mut ComponentCloneCtx) {
+    ctx.write_target_component(BodyIslandNode::default());
+}
 
 impl BodyIslandNode {
     /// Creates a new [`BodyIslandNode`] with the given island ID.
