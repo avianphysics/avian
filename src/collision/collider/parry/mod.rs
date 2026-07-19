@@ -498,6 +498,7 @@ impl QueryCollider for Collider {
     ) -> f32 {
         self.shape_scaled()
             .distance_to_point(&make_pose(translation, rotation), point, solid)
+            .f32()
     }
 
     fn contains_point(
@@ -523,11 +524,11 @@ impl QueryCollider for Collider {
     ) -> Option<(f32, Vector)> {
         let hit = self.shape_scaled().cast_ray_and_get_normal(
             &make_pose(translation, rotation),
-            &parry::query::Ray::new(ray_origin, ray_direction),
-            max_distance,
+            &parry::query::Ray::new(ray_origin, ray_direction.real()),
+            max_distance.real(),
             solid,
         );
-        hit.map(|hit| (hit.time_of_impact, hit.normal))
+        hit.map(|hit| (hit.time_of_impact.f32(), hit.normal.f32()))
     }
 
     fn intersects_ray(
@@ -541,8 +542,8 @@ impl QueryCollider for Collider {
     ) -> bool {
         self.shape_scaled().intersects_ray(
             &make_pose(translation, rotation),
-            &parry::query::Ray::new(ray_origin, ray_direction),
-            max_distance,
+            &parry::query::Ray::new(ray_origin, ray_direction.real()),
+            max_distance.real(),
         )
     }
 
@@ -581,8 +582,8 @@ impl QueryCollider for Collider {
             shape_direction.real(),
             shape.shape_scaled().as_ref(),
             ShapeCastOptions {
-                max_time_of_impact: settings.max_distance,
-                target_distance: settings.target_distance,
+                max_time_of_impact: settings.max_distance.real(),
+                target_distance: settings.target_distance.real(),
                 stop_at_penetration: !settings.ignore_origin_penetration,
                 compute_impact_geometry_on_penetration: settings.compute_contact_on_penetration,
             },

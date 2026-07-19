@@ -545,7 +545,7 @@ pub struct ShapeHitDataWithoutEntity {
     /// The point where the shapes touch
     pub point: RVector,
     /// The normal from the collider to the cast shape
-    pub normal: RVector,
+    pub normal: Vector,
     /// How far the shapes penetrate
     pub penetration: f32,
 }
@@ -577,7 +577,7 @@ pub struct ShapeHitData {
     /// The closest point where the shapes touch.
     pub point: RVector,
     /// The normal from the collider to the cast shape.
-    pub normal: RVector,
+    pub normal: Vector,
     /// How far the shapes penetrate.
     pub penetration: f32,
 }
