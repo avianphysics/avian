@@ -412,6 +412,8 @@ struct CachedContactStatusChangeSystemState(
 pub struct FlushContactStatusChangeQueue;
 
 impl Command for FlushContactStatusChangeQueue {
+    type Out = ();
+
     fn apply(self, world: &mut World) {
         // The cached system state may not exist if the `SolverPlugin` was not added.
         world.try_resource_scope(
@@ -425,7 +427,7 @@ impl Command for FlushContactStatusChangeQueue {
                         mut constraint_graph,
                         mut islands,
                         mut body_islands,
-                    ) = state.0.get_mut(world);
+                    ) = state.0.get_mut(world).unwrap();
 
                     for change in changes.drain(..) {
                         apply_contact_status_change(
