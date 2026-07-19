@@ -170,7 +170,7 @@
 //! solved automatically according to the `solve` method!
 //!
 //! If the constraint is a [joint](crate::dynamics::joints), it is recommended to also add an instance
-//! of [`JointGraphPlugin`](crate::dynamics::solver::joint_graph::JointGraphPlugin) for the constraint type.
+//! of [`JointGraphPlugin`](crate::dynamics::joints::joint_graph::JointGraphPlugin) for the constraint type.
 //! This is required for sleeping and the `JointCollisionDisabled` component to work.
 //!
 //! You can find a working example of a custom constraint

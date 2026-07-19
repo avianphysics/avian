@@ -82,6 +82,7 @@ pub mod prelude {
             AngleLimit, AngularMotor, DistanceJoint, DistanceLimit, FixedJoint, JointAnchor,
             JointBasis, JointCollisionDisabled, JointDamping, JointDisabled, JointForces,
             JointFrame, JointPlugin, LinearMotor, MotorModel, PrismaticJoint, RevoluteJoint,
+            joint_graph::JointGraph,
         },
         rigid_body::{
             body_size_metrics::{BodySizeMetrics, BodySizeMetricsPlugin},

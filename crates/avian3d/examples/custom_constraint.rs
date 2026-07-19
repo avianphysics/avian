@@ -1,8 +1,7 @@
 use avian3d::{
     dynamics::{
-        joints::EntityConstraint,
+        joints::{EntityConstraint, joint_graph::JointGraphPlugin},
         solver::{
-            joint_graph::JointGraphPlugin,
             solver_body::{SolverBody, SolverBodyInertia},
             xpbd::*,
         },

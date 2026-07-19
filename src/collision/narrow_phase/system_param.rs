@@ -7,16 +7,10 @@ use crate::{
         contact_types::{ContactEdgeFlags, ContactId},
     },
     data_structures::{bit_vec::BitVec, pair_key::PairKey},
-    dynamics::solver::{
-        constraint_graph::ConstraintGraph,
-        islands::{BodyIslandNode, IslandId, PhysicsIslands, WakeIslands},
-        joint_graph::JointGraph,
-    },
     prelude::*,
 };
 use bevy::{
     ecs::{
-        entity_disabling::Disabled,
         query::QueryData,
         system::{SystemParam, SystemParamItem, lifetimeless::Read},
     },
@@ -64,20 +58,19 @@ struct RigidBodyQuery {
 /// - Updates each active [`ContactPair`] in the [`ContactGraph`].
 /// - Sends [collision events](crate::collision::collision_events) when colliders start or stop touching.
 /// - Removes contact pairs from the [`ContactGraph`] when AABBs stop overlapping.
-/// - Adds [`ContactManifold`]s to the [`ConstraintGraph`] when they are created.
-/// - Removes [`ContactManifold`]s from the [`ConstraintGraph`] when they are destroyed.
+/// - Records [`ContactStatusChange`]s for the solver when contacts start or stop generating contact manifolds.
+///
+/// [`ConstraintGraph`]: crate::dynamics::solver::constraint_graph::ConstraintGraph
+/// [`PhysicsIslands`]: crate::dynamics::solver::islands::PhysicsIslands
 #[derive(SystemParam)]
 #[expect(missing_docs)]
 pub struct NarrowPhase<'w, 's, C: AnyCollider> {
     collider_query: Query<'w, 's, ColliderQuery<C>, Without<ColliderDisabled>>,
     colliding_entities_query: Query<'w, 's, &'static mut CollidingEntities>,
     body_query: Query<'w, 's, RigidBodyQuery, Without<RigidBodyDisabled>>,
-    body_islands:
-        Query<'w, 's, &'static mut BodyIslandNode, Or<(With<Disabled>, Without<Disabled>)>>,
     pub contact_graph: ResMut<'w, ContactGraph>,
-    pub joint_graph: ResMut<'w, JointGraph>,
-    pub constraint_graph: ResMut<'w, ConstraintGraph>,
-    pub islands: Option<ResMut<'w, PhysicsIslands>>,
+    /// The queue of contact status changess.
+    pub contact_status_changes: ResMut<'w, ContactStatusChangeQueue>,
     contact_status_bits: ResMut<'w, ContactStatusBits>,
     #[cfg(feature = "parallel")]
     thread_local_contact_status_bits: ResMut<'w, ThreadLocalContactStatusBits>,
@@ -102,14 +95,54 @@ pub(super) struct ContactStatusBits(pub BitVec);
 #[derive(Resource, Default, Deref, DerefMut)]
 pub(super) struct ThreadLocalContactStatusBits(pub ThreadLocal<RefCell<BitVec>>);
 
+/// A change in a contact's solver status, recorded by the narrow phase
+/// and applied by the solver.
+///
+/// The narrow phase only *detects and records* these changes.
+/// The solver drains the [`ContactStatusChangeQueue`] queue and applies them,
+/// keeping the narrow phase and solver decoupled.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ContactStatusChange {
+    /// The contact started touching and should generate constraints.
+    StartedGeneratingConstraints(ContactId),
+    /// The contact stopped touching and should stop generating constraints.
+    ///
+    /// The bodies are captured here because the contact edge no longer exists.
+    StoppedGeneratingConstraints {
+        /// The contact whose constraints should be removed.
+        contact_id: ContactId,
+        /// The first body in the contact.
+        body1: Entity,
+        /// The second body in the contact.
+        body2: Entity,
+    },
+    /// The number of manifolds of a touching contact changed by `delta`.
+    /// Constraints should be added (if `delta > 0`) or removed (if `delta < 0`)
+    /// to match the new manifold count.
+    ManifoldCountChanged {
+        /// The contact whose manifold count changed.
+        contact: ContactId,
+        /// The first body in the contact.
+        body1: Entity,
+        /// The second body in the contact.
+        body2: Entity,
+        /// The signed change in the number of manifolds.
+        delta: i16,
+    },
+}
+
+/// A queue of [`ContactStatusChange`]s recorded by the narrow phase
+/// and applied by the solver.
+#[derive(Resource, Default, Debug, Deref, DerefMut)]
+pub struct ContactStatusChangeQueue(pub Vec<ContactStatusChange>);
+
 impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
     /// Updates the narrow phase.
     ///
     /// - Updates each active [`ContactPair`] in the [`ContactGraph`].
     /// - Sends [collision events](crate::collision::collision_events) when colliders start or stop touching.
     /// - Removes contact pairs from the [`ContactGraph`] when AABBs stop overlapping.
-    /// - Adds [`ContactManifold`]s to the [`ConstraintGraph`] when they are created.
-    /// - Removes [`ContactManifold`]s from the [`ConstraintGraph`] when they are destroyed.
+    /// - Records [`ContactStatusChange`]s into [`ContactStatusChangeQueue`] for the solver to apply.
     pub fn update<H: CollisionHooks>(
         &mut self,
         collision_started_writer: &mut MessageWriter<CollisionStart>,
@@ -124,9 +157,10 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
         // Update contacts for all contact pairs.
         self.update_contacts::<H>(delta_secs, hooks, context, commands);
 
-        let mut islands_to_wake: Vec<IslandId> = Vec::with_capacity(128);
-
         // Process contact status changes, iterating over set bits serially to maintain determinism.
+        //
+        // The narrow phase only updates the `ContactGraph` and records `ContactStatusChange`s.
+        // The solver applies those changes to the constraint graph and physics islands.
         //
         // Iterating over set bits is done efficiently with the "count trailing zeros" method:
         // https://lemire.me/blog/2018/02/21/iterating-over-set-bits-quickly/
@@ -173,27 +207,13 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     if contact_pair.generates_constraints()
                         && let (Some(body1), Some(body2)) = (contact_pair.body1, contact_pair.body2)
                     {
-                        let has_island = contact_edge.island.is_some();
-
-                        // Remove the contact pair from the constraint graph.
-                        for _ in 0..contact_edge.constraint_handles.len() {
-                            self.constraint_graph.pop_manifold(
-                                &mut self.contact_graph.edges,
+                        self.contact_status_changes.push(
+                            ContactStatusChange::StoppedGeneratingConstraints {
                                 contact_id,
                                 body1,
                                 body2,
-                            );
-                        }
-
-                        // Unlink the contact pair from its island.
-                        if has_island && let Some(islands) = &mut self.islands {
-                            islands.remove_contact(
-                                contact_id,
-                                &mut self.body_islands,
-                                &mut self.contact_graph.edges,
-                                &self.joint_graph,
-                            );
-                        }
+                            },
+                        );
                     }
 
                     // Remove the contact edge from the contact graph.
@@ -227,28 +247,9 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                         .set(ContactPairFlags::STARTED_TOUCHING, false);
 
                     if contact_pair.generates_constraints() {
-                        // Add the contact pair to the constraint graph.
-                        for _ in contact_pair.manifolds.iter() {
-                            self.constraint_graph
-                                .push_manifold(contact_edge, contact_pair);
-                        }
-
-                        // Link the contact pair to an island.
-                        if let Some(islands) = &mut self.islands {
-                            let island = islands.add_contact(
-                                contact_id,
-                                &mut self.body_islands,
-                                &mut self.contact_graph,
-                                &mut self.joint_graph,
-                            );
-
-                            if let Some(island) = island
-                                && island.is_sleeping
-                            {
-                                // Wake up the island if it was previously sleeping.
-                                islands_to_wake.push(island.id);
-                            }
-                        }
+                        self.contact_status_changes.push(
+                            ContactStatusChange::StartedGeneratingConstraints(contact_id),
+                        );
                     }
                 } else if contact_pair
                     .flags
@@ -281,35 +282,16 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                         .flags
                         .set(ContactPairFlags::STOPPED_TOUCHING, false);
 
-                    // Remove the contact pair from the constraint graph.
                     if contact_pair.generates_constraints()
-                        && !contact_edge.constraint_handles.is_empty()
                         && let (Some(body1), Some(body2)) = (contact_pair.body1, contact_pair.body2)
                     {
-                        for _ in 0..contact_edge.constraint_handles.len() {
-                            self.constraint_graph.pop_manifold(
-                                &mut self.contact_graph.edges,
+                        self.contact_status_changes.push(
+                            ContactStatusChange::StoppedGeneratingConstraints {
                                 contact_id,
                                 body1,
                                 body2,
-                            );
-                        }
-
-                        // Unlink the contact pair from its island.
-                        if let Some(islands) = &mut self.islands {
-                            let island = islands.remove_contact(
-                                contact_id,
-                                &mut self.body_islands,
-                                &mut self.contact_graph.edges,
-                                &self.joint_graph,
-                            );
-
-                            // TODO: Do we need this?
-                            if island.is_sleeping {
-                                // Wake up the island if it was previously sleeping.
-                                islands_to_wake.push(island.id);
-                            }
-                        }
+                            },
+                        );
                     }
                 } else if contact_pair.is_touching()
                     && contact_pair
@@ -321,73 +303,33 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                         .flags
                         .set(ContactPairFlags::STARTED_GENERATING_CONSTRAINTS, false);
 
-                    // Add the contact pair to the constraint graph.
-                    for _ in contact_pair.manifolds.iter() {
-                        self.constraint_graph
-                            .push_manifold(contact_edge, contact_pair);
-                    }
-
-                    // Link the contact pair to an island.
-                    if let Some(islands) = &mut self.islands {
-                        let island = islands.add_contact(
-                            contact_id,
-                            &mut self.body_islands,
-                            &mut self.contact_graph,
-                            &mut self.joint_graph,
-                        );
-
-                        if let Some(island) = island
-                            && island.is_sleeping
-                        {
-                            // Wake up the island if it was previously sleeping.
-                            islands_to_wake.push(island.id);
-                        }
-                    }
+                    self.contact_status_changes.push(
+                        ContactStatusChange::StartedGeneratingConstraints(contact_id),
+                    );
                 } else if contact_pair.is_touching()
                     && contact_pair.generates_constraints()
-                    && contact_pair.manifold_count_change > 0
+                    && contact_pair.manifold_count_change != 0
                 {
-                    // The contact pair is still touching, but the manifold count has increased.
-                    // Add the new manifolds to the constraint graph.
-                    for _ in 0..contact_pair.manifold_count_change {
-                        self.constraint_graph
-                            .push_manifold(contact_edge, contact_pair);
-                    }
-                    contact_pair.manifold_count_change = 0;
-                } else if contact_pair.is_touching()
-                    && contact_pair.generates_constraints()
-                    && contact_pair.manifold_count_change < 0
-                {
-                    // The contact pair is still touching, but the manifold count has decreased.
-                    // Remove the excess manifolds from the constraint graph.
-                    let removal_count = contact_pair.manifold_count_change.unsigned_abs() as usize;
+                    // The contact pair is still touching, but the manifold count changed.
+                    // Let the solver add or remove the corresponding constraints.
+                    let delta = contact_pair.manifold_count_change;
                     contact_pair.manifold_count_change = 0;
 
                     if let (Some(body1), Some(body2)) = (contact_pair.body1, contact_pair.body2) {
-                        for _ in 0..removal_count {
-                            self.constraint_graph.pop_manifold(
-                                &mut self.contact_graph.edges,
-                                contact_id,
+                        self.contact_status_changes.push(
+                            ContactStatusChange::ManifoldCountChanged {
+                                contact: contact_id,
                                 body1,
                                 body2,
-                            );
-                        }
+                                delta,
+                            },
+                        );
                     }
                 }
 
                 // Clear the least significant set bit.
                 bits &= bits - 1;
             }
-        }
-
-        if !islands_to_wake.is_empty() {
-            islands_to_wake.sort_unstable();
-            islands_to_wake.dedup();
-
-            // Wake up the islands that were previously sleeping.
-            commands.command_scope(|mut commands| {
-                commands.queue(WakeIslands(islands_to_wake));
-            });
         }
     }
 

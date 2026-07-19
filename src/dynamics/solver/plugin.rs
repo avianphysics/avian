@@ -1,12 +1,16 @@
 use crate::{
     dynamics::{
-        joints::EntityConstraint,
+        joints::{
+            EntityConstraint,
+            joint_graph::{JointGraph, JointGraphChange},
+        },
         solver::{
             SolverDiagnostics,
             constraint_graph::{
                 COLOR_OVERFLOW_INDEX, ConstraintGraph, ContactManifoldHandle, GraphColor,
             },
             contact::ContactConstraint,
+            islands::{BodyIslandNode, IslandId, PhysicsIslands, WakeIslands},
             schedule::SubstepSolverSystems,
             softness_parameters::{SoftnessCoefficients, SoftnessParameters},
             solver_body::{SolverBody, SolverBodyInertia},
@@ -15,7 +19,11 @@ use crate::{
     prelude::*,
 };
 use bevy::{
-    ecs::{query::QueryData, system::lifetimeless::Read},
+    ecs::{
+        entity_disabling::Disabled,
+        query::QueryData,
+        system::{SystemState, lifetimeless::Read},
+    },
     prelude::*,
 };
 use core::cmp::Ordering;
@@ -100,12 +108,31 @@ impl Plugin for SolverPlugin {
             app.insert_resource(PhysicsLengthUnit(self.length_unit));
         }
 
+        // Cache the system state used by the `FlushContactStatusChangeQueue` command.
+        let cached_state = CachedContactStatusChangeSystemState(SystemState::new(app.world_mut()));
+        app.insert_resource(cached_state);
+
         // Get the `PhysicsSchedule`, and panic if it doesn't exist.
         let physics = app
             .get_schedule_mut(PhysicsSchedule)
             .expect("add PhysicsSchedule first");
 
         physics.add_systems(update_contact_softness.before(PhysicsStepSystems::NarrowPhase));
+
+        // Apply queued contact status changes and joint graph changes
+        // to the constraint graph and islands.
+        //
+        // These are drained at two points each time step:
+        //
+        // - Before the broad phase (contacts only)
+        // - At the start of the solver
+        physics.add_systems(apply_contact_status_changes.in_set(PhysicsStepSystems::First));
+        physics.add_systems(
+            (apply_contact_status_changes, apply_joint_graph_changes)
+                .chain()
+                .in_set(PhysicsStepSystems::Solver)
+                .before(SolverSystems::PrepareSolverBodies),
+        );
 
         // Prepare contact constraints before the substepping loop.
         physics.add_systems(
@@ -153,6 +180,276 @@ impl Plugin for SolverPlugin {
     fn finish(&self, app: &mut App) {
         // Register timer and counter diagnostics for the solver.
         app.register_physics_diagnostics::<SolverDiagnostics>();
+    }
+}
+
+/// Applies the [`ContactStatusChange`]s to the [`ConstraintGraph`] and [`PhysicsIslands`].
+pub fn apply_contact_status_changes(
+    mut changes: ResMut<ContactStatusChangeQueue>,
+    contact_graph: Res<ContactGraph>,
+    mut constraint_graph: ResMut<ConstraintGraph>,
+    mut islands: Option<ResMut<PhysicsIslands>>,
+    mut body_islands: Query<&mut BodyIslandNode, Or<(With<Disabled>, Without<Disabled>)>>,
+    mut commands: Commands,
+) {
+    if changes.is_empty() {
+        return;
+    }
+
+    let mut islands_to_wake: Vec<IslandId> = Vec::new();
+
+    for change in changes.drain(..) {
+        apply_contact_status_change(
+            change,
+            &contact_graph,
+            &mut constraint_graph,
+            islands.as_deref_mut(),
+            &mut body_islands,
+            &mut islands_to_wake,
+        );
+    }
+
+    if !islands_to_wake.is_empty() {
+        islands_to_wake.sort_unstable();
+        islands_to_wake.dedup();
+
+        // Wake up the islands that were previously sleeping.
+        commands.queue(WakeIslands(islands_to_wake));
+    }
+}
+
+/// Applies [`JointGraphChange`] messages to [`PhysicsIslands`].
+pub fn apply_joint_graph_changes(
+    mut changes: MessageReader<JointGraphChange>,
+    joint_graph: Res<JointGraph>,
+    mut islands: Option<ResMut<PhysicsIslands>>,
+    mut body_islands: Query<&mut BodyIslandNode, Or<(With<Disabled>, Without<Disabled>)>>,
+    mut commands: Commands,
+) {
+    let Some(islands) = &mut islands else {
+        // Islands are not in use, so there is nothing to update.
+        changes.clear();
+        return;
+    };
+
+    let mut islands_to_wake: Vec<IslandId> = Vec::new();
+
+    for &change in changes.read() {
+        match change {
+            JointGraphChange::Added(joint_id) => {
+                // The joint may have already been removed before this change was applied.
+                if joint_graph.get_by_id(joint_id).is_none() {
+                    continue;
+                }
+
+                // Link the joint to an island.
+                if let Some(island) = islands.add_joint(joint_id, &mut body_islands, &joint_graph)
+                    && island.is_sleeping
+                {
+                    // Wake up the island if it was previously sleeping.
+                    islands_to_wake.push(island.id);
+                }
+            }
+            JointGraphChange::Removed(joint_id) => {
+                // The joint may never have been linked to an island.
+                if islands.joint_node(joint_id).is_none() {
+                    continue;
+                }
+
+                // Unlink the joint from its island.
+                if let Some(island) = islands.remove_joint(joint_id, &mut body_islands)
+                    && island.is_sleeping
+                {
+                    // Wake up the island if it was previously sleeping.
+                    islands_to_wake.push(island.id);
+                }
+            }
+        }
+    }
+
+    if !islands_to_wake.is_empty() {
+        islands_to_wake.sort_unstable();
+        islands_to_wake.dedup();
+
+        // Wake up the islands that were previously sleeping.
+        commands.queue(WakeIslands(islands_to_wake));
+    }
+}
+
+/// Applies a single [`ContactStatusChange`] to the [`ConstraintGraph`] and [`PhysicsIslands`].
+///
+/// Any islands that should be woken up are pushed to `islands_to_wake`.
+fn apply_contact_status_change(
+    change: ContactStatusChange,
+    contact_graph: &ContactGraph,
+    constraint_graph: &mut ConstraintGraph,
+    islands: Option<&mut PhysicsIslands>,
+    body_islands: &mut Query<&mut BodyIslandNode, Or<(With<Disabled>, Without<Disabled>)>>,
+    islands_to_wake: &mut Vec<IslandId>,
+) {
+    match change {
+        ContactStatusChange::StartedGeneratingConstraints(contact) => {
+            let Some((_, contact_pair)) = contact_graph.get_by_id(contact) else {
+                return;
+            };
+
+            // Add a contact constraint for each manifold.
+            for _ in 0..contact_pair.manifolds.len() {
+                constraint_graph.push_manifold(contact_pair);
+            }
+
+            // Link the contact to an island.
+            if let Some(islands) = islands {
+                let island = islands.add_contact(contact, body_islands, contact_graph);
+
+                if let Some(island) = island
+                    && island.is_sleeping
+                {
+                    // Wake up the island if it was previously sleeping.
+                    islands_to_wake.push(island.id);
+                }
+            }
+        }
+        ContactStatusChange::StoppedGeneratingConstraints {
+            contact_id: contact,
+            body1,
+            body2,
+        } => {
+            // Remove the contact's constraints.
+            constraint_graph.remove_contact(contact, body1, body2);
+
+            // Unlink the contact from its island.
+            if let Some(islands) = islands
+                && islands.contact_node(contact).is_some()
+            {
+                let island = islands.remove_contact(contact, body_islands);
+                let island_id = island.id;
+
+                // TODO: Do we need this?
+                if island.is_sleeping {
+                    // Wake up the island if it was previously sleeping.
+                    islands_to_wake.push(island_id);
+                }
+
+                // The island may now be empty. Clean it up.
+                islands.remove_island_if_empty(island_id);
+            }
+        }
+        ContactStatusChange::ManifoldCountChanged {
+            contact,
+            body1,
+            body2,
+            delta,
+        } => {
+            if delta > 0 {
+                // The manifold count increased. Add the new manifolds to the constraint graph.
+                let Some((_, contact_pair)) = contact_graph.get_by_id(contact) else {
+                    return;
+                };
+                for _ in 0..delta {
+                    constraint_graph.push_manifold(contact_pair);
+                }
+            } else {
+                // The manifold count decreased. Remove the excess manifolds.
+                for _ in 0..delta.unsigned_abs() {
+                    constraint_graph.pop_manifold(contact, body1, body2);
+                }
+            }
+        }
+    }
+}
+
+/// A cached [`SystemState`] for [`FlushContactStatusChangeQueue`].
+#[derive(Resource)]
+struct CachedContactStatusChangeSystemState(
+    SystemState<(
+        ResMut<'static, ContactStatusChangeQueue>,
+        Res<'static, ContactGraph>,
+        ResMut<'static, ConstraintGraph>,
+        Option<ResMut<'static, PhysicsIslands>>,
+        Query<
+            'static,
+            'static,
+            &'static mut BodyIslandNode,
+            Or<(With<Disabled>, Without<Disabled>)>,
+        >,
+    )>,
+);
+
+/// A [`Command`] that immediately applies all queued [`ContactStatusChange`]s to the
+/// [`ConstraintGraph`] and [`PhysicsIslands`], rather than waiting for the next physics step.
+///
+/// The narrow phase and the collider/body lifecycle observers record contact status changes into
+/// the [`ContactStatusChangeQueue`], which is normally drained during the physics step.
+/// Queuing this command forces those changes to be applied right away.
+///
+/// This can be useful if the constraint graph and islands need to be consistent immediately
+/// after despawning colliders or bodies outside of the physics schedule. In general however,
+/// it is best to let the physics step handle this automatically.
+///
+/// # Example
+///
+/// ```
+#[cfg_attr(
+    feature = "2d",
+    doc = "use avian2d::{dynamics::solver::FlushContactStatusChangeQueue, prelude::*};"
+)]
+#[cfg_attr(
+    feature = "3d",
+    doc = "use avian3d::{dynamics::solver::FlushContactStatusChangeQueue, prelude::*};"
+)]
+/// use bevy::prelude::*;
+///
+/// fn clear_scene(mut commands: Commands, bodies: Query<Entity, With<RigidBody>>) {
+///     for entity in &bodies {
+///         commands.entity(entity).despawn();
+///     }
+///
+///     // Apply the resulting constraint graph and island changes immediately.
+///     commands.queue(FlushContactStatusChangeQueue);
+/// }
+/// ```
+pub struct FlushContactStatusChangeQueue;
+
+impl Command for FlushContactStatusChangeQueue {
+    type Out = ();
+
+    fn apply(self, world: &mut World) {
+        // The cached system state may not exist if the `SolverPlugin` was not added.
+        world.try_resource_scope(
+            |world, mut state: Mut<CachedContactStatusChangeSystemState>| {
+                let mut islands_to_wake: Vec<IslandId> = Vec::new();
+
+                {
+                    let (
+                        mut changes,
+                        contact_graph,
+                        mut constraint_graph,
+                        mut islands,
+                        mut body_islands,
+                    ) = state.0.get_mut(world).unwrap();
+
+                    for change in changes.drain(..) {
+                        apply_contact_status_change(
+                            change,
+                            &contact_graph,
+                            &mut constraint_graph,
+                            islands.as_deref_mut(),
+                            &mut body_islands,
+                            &mut islands_to_wake,
+                        );
+                    }
+                }
+
+                if !islands_to_wake.is_empty() {
+                    islands_to_wake.sort_unstable();
+                    islands_to_wake.dedup();
+
+                    // Wake up the islands that were previously sleeping.
+                    WakeIslands(islands_to_wake).apply(world);
+                }
+            },
+        );
     }
 }
 

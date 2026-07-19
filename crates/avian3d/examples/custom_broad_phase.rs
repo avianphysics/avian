@@ -1,4 +1,4 @@
-use avian3d::{dynamics::solver::joint_graph::JointGraph, prelude::*};
+use avian3d::{dynamics::joints::joint_graph::JointGraph, prelude::*};
 use bevy::prelude::*;
 use examples_common_3d::ExampleCommonPlugin;
 

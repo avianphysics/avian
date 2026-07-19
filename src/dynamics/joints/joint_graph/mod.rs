@@ -4,15 +4,12 @@
 //! [joints]: crate::dynamics::joints
 
 mod plugin;
-pub use plugin::{JointComponentId, JointGraphPlugin};
+pub use plugin::{JointComponentId, JointGraphChange, JointGraphPlugin};
 
-use crate::{
-    data_structures::{
-        graph::{EdgeIndex, NodeIndex},
-        sparse_secondary_map::SparseSecondaryEntityMap,
-        stable_graph::StableUnGraph,
-    },
-    dynamics::solver::islands::IslandNode,
+use crate::data_structures::{
+    graph::{EdgeIndex, NodeIndex},
+    sparse_secondary_map::SparseSecondaryEntityMap,
+    stable_graph::StableUnGraph,
 };
 use bevy::prelude::*;
 
@@ -87,9 +84,6 @@ pub struct JointGraphEdge {
     ///
     /// [`JointCollisionDisabled`]: crate::dynamics::joints::JointCollisionDisabled
     pub collision_disabled: bool,
-
-    /// The [`IslandNode`] associated with this joint.
-    pub island: IslandNode<JointId>,
 }
 
 impl JointGraphEdge {
@@ -103,7 +97,6 @@ impl JointGraphEdge {
             body1,
             body2,
             collision_disabled,
-            island: IslandNode::default(),
         }
     }
 }
@@ -235,12 +228,10 @@ impl JointGraph {
     /// Creating a joint edge with this method will *not* wake up the entities involved
     /// or do any other clean-up. Only use this method if you know what you are doing.
     #[inline]
-    pub fn add_joint(
-        &mut self,
-        body1: Entity,
-        body2: Entity,
-        joint_edge: JointGraphEdge,
-    ) -> JointId {
+    pub fn add_joint(&mut self, joint_edge: JointGraphEdge) -> JointId {
+        let body1 = joint_edge.body1;
+        let body2 = joint_edge.body2;
+
         // Get the indices of the entities in the graph.
         let body1_index = self
             .entity_to_body

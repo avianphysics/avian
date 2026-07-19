@@ -109,7 +109,8 @@ pub mod prelude {
     pub use super::hooks::{ActiveCollisionHooks, CollisionHooks};
     #[expect(deprecated)]
     pub use super::narrow_phase::{
-        NarrowPhaseConfig, NarrowPhasePlugin, NarrowPhaseSet, NarrowPhaseSystems,
+        ContactStatusChange, ContactStatusChangeQueue, NarrowPhaseConfig, NarrowPhasePlugin,
+        NarrowPhaseSet, NarrowPhaseSystems,
     };
 }
 

@@ -25,13 +25,29 @@ use bevy::{
     reflect::Reflect,
 };
 
+use smallvec::SmallVec;
+
 use crate::{
-    collision::contact_types::{ContactEdge, ContactGraphInternal, ContactId},
+    collision::contact_types::ContactId,
     data_structures::bit_vec::BitVec,
     prelude::{ContactPair, ContactPairFlags},
 };
 
 use super::contact::ContactConstraint;
+
+/// The [`ContactConstraintHandle`]s associated with a single contact, with one handle
+/// per contact manifold that generates constraints.
+///
+/// Stored inline for up to 2 (in 2D) or 4 (in 3D) manifolds before spilling to the heap.
+#[cfg(feature = "2d")]
+type ManifoldConstraintHandles = SmallVec<[ContactConstraintHandle; 2]>;
+
+/// The [`ContactConstraintHandle`]s associated with a single contact, with one handle
+/// per contact manifold that generates constraints.
+///
+/// Stored inline for up to 2 (in 2D) or 4 (in 3D) manifolds before spilling to the heap.
+#[cfg(feature = "3d")]
+type ManifoldConstraintHandles = SmallVec<[ContactConstraintHandle; 4]>;
 
 /// The maximum number of [`GraphColor`]s in the [`ConstraintGraph`].
 /// Constraints that cannot find a color are added to the overflow set,
@@ -129,6 +145,16 @@ pub struct ContactConstraintHandle {
 pub struct ConstraintGraph {
     /// The colors in the graph.
     pub colors: Vec<GraphColor>,
+
+    /// The [`ContactConstraintHandle`]s associated with each contact, indexed by [`ContactId`].
+    /// Each contact has one handle per contact manifold that generates constraints.
+    ///
+    /// Entries persist as empty lists once allocated, since [`ContactId`]s are reused by the
+    /// [`ContactGraph`].
+    ///
+    /// [`ContactGraph`]: crate::collision::contact_types::ContactGraph
+    #[reflect(ignore)]
+    contact_handles: Vec<ManifoldConstraintHandles>,
 }
 
 impl Default for ConstraintGraph {
@@ -156,11 +182,31 @@ impl ConstraintGraph {
             });
         }
 
-        Self { colors }
+        Self {
+            colors,
+            contact_handles: Vec::new(),
+        }
     }
 
-    /// Adds a manifold to the graph, associating it with the given contact edge and contact pair.
-    pub fn push_manifold(&mut self, contact_edge: &mut ContactEdge, contact_pair: &ContactPair) {
+    /// Returns the [`ContactConstraintHandle`]s associated with the given contact,
+    /// with one handle per contact manifold that generates constraints.
+    ///
+    /// Returns an empty slice if the contact has no associated constraints.
+    #[inline]
+    pub fn contact_handles(&self, contact_id: ContactId) -> &[ContactConstraintHandle] {
+        self.contact_handles
+            .get(contact_id.0 as usize)
+            .map_or(&[], |handles| handles.as_slice())
+    }
+
+    /// Returns the number of contact manifold constraints associated with the given contact.
+    #[inline]
+    pub fn manifold_count(&self, contact_id: ContactId) -> usize {
+        self.contact_handles(contact_id).len()
+    }
+
+    /// Adds a manifold to the graph, associating it with the given contact pair.
+    pub fn push_manifold(&mut self, contact_pair: &ContactPair) {
         // TODO: These shouldn't be `Option`s.
         let (Some(body1), Some(body2)) = (contact_pair.body1, contact_pair.body2) else {
             return;
@@ -218,15 +264,21 @@ impl ConstraintGraph {
             }
         }
 
-        // Add a constraint handle to the contact edge.
+        // Ensure there is a slot for this contact's constraint handles.
+        let contact_index = contact_pair.contact_id.0 as usize;
+        if contact_index >= self.contact_handles.len() {
+            self.contact_handles
+                .resize_with(contact_index + 1, ManifoldConstraintHandles::new);
+        }
+
+        // Add a constraint handle for the contact.
+        let handles = &mut self.contact_handles[contact_index];
+        let manifold_index = handles.len();
         let color = &mut self.colors[color_index];
-        let manifold_index = contact_edge.constraint_handles.len();
-        contact_edge
-            .constraint_handles
-            .push(ContactConstraintHandle {
-                color_index: color_index as u8,
-                local_index: color.manifold_handles.len(),
-            });
+        handles.push(ContactConstraintHandle {
+            color_index: color_index as u8,
+            local_index: color.manifold_handles.len(),
+        });
 
         // Add the handle of the contact manifold to the color.
         color.manifold_handles.push(ContactManifoldHandle {
@@ -235,25 +287,24 @@ impl ConstraintGraph {
         });
     }
 
-    /// Removes a [`ContactConstraintHandle`] corresponding to a [`ContactManifold`]
-    /// from the end of the vector stored in the [`ContactEdge`], updating the color's
-    /// body set and manifold handles accordingly.
+    /// Removes the [`ContactConstraintHandle`] corresponding to the last [`ContactManifold`]
+    /// associated with the given contact, updating the color's body set and manifold handles
+    /// accordingly.
     ///
     /// Returns the removed [`ContactConstraintHandle`] if it exists.
+    ///
+    /// To remove *all* constraints associated with a contact, use [`remove_contact`](Self::remove_contact).
     ///
     /// [`ContactManifold`]: crate::collision::contact_types::ContactManifold
     pub fn pop_manifold(
         &mut self,
-        contact_graph: &mut ContactGraphInternal,
         contact_id: ContactId,
         body1: Entity,
         body2: Entity,
     ) -> Option<ContactConstraintHandle> {
-        // Remove a constraint handle from the contact edge.
-        let contact_edge = contact_graph
-            .edge_weight_mut(contact_id.into())
-            .unwrap_or_else(|| panic!("Contact edge not found in graph: {contact_id:?}"));
-        let contact_constraint_handle = contact_edge.constraint_handles.pop()?;
+        // Remove a constraint handle associated with the contact.
+        let handles = self.contact_handles.get_mut(contact_id.0 as usize)?;
+        let contact_constraint_handle = handles.pop()?;
 
         let color_index = contact_constraint_handle.color_index as usize;
         let local_index = contact_constraint_handle.local_index;
@@ -273,19 +324,11 @@ impl ConstraintGraph {
 
         if moved_index != local_index {
             // Fix moved manifold handle.
-            let moved_handle = &mut color.manifold_handles[local_index];
-            let contact_edge = contact_graph
-                .edge_weight_mut(moved_handle.contact_id.into())
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Contact edge not found in graph: {:?}",
-                        moved_handle.contact_id
-                    )
-                });
+            let moved_handle = color.manifold_handles[local_index];
 
             // Update the local index of the constraint handle associated with the moved manifold handle.
-            let constraint_handle =
-                &mut contact_edge.constraint_handles[moved_handle.manifold_index];
+            let constraint_handle = &mut self.contact_handles[moved_handle.contact_id.0 as usize]
+                [moved_handle.manifold_index];
             debug_assert!(constraint_handle.color_index == color_index as u8);
             debug_assert!(constraint_handle.local_index == moved_index);
             constraint_handle.local_index = local_index;
@@ -293,6 +336,14 @@ impl ConstraintGraph {
 
         // Return the constraint handle that was removed.
         Some(contact_constraint_handle)
+    }
+
+    /// Removes all [`ContactConstraintHandle`]s associated with the given contact from the graph,
+    /// updating the colors' body sets and manifold handles accordingly.
+    ///
+    /// This is equivalent to calling [`pop_manifold`](Self::pop_manifold) until no handles remain.
+    pub fn remove_contact(&mut self, contact_id: ContactId, body1: Entity, body2: Entity) {
+        while self.pop_manifold(contact_id, body1, body2).is_some() {}
     }
 
     /// Clears the constraint graph, removing all colors and their contents.
@@ -310,5 +361,6 @@ impl ConstraintGraph {
             color.manifold_handles.clear();
             color.contact_constraints.clear();
         }
+        self.contact_handles.clear();
     }
 }

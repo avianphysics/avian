@@ -8,7 +8,6 @@ pub use plugin::*;
 pub mod constraint_graph;
 pub mod contact;
 pub mod islands;
-pub mod joint_graph;
 pub mod schedule;
 pub mod softness_parameters;
 pub mod solver_body;
@@ -19,7 +18,7 @@ mod diagnostics;
 pub use diagnostics::SolverDiagnostics;
 
 use crate::{
-    dynamics::solver::{joint_graph::JointGraphPlugin, solver_body::SolverBodyPlugin},
+    dynamics::{joints::joint_graph::JointGraphPlugin, solver::solver_body::SolverBodyPlugin},
     prelude::*,
 };
 use bevy::{app::PluginGroupBuilder, prelude::*};
@@ -39,7 +38,7 @@ use bevy::{app::PluginGroupBuilder, prelude::*};
 /// | [`CcdPlugin`]                     | Performs [Continuous Collision Detection (CCD)](dynamics::ccd) for fast dynamic bodies.                                                                    |
 /// | [`IslandPlugin`]                  | Manages [simulation islands](dynamics::solver::islands) for sleeping and waking.                                                                           |
 /// | [`IslandSleepingPlugin`]          | Manages sleeping and waking of [simulation islands](dynamics::solver::islands).                                                                            |
-/// | [`JointGraphPlugin`]              | Manages the [`JointGraph`](joint_graph::JointGraph) for each joint type.                                                                                   |
+/// | [`JointGraphPlugin`]              | Manages the [`JointGraph`] for each joint type.                                                          |
 /// | [`XpbdSolverPlugin`]              | Solves joints using Extended Position-Based Dynamics (XPBD). Requires the `xpbd_joints` feature.                                                           |
 ///
 /// Refer to the documentation of the plugins for more information about their responsibilities and implementations.
