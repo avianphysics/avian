@@ -185,7 +185,7 @@ pub trait BoundedCollider {
     /// #     fn center_of_mass(&self) -> Vec3 { Vec3::ZERO }
     /// # }
     /// #
-    /// impl AnyCollider for VoxelCollider {
+    /// impl BoundedCollider for VoxelCollider {
     ///     type Context = (
     ///         // you can query extra components here
     ///         SQuery<&'static VoxelData>,
@@ -193,15 +193,24 @@ pub trait BoundedCollider {
     ///         SRes<Time>,
     ///     );
     ///
-    /// #   fn aabb_with_context(
-    /// #       &self,
-    /// #       _: RVector,
-    #[cfg_attr(feature = "2d", doc = "#       _: impl Into<Rot2>,")]
-    #[cfg_attr(feature = "3d", doc = "#       _: impl Into<Quat>,")]
-    /// #       _: f32,
-    /// #       _: ColliderContext<Self::Context>,
-    /// #   ) -> ColliderAabb { unimplemented!() }
-    /// #
+    ///     // Set this to `Entity` to access the collider entities via
+    ///     // `context.collider1` / `context.collider2` in the methods below.
+    ///     type EntityUsage = Entity;
+    ///
+    ///     fn aabb_with_context(
+    ///         &self,
+    ///         position: RVector,
+    #[cfg_attr(feature = "2d", doc = "        rotation: impl Into<Rot2>,")]
+    #[cfg_attr(feature = "3d", doc = "        rotation: impl Into<Quat>,")]
+    ///         margin: f32,
+    ///         context: ColliderContext<Self::Context>,
+    ///     ) -> ColliderAabb {
+    ///         // do some computation...
+    /// #       unimplemented!()
+    ///     }
+    /// }
+    ///
+    /// impl AnyCollider for VoxelCollider {
     ///     fn contact_manifolds_with_context(
     ///         &self,
     ///         other: &Self,
@@ -213,7 +222,7 @@ pub trait BoundedCollider {
     #[cfg_attr(feature = "3d", doc = "        rotation2: impl Into<Quat>,")]
     ///         prediction_distance: f32,
     ///         manifolds: &mut Vec<ContactManifold>,
-    ///         context: ColliderPairContext<Self::Context>,
+    ///         context: ColliderPairContext<Self::Context, Self::EntityUsage>,
     ///     ) {
     ///         let [voxels1, voxels2] = context.0.get_many([context.collider1, context.collider2])
     ///             .expect("our own `VoxelCollider` entities should have `VoxelData`");
