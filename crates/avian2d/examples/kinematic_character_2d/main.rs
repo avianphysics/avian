@@ -14,7 +14,7 @@
 #[expect(clippy::type_complexity)]
 mod plugin;
 
-use avian2d::{math::*, prelude::*};
+use avian2d::prelude::*;
 use bevy::{asset::RenderAssetUsages, prelude::*, render::render_resource::PrimitiveTopology};
 use examples_common_2d::ExampleCommonPlugin;
 use plugin::*;
@@ -30,7 +30,7 @@ fn main() {
             CharacterControllerPlugin,
         ))
         .insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.1)))
-        .insert_resource(Gravity(Vector::NEG_Y * 1000.0))
+        .insert_resource(Gravity(Vec2::NEG_Y * 1000.0))
         .add_systems(Startup, setup)
         .run();
 }
@@ -135,9 +135,9 @@ fn setup(
     );
 
     let ramp_collider = Collider::triangle(
-        Vector::new(-125.0, 80.0),
-        Vector::NEG_X * 125.0,
-        Vector::X * 125.0,
+        Vec2::new(-125.0, 80.0),
+        Vec2::NEG_X * 125.0,
+        Vec2::X * 125.0,
     );
 
     commands.spawn((
@@ -159,9 +159,9 @@ fn setup(
     );
 
     let ramp_collider = Collider::triangle(
-        Vector::new(20.0, -40.0),
-        Vector::new(20.0, 40.0),
-        Vector::new(-20.0, -40.0),
+        Vec2::new(20.0, -40.0),
+        Vec2::new(20.0, 40.0),
+        Vec2::new(-20.0, -40.0),
     );
 
     commands.spawn((

@@ -10,7 +10,8 @@ use bevy::{
     ecs::entity::EntityHashSet,
     gltf::{GltfLoaderSettings, convert_coordinates::GltfConvertCoordinates},
     input::{common_conditions::input_just_pressed, mouse::AccumulatedMouseMotion},
-    pbr::{Atmosphere, ScatteringMedium},
+    light::{Atmosphere, atmosphere::ScatteringMedium},
+    pbr::AtmosphereSettings,
     prelude::*,
     window::{CursorGrabMode, CursorOptions},
 };
@@ -71,55 +72,66 @@ fn setup(
     ));
 
     // Scene
-    commands.spawn((
-        SceneRoot(assets.load_with_settings(
-            "https://github.com/avianphysics/avian_asset_files/raw/08f82a1031c4fbdf1a461600468d2a37593a804a/move_and_slide_level/move_and_slide_level.glb#Scene0",
-            |settings: &mut GltfLoaderSettings| {
-                settings.convert_coordinates = Some(GltfConvertCoordinates {
-                    rotate_scene_entity: true,
-                    rotate_meshes: true,
-                });
+    let path = "https://github.com/avianphysics/avian_asset_files/raw/08f82a1031c4fbdf1a461600468d2a37593a804a/move_and_slide_level/move_and_slide_level.glb#Scene0";
+    commands
+        .spawn((
+            WorldAssetRoot(
+                assets
+                    .load_builder()
+                    .with_settings(|settings: &mut GltfLoaderSettings| {
+                        settings.convert_coordinates = Some(GltfConvertCoordinates {
+                            rotate_scene_entity: true,
+                            rotate_meshes: true,
+                        });
+                    })
+                    .load(path),
+            ),
+            ColliderConstructorHierarchy::new(ColliderConstructor::TrimeshFromMesh),
+            RigidBody::Static,
+        ))
+        .observe(
+            |_ready: On<ColliderConstructorHierarchyReady>,
+             mut commands: Commands,
+             mut meshes: ResMut<Assets<Mesh>>,
+             mut materials: ResMut<Assets<StandardMaterial>>| {
+                // Add some dynamic cubes
+                for i in 0..5 {
+                    for j in 0..5 {
+                        let position = Vec3::new(i as f32 * 2.0 - 15.0, 0.0, j as f32 * 2.0 - 15.0);
+                        let cube = Cuboid::from_length(0.75);
+                        commands.spawn((
+                            Name::new("Cube"),
+                            Mesh3d(meshes.add(cube)),
+                            MeshMaterial3d(materials.add(StandardMaterial::default())),
+                            Collider::from(cube),
+                            RigidBody::Dynamic,
+                            Transform::from_translation(position),
+                        ));
+                    }
+                }
             },
-        )),
-        ColliderConstructorHierarchy::new(ColliderConstructor::TrimeshFromMesh),
-        RigidBody::Static,
-    )).observe(|
-        _ready: On<ColliderConstructorHierarchyReady>,
-        mut commands: Commands,
-        mut meshes: ResMut<Assets<Mesh>>,
-        mut materials: ResMut<Assets<StandardMaterial>>| {
-        // Add some dynamic cubes
-        for i in 0..5 {
-            for j in 0..5 {
-                let position = Vec3::new(i as f32 * 2.0 - 15.0, 0.0, j as f32 * 2.0 - 15.0);
-                let cube = Cuboid::from_length(0.75);
-                commands.spawn((
-                    Name::new("Cube"),
-                    Mesh3d(meshes.add(cube)),
-                    MeshMaterial3d(materials.add(StandardMaterial::default())),
-                    Collider::from(cube),
-                    RigidBody::Dynamic,
-                    Transform::from_translation(position),
-                ));
-            }
-        }
-    });
+        );
 
     // Light
     commands.spawn((
         DirectionalLight {
             illuminance: 6000.0,
-            shadows_enabled: true,
+            shadow_maps_enabled: true,
             ..default()
         },
         Transform::default().looking_at(Vec3::new(-1.0, -3.0, -2.0), Vec3::Y),
     ));
 
-    // Camera and atmosphere
+    // Atmosphere
+    commands.spawn(Atmosphere::earth(
+        scattering_media.add(ScatteringMedium::default()),
+    ));
+
+    // Camera
     commands.spawn((
         Camera3d::default(),
+        AtmosphereSettings::default(),
         Transform::from_xyz(-5.0, 3.5, 5.5).looking_at(Vec3::ZERO, Vec3::Y),
-        Atmosphere::earthlike(scattering_media.add(ScatteringMedium::default())),
         EnvironmentMapLight {
             diffuse_map: assets.load("https://github.com/avianphysics/avian_asset_files/raw/08f82a1031c4fbdf1a461600468d2a37593a804a/voortrekker_interior/voortrekker_interior_1k_diffuse.ktx2"),
             specular_map: assets.load("https://github.com/avianphysics/avian_asset_files/raw/08f82a1031c4fbdf1a461600468d2a37593a804a/voortrekker_interior/voortrekker_interior_1k_specular.ktx2"),
@@ -182,14 +194,13 @@ fn player_movement(
         movement_velocity = camera.rotation * movement_velocity;
 
         // Add to current velocity
-        lin_vel.0 += movement_velocity.adjust_precision();
+        lin_vel.0 += movement_velocity;
 
         let current_speed = lin_vel.length();
         if current_speed > 0.0 {
             // Apply friction
             lin_vel.0 = lin_vel.0 / current_speed
-                * (current_speed - current_speed * 20.0 * time.delta_secs().adjust_precision())
-                    .max(0.0)
+                * (current_speed - current_speed * 20.0 * time.delta_secs()).max(0.0)
         }
     }
 }
@@ -222,8 +233,8 @@ fn run_move_and_slide(
             projected_velocity,
         } = move_and_slide.move_and_slide(
             collider,
-            transform.translation.adjust_precision(),
-            transform.rotation.adjust_precision(),
+            transform.translation.real(),
+            transform.rotation,
             lin_vel.0,
             time.delta(),
             &MoveAndSlideConfig::default(),
@@ -235,10 +246,7 @@ fn run_move_and_slide(
                 } else {
                     gizmos.arrow(
                         hit.point.f32(),
-                        (hit.point
-                            + hit.normal.adjust_precision() * hit.collision_distance
-                                / time.delta_secs().adjust_precision())
-                        .f32(),
+                        hit.point.f32() + *hit.normal * hit.collision_distance / time.delta_secs(),
                         tailwind::EMERALD_400,
                     );
                 }
@@ -275,9 +283,9 @@ fn update_camera_transform(
     const MAX_DISTANCE: f32 = 15.0;
     camera.translation = player_transform.translation + camera.back() * MAX_DISTANCE;
     if let Some(hit) = spatial.cast_ray(
-        player_transform.translation.adjust_precision(),
+        player_transform.translation.real(),
         camera.back(),
-        MAX_DISTANCE.adjust_precision(),
+        MAX_DISTANCE,
         true,
         &SpatialQueryFilter::from_excluded_entities([player_entity]),
     ) {

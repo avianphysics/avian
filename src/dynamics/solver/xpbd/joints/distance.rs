@@ -49,7 +49,7 @@ impl XpbdConstraint<2> for DistanceJoint {
         // Prepare the base rotation difference.
         solver_data.world_r1 = body1.rotation * (local_anchor1 - body1.center_of_mass.0);
         solver_data.world_r2 = body2.rotation * (local_anchor2 - body2.center_of_mass.0);
-        solver_data.center_difference = (body2.position.0 - body1.position.0)
+        solver_data.center_difference = (body2.position.0 - body1.position.0).f32()
             + (body2.rotation * body2.center_of_mass.0 - body1.rotation * body1.center_of_mass.0);
     }
 
@@ -58,7 +58,7 @@ impl XpbdConstraint<2> for DistanceJoint {
         bodies: [&mut SolverBody; 2],
         inertias: [&SolverBodyInertia; 2],
         solver_data: &mut DistanceJointSolverData,
-        dt: Scalar,
+        dt: f32,
     ) {
         let [body1, body2] = bodies;
         let [inertia1, inertia2] = inertias;
@@ -79,7 +79,7 @@ impl XpbdConstraint<2> for DistanceJoint {
         // to keep the bodies within a certain distance from each other.
         let (dir, distance) = self.limits.compute_correction(separation);
 
-        if distance <= Scalar::EPSILON {
+        if distance <= f32::EPSILON {
             // No separation, no need to apply a correction.
             return;
         }

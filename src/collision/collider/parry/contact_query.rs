@@ -32,10 +32,10 @@ pub type UnsupportedShape = Unsupported;
 /// # #[cfg(feature = "2d")]
 /// # use avian2d::{collision::collider::contact_query::contact, prelude::*};
 /// # #[cfg(feature = "3d")]
-/// use avian3d::{collision::collider::contact_query::contact, prelude::*};
+/// use avian3d::{collision::collider::contact_query::contact, math::RVec3, prelude::*};
 /// use bevy::prelude::*;
 ///
-/// # #[cfg(all(feature = "3d", feature = "f32"))]
+/// # #[cfg(feature = "3d")]
 /// # {
 /// let collider1 = Collider::sphere(0.5);
 /// let collider2 = Collider::cuboid(1.0, 1.0, 1.0);
@@ -44,11 +44,11 @@ pub type UnsupportedShape = Unsupported;
 /// let contact = contact(
 ///     // First collider
 ///     &collider1,
-///     Vec3::default(),
+///     RVec3::default(),
 ///     Quat::default(),
 ///     // Second collider
 ///     &collider2,
-///     Vec3::X * 0.5,
+///     RVec3::X * 0.5,
 ///     Quat::default(),
 ///     // Prediction distance
 ///     0.0,
@@ -63,15 +63,15 @@ pub type UnsupportedShape = Unsupported;
 /// ```
 pub fn contact(
     collider1: &Collider,
-    position1: impl Into<Position>,
-    rotation1: impl Into<Rotation>,
+    position1: RVector,
+    rotation1: impl Into<Rot>,
     collider2: &Collider,
-    position2: impl Into<Position>,
-    rotation2: impl Into<Rotation>,
-    prediction_distance: Scalar,
+    position2: RVector,
+    rotation2: impl Into<Rot>,
+    prediction_distance: f32,
 ) -> Result<Option<SingleContact>, UnsupportedShape> {
-    let rotation1: Rotation = rotation1.into();
-    let rotation2: Rotation = rotation2.into();
+    let rotation1: Rot = rotation1.into();
+    let rotation2: Rot = rotation2.into();
     let isometry1 = make_pose(position1, rotation1);
     let isometry2 = make_pose(position2, rotation2);
 
@@ -80,15 +80,17 @@ pub fn contact(
         collider1.shape_scaled().0.as_ref(),
         &isometry2,
         collider2.shape_scaled().0.as_ref(),
-        prediction_distance,
+        prediction_distance.real(),
     )
     .map(|contact| {
         if let Some(contact) = contact {
             // Transform contact data into local space
-            let point1: Vector = rotation1.inverse() * contact.point1;
-            let point2: Vector = rotation2.inverse() * contact.point2;
-            let normal1: Vector = (rotation1.inverse() * contact.normal1).normalize();
-            let normal2: Vector = (rotation2.inverse() * contact.normal2).normalize();
+            let inv_rotation1 = rotation1.inverse();
+            let inv_rotation2 = rotation2.inverse();
+            let point1: Vector = inv_rotation1 * contact.point1.f32();
+            let point2: Vector = inv_rotation2 * contact.point2.f32();
+            let normal1: Vector = (inv_rotation1 * contact.normal1.f32()).normalize();
+            let normal2: Vector = (inv_rotation2 * contact.normal2.f32()).normalize();
 
             // Make sure the normals are valid
             if !normal1.is_normalized() || !normal2.is_normalized() {
@@ -100,7 +102,7 @@ pub fn contact(
                 point2,
                 normal1,
                 normal2,
-                -contact.dist,
+                -contact.dist.f32(),
             ))
         } else {
             None
@@ -125,10 +127,10 @@ pub fn contact(
 /// # #[cfg(feature = "2d")]
 /// # use avian2d::{collision::collider::contact_query::contact_manifolds, prelude::*};
 /// # #[cfg(feature = "3d")]
-/// use avian3d::{collision::collider::contact_query::contact_manifolds, prelude::*};
+/// use avian3d::{collision::collider::contact_query::contact_manifolds, math::RVec3, prelude::*};
 /// use bevy::prelude::*;
 ///
-/// # #[cfg(all(feature = "3d", feature = "f32"))]
+/// # #[cfg(feature = "3d")]
 /// # {
 /// let collider1 = Collider::sphere(0.5);
 /// let collider2 = Collider::cuboid(1.0, 1.0, 1.0);
@@ -138,11 +140,11 @@ pub fn contact(
 /// contact_manifolds(
 ///     // First collider
 ///     &collider1,
-///     Vec3::default(),
+///     RVec3::default(),
 ///     Quat::default(),
 ///     // Second collider
 ///     &collider2,
-///     Vec3::X * 0.25,
+///     RVec3::X * 0.25,
 ///     Quat::default(),
 ///     // Prediction distance
 ///     0.0,
@@ -155,18 +157,18 @@ pub fn contact(
 /// ```
 pub fn contact_manifolds(
     collider1: &Collider,
-    position1: impl Into<Position>,
-    rotation1: impl Into<Rotation>,
+    position1: RVector,
+    rotation1: impl Into<Rot>,
     collider2: &Collider,
-    position2: impl Into<Position>,
-    rotation2: impl Into<Rotation>,
-    prediction_distance: Scalar,
+    position2: RVector,
+    rotation2: impl Into<Rot>,
+    prediction_distance: f32,
     manifolds: &mut Vec<ContactManifold>,
 ) {
     let position1: Position = position1.into();
     let position2: Position = position2.into();
-    let rotation1: Rotation = rotation1.into();
-    let rotation2: Rotation = rotation2.into();
+    let rotation1: Rot = rotation1.into();
+    let rotation2: Rot = rotation2.into();
     let isometry1 = make_pose(position1, rotation1);
     let isometry2 = make_pose(position2, rotation2);
     let isometry12 = isometry1.inv_mul(&isometry2);
@@ -178,7 +180,7 @@ pub fn contact_manifolds(
         &isometry12,
         collider1.shape_scaled().0.as_ref(),
         collider2.shape_scaled().0.as_ref(),
-        prediction_distance,
+        prediction_distance.real(),
         &mut new_manifolds,
         &mut None,
     );
@@ -196,29 +198,29 @@ pub fn contact_manifolds(
             &isometry12,
             shape1,
             shape2,
-            prediction_distance,
+            prediction_distance.real(),
         )
     {
-        let normal = rotation1 * contact.normal1;
+        let normal = rotation1 * contact.normal1.f32();
 
         // Make sure the normal is valid
         if !normal.is_normalized() {
             return;
         }
 
-        let local_point1: Vector = contact.point1;
+        let local_point1: Vector = contact.point1.f32();
 
         // The contact point is the midpoint of the two points in world space.
         // The anchors are relative to the positions of the colliders.
         let point1 = rotation1 * local_point1;
-        let anchor1 = point1 + normal * contact.dist * 0.5;
-        let anchor2 = anchor1 + (position1.0 - position2.0);
-        let world_point = position1.0 + anchor1;
+        let anchor1 = point1 + normal * contact.dist.f32() * 0.5;
+        let anchor2 = anchor1 + (position1.0 - position2.0).f32();
+        let world_point = position1.0 + anchor1.real();
         let points = [ContactPoint::new(
             anchor1,
             anchor2,
             world_point,
-            -contact.dist,
+            -contact.dist.f32(),
         )];
 
         manifolds.push(ContactManifold::new(points, normal));
@@ -231,8 +233,8 @@ pub fn contact_manifolds(
         }
 
         let subpos1 = manifold.subshape_pos1.unwrap_or_default();
-        let local_normal: Vector = (subpos1.rotation * manifold.local_n1).normalize();
-        let normal = rotation1 * local_normal;
+        let local_normal: RVector = (subpos1.rotation * manifold.local_n1).normalize();
+        let normal = rotation1 * local_normal.f32();
 
         // Make sure the normal is valid
         if !normal.is_normalized() {
@@ -242,11 +244,11 @@ pub fn contact_manifolds(
         let points = manifold.contacts().iter().map(|contact| {
             // The contact point is the midpoint of the two points in world space.
             // The anchors are relative to the positions of the colliders.
-            let point1 = rotation1 * subpos1.transform_point(contact.local_p1);
-            let anchor1 = point1 + normal * contact.dist * 0.5;
-            let anchor2 = anchor1 + (position1.0 - position2.0);
-            let world_point = position1.0 + anchor1;
-            ContactPoint::new(anchor1, anchor2, world_point, -contact.dist)
+            let point1 = rotation1 * subpos1.transform_point(contact.local_p1).f32();
+            let anchor1 = point1 + normal * contact.dist.f32() * 0.5;
+            let anchor2 = anchor1 + (position1.0 - position2.0).f32();
+            let world_point = position1.0 + anchor1.real();
+            ContactPoint::new(anchor1, anchor2, world_point, -contact.dist.f32())
                 .with_feature_ids(contact.fid1.into(), contact.fid2.into())
         });
 
@@ -270,7 +272,7 @@ pub enum ClosestPoints {
     /// is below the user-defined maximum distance.
     ///
     /// The points are expressed in world space.
-    WithinMargin(Vector, Vector),
+    WithinMargin(RVector, RVector),
     /// The two shapes are not intersecting each other and the distance between the closest points
     /// exceeds the user-defined maximum distance.
     OutsideMargin,
@@ -286,10 +288,10 @@ pub enum ClosestPoints {
 /// # #[cfg(feature = "2d")]
 /// # use avian2d::{collision::collider::contact_query::*, prelude::*};
 /// # #[cfg(feature = "3d")]
-/// use avian3d::{collision::collider::contact_query::*, prelude::*};
+/// use avian3d::{collision::collider::contact_query::*, math::RVec3, prelude::*};
 /// use bevy::prelude::*;
 ///
-/// # #[cfg(all(feature = "3d", feature = "f32"))]
+/// # #[cfg(feature = "3d")]
 /// # {
 /// let collider1 = Collider::sphere(0.5);
 /// let collider2 = Collider::cuboid(1.0, 1.0, 1.0);
@@ -298,10 +300,10 @@ pub enum ClosestPoints {
 /// assert_eq!(
 ///     closest_points(
 ///         &collider1,
-///         Vec3::default(),
+///         RVec3::default(),
 ///         Quat::default(),
 ///         &collider2,
-///         Vec3::default(),
+///         RVec3::default(),
 ///         Quat::default(),
 ///         2.0,
 ///     )
@@ -313,25 +315,25 @@ pub enum ClosestPoints {
 /// assert_eq!(
 ///     closest_points(
 ///         &collider1,
-///         Vec3::default(),
+///         RVec3::default(),
 ///         Quat::default(),
 ///         &collider2,
-///         Vec3::X * 1.5,
+///         RVec3::X * 1.5,
 ///         Quat::default(),
 ///         2.0,
 ///     )
 ///     .expect("Unsupported collider shape"),
-///     ClosestPoints::WithinMargin(Vec3::X * 0.5, Vec3::X * 1.0),
+///     ClosestPoints::WithinMargin(RVec3::X * 0.5, RVec3::X * 1.0),
 /// );
 ///
 /// // The shapes are not intersecting and the distance between the closest points exceeds 2.0
 /// assert_eq!(
 ///     closest_points(
 ///         &collider1,
-///         Vec3::default(),
+///         RVec3::default(),
 ///         Quat::default(),
 ///         &collider2,
-///         Vec3::X * 5.0,
+///         RVec3::X * 5.0,
 ///         Quat::default(),
 ///         2.0,
 ///     )
@@ -342,15 +344,15 @@ pub enum ClosestPoints {
 /// ```
 pub fn closest_points(
     collider1: &Collider,
-    position1: impl Into<Position>,
-    rotation1: impl Into<Rotation>,
+    position1: RVector,
+    rotation1: impl Into<Rot>,
     collider2: &Collider,
-    position2: impl Into<Position>,
-    rotation2: impl Into<Rotation>,
-    max_distance: Scalar,
+    position2: RVector,
+    rotation2: impl Into<Rot>,
+    max_distance: f32,
 ) -> Result<ClosestPoints, UnsupportedShape> {
-    let rotation1: Rotation = rotation1.into();
-    let rotation2: Rotation = rotation2.into();
+    let rotation1: Rot = rotation1.into();
+    let rotation2: Rot = rotation2.into();
     let isometry1 = make_pose(position1, rotation1);
     let isometry2 = make_pose(position2, rotation2);
 
@@ -359,7 +361,7 @@ pub fn closest_points(
         collider1.shape_scaled().0.as_ref(),
         &isometry2,
         collider2.shape_scaled().0.as_ref(),
-        max_distance,
+        max_distance.real(),
     )
     .map(|closest_points| match closest_points {
         parry::query::ClosestPoints::Intersecting => ClosestPoints::Intersecting,
@@ -381,10 +383,10 @@ pub fn closest_points(
 /// # #[cfg(feature = "2d")]
 /// # use avian2d::{collision::collider::contact_query::distance, prelude::*};
 /// # #[cfg(feature = "3d")]
-/// use avian3d::{collision::collider::contact_query::distance, prelude::*};
+/// use avian3d::{collision::collider::contact_query::distance, math::RVec3, prelude::*};
 /// use bevy::prelude::*;
 ///
-/// # #[cfg(all(feature = "3d", feature = "f32"))]
+/// # #[cfg(feature = "3d")]
 /// # {
 /// let collider1 = Collider::sphere(0.5);
 /// let collider2 = Collider::cuboid(1.0, 1.0, 1.0);
@@ -393,10 +395,10 @@ pub fn closest_points(
 /// assert_eq!(
 ///     distance(
 ///         &collider1,
-///         Vec3::default(),
+///         RVec3::default(),
 ///         Quat::default(),
 ///         &collider2,
-///         Vec3::X * 2.0,
+///         RVec3::X * 2.0,
 ///         Quat::default(),
 ///     )
 ///     .expect("Unsupported collider shape"),
@@ -407,10 +409,10 @@ pub fn closest_points(
 /// assert_eq!(
 ///     distance(
 ///         &collider1,
-///         Vec3::default(),
+///         RVec3::default(),
 ///         Quat::default(),
 ///         &collider2,
-///         Vec3::default(),
+///         RVec3::default(),
 ///         Quat::default(),
 ///     )
 ///     .expect("Unsupported collider shape"),
@@ -420,14 +422,14 @@ pub fn closest_points(
 /// ```
 pub fn distance(
     collider1: &Collider,
-    position1: impl Into<Position>,
-    rotation1: impl Into<Rotation>,
+    position1: RVector,
+    rotation1: impl Into<Rot>,
     collider2: &Collider,
-    position2: impl Into<Position>,
-    rotation2: impl Into<Rotation>,
-) -> Result<Scalar, UnsupportedShape> {
-    let rotation1: Rotation = rotation1.into();
-    let rotation2: Rotation = rotation2.into();
+    position2: RVector,
+    rotation2: impl Into<Rot>,
+) -> Result<f32, UnsupportedShape> {
+    let rotation1: Rot = rotation1.into();
+    let rotation2: Rot = rotation2.into();
     let isometry1 = make_pose(position1, rotation1);
     let isometry2 = make_pose(position2, rotation2);
 
@@ -437,6 +439,7 @@ pub fn distance(
         &isometry2,
         collider2.shape_scaled().0.as_ref(),
     )
+    .map(|distance| distance.f32())
 }
 
 /// Tests whether two [`Collider`]s are intersecting each other.
@@ -449,10 +452,10 @@ pub fn distance(
 /// # #[cfg(feature = "2d")]
 /// # use avian2d::{collision::collider::contact_query::intersection_test, prelude::*};
 /// # #[cfg(feature = "3d")]
-/// use avian3d::{collision::collider::contact_query::intersection_test, prelude::*};
+/// use avian3d::{collision::collider::contact_query::intersection_test, math::RVec3, prelude::*};
 /// use bevy::prelude::*;
 ///
-/// # #[cfg(all(feature = "3d", feature = "f32"))]
+/// # #[cfg(feature = "3d")]
 /// # {
 /// let collider1 = Collider::sphere(0.5);
 /// let collider2 = Collider::cuboid(1.0, 1.0, 1.0);
@@ -461,10 +464,10 @@ pub fn distance(
 /// assert_eq!(
 ///     intersection_test(
 ///         &collider1,
-///         Vec3::default(),
+///         RVec3::default(),
 ///         Quat::default(),
 ///         &collider2,
-///         Vec3::default(),
+///         RVec3::default(),
 ///         Quat::default(),
 ///     )
 ///     .expect("Unsupported collider shape"),
@@ -475,10 +478,10 @@ pub fn distance(
 /// assert_eq!(
 ///     intersection_test(
 ///         &collider1,
-///         Vec3::default(),
+///         RVec3::default(),
 ///         Quat::default(),
 ///         &collider2,
-///         Vec3::X * 5.0,
+///         RVec3::X * 5.0,
 ///         Quat::default(),
 ///     )
 ///     .expect("Unsupported collider shape"),
@@ -488,14 +491,14 @@ pub fn distance(
 /// ```
 pub fn intersection_test(
     collider1: &Collider,
-    position1: impl Into<Position>,
-    rotation1: impl Into<Rotation>,
+    position1: RVector,
+    rotation1: impl Into<Rot>,
     collider2: &Collider,
-    position2: impl Into<Position>,
-    rotation2: impl Into<Rotation>,
+    position2: RVector,
+    rotation2: impl Into<Rot>,
 ) -> Result<bool, UnsupportedShape> {
-    let rotation1: Rotation = rotation1.into();
-    let rotation2: Rotation = rotation2.into();
+    let rotation1: Rot = rotation1.into();
+    let rotation2: Rot = rotation2.into();
     let isometry1 = make_pose(position1, rotation1);
     let isometry2 = make_pose(position2, rotation2);
 
@@ -514,7 +517,7 @@ pub type TimeOfImpactStatus = parry::query::details::ShapeCastStatus;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TimeOfImpact {
     /// The time at which the colliders come into contact.
-    pub time_of_impact: Scalar,
+    pub time_of_impact: f32,
     /// The closest point on the first collider, at the time of impact,
     /// expressed in local space.
     pub point1: Vector,
@@ -542,24 +545,24 @@ pub struct TimeOfImpact {
 /// # #[cfg(feature = "2d")]
 /// # use avian2d::{collision::collider::contact_query::time_of_impact, prelude::*};
 /// # #[cfg(feature = "3d")]
-/// use avian3d::{collision::collider::contact_query::time_of_impact, prelude::*};
+/// use avian3d::{collision::collider::contact_query::time_of_impact, math::RVec3, prelude::*};
 /// use bevy::prelude::*;
 ///
-/// # #[cfg(all(feature = "3d", feature = "f32"))]
+/// # #[cfg(feature = "3d")]
 /// # {
 /// let collider1 = Collider::sphere(0.5);
 /// let collider2 = Collider::cuboid(1.0, 1.0, 1.0);
 ///
 /// let result = time_of_impact(
-///     &collider1,        // Collider 1
-///     Vec3::NEG_X * 5.0, // Position 1
-///     Quat::default(),   // Rotation 1
-///     Vec3::X,           // Linear velocity 1
-///     &collider2,        // Collider 2
-///     Vec3::X * 5.0,     // Position 2
-///     Quat::default(),   // Rotation 2
-///     Vec3::NEG_X,       // Linear velocity 2
-///     100.0,             // Maximum time of impact
+///     &collider1,         // Collider 1
+///     RVec3::NEG_X * 5.0, // Position 1
+///     Quat::default(),    // Rotation 1
+///     Vec3::X,            // Linear velocity 1
+///     &collider2,         // Collider 2
+///     RVec3::X * 5.0,     // Position 2
+///     Quat::default(),    // Rotation 2
+///     Vec3::NEG_X,        // Linear velocity 2
+///     100.0,              // Maximum time of impact
 /// )
 /// .expect("Unsupported collider shape");
 ///
@@ -569,44 +572,41 @@ pub struct TimeOfImpact {
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn time_of_impact(
     collider1: &Collider,
-    position1: impl Into<Position>,
-    rotation1: impl Into<Rotation>,
-    velocity1: impl Into<LinearVelocity>,
+    position1: RVector,
+    rotation1: impl Into<Rot>,
+    velocity1: Vector,
     collider2: &Collider,
-    position2: impl Into<Position>,
-    rotation2: impl Into<Rotation>,
-    velocity2: impl Into<LinearVelocity>,
-    max_time_of_impact: Scalar,
+    position2: RVector,
+    rotation2: impl Into<Rot>,
+    velocity2: Vector,
+    max_time_of_impact: f32,
 ) -> Result<Option<TimeOfImpact>, UnsupportedShape> {
-    let rotation1: Rotation = rotation1.into();
-    let rotation2: Rotation = rotation2.into();
-
-    let velocity1: LinearVelocity = velocity1.into();
-    let velocity2: LinearVelocity = velocity2.into();
+    let rotation1: Rot = rotation1.into();
+    let rotation2: Rot = rotation2.into();
 
     let isometry1 = make_pose(position1, rotation1);
     let isometry2 = make_pose(position2, rotation2);
 
     parry::query::cast_shapes(
         &isometry1,
-        velocity1.0,
+        velocity1.real(),
         collider1.shape_scaled().0.as_ref(),
         &isometry2,
-        velocity2.0,
+        velocity2.real(),
         collider2.shape_scaled().0.as_ref(),
         ShapeCastOptions {
-            max_time_of_impact,
+            max_time_of_impact: max_time_of_impact.real(),
             stop_at_penetration: true,
             ..default()
         },
     )
     .map(|toi| {
         toi.map(|toi| TimeOfImpact {
-            time_of_impact: toi.time_of_impact,
-            point1: toi.witness1,
-            point2: toi.witness2,
-            normal1: toi.normal1,
-            normal2: toi.normal2,
+            time_of_impact: toi.time_of_impact.f32(),
+            point1: toi.witness1.f32(),
+            point2: toi.witness2.f32(),
+            normal1: toi.normal1.f32(),
+            normal2: toi.normal2.f32(),
             status: toi.status,
         })
     })

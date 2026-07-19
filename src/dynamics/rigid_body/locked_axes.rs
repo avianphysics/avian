@@ -283,7 +283,7 @@ impl LockedAxes {
 
     /// Sets the given angular velocity to zero if rotational axes are locked.
     #[cfg(feature = "2d")]
-    pub(crate) fn apply_to_angular_velocity(&self, mut angular_velocity: Scalar) -> Scalar {
+    pub(crate) fn apply_to_angular_velocity(&self, mut angular_velocity: f32) -> f32 {
         if self.is_rotation_locked() {
             angular_velocity = 0.0;
         }

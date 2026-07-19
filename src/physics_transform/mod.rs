@@ -3,9 +3,9 @@
 //! See [`PhysicsTransformPlugin`].
 
 mod transform;
-pub use transform::{Position, PreSolveDeltaPosition, PreSolveDeltaRotation, Rotation};
 #[allow(unused_imports)]
-pub(crate) use transform::{RotationValue, init_physics_transform};
+pub(crate) use transform::init_physics_transform;
+pub use transform::{Position, PreSolveDeltaPosition, PreSolveDeltaRotation, Rotation};
 
 mod helper;
 pub use helper::PhysicsTransformHelper;
@@ -200,17 +200,17 @@ pub fn transform_to_position(
     };
 
     // If the `GlobalTransform` translation and `Position` differ by less than 0.01 mm, we ignore the change.
-    let distance_tolerance = length_unit.0 * 1e-5;
+    let distance_tolerance = length_unit.real() * 1e-5;
     // If the `GlobalTransform` rotation and `Rotation` differ by less than 0.1 degrees, we ignore the change.
-    let rotation_tolerance = (0.1 as Scalar).to_radians();
+    let rotation_tolerance = 0.1f32.to_radians();
 
     for (global_transform, mut position, mut rotation) in &mut query {
         let global_transform = global_transform.compute_transform();
         #[cfg(feature = "2d")]
-        let transform_translation = global_transform.translation.truncate().adjust_precision();
+        let transform_translation = global_transform.translation.truncate().real();
         #[cfg(feature = "3d")]
-        let transform_translation = global_transform.translation.adjust_precision();
-        let transform_rotation = Rotation::from(global_transform.rotation.adjust_precision());
+        let transform_translation = global_transform.translation.real();
+        let transform_rotation = Rotation::from(global_transform.rotation);
 
         let position_changed = !position.is_added()
             && is_changed_after_tick(
@@ -280,9 +280,8 @@ pub fn position_to_transform(
                 let parent_pos = parent_pos.map_or(parent_transform.translation, |pos| {
                     pos.f32().extend(parent_transform.translation.z)
                 });
-                let parent_rot = parent_rot.map_or(parent_transform.rotation, |rot| {
-                    Quaternion::from(*rot).f32()
-                });
+                let parent_rot =
+                    parent_rot.map_or(parent_transform.rotation, |rot| Quat::from(*rot));
                 let parent_scale = parent_transform.scale;
                 let parent_transform = Transform::from_translation(parent_pos)
                     .with_rotation(parent_rot)
@@ -295,7 +294,7 @@ pub fn position_to_transform(
                         pos.f32()
                             .extend(parent_pos.z + transform.translation.z * parent_scale.z),
                     )
-                    .with_rotation(Quaternion::from(*rot).f32()),
+                    .with_rotation(Quat::from(*rot)),
                 )
                 .reparented_to(&GlobalTransform::from(parent_transform));
 
@@ -304,7 +303,7 @@ pub fn position_to_transform(
             }
         } else {
             transform.translation = pos.f32().extend(transform.translation.z);
-            transform.rotation = Quaternion::from(*rot).f32();
+            transform.rotation = Quat::from(*rot);
         }
     }
 }
@@ -325,7 +324,7 @@ pub fn position_to_transform(
                 // Compute the global transform of the parent using its Position and Rotation
                 let parent_transform = parent_transform.compute_transform();
                 let parent_pos = parent_pos.map_or(parent_transform.translation, |pos| pos.f32());
-                let parent_rot = parent_rot.map_or(parent_transform.rotation, |rot| rot.f32());
+                let parent_rot = parent_rot.map_or(parent_transform.rotation, |rot| rot.0);
                 let parent_scale = parent_transform.scale;
                 let parent_transform = Transform::from_translation(parent_pos)
                     .with_rotation(parent_rot)
@@ -334,7 +333,7 @@ pub fn position_to_transform(
                 // The new local transform of the child body,
                 // computed from the its global transform and its parents global transform
                 let new_transform = GlobalTransform::from(
-                    Transform::from_translation(pos.f32()).with_rotation(rot.f32()),
+                    Transform::from_translation(pos.f32()).with_rotation(rot.0),
                 )
                 .reparented_to(&GlobalTransform::from(parent_transform));
 
@@ -343,7 +342,7 @@ pub fn position_to_transform(
             }
         } else {
             transform.translation = pos.f32();
-            transform.rotation = rot.f32();
+            transform.rotation = rot.0;
         }
     }
 }

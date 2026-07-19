@@ -7,12 +7,14 @@ use core::marker::PhantomData;
 #[cfg(all(feature = "collider-from-mesh", feature = "default-collider"))]
 use crate::collision::collider::cache::ColliderCache;
 use crate::{
-    collision::collider::EnlargedAabb,
+    collision::collider::{ColliderAabbMargin, EnlargedAabb},
     physics_transform::{PhysicsTransformConfig, PhysicsTransformSystems, init_physics_transform},
     prelude::*,
 };
 #[cfg(all(feature = "bevy_scene", feature = "default-collider"))]
-use bevy::scene::SceneInstance;
+use bevy::world_serialization::{
+    WorldAssetRoot, WorldInstance as SceneInstance, WorldInstanceSpawner,
+};
 use bevy::{
     ecs::{intern::Interned, schedule::ScheduleLabel},
     prelude::*,
@@ -97,6 +99,7 @@ impl<C: ScalableCollider> Plugin for ColliderBackendPlugin<C> {
         let _ = app.try_register_required_components::<C, ColliderMarker>();
         let _ = app.try_register_required_components::<C, ColliderAabb>();
         let _ = app.try_register_required_components::<C, EnlargedAabb>();
+        let _ = app.try_register_required_components::<C, ColliderAabbMargin>();
         let _ = app.try_register_required_components::<C, CollisionLayers>();
         let _ = app.try_register_required_components::<C, ColliderDensity>();
         let _ = app.try_register_required_components::<C, ColliderMassProperties>();
@@ -132,10 +135,7 @@ impl<C: ScalableCollider> Plugin for ColliderBackendPlugin<C> {
                 // Make sure the collider is initialized with the correct scale.
                 // This overwrites the scale set by the constructor, but that one is
                 // meant to be only changed after initialization.
-                entity_mut
-                    .get_mut::<C>()
-                    .unwrap()
-                    .set_scale(scale.adjust_precision(), 10);
+                entity_mut.get_mut::<C>().unwrap().set_scale(scale, 10);
 
                 let collider = entity_mut.get::<C>().unwrap();
 
@@ -326,8 +326,8 @@ fn init_collider_constructor_hierarchies(
     #[cfg(feature = "collider-from-mesh")] meshes: Res<Assets<Mesh>>,
     #[cfg(feature = "collider-from-mesh")] mesh_handles: Query<&Mesh3d>,
     #[cfg(feature = "collider-from-mesh")] mut collider_cache: Option<ResMut<ColliderCache>>,
-    #[cfg(feature = "bevy_scene")] scene_spawner: Res<SceneSpawner>,
-    #[cfg(feature = "bevy_scene")] scenes: Query<&SceneRoot>,
+    #[cfg(feature = "bevy_scene")] scene_spawner: If<Res<WorldInstanceSpawner>>,
+    #[cfg(feature = "bevy_scene")] scenes: Query<&WorldAssetRoot>,
     #[cfg(feature = "bevy_scene")] scene_instances: Query<&SceneInstance>,
     collider_constructors: Query<(Entity, &ColliderConstructorHierarchy)>,
     children: Query<&Children>,
@@ -471,9 +471,9 @@ pub fn update_collider_scale<C: ScalableCollider>(
         // Update collider scale for root bodies
         for (transform, mut collider) in &mut colliders.p0() {
             #[cfg(feature = "2d")]
-            let scale = transform.scale.truncate().adjust_precision();
+            let scale = transform.scale.truncate();
             #[cfg(feature = "3d")]
-            let scale = transform.scale.adjust_precision();
+            let scale = transform.scale;
             if scale != collider.scale() {
                 // TODO: Support configurable subdivision count for shapes that
                 //       can't be represented without approximations after scaling.

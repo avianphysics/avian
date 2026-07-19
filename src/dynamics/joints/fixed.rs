@@ -44,9 +44,9 @@ pub struct FixedJoint {
     /// relative to the body transform.
     pub frame2: JointFrame,
     /// The compliance of the point-to-point constraint (inverse of stiffness, m / N).
-    pub point_compliance: Scalar,
+    pub point_compliance: f32,
     /// The compliance of the angular constraint (inverse of stiffness, N * m / rad).
-    pub angle_compliance: Scalar,
+    pub angle_compliance: f32,
 }
 
 impl EntityConstraint<2> for FixedJoint {
@@ -87,7 +87,7 @@ impl FixedJoint {
     ///
     /// This configures the [`JointAnchor`] of each [`JointFrame`].
     #[inline]
-    pub const fn with_anchor(mut self, anchor: Vector) -> Self {
+    pub const fn with_anchor(mut self, anchor: RVector) -> Self {
         self.frame1.anchor = JointAnchor::FromGlobal(anchor);
         self.frame2.anchor = JointAnchor::FromGlobal(anchor);
         self
@@ -216,7 +216,7 @@ impl FixedJoint {
         since = "0.4.0",
         note = "Use `with_point_compliance` and `with_angle_compliance` instead."
     )]
-    pub const fn with_compliance(mut self, compliance: Scalar) -> Self {
+    pub const fn with_compliance(mut self, compliance: f32) -> Self {
         self.point_compliance = compliance;
         self.angle_compliance = compliance;
         self
@@ -224,14 +224,14 @@ impl FixedJoint {
 
     /// Sets the compliance of the point-to-point compliance (inverse of stiffness, m / N).
     #[inline]
-    pub const fn with_point_compliance(mut self, compliance: Scalar) -> Self {
+    pub const fn with_point_compliance(mut self, compliance: f32) -> Self {
         self.point_compliance = compliance;
         self
     }
 
     /// Sets the compliance of the angular constraint (inverse of stiffness, (N * m / rad).
     #[inline]
-    pub const fn with_angle_compliance(mut self, compliance: Scalar) -> Self {
+    pub const fn with_angle_compliance(mut self, compliance: f32) -> Self {
         self.angle_compliance = compliance;
         self
     }
@@ -270,7 +270,7 @@ fn update_local_frames(
 
         // TODO: Use weighted COM average for the anchors of dynamic Auto-Auto pairs.
         let [frame1, frame2] =
-            JointFrame::compute_local(joint.frame1, joint.frame2, pos1.0, pos2.0, rot1, rot2);
+            JointFrame::compute_local(joint.frame1, joint.frame2, pos1.0, pos2.0, *rot1, *rot2);
         joint.frame1 = frame1;
         joint.frame2 = frame2;
     }
@@ -282,7 +282,7 @@ impl DebugRenderConstraint<2> for FixedJoint {
 
     fn debug_render(
         &self,
-        positions: [Vector; 2],
+        positions: [RVector; 2],
         rotations: [Rotation; 2],
         _context: &mut Self::Context,
         gizmos: &mut Gizmos<PhysicsGizmos>,
@@ -298,8 +298,8 @@ impl DebugRenderConstraint<2> for FixedJoint {
             return;
         };
 
-        let anchor1 = pos1 + rot1 * local_anchor1;
-        let anchor2 = pos2 + rot2 * local_anchor2;
+        let anchor1 = pos1 + (rot1 * local_anchor1).real();
+        let anchor2 = pos2 + (rot2 * local_anchor2).real();
 
         if let Some(anchor_color) = config.joint_anchor_color {
             gizmos.draw_line(pos1, anchor1, anchor_color);

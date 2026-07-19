@@ -81,6 +81,7 @@ pub use total::{PhysicsTotalDiagnostics, PhysicsTotalDiagnosticsPlugin};
 use crate::{PhysicsStepSystems, schedule::PhysicsSchedule};
 use bevy::{
     diagnostic::DiagnosticPath,
+    ecs::component::Mutable,
     prelude::{App, IntoScheduleConfigs, ResMut, Resource, SystemSet},
 };
 #[cfg(feature = "bevy_diagnostic")]
@@ -127,7 +128,7 @@ pub enum PhysicsDiagnosticsSystems {
 }
 
 /// A trait for resources storing timers and counters for [physics diagnostics](crate::diagnostics).
-pub trait PhysicsDiagnostics: Default + Resource {
+pub trait PhysicsDiagnostics: Default + Resource<Mutability = Mutable> {
     /// Maps diagnostic paths to their respective duration fields.
     fn timer_paths(&self) -> Vec<(&'static DiagnosticPath, Duration)> {
         Vec::new()

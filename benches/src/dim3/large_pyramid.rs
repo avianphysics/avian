@@ -1,4 +1,4 @@
-use avian3d::{math::Scalar, prelude::*};
+use avian3d::prelude::*;
 use bevy::prelude::*;
 
 use super::Benchmark3dPlugins;
@@ -22,7 +22,7 @@ fn setup(mut commands: Commands, base_count: usize) {
 
     let h = 0.5;
     let box_size = 2.0 * h;
-    let collider = Collider::cuboid(box_size as Scalar, box_size as Scalar, box_size as Scalar);
+    let collider = Collider::cuboid(box_size, box_size, box_size);
     let shift = h;
     for i in 0..base_count {
         let y = (2.0 * i as f32 + 1.0) * shift * 0.99;

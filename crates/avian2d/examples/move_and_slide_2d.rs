@@ -133,9 +133,9 @@ fn setup(
     );
 
     let ramp_collider = Collider::triangle(
-        Vector::new(-125.0, 80.0),
-        Vector::NEG_X * 125.0,
-        Vector::X * 125.0,
+        Vec2::new(-125.0, 80.0),
+        Vec2::NEG_X * 125.0,
+        Vec2::X * 125.0,
     );
 
     commands.spawn((
@@ -157,9 +157,9 @@ fn setup(
     );
 
     let ramp_collider = Collider::triangle(
-        Vector::new(20.0, -40.0),
-        Vector::new(20.0, 40.0),
-        Vector::new(-20.0, -40.0),
+        Vec2::new(20.0, -40.0),
+        Vec2::new(20.0, 40.0),
+        Vec2::new(-20.0, -40.0),
     );
 
     commands.spawn((
@@ -215,14 +215,13 @@ fn player_movement(
         }
 
         // Add to current velocity
-        lin_vel.0 += movement_velocity.adjust_precision();
+        lin_vel.0 += movement_velocity;
 
         let current_speed = lin_vel.length();
         if current_speed > 0.0 {
             // Apply friction
             lin_vel.0 = lin_vel.0 / current_speed
-                * (current_speed - current_speed * 20.0 * time.delta_secs().adjust_precision())
-                    .max(0.0)
+                * (current_speed - current_speed * 20.0 * time.delta_secs()).max(0.0)
         }
     }
 }
@@ -255,12 +254,8 @@ fn run_move_and_slide(
             projected_velocity,
         } = move_and_slide.move_and_slide(
             collider,
-            transform.translation.xy().adjust_precision(),
-            transform
-                .rotation
-                .to_euler(EulerRot::XYZ)
-                .2
-                .adjust_precision(),
+            transform.translation.xy().real(),
+            transform.rotation.to_euler(EulerRot::XYZ).2,
             lin_vel.0,
             time.delta(),
             &MoveAndSlideConfig::default(),
@@ -272,10 +267,7 @@ fn run_move_and_slide(
                 } else {
                     gizmos.arrow_2d(
                         hit.point.f32(),
-                        (hit.point
-                            + hit.normal.adjust_precision() * hit.collision_distance
-                                / time.delta_secs().adjust_precision())
-                        .f32(),
+                        hit.point.f32() + **hit.normal * hit.collision_distance / time.delta_secs(),
                         tailwind::EMERALD_400,
                     );
                 }

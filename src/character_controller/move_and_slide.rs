@@ -9,11 +9,10 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use core::time::Duration;
 
 /// Needed to improve stability when `n.dot(dir)` happens to be very close to zero.
-const DOT_EPSILON: Scalar = 0.005;
+const DOT_EPSILON: f32 = 0.005;
 
 /// Cosine of 5 degrees.
-#[allow(clippy::excessive_precision)]
-pub const COS_5_DEGREES: Scalar = 0.99619469809;
+pub const COS_5_DEGREES: f32 = 0.99619469;
 
 /// A [`SystemParam`] for the *move and slide* algorithm, also known as *collide and slide* or *step slide*.
 ///
@@ -119,7 +118,7 @@ pub struct MoveAndSlideConfig {
     /// or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`].
     ///
     /// This is implicitly scaled by the [`PhysicsLengthUnit`].
-    pub max_depenetration_error: Scalar,
+    pub max_depenetration_error: f32,
 
     /// The maximum penetration depth that is allowed for a contact to be resolved during depenetration.
     ///
@@ -128,7 +127,7 @@ pub struct MoveAndSlideConfig {
     /// collision errors in the underlying collision detection system are fixed.
     ///
     /// This is implicitly scaled by the [`PhysicsLengthUnit`].
-    pub penetration_rejection_threshold: Scalar,
+    pub penetration_rejection_threshold: f32,
 
     /// A minimal distance to always keep between the collider and any other colliders.
     ///
@@ -139,7 +138,7 @@ pub struct MoveAndSlideConfig {
     /// Decrease it when you notice jittering, especially around V-shaped walls.
     ///
     /// This is implicitly scaled by the [`PhysicsLengthUnit`].
-    pub skin_width: Scalar,
+    pub skin_width: f32,
 
     /// The initial planes to consider for the move and slide algorithm.
     ///
@@ -157,7 +156,7 @@ pub struct MoveAndSlideConfig {
     /// can lead to unwanted behavior, as it may discard important planes.
     ///
     /// The default value of [`COS_5_DEGREES`] (≈0.996) corresponds to a 5 degree angle between the planes.
-    pub plane_similarity_dot_threshold: Scalar,
+    pub plane_similarity_dot_threshold: f32,
 
     /// The maximum number of planes to solve while performing move and slide.
     ///
@@ -204,7 +203,7 @@ pub struct DepenetrationConfig {
     /// or the accumulated error is less than [`MoveAndSlideConfig::max_depenetration_error`].
     ///
     /// This is implicitly scaled by the [`PhysicsLengthUnit`].
-    pub max_depenetration_error: Scalar,
+    pub max_depenetration_error: f32,
 
     /// The maximum penetration depth that is allowed for a contact to be resolved during depenetration.
     ///
@@ -213,7 +212,7 @@ pub struct DepenetrationConfig {
     /// collision errors in the underlying collision detection system are fixed.
     ///
     /// This is implicitly scaled by the [`PhysicsLengthUnit`].
-    pub penetration_rejection_threshold: Scalar,
+    pub penetration_rejection_threshold: f32,
 
     /// A minimal distance to always keep between the collider and any other colliders.
     ///
@@ -224,7 +223,7 @@ pub struct DepenetrationConfig {
     /// Decrease it when you notice jittering, especially around V-shaped walls.
     ///
     /// This is implicitly scaled by the [`PhysicsLengthUnit`].
-    pub skin_width: Scalar,
+    pub skin_width: f32,
 }
 
 impl Default for DepenetrationConfig {
@@ -258,7 +257,7 @@ pub struct MoveAndSlideOutput {
     /// The final position of the character after move and slide.
     ///
     /// Set your [`Transform::translation`] to this value.
-    pub position: Vector,
+    pub position: RVector,
 
     /// The final velocity of the character after move and slide.
     ///
@@ -290,16 +289,16 @@ pub struct MoveAndSlideHitData<'a> {
     /// - The collider is moving toward another collider that is already closer than `skin_width`.
     ///
     /// If you want to know the real distance to the next collision, use [`Self::collision_distance`].
-    pub distance: Scalar,
+    pub distance: f32,
 
     /// The hit point on the shape that was hit, expressed in world space.
-    pub point: Vector,
+    pub point: RVector,
 
     /// The outward surface normal on the hit shape at `point`, expressed in world space.
     pub normal: &'a mut Dir,
 
     /// The position of the collider at the time of the move and slide iteration.
-    pub position: &'a mut Vector,
+    pub position: &'a mut RVector,
 
     /// The velocity of the collider at the time of the move and slide iteration.
     pub velocity: &'a mut Vector,
@@ -307,7 +306,7 @@ pub struct MoveAndSlideHitData<'a> {
     /// The raw distance to the next collision, not respecting skin width.
     /// To move the shape, use [`Self::distance`] instead.
     #[doc(alias = "time_of_impact")]
-    pub collision_distance: Scalar,
+    pub collision_distance: f32,
 }
 
 impl<'a> MoveAndSlideHitData<'a> {
@@ -359,19 +358,19 @@ pub struct MoveHitData {
     ///
     /// If you want to know the real distance to the next collision, use [`Self::collision_distance`].
     #[doc(alias = "time_of_impact")]
-    pub distance: Scalar,
+    pub distance: f32,
 
     /// The closest point on the shape that was hit, expressed in world space.
     ///
     /// If the shapes are penetrating or the target distance is greater than zero,
     /// this will be different from `point2`.
-    pub point1: Vector,
+    pub point1: RVector,
 
     /// The closest point on the shape that was cast, expressed in world space.
     ///
     /// If the shapes are penetrating or the target distance is greater than zero,
     /// this will be different from `point1`.
-    pub point2: Vector,
+    pub point2: RVector,
 
     /// The outward surface normal on the hit shape at `point1`, expressed in world space.
     pub normal1: Vector,
@@ -382,7 +381,7 @@ pub struct MoveHitData {
     /// The raw distance to the next collision, not respecting skin width.
     /// To move the shape, use [`Self::distance`] instead.
     #[doc(alias = "time_of_impact")]
-    pub collision_distance: Scalar,
+    pub collision_distance: f32,
 }
 
 impl MoveHitData {
@@ -419,16 +418,17 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// use std::collections::HashSet;
     #[cfg_attr(
         feature = "2d",
-        doc = "use avian2d::{prelude::*, math::{Vector, AdjustPrecision as _, AsF32 as _}};"
+        doc = "use avian2d::{prelude::*, math::{ToRealPrecision as _, ToF32Precision as _}};"
     )]
     #[cfg_attr(
         feature = "3d",
-        doc = "use avian3d::{prelude::*, math::{Vector, AdjustPrecision as _, AsF32 as _}};"
+        doc = "use avian3d::{prelude::*, math::{ToRealPrecision as _, ToF32Precision as _}};"
     )]
     ///
     /// #[derive(Component)]
     /// struct CharacterController {
-    ///     velocity: Vector,
+    #[cfg_attr(feature = "2d", doc = "    velocity: Vec2,")]
+    #[cfg_attr(feature = "3d", doc = "    velocity: Vec3,")]
     /// }
     ///
     /// fn perform_move_and_slide(
@@ -437,27 +437,25 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///     time: Res<Time>
     /// ) {
     ///     let (entity, collider, mut controller, mut transform) = player.into_inner();
-    ///     let velocity = controller.velocity + Vector::X * 10.0;
+    #[cfg_attr(
+        feature = "2d",
+        doc = "    let velocity = controller.velocity + Vec2::X * 10.0;"
+    )]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "    let velocity = controller.velocity + Vec3::X * 10.0;"
+    )]
     ///     let filter = SpatialQueryFilter::from_excluded_entities([entity]);
     ///     let mut collisions = HashSet::new();
     ///     let out = move_and_slide.move_and_slide(
     ///         collider,
+    #[cfg_attr(feature = "2d", doc = "        transform.translation.xy().real(),")]
+    #[cfg_attr(feature = "3d", doc = "        transform.translation.real(),")]
     #[cfg_attr(
         feature = "2d",
-        doc = "         transform.translation.xy().adjust_precision(),"
+        doc = "        transform.rotation.to_euler(EulerRot::XYZ).2,"
     )]
-    #[cfg_attr(
-        feature = "3d",
-        doc = "         transform.translation.adjust_precision(),"
-    )]
-    #[cfg_attr(
-        feature = "2d",
-        doc = "         transform.rotation.to_euler(EulerRot::XYZ).2.adjust_precision(),"
-    )]
-    #[cfg_attr(
-        feature = "3d",
-        doc = "         transform.rotation.adjust_precision(),"
-    )]
+    #[cfg_attr(feature = "3d", doc = "        transform.rotation,")]
     ///         velocity,
     ///         time.delta(),
     ///         &MoveAndSlideConfig::default(),
@@ -469,11 +467,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///     );
     #[cfg_attr(
         feature = "2d",
-        doc = "     transform.translation = out.position.f32().extend(0.0);"
+        doc = "    transform.translation = out.position.f32().extend(0.0);"
     )]
     #[cfg_attr(
         feature = "3d",
-        doc = "     transform.translation = out.position.f32();"
+        doc = "    transform.translation = out.position.f32();"
     )]
     ///     controller.velocity = out.projected_velocity;
     ///     info!("Colliding with entities: {:?}", collisions);
@@ -485,31 +483,24 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     pub fn move_and_slide(
         &self,
         shape: &Collider,
-        shape_position: Vector,
-        shape_rotation: RotationValue,
+        shape_position: RVector,
+        shape_rotation: impl Into<Rot>,
         mut velocity: Vector,
         delta_time: Duration,
         config: &MoveAndSlideConfig,
         filter: &SpatialQueryFilter,
         mut on_hit: impl FnMut(MoveAndSlideHitData) -> MoveAndSlideHitResponse,
     ) -> MoveAndSlideOutput {
+        let shape_rotation = shape_rotation.into();
+
         let mut position = shape_position;
-        let mut time_left = {
-            #[cfg(feature = "f32")]
-            {
-                delta_time.as_secs_f32()
-            }
-            #[cfg(feature = "f64")]
-            {
-                delta_time.as_secs_f64()
-            }
-        };
+        let mut time_left = delta_time.as_secs_f32();
         let skin_width = self.length_unit.0 * config.skin_width;
 
         // Initial depenetration pass
         let depenetration_offset =
             self.depenetrate(shape, position, shape_rotation, &config.into(), filter);
-        position += depenetration_offset;
+        position += depenetration_offset.real();
 
         // Main move and slide loop:
         // 1. Sweep the shape along the velocity vector
@@ -519,13 +510,12 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         // 5. Repeat until we run out of iterations or time
         for _ in 0..config.move_and_slide_iterations {
             let sweep = time_left * velocity;
-            let Some((vel_dir, distance)) = Dir::new_and_length(sweep.f32()).ok() else {
+            let Some((vel_dir, distance)) = Dir::new_and_length(sweep).ok() else {
                 // No movement left
                 break;
             };
-            let distance = distance.adjust_precision();
 
-            const MIN_DISTANCE: Scalar = 1e-4;
+            const MIN_DISTANCE: f32 = 1e-4;
             if distance < MIN_DISTANCE {
                 break;
             }
@@ -535,14 +525,14 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 self.cast_move(shape, position, shape_rotation, sweep, skin_width, filter)
             else {
                 // No collision, move the full distance.
-                position += sweep;
+                position += sweep.real();
                 break;
             };
             let point = sweep_hit.point2;
 
             // Move up to the hit point.
             time_left -= time_left * (sweep_hit.distance / distance);
-            position += vel_dir.adjust_precision() * sweep_hit.distance;
+            position += (vel_dir * sweep_hit.distance).real();
 
             // Initialize velocity clipping planes with the user-defined planes.
             // This often includes a ground plane.
@@ -551,7 +541,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             // We need to add the sweep hit's plane explicitly, as `contact_manifolds` sometimes returns nothing
             // due to a Parry bug. Otherwise, `contact_manifolds` would pick up this normal anyways.
             // TODO: Remove this once the collision bug is fixed.
-            let mut first_normal = Dir::new_unchecked(sweep_hit.normal1.f32());
+            let mut first_normal = Dir::new_unchecked(sweep_hit.normal1);
             let hit_response = on_hit(MoveAndSlideHitData {
                 entity: sweep_hit.entity,
                 point,
@@ -582,12 +572,10 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                     // Check if this plane is nearly parallel to an existing one.
                     // This can help prune redundant planes for velocity clipping.
                     for existing_normal in planes.iter_mut() {
-                        if normal.dot(**existing_normal) as Scalar
-                            >= config.plane_similarity_dot_threshold
-                        {
+                        if normal.dot(**existing_normal) >= config.plane_similarity_dot_threshold {
                             // Keep the most blocking version of the plane.
-                            let n_dot_v = normal.adjust_precision().dot(velocity);
-                            let existing_n_dot_v = existing_normal.adjust_precision().dot(velocity);
+                            let n_dot_v = normal.dot(velocity);
+                            let existing_n_dot_v = existing_normal.dot(velocity);
                             if n_dot_v < existing_n_dot_v {
                                 *existing_normal = normal;
                             }
@@ -637,7 +625,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
         // TODO: We could get the intersections from the last iteration and avoid re-querying them here.
         let depenetration_offset =
             self.depenetrate(shape, position, shape_rotation, &config.into(), filter);
-        position += depenetration_offset;
+        position += depenetration_offset.real();
 
         MoveAndSlideOutput {
             position,
@@ -659,7 +647,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// - `shape`: The shape being cast represented as a [`Collider`].
     /// - `shape_position`: Where the shape is cast from.
     /// - `shape_rotation`: The rotation of the shape being cast.
-    /// - `movement`: The direction and magnitude of the movement. If this is [`Vector::ZERO`], this method can still return `Some(MoveHitData)` if the shape started off intersecting a collider.
+    /// - `movement`: The direction and magnitude of the movement. If this is zero, this method can still return `Some(MoveHitData)` if the shape started off intersecting a collider.
     /// - `skin_width`: A [`ShapeCastConfig`] that determines the behavior of the cast.
     /// - `filter`: A [`SpatialQueryFilter`] that determines which colliders are taken into account in the query. It is highly recommended to exclude the entity holding the collider itself,
     ///   otherwise the character will collide with itself.
@@ -675,16 +663,17 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// use bevy::prelude::*;
     #[cfg_attr(
         feature = "2d",
-        doc = "use avian2d::{prelude::*, math::{Vector, Dir, AdjustPrecision as _, AsF32 as _}};"
+        doc = "use avian2d::{prelude::*, math::ToRealPrecision};"
     )]
     #[cfg_attr(
         feature = "3d",
-        doc = "use avian3d::{prelude::*, math::{Vector, Dir, AdjustPrecision as _, AsF32 as _}};"
+        doc = "use avian3d::{prelude::*, math::ToRealPrecision};"
     )]
     ///
     /// #[derive(Component)]
     /// struct CharacterController {
-    ///     velocity: Vector,
+    #[cfg_attr(feature = "2d", doc = "    velocity: Vec2,")]
+    #[cfg_attr(feature = "3d", doc = "    velocity: Vec3,")]
     /// }
     ///
     /// fn perform_cast_move(
@@ -699,51 +688,33 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///     // Ensure that the character is not intersecting with any colliders.
     ///     let offset = move_and_slide.depenetrate(
     ///         collider,
+    #[cfg_attr(feature = "2d", doc = "        transform.translation.xy().real(),")]
+    #[cfg_attr(feature = "3d", doc = "        transform.translation.real(),")]
     #[cfg_attr(
         feature = "2d",
-        doc = "         transform.translation.xy().adjust_precision(),"
+        doc = "        transform.rotation.to_euler(EulerRot::XYZ).2,"
     )]
-    #[cfg_attr(
-        feature = "3d",
-        doc = "         transform.translation.adjust_precision(),"
-    )]
-    #[cfg_attr(
-        feature = "2d",
-        doc = "         transform.rotation.to_euler(EulerRot::XYZ).2.adjust_precision(),"
-    )]
-    #[cfg_attr(
-        feature = "3d",
-        doc = "         transform.rotation.adjust_precision(),"
-    )]
+    #[cfg_attr(feature = "3d", doc = "        transform.rotation,")]
     ///         &((&config).into()),
     ///         &filter,
     ///     );
     #[cfg_attr(
         feature = "2d",
-        doc = "     transform.translation += offset.f32().extend(0.0);"
+        doc = "     transform.translation += offset.extend(0.0);"
     )]
-    #[cfg_attr(feature = "3d", doc = "     transform.translation += offset.f32();")]
+    #[cfg_attr(feature = "3d", doc = "    transform.translation += offset;")]
     ///     let velocity = controller.velocity;
     ///
     ///     let hit = move_and_slide.cast_move(
     ///         collider,
+    #[cfg_attr(feature = "2d", doc = "        transform.translation.xy().real(),")]
+    #[cfg_attr(feature = "3d", doc = "        transform.translation.real(),")]
     #[cfg_attr(
         feature = "2d",
-        doc = "         transform.translation.xy().adjust_precision(),"
+        doc = "        transform.rotation.to_euler(EulerRot::XYZ).2,"
     )]
-    #[cfg_attr(
-        feature = "3d",
-        doc = "         transform.translation.adjust_precision(),"
-    )]
-    #[cfg_attr(
-        feature = "2d",
-        doc = "         transform.rotation.to_euler(EulerRot::XYZ).2.adjust_precision(),"
-    )]
-    #[cfg_attr(
-        feature = "3d",
-        doc = "         transform.rotation.adjust_precision(),"
-    )]
-    ///         velocity * time.delta_secs().adjust_precision(),
+    #[cfg_attr(feature = "3d", doc = "        transform.rotation,")]
+    ///         velocity * time.delta_secs(),
     ///         config.skin_width,
     ///         &filter,
     ///     );
@@ -751,25 +722,29 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///         // We collided with something on the way. Advance as much as possible.
     #[cfg_attr(
         feature = "2d",
-        doc = "         transform.translation += (velocity.normalize_or_zero() * hit.distance).extend(0.0).f32();"
+        doc = "        transform.translation += (velocity.normalize_or_zero() * hit.distance).extend(0.0);"
     )]
     #[cfg_attr(
         feature = "3d",
-        doc = "         transform.translation += (velocity.normalize_or_zero() * hit.distance).f32();"
+        doc = "        transform.translation += velocity.normalize_or_zero() * hit.distance;"
     )]
     ///         // Then project the velocity to make sure it no longer points towards the contact plane.
     ///         controller.velocity =
-    ///             MoveAndSlide::project_velocity(velocity, &[Dir::new_unchecked(hit.normal1.f32())])
+    #[cfg_attr(
+        feature = "2d",
+        doc = "            MoveAndSlide::project_velocity(velocity, &[Dir2::new_unchecked(hit.normal1)])"
+    )]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "            MoveAndSlide::project_velocity(velocity, &[Dir3::new_unchecked(hit.normal1)])"
+    )]
     ///     } else {
     ///         // We traveled the full distance without colliding.
     #[cfg_attr(
         feature = "2d",
-        doc = "         transform.translation += velocity.extend(0.0).f32();"
+        doc = "        transform.translation += velocity.extend(0.0);"
     )]
-    #[cfg_attr(
-        feature = "3d",
-        doc = "         transform.translation += velocity.f32();"
-    )]
+    #[cfg_attr(feature = "3d", doc = "        transform.translation += velocity;")]
     ///     }
     /// }
     /// ```
@@ -782,14 +757,14 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     pub fn cast_move(
         &self,
         shape: &Collider,
-        shape_position: Vector,
-        shape_rotation: RotationValue,
+        shape_position: RVector,
+        shape_rotation: impl Into<Rot>,
         movement: Vector,
-        skin_width: Scalar,
+        skin_width: f32,
         filter: &SpatialQueryFilter,
     ) -> Option<MoveHitData> {
-        let (direction, distance) = Dir::new_and_length(movement.f32()).unwrap_or((Dir::X, 0.0));
-        let distance = distance.adjust_precision() + skin_width;
+        let (direction, distance) = Dir::new_and_length(movement).unwrap_or((Dir::X, 0.0));
+        let distance = distance + skin_width;
         let shape_hit = self.spatial_query.cast_shape_predicate(
             shape,
             shape_position,
@@ -823,8 +798,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// Returns a [`ShapeHitData::distance`] that is reduced such that the hit distance is at least `skin_width`.
     /// The result will never be negative, so if the hit is already closer than `skin_width`, the returned distance will be zero.
     #[must_use]
-    fn pull_back(hit: ShapeHitData, dir: Dir, skin_width: Scalar) -> Scalar {
-        let dot = dir.adjust_precision().dot(-hit.normal1).max(DOT_EPSILON);
+    fn pull_back(hit: ShapeHitData, dir: Dir, skin_width: f32) -> f32 {
+        let dot = dir.dot(-hit.normal1).max(DOT_EPSILON);
         let skin_distance = skin_width / dot;
         (hit.distance - skin_distance).max(0.0)
     }
@@ -853,11 +828,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// use bevy::prelude::*;
     #[cfg_attr(
         feature = "2d",
-        doc = "use avian2d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::{AdjustPrecision as _, AsF32 as _}};"
+        doc = "use avian2d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::ToRealPrecision};"
     )]
     #[cfg_attr(
         feature = "3d",
-        doc = "use avian3d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::{AdjustPrecision as _, AsF32 as _}};"
+        doc = "use avian3d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::ToRealPrecision};"
     )]
     /// fn depenetrate_player(
     ///     player: Single<(Entity, &Collider, &mut Transform)>,
@@ -869,30 +844,21 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///
     ///     let offset = move_and_slide.depenetrate(
     ///         collider,
+    #[cfg_attr(feature = "2d", doc = "        transform.translation.xy().real(),")]
+    #[cfg_attr(feature = "3d", doc = "        transform.translation.real(),")]
     #[cfg_attr(
         feature = "2d",
-        doc = "         transform.translation.xy().adjust_precision(),"
+        doc = "        transform.rotation.to_euler(EulerRot::XYZ).2,"
     )]
-    #[cfg_attr(
-        feature = "3d",
-        doc = "         transform.translation.adjust_precision(),"
-    )]
-    #[cfg_attr(
-        feature = "2d",
-        doc = "         transform.rotation.to_euler(EulerRot::XYZ).2.adjust_precision(),"
-    )]
-    #[cfg_attr(
-        feature = "3d",
-        doc = "         transform.rotation.adjust_precision(),"
-    )]
+    #[cfg_attr(feature = "3d", doc = "        transform.rotation,")]
     ///         &DepenetrationConfig::default(),
     ///         &filter,
     ///     );
     #[cfg_attr(
         feature = "2d",
-        doc = "     transform.translation += offset.f32().extend(0.0);"
+        doc = "    transform.translation += offset.extend(0.0);"
     )]
-    #[cfg_attr(feature = "3d", doc = "     transform.translation += offset.f32();")]
+    #[cfg_attr(feature = "3d", doc = "    transform.translation += offset;")]
     /// }
     /// ```
     ///
@@ -905,8 +871,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     pub fn depenetrate(
         &self,
         shape: &Collider,
-        shape_position: Vector,
-        shape_rotation: RotationValue,
+        shape_position: RVector,
+        shape_rotation: impl Into<Rot>,
         config: &DepenetrationConfig,
         filter: &SpatialQueryFilter,
     ) -> Vector {
@@ -961,11 +927,11 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// use bevy::prelude::*;
     #[cfg_attr(
         feature = "2d",
-        doc = "use avian2d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::{AdjustPrecision as _, AsF32 as _}};"
+        doc = "use avian2d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::ToRealPrecision};"
     )]
     #[cfg_attr(
         feature = "3d",
-        doc = "use avian3d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::{AdjustPrecision as _, AsF32 as _}};"
+        doc = "use avian3d::{prelude::*, character_controller::move_and_slide::DepenetrationConfig, math::ToRealPrecision};"
     )]
     /// fn depenetrate_player_manually(
     ///     player: Single<(Entity, &Collider, &mut Transform)>,
@@ -979,22 +945,13 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///     let mut intersections = Vec::new();
     ///     move_and_slide.intersections(
     ///         collider,
+    #[cfg_attr(feature = "2d", doc = "        transform.translation.xy().real(),")]
+    #[cfg_attr(feature = "3d", doc = "        transform.translation.real(),")]
     #[cfg_attr(
         feature = "2d",
-        doc = "         transform.translation.xy().adjust_precision(),"
+        doc = "        transform.rotation.to_euler(EulerRot::XYZ).2,"
     )]
-    #[cfg_attr(
-        feature = "3d",
-        doc = "         transform.translation.adjust_precision(),"
-    )]
-    #[cfg_attr(
-        feature = "2d",
-        doc = "         transform.rotation.to_euler(EulerRot::XYZ).2.adjust_precision(),"
-    )]
-    #[cfg_attr(
-        feature = "3d",
-        doc = "         transform.rotation.adjust_precision(),"
-    )]
+    #[cfg_attr(feature = "3d", doc = "        transform.rotation,")]
     ///         config.skin_width,
     ///         &filter,
     ///         |_entity, contact_point, normal| {
@@ -1005,9 +962,9 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     ///     let offset = move_and_slide.depenetrate_intersections(&config, &intersections);
     #[cfg_attr(
         feature = "2d",
-        doc = "     transform.translation += offset.f32().extend(0.0);"
+        doc = "    transform.translation += offset.extend(0.0);"
     )]
-    #[cfg_attr(feature = "3d", doc = "     transform.translation += offset.f32();")]
+    #[cfg_attr(feature = "3d", doc = "    transform.translation += offset;")]
     /// }
     /// ```
     ///
@@ -1019,7 +976,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     pub fn depenetrate_intersections(
         &self,
         config: &DepenetrationConfig,
-        intersections: &[(Dir, Scalar)],
+        intersections: &[(Dir, f32)],
     ) -> Vector {
         let mut fixup = Vector::ZERO;
 
@@ -1031,10 +988,9 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 if *dist > self.length_unit.0 * config.penetration_rejection_threshold {
                     continue;
                 }
-                let normal = normal.adjust_precision();
-                let error = (dist - fixup.dot(normal)).max(0.0);
+                let error = (dist - fixup.dot(**normal)).max(0.0);
                 total_error += error;
-                fixup += error * normal;
+                fixup += error * **normal;
             }
 
             if total_error < self.length_unit.0 * config.max_depenetration_error {
@@ -1069,15 +1025,14 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     pub fn intersections(
         &self,
         shape: &Collider,
-        shape_position: Vector,
-        shape_rotation: RotationValue,
-        prediction_distance: Scalar,
+        shape_position: RVector,
+        shape_rotation: impl Into<Rot>,
+        prediction_distance: f32,
         filter: &SpatialQueryFilter,
         mut callback: impl FnMut(Entity, &ContactPoint, Dir) -> bool,
     ) {
-        let expanded_aabb = shape
-            .aabb(shape_position, shape_rotation)
-            .grow(Vector::splat(prediction_distance));
+        let shape_rotation = shape_rotation.into();
+        let expanded_aabb = shape.aabb(shape_position, shape_rotation, prediction_distance);
         let aabb_intersections = self
             .spatial_query
             .aabb_intersections_with_aabb(expanded_aabb);
@@ -1098,7 +1053,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 shape_position,
                 shape_rotation,
                 intersection_collider,
-                *intersection_pos,
+                intersection_pos.0,
                 *intersection_rot,
                 prediction_distance,
                 &mut manifolds,
@@ -1108,7 +1063,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                     continue;
                 };
 
-                let normal = Dir::new_unchecked(-manifold.normal.f32());
+                let normal = Dir::new_unchecked(-manifold.normal);
 
                 if !callback(intersection_entity, deepest, normal) {
                     // Abort further processing.

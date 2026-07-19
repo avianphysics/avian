@@ -2,16 +2,12 @@
 
 #![allow(clippy::unnecessary_cast)]
 
-use crate::{physics_transform::PhysicsTransformConfig, prelude::*};
+use crate::{math::Real, physics_transform::PhysicsTransformConfig, prelude::*};
 use bevy::{
     ecs::{lifecycle::HookContext, world::DeferredWorld},
-    math::DQuat,
     prelude::*,
 };
 use derive_more::From;
-
-#[cfg(feature = "2d")]
-use crate::math::Matrix;
 
 /// The global position of a [rigid body](RigidBody) or a [collider](Collider).
 ///
@@ -45,47 +41,44 @@ use crate::math::Matrix;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, Component, Default, PartialEq)]
-pub struct Position(pub Vector);
+pub struct Position(pub RVector);
 
 impl Position {
     /// A placeholder position. This is an invalid position and should *not*
     /// be used to an actually position entities in the world, but can be used
     /// to indicate that a position has not yet been initialized.
-    pub const PLACEHOLDER: Self = Self(Vector::MAX);
+    pub const PLACEHOLDER: Self = Self(RVector::MAX);
 
     /// Creates a [`Position`] component with the given global `position`.
-    pub fn new(position: Vector) -> Self {
+    pub fn new(position: RVector) -> Self {
         Self(position)
     }
 
     /// Creates a [`Position`] component with the global position `(x, y)`.
     #[cfg(feature = "2d")]
-    pub fn from_xy(x: Scalar, y: Scalar) -> Self {
-        Self(Vector::new(x, y))
+    pub fn from_xy(x: Real, y: Real) -> Self {
+        Self(RVector::new(x, y))
     }
 
     /// Creates a [`Position`] component with the global position `(x, y, z)`.
     #[cfg(feature = "3d")]
-    pub fn from_xyz(x: Scalar, y: Scalar, z: Scalar) -> Self {
-        Self(Vector::new(x, y, z))
+    pub fn from_xyz(x: Real, y: Real, z: Real) -> Self {
+        Self(RVector::new(x, y, z))
     }
 }
 
 impl From<GlobalTransform> for Position {
     #[cfg(feature = "2d")]
     fn from(value: GlobalTransform) -> Self {
-        Self::from_xy(
-            value.translation().adjust_precision().x,
-            value.translation().adjust_precision().y,
-        )
+        Self::from_xy(value.translation().x.real(), value.translation().y.real())
     }
 
     #[cfg(feature = "3d")]
     fn from(value: GlobalTransform) -> Self {
         Self::from_xyz(
-            value.translation().adjust_precision().x,
-            value.translation().adjust_precision().y,
-            value.translation().adjust_precision().z,
+            value.translation().x.real(),
+            value.translation().y.real(),
+            value.translation().z.real(),
         )
     }
 }
@@ -93,18 +86,15 @@ impl From<GlobalTransform> for Position {
 impl From<&GlobalTransform> for Position {
     #[cfg(feature = "2d")]
     fn from(value: &GlobalTransform) -> Self {
-        Self::from_xy(
-            value.translation().adjust_precision().x,
-            value.translation().adjust_precision().y,
-        )
+        Self::from_xy(value.translation().x.real(), value.translation().y.real())
     }
 
     #[cfg(feature = "3d")]
     fn from(value: &GlobalTransform) -> Self {
         Self::from_xyz(
-            value.translation().adjust_precision().x,
-            value.translation().adjust_precision().y,
-            value.translation().adjust_precision().z,
+            value.translation().x.real(),
+            value.translation().y.real(),
+            value.translation().z.real(),
         )
     }
 }
@@ -112,7 +102,7 @@ impl From<&GlobalTransform> for Position {
 impl Ease for Position {
     fn interpolating_curve_unbounded(start: Self, end: Self) -> impl Curve<Self> {
         FunctionCurve::new(Interval::UNIT, move |t| {
-            Position(Vector::lerp(start.0, end.0, t as Scalar))
+            Position(RVector::lerp(start.0, end.0, t as Real))
         })
     }
 }
@@ -129,16 +119,7 @@ pub struct PreSolveDeltaPosition(pub Vector);
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, Component, Default, PartialEq)]
-pub struct PreSolveDeltaRotation(pub Rotation);
-
-/// Radians
-#[cfg(feature = "2d")]
-#[allow(dead_code)]
-pub(crate) type RotationValue = Scalar;
-/// Quaternion
-#[cfg(feature = "3d")]
-#[allow(dead_code)]
-pub(crate) type RotationValue = Quaternion;
+pub struct PreSolveDeltaRotation(pub Rot);
 
 /// The global counterclockwise physics rotation of a [rigid body](RigidBody)
 /// or a [collider](Collider) in radians.
@@ -176,11 +157,11 @@ pub struct Rotation {
     /// The cosine of the rotation angle in radians.
     ///
     /// This is the real part of the unit complex number representing the rotation.
-    pub cos: Scalar,
+    pub cos: f32,
     /// The sine of the rotation angle in radians.
     ///
     /// This is the imaginary part of the unit complex number representing the rotation.
-    pub sin: Scalar,
+    pub sin: f32,
 }
 
 #[cfg(feature = "2d")]
@@ -196,8 +177,8 @@ impl Rotation {
     /// be used to an actually rotate entities in the world, but can be used
     /// to indicate that a rotation has not yet been initialized.
     pub const PLACEHOLDER: Self = Self {
-        cos: Scalar::MAX,
-        sin: Scalar::MAX,
+        cos: f32::MAX,
+        sin: f32::MAX,
     };
 
     /// No rotation.
@@ -220,8 +201,8 @@ impl Rotation {
 
     /// A counterclockwise rotation of π/4 radians.
     pub const FRAC_PI_4: Self = Self {
-        cos: FRAC_1_SQRT_2,
-        sin: FRAC_1_SQRT_2,
+        cos: core::f32::consts::FRAC_1_SQRT_2,
+        sin: core::f32::consts::FRAC_1_SQRT_2,
     };
 
     /// A counterclockwise rotation of π/6 radians.
@@ -238,12 +219,9 @@ impl Rotation {
 
     /// Creates a [`Rotation`] from a counterclockwise angle in radians.
     #[inline]
-    pub fn radians(radians: Scalar) -> Self {
+    pub fn radians(radians: f32) -> Self {
         #[cfg(feature = "enhanced-determinism")]
-        let (sin, cos) = (
-            libm::sin(radians as f64) as Scalar,
-            libm::cos(radians as f64) as Scalar,
-        );
+        let (sin, cos) = (libm::sinf(radians), libm::cosf(radians));
         #[cfg(not(feature = "enhanced-determinism"))]
         let (sin, cos) = radians.sin_cos();
 
@@ -252,19 +230,19 @@ impl Rotation {
 
     /// Creates a [`Rotation`] from a counterclockwise angle in degrees.
     #[inline]
-    pub fn degrees(degrees: Scalar) -> Self {
+    pub fn degrees(degrees: f32) -> Self {
         Self::radians(degrees.to_radians())
     }
 
     /// Creates a [`Rotation`] from radians.
     #[deprecated(note = "renamed to just `radians` to match Bevy")]
-    pub fn from_radians(radians: Scalar) -> Self {
+    pub fn from_radians(radians: f32) -> Self {
         Self::radians(radians)
     }
 
     /// Creates a [`Rotation`] from degrees.
     #[deprecated(note = "renamed to just `degrees` to match Bevy")]
-    pub fn from_degrees(degrees: Scalar) -> Self {
+    pub fn from_degrees(degrees: f32) -> Self {
         Self::degrees(degrees)
     }
 
@@ -276,7 +254,7 @@ impl Rotation {
     ///
     /// Panics if `sin * sin + cos * cos != 1.0` when `debug_assertions` are enabled.
     #[inline]
-    pub fn from_sin_cos(sin: Scalar, cos: Scalar) -> Self {
+    pub fn from_sin_cos(sin: f32, cos: f32) -> Self {
         let rotation = Self { sin, cos };
         debug_assert!(
             rotation.is_normalized(),
@@ -287,33 +265,27 @@ impl Rotation {
 
     /// Returns the rotation in radians in the `(-pi, pi]` range.
     #[inline]
-    pub fn as_radians(self) -> Scalar {
+    pub fn as_radians(self) -> f32 {
         #[cfg(feature = "enhanced-determinism")]
         {
-            libm::atan2(self.sin as f64, self.cos as f64) as Scalar
+            libm::atan2f(self.sin, self.cos)
         }
         #[cfg(not(feature = "enhanced-determinism"))]
         {
-            Scalar::atan2(self.sin, self.cos)
+            f32::atan2(self.sin, self.cos)
         }
     }
 
     /// Returns the rotation in degrees in the `(-180, 180]` range.
     #[inline]
-    pub fn as_degrees(self) -> Scalar {
+    pub fn as_degrees(self) -> f32 {
         self.as_radians().to_degrees()
     }
 
     /// Returns the sine and cosine of the rotation angle in radians.
     #[inline]
-    pub const fn sin_cos(self) -> (Scalar, Scalar) {
+    pub const fn sin_cos(self) -> (f32, f32) {
         (self.sin, self.cos)
-    }
-
-    /// Rotates the given vector by `self`.
-    #[deprecated(note = "use the `Mul` impl instead, like `rot * vec`")]
-    pub fn rotate(&self, vec: Vector) -> Vector {
-        self * vec
     }
 
     /// Computes the length or norm of the complex number used to represent the rotation.
@@ -323,8 +295,8 @@ impl Rotation {
     /// successive operations.
     #[inline]
     #[doc(alias = "norm")]
-    pub fn length(self) -> Scalar {
-        Vector::new(self.sin, self.cos).length()
+    pub fn length(self) -> f32 {
+        Vec2::new(self.sin, self.cos).length()
     }
 
     /// Computes the squared length or norm of the complex number used to represent the rotation.
@@ -337,16 +309,30 @@ impl Rotation {
     /// successive operations.
     #[inline]
     #[doc(alias = "norm2")]
-    pub fn length_squared(self) -> Scalar {
-        Vector::new(self.sin, self.cos).length_squared()
+    pub fn length_squared(self) -> f32 {
+        Vec2::new(self.sin, self.cos).length_squared()
     }
 
     /// Computes `1.0 / self.length()`.
     ///
     /// For valid results, `self` must _not_ have a length of zero.
     #[inline]
-    pub fn length_recip(self) -> Scalar {
-        Vector::new(self.sin, self.cos).length_recip()
+    pub fn length_recip(self) -> f32 {
+        Vec2::new(self.sin, self.cos).length_recip()
+    }
+
+    /// Computes the chord length of the rotation, which is the straight-line
+    /// distance between the start and end points of the rotation on a unit circle.
+    #[inline]
+    pub fn chord_length(self) -> f32 {
+        // The chord length traveled by a point rotated by `θ` on a unit circle
+        // is `2 * sin(θ / 2)`.
+        //
+        // In 2D, `2 * sin(θ / 2) = sqrt(2 * (1 - cos(θ)))`, using the stored cosine.
+        //
+        // TODO: A "2D quaternion" that stores cos(theta / 2) and sin(theta / 2)
+        //       could avoid the sqrt and be more accurate in some places.
+        (2.0 * (1.0 - self.cos)).max(0.0).sqrt()
     }
 
     /// Returns `self` with a length of `1.0` if possible, and `None` otherwise.
@@ -432,7 +418,7 @@ impl Rotation {
 
     /// Returns the angle in radians needed to make `self` and `other` coincide.
     #[inline]
-    pub fn angle_between(self, other: Self) -> Scalar {
+    pub fn angle_between(self, other: Self) -> f32 {
         (other * self.inverse()).as_radians()
     }
 
@@ -452,7 +438,7 @@ impl Rotation {
     #[must_use]
     /// Adds the given counterclockiwise angle in radians to the [`Rotation`].
     /// Uses small-angle approximation
-    pub fn add_angle_fast(&self, radians: Scalar) -> Self {
+    pub fn add_angle_fast(&self, radians: f32) -> Self {
         let (sin, cos) = (self.sin + radians * self.cos, self.cos - radians * self.sin);
         let magnitude_squared = sin * sin + cos * cos;
         let magnitude_recip = if magnitude_squared > 0.0 {
@@ -502,7 +488,7 @@ impl Rotation {
     /// assert_relative_eq!(result2.as_degrees(), 67.5);
     /// ```
     #[inline]
-    pub fn nlerp(self, end: Self, s: Scalar) -> Self {
+    pub fn nlerp(self, end: Self, s: f32) -> Self {
         Self {
             sin: self.sin.lerp(end.sin, s),
             cos: self.cos.lerp(end.cos, s),
@@ -540,31 +526,31 @@ impl Rotation {
     /// assert_eq!(result2.as_degrees(), 67.5);
     /// ```
     #[inline]
-    pub fn slerp(self, end: Self, s: Scalar) -> Self {
+    pub fn slerp(self, end: Self, s: f32) -> Self {
         self * Self::radians(self.angle_between(end) * s)
     }
 }
 
 #[cfg(feature = "2d")]
-impl From<Scalar> for Rotation {
+impl From<f32> for Rotation {
     /// Creates a [`Rotation`] from a counterclockwise angle in radians.
-    fn from(rotation: Scalar) -> Self {
+    fn from(rotation: f32) -> Self {
         Self::radians(rotation)
     }
 }
 
 #[cfg(feature = "2d")]
-impl From<Rotation> for Matrix {
-    /// Creates a [`Matrix`] rotation matrix from a [`Rotation`].
+impl From<Rotation> for Mat2 {
+    /// Creates a [`Mat2`] rotation matrix from a [`Rotation`].
     fn from(rot: Rotation) -> Self {
-        Matrix::from_cols_array(&[rot.cos, rot.sin, -rot.sin, rot.cos])
+        Mat2::from_cols_array(&[rot.cos, rot.sin, -rot.sin, rot.cos])
     }
 }
 
 #[cfg(feature = "2d")]
-impl From<Matrix> for Rotation {
-    /// Creates a [`Rotation`] from a [`Matrix`].
-    fn from(mat: Matrix) -> Self {
+impl From<Mat2> for Rotation {
+    /// Creates a [`Rotation`] from a [`Mat2`].
+    fn from(mat: Mat2) -> Self {
         let cos = mat.x_axis.x;
         let sin = mat.x_axis.y;
         Self::from_sin_cos(sin, cos)
@@ -575,7 +561,7 @@ impl From<Matrix> for Rotation {
 impl From<Rot2> for Rotation {
     /// Creates a [`Rotation`] from a [`Rot2`].
     fn from(rot: Rot2) -> Self {
-        Self::from_sin_cos(rot.sin as Scalar, rot.cos as Scalar)
+        Self::from_sin_cos(rot.sin, rot.cos)
     }
 }
 
@@ -583,7 +569,7 @@ impl From<Rot2> for Rotation {
 impl From<Rotation> for Rot2 {
     /// Creates a [`Rot2`] from a [`Rotation`].
     fn from(rot: Rotation) -> Self {
-        Self::from_sin_cos(rot.sin as f32, rot.cos as f32)
+        Self::from_sin_cos(rot.sin, rot.cos)
     }
 }
 
@@ -607,12 +593,12 @@ impl core::ops::MulAssign for Rotation {
 }
 
 #[cfg(feature = "2d")]
-impl core::ops::Mul<Vector> for Rotation {
-    type Output = Vector;
+impl core::ops::Mul<Vec2> for Rotation {
+    type Output = Vec2;
 
-    /// Rotates a [`Vector`] by a [`Rotation`].
-    fn mul(self, rhs: Vector) -> Self::Output {
-        Vector::new(
+    /// Rotates a [`Vec2`] by a [`Rotation`].
+    fn mul(self, rhs: Vec2) -> Self::Output {
+        Vec2::new(
             rhs.x * self.cos - rhs.y * self.sin,
             rhs.x * self.sin + rhs.y * self.cos,
         )
@@ -620,11 +606,11 @@ impl core::ops::Mul<Vector> for Rotation {
 }
 
 #[cfg(feature = "2d")]
-impl core::ops::Mul<Vector3> for Rotation {
-    type Output = Vector3;
+impl core::ops::Mul<Vec3> for Rotation {
+    type Output = Vec3;
 
-    fn mul(self, rhs: Vector3) -> Self::Output {
-        Vector3::new(
+    fn mul(self, rhs: Vec3) -> Self::Output {
+        Vec3::new(
             rhs.x * self.cos - rhs.y * self.sin,
             rhs.x * self.sin + rhs.y * self.cos,
             rhs.z,
@@ -633,82 +619,80 @@ impl core::ops::Mul<Vector3> for Rotation {
 }
 
 #[cfg(feature = "2d")]
-impl core::ops::Mul<&Vector3> for Rotation {
-    type Output = Vector3;
+impl core::ops::Mul<&Vec3> for Rotation {
+    type Output = Vec3;
 
-    fn mul(self, rhs: &Vector3) -> Self::Output {
+    fn mul(self, rhs: &Vec3) -> Self::Output {
         self * *rhs
     }
 }
 
 #[cfg(feature = "2d")]
-impl core::ops::Mul<&mut Vector3> for Rotation {
-    type Output = Vector3;
+impl core::ops::Mul<&mut Vec3> for Rotation {
+    type Output = Vec3;
 
-    fn mul(self, rhs: &mut Vector3) -> Self::Output {
+    fn mul(self, rhs: &mut Vec3) -> Self::Output {
         self * *rhs
     }
 }
 
 #[cfg(feature = "2d")]
-impl core::ops::Mul<Vector3> for &Rotation {
-    type Output = Vector3;
+impl core::ops::Mul<Vec3> for &Rotation {
+    type Output = Vec3;
 
-    fn mul(self, rhs: Vector3) -> Self::Output {
+    fn mul(self, rhs: Vec3) -> Self::Output {
         *self * rhs
     }
 }
 
 #[cfg(feature = "2d")]
-impl core::ops::Mul<&Vector3> for &Rotation {
-    type Output = Vector3;
+impl core::ops::Mul<&Vec3> for &Rotation {
+    type Output = Vec3;
 
-    fn mul(self, rhs: &Vector3) -> Self::Output {
+    fn mul(self, rhs: &Vec3) -> Self::Output {
         *self * *rhs
     }
 }
 
 #[cfg(feature = "2d")]
-impl core::ops::Mul<&mut Vector3> for &Rotation {
-    type Output = Vector3;
+impl core::ops::Mul<&mut Vec3> for &Rotation {
+    type Output = Vec3;
 
-    fn mul(self, rhs: &mut Vector3) -> Self::Output {
+    fn mul(self, rhs: &mut Vec3) -> Self::Output {
         *self * *rhs
     }
 }
 
 #[cfg(feature = "2d")]
-impl core::ops::Mul<Vector3> for &mut Rotation {
-    type Output = Vector3;
+impl core::ops::Mul<Vec3> for &mut Rotation {
+    type Output = Vec3;
 
-    fn mul(self, rhs: Vector3) -> Self::Output {
+    fn mul(self, rhs: Vec3) -> Self::Output {
         *self * rhs
     }
 }
 
 #[cfg(feature = "2d")]
-impl core::ops::Mul<&Vector3> for &mut Rotation {
-    type Output = Vector3;
+impl core::ops::Mul<&Vec3> for &mut Rotation {
+    type Output = Vec3;
 
-    fn mul(self, rhs: &Vector3) -> Self::Output {
+    fn mul(self, rhs: &Vec3) -> Self::Output {
         *self * *rhs
     }
 }
 
 #[cfg(feature = "2d")]
-impl core::ops::Mul<&mut Vector3> for &mut Rotation {
-    type Output = Vector3;
+impl core::ops::Mul<&mut Vec3> for &mut Rotation {
+    type Output = Vec3;
 
-    fn mul(self, rhs: &mut Vector3) -> Self::Output {
+    fn mul(self, rhs: &mut Vec3) -> Self::Output {
         *self * *rhs
     }
 }
 
 impl Ease for Rotation {
     fn interpolating_curve_unbounded(start: Self, end: Self) -> impl Curve<Self> {
-        FunctionCurve::new(Interval::UNIT, move |t| {
-            Rotation::slerp(start, end, t as Scalar)
-        })
+        FunctionCurve::new(Interval::UNIT, move |t| Rotation::slerp(start, end, t))
     }
 }
 
@@ -731,7 +715,6 @@ impl Ease for Rotation {
 /// use avian3d::prelude::*;
 /// use bevy::prelude::*;
 ///
-/// # #[cfg(feature = "f32")]
 /// fn setup(mut commands: Commands) {
 ///     // Spawn a dynamic rigid body rotated by 1.5 radians around the x axis
 ///     commands.spawn((RigidBody::Dynamic, Rotation(Quat::from_rotation_x(1.5))));
@@ -742,26 +725,33 @@ impl Ease for Rotation {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, Component, Default, PartialEq)]
-pub struct Rotation(pub Quaternion);
+pub struct Rotation(pub Quat);
 
 #[cfg(feature = "3d")]
 impl Rotation {
     /// A placeholder rotation. This is an invalid rotation and should *not*
     /// be used to an actually rotate entities in the world, but can be used
     /// to indicate that a rotation has not yet been initialized.
-    pub const PLACEHOLDER: Self = Self(Quaternion::from_xyzw(
-        Scalar::MAX,
-        Scalar::MAX,
-        Scalar::MAX,
-        Scalar::MAX,
-    ));
+    pub const PLACEHOLDER: Self = Self(Quat::from_xyzw(f32::MAX, f32::MAX, f32::MAX, f32::MAX));
 
     /// No rotation.
-    pub const IDENTITY: Self = Self(Quaternion::IDENTITY);
+    pub const IDENTITY: Self = Self(Quat::IDENTITY);
+
+    /// Computes the chord length of the rotation, which is the straight-line
+    /// distance between the start and end points of the rotation on a unit sphere.
+    #[inline]
+    pub fn chord_length(self) -> f32 {
+        // The chord length traveled by a point rotated by `θ` on a unit sphere
+        // is `2 * sin(θ / 2)`.
+        //
+        // In 3D, the vector part of the quaternion has length `sin(θ / 2)`,
+        // so doubling it gives the chord length `2 * sin(θ / 2)` directly.
+        2.0 * self.xyz().length()
+    }
 
     /// Returns the angle (in radians) for the minimal rotation for transforming this rotation into another.
     #[inline]
-    pub fn angle_between(self, other: Self) -> Scalar {
+    pub fn angle_between(self, other: Self) -> f32 {
         self.0.angle_between(other.0)
     }
 
@@ -784,7 +774,7 @@ impl Rotation {
     ///
     /// If you would like the angular velocity to remain constant, consider using [`slerp`](Self::slerp) instead.
     #[inline]
-    pub fn nlerp(self, end: Self, t: Scalar) -> Self {
+    pub fn nlerp(self, end: Self, t: f32) -> Self {
         Self(self.0.lerp(end.0, t))
     }
 
@@ -799,7 +789,7 @@ impl Rotation {
     /// If you would like the rotation to have a kind of ease-in-out effect, consider
     /// using the slightly more efficient [`nlerp`](Self::nlerp) instead.
     #[inline]
-    pub fn slerp(self, end: Self, t: Scalar) -> Self {
+    pub fn slerp(self, end: Self, t: f32) -> Self {
         Self(self.0.slerp(end.0, t))
     }
 
@@ -818,10 +808,10 @@ impl Rotation {
 }
 
 #[cfg(feature = "3d")]
-impl core::ops::Mul<Vector> for Rotation {
-    type Output = Vector;
+impl core::ops::Mul<Vec3> for Rotation {
+    type Output = Vec3;
 
-    fn mul(self, vector: Vector) -> Self::Output {
+    fn mul(self, vector: Vec3) -> Self::Output {
         self.0 * vector
     }
 }
@@ -843,34 +833,34 @@ impl core::ops::MulAssign for Rotation {
 }
 
 #[cfg(feature = "3d")]
-impl core::ops::Mul<Quaternion> for Rotation {
-    type Output = Quaternion;
+impl core::ops::Mul<Quat> for Rotation {
+    type Output = Quat;
 
-    fn mul(self, quaternion: Quaternion) -> Self::Output {
+    fn mul(self, quaternion: Quat) -> Self::Output {
         self.0 * quaternion
     }
 }
 
 #[cfg(feature = "3d")]
-impl core::ops::Mul<Quaternion> for &Rotation {
-    type Output = Quaternion;
+impl core::ops::Mul<Quat> for &Rotation {
+    type Output = Quat;
 
-    fn mul(self, quaternion: Quaternion) -> Self::Output {
+    fn mul(self, quaternion: Quat) -> Self::Output {
         self.0 * quaternion
     }
 }
 
 #[cfg(feature = "3d")]
-impl core::ops::Mul<Quaternion> for &mut Rotation {
-    type Output = Quaternion;
+impl core::ops::Mul<Quat> for &mut Rotation {
+    type Output = Quat;
 
-    fn mul(self, quaternion: Quaternion) -> Self::Output {
+    fn mul(self, quaternion: Quat) -> Self::Output {
         self.0 * quaternion
     }
 }
 
 #[cfg(feature = "3d")]
-impl core::ops::Mul<Rotation> for Quaternion {
+impl core::ops::Mul<Rotation> for Quat {
     type Output = Rotation;
 
     fn mul(self, rotation: Rotation) -> Self::Output {
@@ -879,16 +869,16 @@ impl core::ops::Mul<Rotation> for Quaternion {
 }
 
 #[cfg(feature = "3d")]
-impl core::ops::Mul<Rotation> for &Quaternion {
+impl core::ops::Mul<Rotation> for &Quat {
     type Output = Rotation;
 
     fn mul(self, rotation: Rotation) -> Self::Output {
-        Rotation(*self * rotation.0)
+        Rotation(self * rotation.0)
     }
 }
 
 #[cfg(feature = "3d")]
-impl core::ops::Mul<Rotation> for &mut Quaternion {
+impl core::ops::Mul<Rotation> for &mut Quat {
     type Output = Rotation;
 
     fn mul(self, rotation: Rotation) -> Self::Output {
@@ -900,7 +890,7 @@ impl core::ops::Mul<Dir> for Rotation {
     type Output = Dir;
 
     fn mul(self, direction: Dir) -> Self::Output {
-        Dir::new_unchecked((self * direction.adjust_precision()).f32())
+        Dir::new_unchecked(self * *direction)
     }
 }
 
@@ -916,7 +906,7 @@ impl core::ops::Mul<Dir> for &Rotation {
     type Output = Dir;
 
     fn mul(self, direction: Dir) -> Self::Output {
-        Dir::new_unchecked((*self * direction.adjust_precision()).f32())
+        Dir::new_unchecked(self * *direction)
     }
 }
 
@@ -932,7 +922,7 @@ impl core::ops::Mul<Dir> for &mut Rotation {
     type Output = Dir;
 
     fn mul(self, direction: Dir) -> Self::Output {
-        Dir::new_unchecked((*self * direction.adjust_precision()).f32())
+        Dir::new_unchecked(self * *direction)
     }
 }
 
@@ -948,7 +938,7 @@ impl core::ops::Mul<&Dir> for Rotation {
     type Output = Dir;
 
     fn mul(self, direction: &Dir) -> Self::Output {
-        Dir::new_unchecked((self * direction.adjust_precision()).f32())
+        Dir::new_unchecked(self * **direction)
     }
 }
 
@@ -964,7 +954,7 @@ impl core::ops::Mul<&mut Dir> for Rotation {
     type Output = Dir;
 
     fn mul(self, direction: &mut Dir) -> Self::Output {
-        Dir::new_unchecked((self * direction.adjust_precision()).f32())
+        Dir::new_unchecked(self * **direction)
     }
 }
 
@@ -980,7 +970,7 @@ impl core::ops::Mul<&Dir> for &Rotation {
     type Output = Dir;
 
     fn mul(self, direction: &Dir) -> Self::Output {
-        Dir::new_unchecked((*self * direction.adjust_precision()).f32())
+        Dir::new_unchecked(self * **direction)
     }
 }
 
@@ -996,7 +986,7 @@ impl core::ops::Mul<&Dir> for &mut Rotation {
     type Output = Dir;
 
     fn mul(self, direction: &Dir) -> Self::Output {
-        Dir::new_unchecked((*self * direction.adjust_precision()).f32())
+        Dir::new_unchecked(self * **direction)
     }
 }
 
@@ -1012,7 +1002,7 @@ impl core::ops::Mul<&mut Dir> for &Rotation {
     type Output = Dir;
 
     fn mul(self, direction: &mut Dir) -> Self::Output {
-        Dir::new_unchecked((*self * direction.adjust_precision()).f32())
+        Dir::new_unchecked(self * **direction)
     }
 }
 
@@ -1028,28 +1018,28 @@ impl core::ops::Mul<&mut Dir> for &mut Rotation {
     type Output = Dir;
 
     fn mul(self, direction: &mut Dir) -> Self::Output {
-        Dir::new_unchecked((*self * direction.adjust_precision()).f32())
+        Dir::new_unchecked(self * **direction)
     }
 }
 
 #[cfg(feature = "2d")]
-impl From<Rotation> for Scalar {
+impl From<Rotation> for f32 {
     fn from(rot: Rotation) -> Self {
         rot.as_radians()
     }
 }
 
 #[cfg(feature = "2d")]
-impl From<Rotation> for Quaternion {
+impl From<Rotation> for Quat {
     fn from(rot: Rotation) -> Self {
         let z = rot.sin.signum() * ((1.0 - rot.cos) / 2.0).abs().sqrt();
         let w = ((1.0 + rot.cos) / 2.0).abs().sqrt();
-        Quaternion::from_xyzw(0.0, 0.0, z, w)
+        Quat::from_xyzw(0.0, 0.0, z, w)
     }
 }
 
 #[cfg(feature = "3d")]
-impl From<Rotation> for Quaternion {
+impl From<Rotation> for Quat {
     fn from(rot: Rotation) -> Self {
         rot.0
     }
@@ -1077,39 +1067,14 @@ impl From<&GlobalTransform> for Rotation {
 impl From<Quat> for Rotation {
     fn from(quat: Quat) -> Self {
         let angle = quat.to_euler(EulerRot::XYZ).2;
-        Self::radians(angle as Scalar)
-    }
-}
-
-#[cfg(feature = "2d")]
-impl From<DQuat> for Rotation {
-    fn from(quat: DQuat) -> Self {
-        let angle = quat.to_euler(EulerRot::XYZ).2;
-        Self::radians(angle as Scalar)
+        Self::radians(angle)
     }
 }
 
 #[cfg(feature = "3d")]
 impl From<Quat> for Rotation {
     fn from(quat: Quat) -> Self {
-        Self(Quaternion::from_xyzw(
-            quat.x as Scalar,
-            quat.y as Scalar,
-            quat.z as Scalar,
-            quat.w as Scalar,
-        ))
-    }
-}
-
-#[cfg(feature = "3d")]
-impl From<DQuat> for Rotation {
-    fn from(quat: DQuat) -> Self {
-        Self(Quaternion::from_xyzw(
-            quat.x as Scalar,
-            quat.y as Scalar,
-            quat.z as Scalar,
-            quat.w as Scalar,
-        ))
+        Self(Quat::from_xyzw(quat.x, quat.y, quat.z, quat.w))
     }
 }
 
@@ -1125,7 +1090,7 @@ pub(crate) fn init_physics_transform(world: &mut DeferredWorld, ctx: &HookContex
         .map_or((default(), true), |r| (*r, *r == Rotation::PLACEHOLDER));
 
     if is_pos_placeholder {
-        position.0 = Vector::ZERO;
+        position.0 = RVector::ZERO;
     }
     if is_rot_placeholder {
         rotation = Rotation::IDENTITY;
@@ -1181,13 +1146,13 @@ pub(crate) fn init_physics_transform(world: &mut DeferredWorld, ctx: &HookContex
                         Transform::from_translation(position.f32().extend(
                             parent_translation.z + transform.translation.z * parent_scale.z,
                         ))
-                        .with_rotation(Quaternion::from(rotation).f32()),
+                        .with_rotation(Quat::from(rotation)),
                     )
                     .reparented_to(&parent_global_transform)
                 };
             #[cfg(feature = "3d")]
             let new_transform = GlobalTransform::from(
-                Transform::from_translation(position.f32()).with_rotation(rotation.f32()),
+                Transform::from_translation(position.f32()).with_rotation(rotation.0),
             )
             .reparented_to(&parent_global_transform);
 
@@ -1204,7 +1169,7 @@ pub(crate) fn init_physics_transform(world: &mut DeferredWorld, ctx: &HookContex
                     transform.translation = position.f32().extend(transform.translation.z);
                 }
                 if !is_rot_placeholder {
-                    transform.rotation = Quaternion::from(rotation).f32();
+                    transform.rotation = Quat::from(rotation);
                 }
             }
             #[cfg(feature = "3d")]
@@ -1213,7 +1178,7 @@ pub(crate) fn init_physics_transform(world: &mut DeferredWorld, ctx: &HookContex
                     transform.translation = position.f32();
                 }
                 if !is_rot_placeholder {
-                    transform.rotation = rotation.f32();
+                    transform.rotation = rotation.0;
                 }
             }
         }
@@ -1221,7 +1186,7 @@ pub(crate) fn init_physics_transform(world: &mut DeferredWorld, ctx: &HookContex
 
     if !config.transform_to_position {
         if is_pos_placeholder && let Some(mut position) = world.get_mut::<Position>(ctx.entity) {
-            position.0 = Vector::ZERO;
+            position.0 = RVector::ZERO;
         }
         if is_rot_placeholder && let Some(mut rotation) = world.get_mut::<Rotation>(ctx.entity) {
             *rotation = Rotation::IDENTITY;
@@ -1236,18 +1201,18 @@ pub(crate) fn init_physics_transform(world: &mut DeferredWorld, ctx: &HookContex
                 global_transform.to_scale_rotation_translation();
             #[cfg(feature = "2d")]
             {
-                position.0 = global_translation.truncate().adjust_precision();
-                rotation = Rotation::from(global_rotation.adjust_precision());
+                position.0 = global_translation.truncate().real();
+                rotation = Rotation::from(global_rotation);
             }
             #[cfg(feature = "3d")]
             {
-                position.0 = global_translation.adjust_precision();
-                rotation.0 = global_rotation.adjust_precision();
+                position.0 = global_translation.real();
+                rotation.0 = global_rotation;
             }
         } else {
             // No transform was set. Set the computed `position` and `rotation` to default values.
             if is_pos_placeholder {
-                position.0 = Vector::ZERO;
+                position.0 = RVector::ZERO;
             }
             if is_rot_placeholder {
                 rotation = Rotation::IDENTITY;

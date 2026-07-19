@@ -1,3 +1,7 @@
+#[cfg(feature = "3d")]
+use bevy_math::Quat;
+use bevy_math::Vec3;
+
 use crate::dynamics::solver::solver_body::SolverBody;
 use crate::dynamics::solver::xpbd;
 use crate::prelude::*;
@@ -15,9 +19,9 @@ pub trait AngularConstraint {
         body2: &mut SolverBody,
         inv_angular_inertia1: SymmetricTensor,
         inv_angular_inertia2: SymmetricTensor,
-        delta_lagrange: Scalar,
-    ) -> Scalar {
-        if delta_lagrange.abs() <= Scalar::EPSILON {
+        delta_lagrange: f32,
+    ) -> f32 {
+        if delta_lagrange.abs() <= f32::EPSILON {
             return 0.0;
         }
 
@@ -41,8 +45,8 @@ pub trait AngularConstraint {
         body2: &mut SolverBody,
         inv_angular_inertia1: SymmetricTensor,
         inv_angular_inertia2: SymmetricTensor,
-        impulse: Scalar,
-    ) -> Scalar {
+        impulse: f32,
+    ) -> f32 {
         // Apply rotational updates
         let delta_angle = Self::get_delta_rot(inv_angular_inertia1, impulse);
         body1.delta_rotation = body1.delta_rotation.add_angle_fast(delta_angle);
@@ -64,10 +68,10 @@ pub trait AngularConstraint {
         body2: &mut SolverBody,
         inv_angular_inertia1: SymmetricTensor,
         inv_angular_inertia2: SymmetricTensor,
-        delta_lagrange: Scalar,
+        delta_lagrange: f32,
         axis: Vector,
     ) -> Vector {
-        if delta_lagrange.abs() <= Scalar::EPSILON {
+        if delta_lagrange.abs() <= f32::EPSILON {
             return Vector::ZERO;
         }
 
@@ -97,10 +101,10 @@ pub trait AngularConstraint {
     ) -> Vector {
         // Apply rotational updates
         let delta_quat = Self::get_delta_rot(inv_angular_inertia1, impulse);
-        body1.delta_rotation.0 = delta_quat * body1.delta_rotation.0;
+        body1.delta_rotation = delta_quat * body1.delta_rotation;
 
         let delta_quat = Self::get_delta_rot(inv_angular_inertia2, -impulse);
-        body2.delta_rotation.0 = delta_quat * body2.delta_rotation.0;
+        body2.delta_rotation = delta_quat * body2.delta_rotation;
 
         impulse
     }
@@ -115,13 +119,13 @@ pub trait AngularConstraint {
         body2: &mut SolverBody,
         inv_angular_inertia1: SymmetricTensor,
         inv_angular_inertia2: SymmetricTensor,
-        angle: Scalar,
-        lagrange: Scalar,
-        compliance: Scalar,
-        dt: Scalar,
-    ) -> AngularVector {
-        if angle.abs() <= Scalar::EPSILON {
-            return AngularVector::ZERO;
+        angle: f32,
+        lagrange: f32,
+        compliance: f32,
+        dt: f32,
+    ) -> f32 {
+        if angle.abs() <= f32::EPSILON {
+            return 0.0;
         }
 
         let w = [inv_angular_inertia1, inv_angular_inertia2];
@@ -152,15 +156,15 @@ pub trait AngularConstraint {
         body2: &mut SolverBody,
         inv_angular_inertia1: SymmetricTensor,
         inv_angular_inertia2: SymmetricTensor,
-        rotation_difference: Vector,
-        lagrange: Scalar,
-        compliance: Scalar,
-        dt: Scalar,
-    ) -> AngularVector {
+        rotation_difference: Vec3,
+        lagrange: f32,
+        compliance: f32,
+        dt: f32,
+    ) -> Vec3 {
         let angle = rotation_difference.length();
 
-        if angle <= Scalar::EPSILON {
-            return AngularVector::ZERO;
+        if angle <= f32::EPSILON {
+            return Vec3::ZERO;
         }
 
         let axis = rotation_difference / angle;
@@ -201,10 +205,10 @@ pub trait AngularConstraint {
         body2: &mut SolverBody,
         inv_angular_inertia1: SymmetricTensor,
         inv_angular_inertia2: SymmetricTensor,
-        delta_lagrange: Scalar,
-        axis: Vector3,
-    ) -> Scalar {
-        if delta_lagrange.abs() <= Scalar::EPSILON {
+        delta_lagrange: f32,
+        axis: Vec3,
+    ) -> f32 {
+        if delta_lagrange.abs() <= f32::EPSILON {
             return 0.0;
         }
 
@@ -232,10 +236,10 @@ pub trait AngularConstraint {
         body2: &mut SolverBody,
         inv_angular_inertia1: SymmetricTensor,
         inv_angular_inertia2: SymmetricTensor,
-        delta_lagrange: Scalar,
+        delta_lagrange: f32,
         axis: Vector,
     ) -> Vector {
-        if delta_lagrange.abs() <= Scalar::EPSILON {
+        if delta_lagrange.abs() <= f32::EPSILON {
             return Vector::ZERO;
         }
 
@@ -244,10 +248,10 @@ pub trait AngularConstraint {
 
         // Apply rotational updates
         let delta_quat = Self::get_delta_rot(inv_angular_inertia1, p);
-        body1.delta_rotation.0 = delta_quat * body1.delta_rotation.0;
+        body1.delta_rotation = delta_quat * body1.delta_rotation;
 
         let delta_quat = Self::get_delta_rot(inv_angular_inertia2, -p);
-        body2.delta_rotation.0 = delta_quat * body2.delta_rotation.0;
+        body2.delta_rotation = delta_quat * body2.delta_rotation;
 
         p
     }
@@ -260,36 +264,36 @@ pub trait AngularConstraint {
     fn compute_generalized_inverse_mass(
         &self,
         inv_angular_inertia: SymmetricTensor,
-        axis: Vector3,
-    ) -> Scalar {
+        axis: Vec3,
+    ) -> f32 {
         axis.dot(inv_angular_inertia * axis)
     }
 
     /// Computes the update in rotation when applying an angular correction `p`.
     #[cfg(feature = "2d")]
-    fn get_delta_rot(inverse_inertia: SymmetricTensor, p: Scalar) -> Scalar {
+    fn get_delta_rot(inverse_inertia: SymmetricTensor, p: f32) -> f32 {
         // Equation 8/9 but in 2D
         inverse_inertia * p
     }
 
     /// Computes the update in rotation when applying an angular correction `p`.
     #[cfg(feature = "3d")]
-    fn get_delta_rot(inverse_inertia: SymmetricTensor, p: Vector) -> Quaternion {
+    fn get_delta_rot(inverse_inertia: SymmetricTensor, p: Vector) -> Quat {
         // Equation 8/9
-        Quaternion::from_scaled_axis(inverse_inertia * p)
+        Quat::from_scaled_axis(inverse_inertia * p)
     }
 
     /// Computes the torque acting along the constraint using the equation `tau = lambda * n / h^2`,
     /// where `n` is the Z axis in 2D.
     #[cfg(feature = "2d")]
-    fn compute_torque(&self, lagrange: Scalar, dt: Scalar) -> AngularVector {
+    fn compute_torque(&self, lagrange: f32, dt: f32) -> f32 {
         // Eq (17)
         lagrange / dt.powi(2)
     }
 
     /// Computes the torque acting along the constraint using the equation `tau = lambda * n / h^2`
     #[cfg(feature = "3d")]
-    fn compute_torque(&self, lagrange: Scalar, axis: Vector, dt: Scalar) -> AngularVector {
+    fn compute_torque(&self, lagrange: f32, axis: Vector, dt: f32) -> Vector {
         // Eq (17)
         lagrange * axis / dt.powi(2)
     }

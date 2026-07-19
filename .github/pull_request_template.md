@@ -1,11 +1,17 @@
 # Objective
 
+<!--
+Before you contribute, make sure you review our AI policy!
+https://github.com/avianphysics/avian/blob/main/AI_POLICY.md
+-->
+
 - Describe the objective or issue this PR addresses.
 - If you're fixing a specific issue, say "Fixes #X".
 
 ## Solution
 
 - Describe the solution used to achieve the objective above.
+- Was AI used in design, code, or communication? In which ways?
 
 <!--
 Note: If your PR contains breaking changes relative to the latest release,
@@ -28,7 +34,7 @@ Note: If your PR contains breaking changes relative to the latest release,
 - Help others understand the result of this PR by showcasing your awesome work!
 - If this PR adds a new feature or public API, consider adding a brief pseudo-code snippet of it in action
 - If this PR includes a visual change, consider adding a screenshot, GIF, or video
-  - If you want, you could even include a before/after comparison!
+    - If you want, you could even include a before/after comparison!
 - If the Migration Guide adequately covers the changes, you can delete this section
 
 While a showcase should aim to be brief and digestible, you can use a toggleable section to save space on longer showcases:

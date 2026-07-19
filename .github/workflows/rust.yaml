@@ -1,10 +1,15 @@
-name: CI
+name: Rust
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+        types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
     CARGO_TERM_COLOR: always
@@ -12,33 +17,67 @@ env:
     RUSTDOCFLAGS: --deny warnings
 
 jobs:
+    changes:
+        name: Detect Rust Changes
+        runs-on: ubuntu-latest
+        outputs:
+            rust: ${{ steps.rust-changed.outputs.rust }}
+        steps:
+            - uses: actions/checkout@v6
+              if: ${{ github.event_name == 'pull_request' }}
+              with:
+                  fetch-depth: 0
+            - uses: dorny/paths-filter@v3
+              id: filter
+              if: ${{ github.event_name == 'pull_request' }}
+              with:
+                  filters: |
+                      rust:
+                          - '**.rs'
+                          - '**/Cargo.toml'
+                          - '**/Cargo.lock'
+                          - '.cargo/**'
+                          - '.github/workflows/rust.yaml'
+            - name: Set Rust change output
+              id: rust-changed
+              run: |
+                  if [[ "${{ github.event_name }}" == "push" ]]; then
+                      echo "rust=true" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "rust=${{ steps.filter.outputs.rust }}" >> "$GITHUB_OUTPUT"
+                  fi
+
     check:
         name: Check Minimal Features
+        needs: changes
+        if: ${{ github.event_name == 'push' || needs.changes.outputs.rust == 'true' }}
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - uses: dtolnay/rust-toolchain@stable
             - uses: Swatinem/rust-cache@v2
               with:
-                save-if: ${{ github.ref == 'refs/heads/main' }}
-                cache-all-crates: true
-                shared-key: lints
+                  save-if: ${{ github.ref == 'refs/heads/main' }}
+                  cache-all-crates: true
+                  shared-key: lints
             - name: Install Linux dependencies
               run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev libx264-164 libx264-dev
             - name: Run cargo check
-              run: cargo check --locked --all-targets --no-default-features --features 2d,3d,f32
+              run: cargo check --locked --all-targets --no-default-features --features 2d,3d
 
     docs:
         name: Check Documentation
+        needs: changes
+        if: ${{ github.event_name == 'push' || needs.changes.outputs.rust == 'true' }}
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - uses: dtolnay/rust-toolchain@stable
             - uses: Swatinem/rust-cache@v2
               with:
-                save-if: ${{ github.ref == 'refs/heads/main' }}
-                cache-all-crates: true
-                shared-key: lints
+                  save-if: ${{ github.ref == 'refs/heads/main' }}
+                  cache-all-crates: true
+                  shared-key: lints
             - name: Install Linux dependencies
               run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev libx264-164 libx264-dev
             - name: Run cargo doc
@@ -46,18 +85,20 @@ jobs:
 
     test:
         name: Test Suite
+        needs: changes
+        if: ${{ github.event_name == 'push' || needs.changes.outputs.rust == 'true' }}
         strategy:
             matrix:
-                os: [windows-latest, macos-latest, ubuntu-latest]
+                os: ${{ fromJSON((github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'Cross-Platform')) && '["windows-latest","macos-latest","ubuntu-latest"]' || '["ubuntu-latest"]') }}
         env:
             RUSTFLAGS: --deny warnings -C debuginfo=line-tables-only -Zthreads=0
         runs-on: ${{ matrix.os }}
         timeout-minutes: 60
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - uses: dtolnay/rust-toolchain@nightly
               with:
-                components: llvm-tools-preview
+                  components: llvm-tools-preview
             - uses: cargo-bins/cargo-binstall@main
             - name: Install Linux dependencies
               run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev libx264-164 libx264-dev
@@ -71,54 +112,55 @@ jobs:
             - name: set LD_LIBRARY_PATH on unix
               id: ld-unix
               run: |
-                # Linux
-                echo "LD_LIBRARY_PATH=$(rustc --print target-libdir)" >> "$GITHUB_ENV"
-                # macOS
-                echo "DYLD_LIBRARY_PATH=$(rustc --print target-libdir)" >> "$GITHUB_ENV"
-                echo "libdir=$(rustc --print target-libdir)" >> "$GITHUB_OUTPUT"
+                  # Linux
+                  echo "LD_LIBRARY_PATH=$(rustc --print target-libdir)" >> "$GITHUB_ENV"
+                  # macOS
+                  echo "DYLD_LIBRARY_PATH=$(rustc --print target-libdir)" >> "$GITHUB_ENV"
+                  echo "libdir=$(rustc --print target-libdir)" >> "$GITHUB_OUTPUT"
               if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest' }}
             - name: set LD_LIBRARY_PATH on Windows
               id: ld-windows
               run: |
-                $libDir = (rustc --print target-libdir)
-                Add-Content -Path $env:GITHUB_ENV -Value "RUST_LIB_DIR=$libDir"
-                Add-Content -Path $env:GITHUB_PATH -Value "$libDir"
-                "libdir=$libDir" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+                  $libDir = (rustc --print target-libdir)
+                  Add-Content -Path $env:GITHUB_ENV -Value "RUST_LIB_DIR=$libDir"
+                  Add-Content -Path $env:GITHUB_PATH -Value "$libDir"
+                  "libdir=$libDir" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
               shell: pwsh
               if: ${{ matrix.os == 'windows-latest' }}
             - name: Restore Rust cache on Unix
               uses: Swatinem/rust-cache@v2
               if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest' }}
               with:
-                save-if: ${{ github.ref == 'refs/heads/main' }}
-                cache-directories: ${{ steps.ld-unix.outputs.libdir }}
-                cache-all-crates: true
+                  save-if: ${{ github.ref == 'refs/heads/main' }}
+                  cache-directories: ${{ steps.ld-unix.outputs.libdir }}
+                  cache-all-crates: true
             - name: Restore Rust cache on Windows
               uses: Swatinem/rust-cache@v2
               if: ${{ matrix.os == 'windows-latest' }}
               with:
-                save-if: ${{ github.ref == 'refs/heads/main' }}
-                cache-directories: ${{ steps.ld-windows.outputs.libdir }}
-                cache-all-crates: true
+                  save-if: ${{ github.ref == 'refs/heads/main' }}
+                  cache-directories: ${{ steps.ld-windows.outputs.libdir }}
+                  cache-all-crates: true
             - name: Run cargo test
               run: cargo nextest run --locked --no-default-features --lib --bins --examples --no-fail-fast --features enhanced-determinism,parallel,collider-from-mesh,serialize,debug-plugin,xpbd_joints,avian2d/2d,avian3d/3d,avian2d/f64,avian3d/f64,default-collider,parry-f64,bevy_scene,bevy_picking,diagnostic_ui,bevy/dynamic_linking
             - name: Run doc tests
               run: cargo test --locked --doc --no-default-features --features enhanced-determinism,parallel,collider-from-mesh,serialize,debug-plugin,xpbd_joints,avian2d/2d,avian3d/3d,avian2d/f64,avian3d/f64,default-collider,parry-f64,bevy_scene,bevy_picking,diagnostic_ui,bevy/dynamic_linking
-  
-           
+
     lints:
         name: Lints
+        needs: changes
+        if: ${{ github.event_name == 'push' || needs.changes.outputs.rust == 'true' }}
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - uses: dtolnay/rust-toolchain@stable
               with:
-                components: rustfmt, clippy
+                  components: rustfmt, clippy
             - uses: Swatinem/rust-cache@v2
               with:
-                save-if: ${{ github.ref == 'refs/heads/main' }}
-                cache-all-crates: true
-                shared-key: lints
+                  save-if: ${{ github.ref == 'refs/heads/main' }}
+                  cache-all-crates: true
+                  shared-key: lints
             - name: Install Linux dependencies
               run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev libx264-164 libx264-dev
             - name: Run cargo fmt

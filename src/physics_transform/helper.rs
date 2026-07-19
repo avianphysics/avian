@@ -12,7 +12,7 @@ use bevy::{
 use thiserror::Error;
 
 use crate::{
-    math::AdjustPrecision,
+    math::ToRealPrecision,
     prelude::{Position, Rotation},
 };
 
@@ -74,13 +74,13 @@ impl PhysicsTransformHelper<'_, '_> {
         };
         #[cfg(feature = "2d")]
         {
-            position.0 = global_transform.translation().truncate().adjust_precision();
-            *rotation = Rotation::from(global_transform.rotation().adjust_precision());
+            position.0 = global_transform.translation().truncate().real();
+            *rotation = Rotation::from(global_transform.rotation());
         }
         #[cfg(feature = "3d")]
         {
-            position.0 = global_transform.translation().adjust_precision();
-            rotation.0 = global_transform.rotation().adjust_precision();
+            position.0 = global_transform.translation().real();
+            rotation.0 = global_transform.rotation();
         }
 
         Ok((position, rotation))

@@ -7,7 +7,7 @@ use crate::{
         ColliderTreeSystems, ColliderTreeType, ColliderTrees, ProxyId,
         tree::ColliderTreeProxyFlags,
     },
-    collision::collider::EnlargedAabb,
+    collision::collider::{ColliderAabbMargin, EnlargedAabb},
     data_structures::bit_vec::BitVec,
     dynamics::solver::solver_body::SolverBody,
     prelude::*,
@@ -25,13 +25,6 @@ use bevy::{
 };
 use obvhs::aabb::Aabb;
 use thread_local::ThreadLocal;
-
-/// An extra margin added around the [`EnlargedAabb`]. This allows proxies
-/// to move a small amount without triggering a tree update.
-///
-/// This is implicitly scaled by the [`PhysicsLengthUnit`].
-// TODO: This should probably be configurable.
-const AABB_MARGIN: Scalar = 0.05;
 
 /// A plugin for updating [`ColliderTree`]s for a collider type `C`.
 ///
@@ -81,27 +74,40 @@ impl<C: AnyCollider> Plugin for ColliderTreeUpdatePlugin<C> {
                 Option<&CollisionMargin>,
                 &mut ColliderAabb,
                 &mut EnlargedAabb,
+                &mut ColliderAabbMargin,
             )>,
              narrow_phase_config: Res<NarrowPhaseConfig>,
              length_unit: Res<PhysicsLengthUnit>,
              collider_context: StaticSystemParam<C::Context>| {
                 let contact_tolerance = length_unit.0 * narrow_phase_config.contact_tolerance;
-                let margin = length_unit.0 * AABB_MARGIN;
 
-                if let Ok((collider, pos, rot, collision_margin, mut aabb, mut enlarged_aabb)) =
-                    query.get_mut(trigger.entity)
+                if let Ok((
+                    collider,
+                    pos,
+                    rot,
+                    collision_margin,
+                    mut aabb,
+                    mut enlarged_aabb,
+                    mut aabb_margin,
+                )) = query.get_mut(trigger.entity)
                 {
                     let collision_margin = collision_margin.map_or(0.0, |m| m.0);
 
                     // TODO: Should we instead do this in `add_to_tree_on`?
                     // Update tight-fitting AABB.
-                    let context = AabbContext::new(trigger.entity, &*collider_context);
-                    let growth = Vector::splat(contact_tolerance + collision_margin);
-                    *aabb = collider
-                        .aabb_with_context(pos.0, *rot, context)
-                        .grow(growth);
+                    let context = ColliderContext::new(trigger.entity, &*collider_context);
+                    let growth = contact_tolerance + collision_margin;
+                    *aabb = collider.aabb_with_context(pos.0, *rot, growth, context);
 
-                    enlarged_aabb.update(&aabb, margin);
+                    // Compute and cache the size-relative AABB margin for the collider.
+                    let context = ColliderContext::new(trigger.entity, &*collider_context);
+                    *aabb_margin = ColliderAabbMargin::from_bounding_radius(
+                        collider.bounding_radius_with_context(context),
+                        length_unit.0,
+                    );
+
+                    // Use the cached margin for the initial enlarged AABB.
+                    enlarged_aabb.update(&aabb, aabb_margin.0);
                 }
             },
         );
@@ -191,11 +197,11 @@ impl<C: AnyCollider> Plugin for ColliderTreeUpdatePlugin<C> {
         );
 
         // Cases 4
-        // Note: We use `Replace` here to run before Case 2.
+        // Note: We use `Discard` here to run before Case 2.
         app.add_observer(
-            add_to_tree_on::<Replace, Disabled, (Without<ColliderDisabled>, Allow<Disabled>)>,
+            add_to_tree_on::<Discard, Disabled, (Without<ColliderDisabled>, Allow<Disabled>)>,
         );
-        app.add_observer(add_to_tree_on::<Replace, ColliderDisabled, ()>);
+        app.add_observer(add_to_tree_on::<Discard, ColliderDisabled, ()>);
 
         // Case 5
         app.add_observer(
@@ -371,7 +377,7 @@ impl<C: AnyCollider> Plugin for ColliderTreeUpdatePlugin<C> {
 
         // Case 11
         app.add_observer(
-            |trigger: On<Replace, RigidBodyDisabled>,
+            |trigger: On<Discard, RigidBodyDisabled>,
              body_query: Query<(&RigidBodyColliders, Has<RigidBodyDisabled>)>,
              mut collider_query: Query<&ColliderTreeProxyKey, Without<ColliderDisabled>>,
              mut trees: ResMut<ColliderTrees>| {
@@ -648,8 +654,6 @@ impl EnlargedProxiesBitVec {
 // TODO: Once dynamic an kinematic bodies have their own marker components,
 //       we should use those instead of `SolverBody`. Solver bodies should
 //       be an implementation detail of the solver.
-// TODO: This approach with velocity-expanded AABBs is quite inefficient.
-//       We could switch to Box2D-style CCD with fast bodies.
 fn update_solver_body_aabbs<C: AnyCollider>(
     body_query: Query<
         (
@@ -658,7 +662,7 @@ fn update_solver_body_aabbs<C: AnyCollider>(
             &LinearVelocity,
             &AngularVelocity,
             &RigidBodyColliders,
-            Has<SweptCcd>,
+            Option<&SpeculativeCcd>,
         ),
         With<SolverBody>,
     >,
@@ -668,11 +672,11 @@ fn update_solver_body_aabbs<C: AnyCollider>(
                 Ref<C>,
                 &mut ColliderAabb,
                 &mut EnlargedAabb,
+                &mut ColliderAabbMargin,
                 &ColliderTreeProxyKey,
                 &Position,
                 &Rotation,
                 Option<&CollisionMargin>,
-                Option<&SpeculativeMargin>,
             ),
             Without<ColliderDisabled>,
         >,
@@ -680,10 +684,10 @@ fn update_solver_body_aabbs<C: AnyCollider>(
     )>,
     narrow_phase_config: Res<NarrowPhaseConfig>,
     length_unit: Res<PhysicsLengthUnit>,
+    time: Res<Time>,
     mut trees: ResMut<ColliderTrees>,
     mut moved_proxies: ResMut<MovedProxies>,
     mut enlarged_proxies: ResMut<EnlargedProxies>,
-    time: Res<Time>,
     collider_context: StaticSystemParam<C::Context>,
     mut diagnostics: ResMut<ColliderTreeDiagnostics>,
     mut last_tick: ResMut<LastDynamicKinematicAabbUpdate>,
@@ -703,81 +707,80 @@ fn update_solver_body_aabbs<C: AnyCollider>(
     e.dynamic_proxies.clear_and_set_capacity(cap_dynamic);
     e.kinematic_proxies.clear_and_set_capacity(cap_kinematic);
 
-    let delta_secs = time.delta_seconds_adjusted();
-    let default_speculative_margin = length_unit.0 * narrow_phase_config.default_speculative_margin;
+    // A small, fixed contact tolerance is added to each AABB so the narrow phase
+    // can predict slightly separated contacts.
     let contact_tolerance = length_unit.0 * narrow_phase_config.contact_tolerance;
-    let margin = length_unit.0 * AABB_MARGIN;
+
+    let delta_secs = time.delta_secs();
 
     let collider_query = colliders.p0();
 
     body_query.par_iter().for_each(
-        |(rb_pos, center_of_mass, lin_vel, ang_vel, body_colliders, has_swept_ccd)| {
+        |(rb_pos, center_of_mass, lin_vel, ang_vel, body_colliders, speculative_ccd)| {
             for collider_entity in body_colliders.iter() {
                 let Ok((
                     collider,
                     mut aabb,
                     mut enlarged_aabb,
+                    mut aabb_margin,
                     proxy_key,
                     pos,
                     rot,
                     collision_margin,
-                    speculative_margin,
                 )) = (unsafe { collider_query.get_unchecked(collider_entity) })
                 else {
                     continue;
                 };
 
                 let collision_margin = collision_margin.map_or(0.0, |margin| margin.0);
-                let speculative_margin = if has_swept_ccd {
-                    Scalar::MAX
+
+                let context = ColliderContext::new(collider_entity, &*collider_context);
+                let growth = contact_tolerance + collision_margin;
+
+                *aabb = if let Some(max_distance) = speculative_ccd.map(|s| s.max_distance) {
+                    // Opt-in velocity-expanded AABB: sweep the collider from its current pose to
+                    // where it would be next frame, so the broad phase and swept CCD can predict
+                    // contacts ahead. Note that this is only really needed by CCD for cases like
+                    // two fast-moving objects coming into contact from different directions,
+                    // because with tight AABBs, sweeping the shapes would not find any AABB intersection.
+
+                    // Velocity of this collider. For off-center (child) colliders on a rotating
+                    // body, the collider orbits the center of mass, which adds to its velocity.
+                    let offset = (pos.0 - rb_pos.0).f32() - center_of_mass.0;
+                    #[cfg(feature = "2d")]
+                    let vel = lin_vel.0 + Vec2::new(-ang_vel.0 * offset.y, ang_vel.0 * offset.x);
+                    #[cfg(feature = "3d")]
+                    let vel = lin_vel.0 + ang_vel.0.cross(offset);
+
+                    // Expand the AABB along the velocity, but no further than the speculative margin.
+                    let movement = (vel * delta_secs).clamp_length_max(max_distance);
+
+                    #[cfg(feature = "2d")]
+                    let end_rot = *rot * Rotation::radians(ang_vel.0 * delta_secs);
+                    #[cfg(feature = "3d")]
+                    let end_rot =
+                        (Quat::from_scaled_axis(ang_vel.0 * delta_secs) * rot.0)
+                            .fast_renormalize();
+
+                    collider
+                        .swept_aabb_with_context(pos.0, *rot, pos.0 + movement.real(), end_rot,growth, context)
                 } else {
-                    speculative_margin.map_or(default_speculative_margin, |margin| margin.0)
+                    collider
+                        .aabb_with_context(pos.0, *rot, growth, context)
                 };
 
-                let context = AabbContext::new(collider_entity, &*collider_context);
-                let growth = Vector::splat(contact_tolerance + collision_margin);
-
-                if speculative_margin <= 0.0 {
-                    *aabb = collider
-                        .aabb_with_context(pos.0, *rot, context)
-                        .grow(growth);
-                } else {
-                    // If the rigid body is rotating, off-center colliders will orbit around it,
-                    // which affects their linear velocities. We need to compute the linear velocity
-                    // at the offset position.
-                    // TODO: This assumes that the colliders would continue moving in the same direction,
-                    //       but because they are orbiting, the direction will change. We should take
-                    //       into account the uniform circular motion.
-                    let offset = pos.0 - rb_pos.0 - center_of_mass.0;
-                    #[cfg(feature = "2d")]
-                    let vel = lin_vel.0 + Vector::new(-ang_vel.0 * offset.y, ang_vel.0 * offset.x);
-                    #[cfg(feature = "3d")]
-                    let vel = lin_vel.0 + ang_vel.cross(offset);
-                    let movement = (vel * delta_secs)
-                        .clamp_length_max(speculative_margin.max(contact_tolerance));
-
-                    // Current position and predicted position for next feame
-                    #[cfg(feature = "2d")]
-                    let (end_pos, end_rot) = (
-                        pos.0 + movement,
-                        *rot * Rotation::radians(ang_vel.0 * delta_secs),
+                // Recompute the cached AABB margin if the collider shape changed.
+                if collider.is_changed() {
+                    let context = ColliderContext::new(collider_entity, &*collider_context);
+                    *aabb_margin = ColliderAabbMargin::from_bounding_radius(
+                        collider.bounding_radius_with_context(context),
+                        length_unit.0,
                     );
-
-                    #[cfg(feature = "3d")]
-                    let (end_pos, end_rot) = (
-                        pos.0 + movement,
-                        Rotation(Quaternion::from_scaled_axis(ang_vel.0 * delta_secs) * rot.0)
-                            .fast_renormalize(),
-                    );
-
-                    // Compute swept AABB, the space that the body would occupy if it was integrated for one frame
-                    // TODO: Should we expand the AABB in all directions for speculative contacts?
-                    *aabb = collider
-                        .swept_aabb_with_context(pos.0, *rot, end_pos, end_rot, context)
-                        .grow(growth);
                 }
 
-                let moved = enlarged_aabb.update(&aabb, margin);
+                // Solver bodies are always dynamic or kinematic, so they use the size-relative
+                // AABB margin to allow some movement without triggering tree updates.
+                let moved = enlarged_aabb.update(&aabb, aabb_margin.0);
 
                 if moved {
                     let tree_type = proxy_key.tree_type();
@@ -845,6 +848,7 @@ pub fn update_moved_collider_aabbs<C: AnyCollider>(
                 Ref<Rotation>,
                 &mut ColliderAabb,
                 &mut EnlargedAabb,
+                &mut ColliderAabbMargin,
                 Ref<C>,
                 Option<&CollisionMargin>,
                 &ColliderTreeProxyKey,
@@ -880,19 +884,31 @@ pub fn update_moved_collider_aabbs<C: AnyCollider>(
     e.static_proxies.clear_and_set_capacity(cap_static);
     e.standalone_proxies.clear_and_set_capacity(cap_standalone);
 
+    // A small, fixed contact tolerance is added to each AABB so the narrow phase
+    // can predict slightly separated contacts.
     let contact_tolerance = length_unit.0 * narrow_phase_config.contact_tolerance;
-    let margin = length_unit.0 * AABB_MARGIN;
 
     // TODO: This doesn't do velocity-based enlargement like the dynamic/kinematic AABB update.
     //       We should overall rework CCD to not rely on velocity-based AABB enlargement for all bodies.
     // TODO: par-iter over all colliders, check if they have actually changed since the `LastPhysicsTick`
     let mut collider_query = colliders.p0();
     collider_query.par_iter_mut().for_each(
-        |(entity, pos, rot, mut aabb, mut enlarged_aabb, collider, collision_margin, proxy_key)| {
+        |(
+            entity,
+            pos,
+            rot,
+            mut aabb,
+            mut enlarged_aabb,
+            mut aabb_margin,
+            collider,
+            collision_margin,
+            proxy_key,
+        )| {
             // Skip if the collider's AABB can't have changed since the last physics tick.
+            let collider_changed = collider.last_changed().is_newer_than(last_tick.0, this_run);
             if !pos.last_changed().is_newer_than(last_tick.0, this_run)
                 && !rot.last_changed().is_newer_than(last_tick.0, this_run)
-                && !collider.last_changed().is_newer_than(last_tick.0, this_run)
+                && !collider_changed
             {
                 return;
             }
@@ -900,11 +916,25 @@ pub fn update_moved_collider_aabbs<C: AnyCollider>(
             let collision_margin = collision_margin.map_or(0.0, |margin| margin.0);
 
             // Update tight-fitting AABB.
-            let context = AabbContext::new(entity, &*collider_context);
-            let growth = Vector::splat(contact_tolerance + collision_margin);
-            *aabb = collider
-                .aabb_with_context(pos.0, *rot, context)
-                .grow(growth);
+            let context = ColliderContext::new(entity, &*collider_context);
+            let growth = contact_tolerance + collision_margin;
+            *aabb = collider.aabb_with_context(pos.0, *rot, growth, context);
+
+            // Recompute the cached AABB margin if the collider shape changed.
+            if collider_changed {
+                let context = ColliderContext::new(entity, &*collider_context);
+                *aabb_margin = ColliderAabbMargin::from_bounding_radius(
+                    collider.bounding_radius_with_context(context),
+                    length_unit.0,
+                );
+            }
+
+            // Dynamic and kinematic colliders use the size-relative AABB margin, while static and
+            // standalone colliders only use the smaller contact tolerance to keep their AABBs tight.
+            let margin = match proxy_key.tree_type() {
+                ColliderTreeType::Dynamic | ColliderTreeType::Kinematic => aabb_margin.0,
+                ColliderTreeType::Static | ColliderTreeType::Standalone => contact_tolerance,
+            };
 
             // Try to update the enlarged AABB, and if it changed, mark the proxy as moved.
             let moved = enlarged_aabb.update(&aabb, margin);

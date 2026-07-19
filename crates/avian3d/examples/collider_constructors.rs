@@ -34,7 +34,7 @@ fn setup(
     commands.spawn((
         // The model was made by RayMarch, licenced under CC0-1.0, and can be found here:
         // https://github.com/RayMarch/ferris3d
-        SceneRoot(assets.load("ferris.glb#Scene0")),
+        WorldAssetRoot(assets.load("ferris.glb#Scene0")),
         Transform::from_xyz(0.0, 1.0, 0.0).with_scale(Vec3::splat(2.0)),
         // Create colliders using convex decomposition.
         // This takes longer than creating a trimesh or convex hull collider,
@@ -51,7 +51,7 @@ fn setup(
     commands.spawn((
         PointLight {
             intensity: 1_000_000.0,
-            shadows_enabled: true,
+            shadow_maps_enabled: true,
             ..default()
         },
         Transform::from_xyz(2.0, 8.0, 2.0),
