@@ -160,8 +160,14 @@ pub trait BoundedCollider {
     /// # Example
     ///
     /// ```
-    #[cfg_attr(feature = "2d", doc = "# use avian2d::{prelude::*, math::RVector};")]
-    #[cfg_attr(feature = "3d", doc = "# use avian3d::{prelude::*, math::RVector};")]
+    #[cfg_attr(
+        feature = "2d",
+        doc = "# use avian2d::{collision::collider::BoundedCollider, prelude::*, math::RVector};"
+    )]
+    #[cfg_attr(
+        feature = "3d",
+        doc = "# use avian3d::{collision::collider::BoundedCollider, prelude::*, math::RVector};"
+    )]
     /// # use bevy::prelude::*;
     /// # use bevy::ecs::system::{SystemParam, lifetimeless::{SRes, SQuery}};
     /// #
