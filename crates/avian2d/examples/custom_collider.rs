@@ -41,15 +41,15 @@ fn main() {
 #[derive(Component)]
 struct CircleCollider {
     /// The radius of the circle collider. This may be scaled by the `Transform` scale.
-    radius: Scalar,
+    radius: f32,
     /// The radius of the circle collider without `Transform` scale applied.
-    unscaled_radius: Scalar,
+    unscaled_radius: f32,
     /// The scaling factor, determined by `Transform` scale.
-    scale: Scalar,
+    scale: f32,
 }
 
 impl CircleCollider {
-    fn new(radius: Scalar) -> Self {
+    fn new(radius: f32) -> Self {
         Self {
             radius,
             unscaled_radius: radius,
@@ -67,11 +67,12 @@ impl BoundedCollider for CircleCollider {
 
     fn aabb_with_context(
         &self,
-        position: Vector,
-        _: impl Into<Rotation>,
-        _: ColliderContext<Self::Context, Self::EntityUsage>,
+        position: RVec2,
+        _rotation: impl Into<Rot2>,
+        margin: f32,
+        _context: ColliderContext<Self::Context>,
     ) -> ColliderAabb {
-        ColliderAabb::new(position, Vector::splat(self.radius))
+        ColliderAabb::new(position, Vec2::splat(self.radius + margin))
     }
 }
 
@@ -81,21 +82,21 @@ impl AnyCollider for CircleCollider {
     fn contact_manifolds_with_context(
         &self,
         other: &Self,
-        position1: Vector,
-        rotation1: impl Into<Rotation>,
-        position2: Vector,
-        _rotation2: impl Into<Rotation>,
-        prediction_distance: Scalar,
+        position1: RVec2,
+        rotation1: impl Into<Rot2>,
+        position2: RVec2,
+        _rotation2: impl Into<Rot2>,
+        prediction_distance: f32,
         manifolds: &mut Vec<ContactManifold>,
         _: ColliderPairContext<Self::Context, Self::EntityUsage>,
     ) {
         // Clear the previous manifolds.
         manifolds.clear();
 
-        let rotation1: Rotation = rotation1.into();
+        let rotation1: Rot2 = rotation1.into();
 
         let inv_rotation1 = rotation1.inverse();
-        let delta_pos = inv_rotation1 * (position2 - position1);
+        let delta_pos = inv_rotation1 * (position2 - position1).f32();
 
         let distance_squared = delta_pos.length_squared();
         let sum_radius = self.radius + other.radius;
@@ -104,7 +105,7 @@ impl AnyCollider for CircleCollider {
             let local_normal1 = if distance_squared != 0.0 {
                 delta_pos.normalize_or_zero()
             } else {
-                Vector::X
+                Vec2::X
             };
             let local_point1 = local_normal1 * self.radius;
             let normal = rotation1 * local_normal1;
@@ -115,8 +116,8 @@ impl AnyCollider for CircleCollider {
             // The anchors are relative to the positions of the colliders.
             let point1 = rotation1 * local_point1;
             let anchor1 = point1 + normal * separation * 0.5;
-            let anchor2 = anchor1 + (position1 - position2);
-            let world_point = position1 + anchor1;
+            let anchor2 = anchor1 + (position1 - position2).f32();
+            let world_point = position1 + anchor1.real();
 
             let point = ContactPoint::new(anchor1, anchor2, world_point, -separation)
                 .with_feature_ids(PackedFeatureId::face(0), PackedFeatureId::face(0));
@@ -147,11 +148,11 @@ impl ComputeMassProperties2d for CircleCollider {
 
 // Note: This circle collider only supports uniform scaling.
 impl ScalableCollider for CircleCollider {
-    fn scale(&self) -> Vector {
-        Vector::splat(self.scale)
+    fn scale(&self) -> Vec2 {
+        Vec2::splat(self.scale)
     }
 
-    fn set_scale(&mut self, scale: Vector, _detail: u32) {
+    fn set_scale(&mut self, scale: Vec2, _detail: u32) {
         // For non-unifprm scaling, this would need to be converted to an ellipse collider or a convex hull.
         self.scale = scale.max_element();
         self.radius = self.unscaled_radius * scale.max_element();
@@ -182,7 +183,7 @@ fn setup(
             Mesh2d(meshes.add(Circle::new(center_radius))),
             MeshMaterial2d(materials.add(Color::srgb(0.7, 0.7, 0.8)).clone()),
             RigidBody::Kinematic,
-            CircleCollider::new(center_radius.adjust_precision()),
+            CircleCollider::new(center_radius),
             CenterBody,
         ))
         .with_children(|c| {
@@ -195,7 +196,7 @@ fn setup(
                     Mesh2d(particle_mesh.clone()),
                     MeshMaterial2d(red.clone()),
                     Transform::from_translation(pos).with_scale(Vec3::ONE * 5.0),
-                    CircleCollider::new(particle_radius.adjust_precision()),
+                    CircleCollider::new(particle_radius),
                 ));
             }
         });
@@ -215,7 +216,7 @@ fn setup(
                     0.0,
                 ),
                 RigidBody::Dynamic,
-                CircleCollider::new(particle_radius.adjust_precision()),
+                CircleCollider::new(particle_radius),
                 LinearDamping(0.4),
             ));
         }
@@ -227,9 +228,9 @@ fn center_gravity(
     mut particles: Query<(&Transform, &mut LinearVelocity), Without<CenterBody>>,
     time: Res<Time>,
 ) {
-    let delta_seconds = time.delta_secs_f64().adjust_precision();
+    let delta_seconds = time.delta_secs();
     for (transform, mut lin_vel) in &mut particles {
-        let pos_delta = transform.translation.truncate().adjust_precision();
+        let pos_delta = transform.translation.truncate();
         let dir = -pos_delta.normalize_or_zero();
         lin_vel.0 += 800.0 * delta_seconds * dir;
     }
@@ -237,7 +238,7 @@ fn center_gravity(
 
 /// Rotates the center body periodically clockwise and counterclockwise.
 fn rotate(mut query: Query<&mut AngularVelocity, With<CenterBody>>, time: Res<Time>) {
-    let sin = 3.0 * time.elapsed_secs_f64().adjust_precision().sin();
+    let sin = 3.0 * time.elapsed_secs().sin();
     for mut ang_vel in &mut query {
         ang_vel.0 = sin;
     }

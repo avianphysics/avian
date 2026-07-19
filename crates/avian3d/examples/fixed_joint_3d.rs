@@ -1,4 +1,4 @@
-use avian3d::{math::*, prelude::*};
+use avian3d::prelude::*;
 use bevy::prelude::*;
 use examples_common_3d::ExampleCommonPlugin;
 
@@ -29,7 +29,7 @@ fn setup(
             Mesh3d(cube_mesh.clone()),
             MeshMaterial3d(cube_material.clone()),
             RigidBody::Kinematic,
-            AngularVelocity(Vector::Z * 1.5),
+            AngularVelocity(Vec3::Z * 1.5),
         ))
         .id();
 
@@ -45,7 +45,7 @@ fn setup(
         .id();
 
     // Connect anchor and dynamic object
-    commands.spawn(FixedJoint::new(anchor, object).with_local_anchor1(Vector::X * 1.5));
+    commands.spawn(FixedJoint::new(anchor, object).with_local_anchor1(Vec3::X * 1.5));
 
     // Directional light
     commands.spawn((

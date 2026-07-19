@@ -305,7 +305,7 @@ struct PreviousLinearVelocity(Vector);
 
 /// The previous angular velocity of an entity indicating its rotation speed during the previous frame.
 #[derive(Component, Default, Deref, DerefMut)]
-struct PreviousAngularVelocity(AngularVelocity);
+struct PreviousAngularVelocity(AngularVector);
 
 #[derive(QueryData)]
 struct LinVelSource;
@@ -317,22 +317,22 @@ impl VelocitySource for LinVelSource {
     fn previous(previous: &Self::Previous) -> Vec3 {
         #[cfg(feature = "2d")]
         {
-            previous.f32().extend(0.0)
+            previous.extend(0.0)
         }
         #[cfg(feature = "3d")]
         {
-            previous.f32()
+            previous.0
         }
     }
 
     fn current(current: &Self::Current) -> Vec3 {
         #[cfg(feature = "2d")]
         {
-            current.0.f32().extend(0.0)
+            current.0.extend(0.0)
         }
         #[cfg(feature = "3d")]
         {
-            current.0.f32()
+            current.0
         }
     }
 }
@@ -348,22 +348,22 @@ impl VelocitySource for AngVelSource {
     fn previous(previous: &Self::Previous) -> Vec3 {
         #[cfg(feature = "2d")]
         {
-            Vec3::Z * previous.0.0 as f32
+            Vec3::Z * previous.0
         }
         #[cfg(feature = "3d")]
         {
-            previous.0.f32()
+            previous.0
         }
     }
 
     fn current(current: &Self::Current) -> Vec3 {
         #[cfg(feature = "2d")]
         {
-            Vec3::Z * current.0 as f32
+            Vec3::Z * current.0
         }
         #[cfg(feature = "3d")]
         {
-            current.0.f32()
+            current.0
         }
     }
 }
@@ -377,6 +377,6 @@ fn update_previous_velocity(
     }
 
     for (ang_vel, mut prev_ang_vel) in &mut ang_vel_query {
-        prev_ang_vel.0 = *ang_vel;
+        prev_ang_vel.0 = ang_vel.0;
     }
 }

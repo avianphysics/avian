@@ -79,7 +79,6 @@
 #![cfg_attr(feature = "3d", doc = "# use avian3d::prelude::*;")]
 //! # use bevy::prelude::*;
 //! #
-//! # #[cfg(feature = "f32")]
 //! fn apply_forces(mut query: Query<Forces>) {
 //!     for mut forces in &mut query {
 //!         // Apply a force of 10 N in the positive Y direction to the entity.
@@ -102,13 +101,19 @@
 //! that allows applying forces to a body without waking it up.
 //!
 //! ```
-#![cfg_attr(feature = "2d", doc = "# use avian2d::{math::Vector, prelude::*};")]
-#![cfg_attr(feature = "3d", doc = "# use avian3d::{math::Vector, prelude::*};")]
+#![cfg_attr(
+    feature = "2d",
+    doc = "# use avian2d::{math::{RVector, ToF32Precision}, prelude::*};"
+)]
+#![cfg_attr(
+    feature = "3d",
+    doc = "# use avian3d::{math::{RVector, ToF32Precision}, prelude::*};"
+)]
 //! # use bevy::prelude::*;
 //! #
 //! # fn apply_forces(mut query: Query<Forces>) {
 //! #     for mut forces in &mut query {
-//! #         let force = Vector::default();
+//! #         let force = RVector::default().f32();
 //! // Apply a force without waking up the body if it is sleeping.
 //! forces.non_waking().apply_force(force);
 //! #     }
@@ -119,14 +124,20 @@
 //! with the [center of mass](CenterOfMass), it will apply a torque to the body.
 //!
 //! ```
-#![cfg_attr(feature = "2d", doc = "# use avian2d::{math::Vector, prelude::*};")]
-#![cfg_attr(feature = "3d", doc = "# use avian3d::{math::Vector, prelude::*};")]
+#![cfg_attr(
+    feature = "2d",
+    doc = "# use avian2d::{math::{RVector, ToF32Precision}, prelude::*};"
+)]
+#![cfg_attr(
+    feature = "3d",
+    doc = "# use avian3d::{math::{RVector, ToF32Precision}, prelude::*};"
+)]
 //! # use bevy::prelude::*;
 //! #
 //! # fn apply_impulses(mut query: Query<Forces>) {
 //! #     for mut forces in &mut query {
-//! #         let force = Vector::default();
-//! #         let point = Vector::default();
+//! #         let force = RVector::default().f32();
+//! #         let point = RVector::default();
 //! // Apply an impulse at a specific point in the world.
 //! // Unlike forces, impulses are applied immediately to the velocity.
 //! forces.apply_linear_impulse_at_point(force, point);
@@ -142,7 +153,6 @@
 #![cfg_attr(feature = "3d", doc = "# use avian3d::prelude::*;")]
 //! # use bevy::prelude::*;
 //! #
-//! # #[cfg(feature = "f32")]
 //! fn radial_gravity(mut query: Query<(Forces, &GlobalTransform)>) {
 //!     for (mut forces, global_transform) in &mut query {
 //!         // Compute the direction towards the center of the world.
@@ -172,7 +182,6 @@
 //! # use bevy::prelude::*;
 //! #
 //! // In `FixedUpdate`
-//! # #[cfg(feature = "f32")]
 //! fn gravity(mut bodies: Query<&mut LinearVelocity>, time: Res<Time>) {
 //!     for mut velocity in &mut bodies {
 //!         // Apply a constant acceleration of 9.81 m/s² in the negative Y direction.
@@ -215,7 +224,7 @@ pub(crate) trait FloatZero {
 }
 
 #[cfg(feature = "2d")]
-impl FloatZero for Scalar {
+impl FloatZero for f32 {
     const ZERO: Self = 0.0;
 }
 
@@ -262,13 +271,13 @@ pub struct ConstantForce(pub Vector);
 impl ConstantForce {
     /// Creates a new [`ConstantForce`] with the given `x` and `y` components.
     #[cfg(feature = "2d")]
-    pub fn new(x: Scalar, y: Scalar) -> Self {
+    pub fn new(x: f32, y: f32) -> Self {
         Self(Vector::new(x, y))
     }
 
     /// Creates a new [`ConstantForce`] with the given `x`, `y`, and `z` components.
     #[cfg(feature = "3d")]
-    pub fn new(x: Scalar, y: Scalar, z: Scalar) -> Self {
+    pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self(Vector::new(x, y, z))
     }
 }
@@ -319,7 +328,7 @@ pub struct ConstantTorque(pub AngularVector);
 #[cfg(feature = "3d")]
 impl ConstantTorque {
     /// Creates a new [`ConstantTorque`] with the given `x`, `y`, and `z` components.
-    pub fn new(x: Scalar, y: Scalar, z: Scalar) -> Self {
+    pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self(Vector::new(x, y, z))
     }
 }
@@ -373,13 +382,13 @@ pub struct ConstantLocalForce(pub Vector);
 impl ConstantLocalForce {
     /// Creates a new [`ConstantLocalForce`] with the given `x` and `y` components.
     #[cfg(feature = "2d")]
-    pub fn new(x: Scalar, y: Scalar) -> Self {
+    pub fn new(x: f32, y: f32) -> Self {
         Self(Vector::new(x, y))
     }
 
     /// Creates a new [`ConstantLocalForce`] with the given `x`, `y`, and `z` components.
     #[cfg(feature = "3d")]
-    pub fn new(x: Scalar, y: Scalar, z: Scalar) -> Self {
+    pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self(Vector::new(x, y, z))
     }
 }
@@ -426,7 +435,7 @@ pub struct ConstantLocalTorque(pub AngularVector);
 #[cfg(feature = "3d")]
 impl ConstantLocalTorque {
     /// Creates a new [`ConstantLocalTorque`] with the given `x`, `y`, and `z` components.
-    pub fn new(x: Scalar, y: Scalar, z: Scalar) -> Self {
+    pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self(Vector::new(x, y, z))
     }
 }
@@ -480,13 +489,13 @@ pub struct ConstantLinearAcceleration(pub Vector);
 impl ConstantLinearAcceleration {
     /// Creates a new [`ConstantLinearAcceleration`] with the given `x` and `y` components.
     #[cfg(feature = "2d")]
-    pub fn new(x: Scalar, y: Scalar) -> Self {
+    pub fn new(x: f32, y: f32) -> Self {
         Self(Vector::new(x, y))
     }
 
     /// Creates a new [`ConstantLinearAcceleration`] with the given `x`, `y`, and `z` components.
     #[cfg(feature = "3d")]
-    pub fn new(x: Scalar, y: Scalar, z: Scalar) -> Self {
+    pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self(Vector::new(x, y, z))
     }
 }
@@ -540,7 +549,7 @@ pub struct ConstantAngularAcceleration(pub AngularVector);
 #[cfg(feature = "3d")]
 impl ConstantAngularAcceleration {
     /// Creates a new [`ConstantAngularAcceleration`] with the given `x`, `y`, and `z` components.
-    pub fn new(x: Scalar, y: Scalar, z: Scalar) -> Self {
+    pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self(Vector::new(x, y, z))
     }
 }
@@ -600,13 +609,13 @@ pub struct ConstantLocalLinearAcceleration(pub Vector);
 impl ConstantLocalLinearAcceleration {
     /// Creates a new [`ConstantLocalLinearAcceleration`] with the given `x` and `y` components.
     #[cfg(feature = "2d")]
-    pub fn new(x: Scalar, y: Scalar) -> Self {
+    pub fn new(x: f32, y: f32) -> Self {
         Self(Vector::new(x, y))
     }
 
     /// Creates a new [`ConstantLocalLinearAcceleration`] with the given `x`, `y`, and `z` components.
     #[cfg(feature = "3d")]
-    pub fn new(x: Scalar, y: Scalar, z: Scalar) -> Self {
+    pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self(Vector::new(x, y, z))
     }
 }
@@ -653,7 +662,7 @@ pub struct ConstantLocalAngularAcceleration(pub AngularVector);
 #[cfg(feature = "3d")]
 impl ConstantLocalAngularAcceleration {
     /// Creates a new [`ConstantLocalAngularAcceleration`] with the given `x`, `y`, and `z` components.
-    pub fn new(x: Scalar, y: Scalar, z: Scalar) -> Self {
+    pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self(Vector::new(x, y, z))
     }
 }

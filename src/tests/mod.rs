@@ -1,3 +1,5 @@
+#[cfg(all(feature = "3d", feature = "default-collider"))]
+use crate::math::Real;
 use crate::prelude::*;
 #[cfg(all(
     feature = "default-collider",
@@ -52,10 +54,10 @@ fn tick_app(app: &mut App, timestep: f64) {
 fn setup_cubes_simulation(mut commands: Commands) {
     let mut next_id = 0;
     // copied from "cubes" example
-    let floor_size = Vector::new(80.0, 1.0, 80.0);
+    let floor_size = Vec3::new(80.0, 1.0, 80.0);
     commands.spawn((
         RigidBody::Static,
-        Position(Vector::NEG_Y),
+        Position(RVector::NEG_Y),
         Collider::cuboid(floor_size.x, floor_size.y, floor_size.z),
     ));
 
@@ -66,15 +68,15 @@ fn setup_cubes_simulation(mut commands: Commands) {
     for y in 0..count_y {
         for x in 0..count_x {
             for z in 0..count_z {
-                let pos = Vector::new(
-                    (x as Scalar - count_x as Scalar * 0.5) * 2.1 * radius,
-                    10.0 * radius * y as Scalar,
-                    (z as Scalar - count_z as Scalar * 0.5) * 2.1 * radius,
+                let pos = RVector::new(
+                    (x as Real - count_x as Real * 0.5) * 2.1 * radius as Real,
+                    10.0 * radius as Real * y as Real,
+                    (z as Real - count_z as Real * 0.5) * 2.1 * radius as Real,
                 );
                 commands.spawn((
                     Transform::default(),
                     RigidBody::Dynamic,
-                    Position(pos + Vector::Y * 5.0),
+                    Position(pos + RVector::Y * 5.0),
                     Collider::cuboid(radius * 2.0, radius * 2.0, radius * 2.0),
                     Id(next_id),
                 ));

@@ -114,7 +114,7 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
         &mut self,
         collision_started_writer: &mut MessageWriter<CollisionStart>,
         collision_ended_writer: &mut MessageWriter<CollisionEnd>,
-        delta_secs: Scalar,
+        delta_secs: f32,
         hooks: &SystemParamItem<H>,
         context: &SystemParamItem<C::Context>,
         commands: &mut ParallelCommands,
@@ -428,7 +428,7 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
     /// The order of contact pairs is preserved.
     fn update_contacts<H: CollisionHooks>(
         &mut self,
-        delta_secs: Scalar,
+        delta_secs: f32,
         hooks: &SystemParamItem<H>,
         collider_context: &SystemParamItem<C::Context>,
         par_commands: &mut ParallelCommands,
@@ -545,7 +545,7 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     .map(|body| {
                         (
                             body.rb.is_static(),
-                            collider1.position.0 - body.position.0,
+                            (collider1.position.0 - body.position.0).f32(),
                             body.rotation * body.center_of_mass.0,
                             body.linear_velocity.0,
                             body.angular_velocity.0,
@@ -569,7 +569,7 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     .map(|body| {
                         (
                             body.rb.is_static(),
-                            collider2.position.0 - body.position.0,
+                            (collider2.position.0 - body.position.0).f32(),
                             body.rotation * body.center_of_mass.0,
                             body.linear_velocity.0,
                             body.angular_velocity.0,
@@ -655,12 +655,12 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
 
                 if max_distance1 != 0.0 || max_distance2 != 0.0 {
                     // Clamp each body's contribution to its maximum speculative distance.
-                    let clamped_vel1 = if max_distance1 < Scalar::MAX {
+                    let clamped_vel1 = if max_distance1 < f32::MAX {
                         lin_vel1.clamp_length_max(max_distance1 * inv_delta_secs)
                     } else {
                         lin_vel1
                     };
-                    let clamped_vel2 = if max_distance2 < Scalar::MAX {
+                    let clamped_vel2 = if max_distance2 < f32::MAX {
                         lin_vel2.clamp_length_max(max_distance2 * inv_delta_secs)
                     } else {
                         lin_vel2
@@ -709,7 +709,7 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     }
                     #[cfg(feature = "3d")]
                     {
-                        manifold.tangent_velocity = Vector::ZERO;
+                        manifold.tangent_velocity = Vec3::ZERO;
                     }
 
                     let normal = manifold.normal;
@@ -717,8 +717,8 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     // Transform and prune contact points.
                     manifold.retain_points_mut(|point| {
                         // Transform contact points to be relative to the centers of mass of the bodies.
-                        point.anchor1 = point.anchor1 + collider_offset1 - world_com1;
-                        point.anchor2 = point.anchor2 + collider_offset2 - world_com2;
+                        point.anchor1 += collider_offset1 - world_com1;
+                        point.anchor2 += collider_offset2 - world_com2;
 
                         // Add the collision margin to the penetration depth.
                         point.penetration += collision_margin_sum;

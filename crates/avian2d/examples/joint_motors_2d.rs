@@ -22,7 +22,7 @@ fn main() {
             PhysicsPlugins::default(),
         ))
         .insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.1)))
-        .insert_resource(Gravity(Vector::NEG_Y * 1000.0))
+        .insert_resource(Gravity(Vec2::NEG_Y * 1000.0))
         .add_systems(Startup, setup)
         .add_systems(Update, (control_motors, update_ui))
         .run();
@@ -74,7 +74,7 @@ fn setup(mut commands: Commands) {
         .id();
 
     // Revolute joint with velocity-controlled motor
-    // Default anchors are at body centers (Vector::ZERO)
+    // Default anchors are at body centers
     commands.spawn((
         RevoluteJoint::new(velocity_anchor, velocity_wheel).with_motor(AngularMotor {
             target_velocity: 5.0,
@@ -131,7 +131,7 @@ fn setup(mut commands: Commands) {
                 damping_ratio: 1.0,
             })
             .with_target_position(0.0)
-            .with_max_torque(Scalar::MAX),
+            .with_max_torque(f32::MAX),
         ),
         PositionMotorJoint,
     ));
@@ -155,7 +155,7 @@ fn setup(mut commands: Commands) {
             piston_base_sprite,
             Transform::from_xyz(200.0, 0.0, 0.0),
             RigidBody::Static,
-            Position(Vector::new(200.0, 0.0)),
+            Position(RVec2::new(200.0, 0.0)),
         ))
         .id();
 
@@ -168,14 +168,14 @@ fn setup(mut commands: Commands) {
             Mass(1.0),
             AngularInertia(1.0),
             SleepingDisabled, // Prevent sleeping so motor can always control it
-            Position(Vector::new(200.0, 0.0)),
+            Position(RVec2::new(200.0, 0.0)),
         ))
         .id();
 
     // frequency = 20 Hz, damping_ratio = 1.0 (critically damped)
     commands.spawn((
         PrismaticJoint::new(piston_base, piston)
-            .with_slider_axis(Vector::Y)
+            .with_slider_axis(Vec2::Y)
             .with_limits(-100.0, 100.0)
             .with_motor(
                 LinearMotor::new(MotorModel::SpringDamper {
@@ -183,7 +183,7 @@ fn setup(mut commands: Commands) {
                     damping_ratio: 1.0,
                 })
                 .with_target_position(50.0)
-                .with_max_force(Scalar::MAX),
+                .with_max_force(f32::MAX),
             ),
         PrismaticMotorJoint,
     ));

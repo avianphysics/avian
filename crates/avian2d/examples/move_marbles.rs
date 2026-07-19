@@ -1,6 +1,6 @@
 #![allow(clippy::unnecessary_cast)]
 
-use avian2d::{math::*, prelude::*};
+use avian2d::prelude::*;
 use bevy::prelude::*;
 use examples_common_2d::ExampleCommonPlugin;
 
@@ -14,7 +14,7 @@ fn main() {
             PhysicsPlugins::default().with_length_unit(20.0),
         ))
         .insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.1)))
-        .insert_resource(Gravity(Vector::NEG_Y * 9.81 * 100.0))
+        .insert_resource(Gravity(Vec2::NEG_Y * 9.81 * 100.0))
         .add_systems(Startup, setup)
         .add_systems(Update, movement)
         .run();
@@ -81,7 +81,7 @@ fn setup(
                     0.0,
                 ),
                 RigidBody::Dynamic,
-                Collider::circle(marble_radius as Scalar),
+                Collider::circle(marble_radius),
                 Marble,
             ));
         }
@@ -95,7 +95,7 @@ fn movement(
 ) {
     // Precision is adjusted so that the example works with
     // both the `f32` and `f64` features. Otherwise you don't need this.
-    let delta_time = time.delta_secs_f64().adjust_precision();
+    let delta_time = time.delta_secs();
 
     for mut linear_velocity in &mut marbles {
         if keyboard_input.any_pressed([KeyCode::KeyW, KeyCode::ArrowUp]) {

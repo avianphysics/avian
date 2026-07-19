@@ -66,7 +66,7 @@ use core::cmp::Ordering;
 /// If the `xpbd_joints` feature is enabled, the [`XpbdSolverPlugin`] can also be added to solve joints
 /// using Extended Position-Based Dynamics (XPBD).
 pub struct SolverPlugin {
-    length_unit: Scalar,
+    length_unit: f32,
 }
 
 impl Default for SolverPlugin {
@@ -80,7 +80,7 @@ impl SolverPlugin {
     ///
     /// The length unit will be used for initializing the [`PhysicsLengthUnit`]
     /// resource unless it already exists.
-    pub fn new_with_length_unit(unit: Scalar) -> Self {
+    pub fn new_with_length_unit(unit: f32) -> Self {
         Self { length_unit: unit }
     }
 }
@@ -198,7 +198,7 @@ impl Plugin for SolverPlugin {
 /// ```
 #[derive(Resource, Clone, Debug, Deref, DerefMut, PartialEq, Reflect)]
 #[reflect(Resource)]
-pub struct PhysicsLengthUnit(pub Scalar);
+pub struct PhysicsLengthUnit(pub f32);
 
 impl Default for PhysicsLengthUnit {
     fn default() -> Self {
@@ -224,7 +224,7 @@ pub struct SolverConfig {
     /// Note that making the value too large can cause instability.
     ///
     /// Default: `10.0`.
-    pub contact_damping_ratio: Scalar,
+    pub contact_damping_ratio: f32,
 
     /// Scales the frequency used for contacts. A higher frequency
     /// makes contact responses faster and reduces visible springiness,
@@ -237,7 +237,7 @@ pub struct SolverConfig {
     /// if the factor is too large.
     ///
     /// Default: `1.5`
-    pub contact_frequency_factor: Scalar,
+    pub contact_frequency_factor: f32,
 
     /// The maximum speed at which overlapping bodies are pushed apart by the solver.
     ///
@@ -247,7 +247,7 @@ pub struct SolverConfig {
     /// This is implicitly scaled by the [`PhysicsLengthUnit`].
     ///
     /// Default: `4.0`
-    pub max_overlap_solve_speed: Scalar,
+    pub max_overlap_solve_speed: f32,
 
     /// The coefficient in the `[0, 1]` range applied to
     /// [warm start](SubstepSolverSystems::WarmStart) impulses.
@@ -259,7 +259,7 @@ pub struct SolverConfig {
     /// The coefficient should typically be set to `1.0`.
     ///
     /// Default: `1.0`
-    pub warm_start_coefficient: Scalar,
+    pub warm_start_coefficient: f32,
 
     /// The minimum speed along the contact normal in units per second
     /// for [restitution](Restitution) to be applied.
@@ -272,7 +272,7 @@ pub struct SolverConfig {
     /// This is implicitly scaled by the [`PhysicsLengthUnit`].
     ///
     /// Default: `1.0`
-    pub restitution_threshold: Scalar,
+    pub restitution_threshold: f32,
 
     /// The number of iterations used for applying [restitution](Restitution).
     ///
@@ -330,8 +330,8 @@ fn update_contact_softness(
     substep_time: Res<Time<Substeps>>,
 ) {
     if solver_config.is_changed() || physics_time.is_changed() || substep_time.is_changed() {
-        let dt = physics_time.delta_secs_f64() as Scalar;
-        let h = substep_time.delta_secs_f64() as Scalar;
+        let dt = physics_time.delta_secs();
+        let h = substep_time.delta_secs();
 
         // The contact frequency should at most be half of the time step due to Nyquist's theorem.
         // https://en.wikipedia.org/wiki/Nyquist%E2%80%93Shannon_sampling_theorem
@@ -484,7 +484,7 @@ fn warm_start(
 fn warm_start_internal(
     bodies: &Query<(&mut SolverBody, &SolverBodyInertia)>,
     constraint: &mut ContactConstraint,
-    warm_start_coefficient: Scalar,
+    warm_start_coefficient: f32,
 ) {
     debug_assert!(!constraint.points.is_empty());
 
@@ -538,7 +538,7 @@ fn solve_contacts<const USE_BIAS: bool>(
 ) {
     let start = crate::utils::Instant::now();
 
-    let delta_secs = time.delta_seconds_adjusted();
+    let delta_secs = time.delta_secs();
     let max_overlap_solve_speed = solver_config.max_overlap_solve_speed * length_unit.0;
 
     // Solve overflow constraints serially. They have lower priority, so they are solved first.
@@ -581,8 +581,8 @@ fn solve_contacts<const USE_BIAS: bool>(
 fn solve_contacts_internal<const USE_BIAS: bool>(
     bodies: &Query<(&mut SolverBody, &SolverBodyInertia)>,
     constraint: &mut ContactConstraint,
-    max_overlap_solve_speed: Scalar,
-    delta_secs: Scalar,
+    max_overlap_solve_speed: f32,
+    delta_secs: f32,
 ) {
     let mut dummy_body1 = SolverBody::DUMMY;
     let mut dummy_body2 = SolverBody::DUMMY;
@@ -675,7 +675,7 @@ fn solve_restitution(
 fn solve_restitution_internal(
     bodies: &Query<(&mut SolverBody, &SolverBodyInertia)>,
     constraint: &mut ContactConstraint,
-    threshold: Scalar,
+    threshold: f32,
     iterations: usize,
 ) {
     let restitution = constraint.restitution;
@@ -761,7 +761,7 @@ pub fn joint_damping<T: Component + EntityConstraint<2>>(
     joints: Query<(&T, &JointDamping)>,
     time: Res<Time>,
 ) {
-    let delta_secs = time.delta_seconds_adjusted();
+    let delta_secs = time.delta_secs();
 
     let mut dummy_body1 = SolverBody::DUMMY;
     let mut dummy_body2 = SolverBody::DUMMY;

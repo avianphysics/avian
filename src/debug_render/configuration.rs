@@ -136,9 +136,9 @@ impl Default for PhysicsGizmos {
 #[reflect(PartialEq)]
 pub enum ContactGizmoScale {
     /// The length of the rendered contact normal is constant.
-    Constant(Scalar),
+    Constant(f32),
     /// The length of the rendered contact normal is scaled by the contact force and the given scaling factor.
-    Scaled(Scalar),
+    Scaled(f32),
 }
 
 impl Default for ContactGizmoScale {

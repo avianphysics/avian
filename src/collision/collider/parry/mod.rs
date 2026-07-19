@@ -14,6 +14,7 @@ use super::EnlargedAabb;
 use crate::{
     collision::collider::{BoundedCollider, QueryCollider},
     make_pose,
+    math::Real,
     prelude::*,
 };
 #[cfg(feature = "collider-from-mesh")]
@@ -22,6 +23,7 @@ use bevy::{log, prelude::*};
 use contact_query::UnsupportedShape;
 use itertools::Either;
 use parry::{
+    bounding_volume::BoundingVolume,
     query::ShapeCastOptions,
     shape::{RoundShape, SharedShape, TypedShape, Voxels},
 };
@@ -44,17 +46,17 @@ pub struct VhacdParameters {
     ///
     /// Default: 0.1 (in 2D), 0.01 (in 3D).
     /// Valid range `[0.0, 1.0]`.
-    pub concavity: Scalar,
+    pub concavity: Real,
     /// Controls the bias toward clipping along symmetry planes.
     ///
     /// Default: 0.05.
     /// Valid Range: `[0.0, 1.0]`.
-    pub alpha: Scalar,
+    pub alpha: Real,
     /// Controls the bias toward clipping along revolution planes.
     ///
     /// Default: 0.05.
     /// Valid Range: `[0.0, 1.0]`.
-    pub beta: Scalar,
+    pub beta: Real,
     /// Resolution used during the voxelization stage.
     ///
     /// Default: 256 (in 2D), 64 (in 3D).
@@ -375,7 +377,7 @@ pub struct Collider {
     shape: SharedShape,
     /// The scaled version of the collider shape.
     ///
-    /// If the scale is `Vector::ONE`, this will be `None` and `unscaled_shape`
+    /// If the scale is one, this will be `None` and `unscaled_shape`
     /// will be used instead.
     scaled_shape: SharedShape,
     /// The global scale used for the collider shape.
@@ -411,17 +413,16 @@ impl BoundedCollider for Collider {
 
     fn aabb_with_context(
         &self,
-        position: Vector,
-        rotation: impl Into<Rotation>,
-        _: ColliderContext<(), ()>,
+        position: RVector,
+        rotation: impl Into<Rot>,
+        margin: f32,
+        _: ColliderContext<Self::Context>,
     ) -> ColliderAabb {
         let aabb = self
             .shape_scaled()
-            .compute_aabb(&make_pose(position, rotation));
-        ColliderAabb {
-            min: aabb.mins,
-            max: aabb.maxs,
-        }
+            .compute_aabb(&make_pose(position, rotation))
+            .loosened(margin.real());
+        ColliderAabb::from_min_max(aabb.mins, aabb.maxs)
     }
 }
 
@@ -429,11 +430,11 @@ impl AnyCollider for Collider {
     fn contact_manifolds_with_context(
         &self,
         other: &Self,
-        position1: Vector,
-        rotation1: impl Into<Rotation>,
-        position2: Vector,
-        rotation2: impl Into<Rotation>,
-        prediction_distance: Scalar,
+        position1: RVector,
+        rotation1: impl Into<Rot>,
+        position2: RVector,
+        rotation2: impl Into<Rot>,
+        prediction_distance: f32,
         manifolds: &mut Vec<ContactManifold>,
         _: ColliderPairContext<(), ()>,
     ) {
@@ -449,22 +450,22 @@ impl AnyCollider for Collider {
         )
     }
 
-    fn ccd_thickness_with_context(&self, _context: ColliderContext<(), ()>) -> Scalar {
-        self.shape_scaled().ccd_thickness()
+    fn ccd_thickness_with_context(&self, _context: ColliderContext<Self::Context>) -> f32 {
+        self.shape_scaled().ccd_thickness().f32()
     }
 
     fn max_distance_to_point_with_context(
         &self,
-        point: Vector,
-        _context: ColliderContext<(), ()>,
-    ) -> Scalar {
+        point: RVector,
+        _context: ColliderContext<Self::Context>,
+    ) -> f32 {
         let bounding_sphere = self.shape_scaled().compute_local_bounding_sphere();
-        point.distance(bounding_sphere.center) + bounding_sphere.radius
+        point.distance(bounding_sphere.center).f32() + bounding_sphere.radius.f32()
     }
 
-    fn bounding_radius_with_context(&self, _context: ColliderContext<(), ()>) -> Scalar {
-        let center_of_mass = self.center_of_mass().adjust_precision();
-        self.max_distance_to_point(center_of_mass)
+    fn bounding_radius_with_context(&self, _context: ColliderContext<Self::Context>) -> f32 {
+        let center_of_mass = self.center_of_mass();
+        self.max_distance_to_point(center_of_mass.real())
     }
 }
 
@@ -475,12 +476,12 @@ impl QueryCollider for Collider {
 
     fn project_point(
         &self,
-        translation: impl Into<Position>,
-        rotation: impl Into<Rotation>,
-        point: Vector,
+        translation: RVector,
+        rotation: impl Into<Rot>,
+        point: RVector,
         solid: bool,
         _: ColliderContext<(), ()>,
-    ) -> (Vector, bool) {
+    ) -> (RVector, bool) {
         let projection =
             self.shape_scaled()
                 .project_point(&make_pose(translation, rotation), point, solid);
@@ -489,21 +490,21 @@ impl QueryCollider for Collider {
 
     fn distance_to_point(
         &self,
-        translation: impl Into<Position>,
-        rotation: impl Into<Rotation>,
-        point: Vector,
+        translation: RVector,
+        rotation: impl Into<Rot>,
+        point: RVector,
         solid: bool,
         _: ColliderContext<(), ()>,
-    ) -> Scalar {
+    ) -> f32 {
         self.shape_scaled()
             .distance_to_point(&make_pose(translation, rotation), point, solid)
     }
 
     fn contains_point(
         &self,
-        translation: impl Into<Position>,
-        rotation: impl Into<Rotation>,
-        point: Vector,
+        translation: RVector,
+        rotation: impl Into<Rot>,
+        point: RVector,
         _: ColliderContext<(), ()>,
     ) -> bool {
         self.shape_scaled()
@@ -512,14 +513,14 @@ impl QueryCollider for Collider {
 
     fn cast_ray(
         &self,
-        translation: impl Into<Position>,
-        rotation: impl Into<Rotation>,
-        ray_origin: Vector,
+        translation: RVector,
+        rotation: impl Into<Rot>,
+        ray_origin: RVector,
         ray_direction: Vector,
-        max_distance: Scalar,
+        max_distance: f32,
         solid: bool,
         _: ColliderContext<(), ()>,
-    ) -> Option<(Scalar, Vector)> {
+    ) -> Option<(f32, Vector)> {
         let hit = self.shape_scaled().cast_ray_and_get_normal(
             &make_pose(translation, rotation),
             &parry::query::Ray::new(ray_origin, ray_direction),
@@ -531,11 +532,11 @@ impl QueryCollider for Collider {
 
     fn intersects_ray(
         &self,
-        translation: impl Into<Position>,
-        rotation: impl Into<Rotation>,
-        ray_origin: Vector,
+        translation: RVector,
+        rotation: impl Into<Rot>,
+        ray_origin: RVector,
         ray_direction: Vector,
-        max_distance: Scalar,
+        max_distance: f32,
         _: ColliderContext<(), ()>,
     ) -> bool {
         self.shape_scaled().intersects_ray(
@@ -547,11 +548,11 @@ impl QueryCollider for Collider {
 
     fn intersects_shape(
         &self,
-        translation: impl Into<Position>,
-        rotation: impl Into<Rotation>,
+        translation: RVector,
+        rotation: impl Into<Rot>,
         shape: &Self::IntersectionShape,
-        shape_position: impl Into<Position>,
-        shape_rotation: impl Into<Rotation>,
+        shape_position: RVector,
+        shape_rotation: impl Into<Rot>,
         _: ColliderContext<(), ()>,
     ) -> bool {
         _ = (translation, rotation, shape, shape_position, shape_rotation);
@@ -560,11 +561,11 @@ impl QueryCollider for Collider {
 
     fn intersects_cast_shape(
         &self,
-        translation: impl Into<Position>,
-        rotation: impl Into<Rotation>,
+        translation: RVector,
+        rotation: impl Into<Rot>,
         shape: &Self,
-        shape_origin: Vector,
-        shape_rotation: impl Into<Rotation>,
+        shape_origin: RVector,
+        shape_rotation: impl Into<Rot>,
         shape_direction: Vector,
         settings: &Self::ShapeCastSettings,
         _: ColliderContext<(), ()>,
@@ -574,10 +575,10 @@ impl QueryCollider for Collider {
 
         parry::query::cast_shapes(
             &pose1,
-            Vector::ZERO,
+            RVector::ZERO,
             self.shape_scaled().as_ref(),
             &pose2,
-            shape_direction.adjust_precision(),
+            shape_direction.real(),
             shape.shape_scaled().as_ref(),
             ShapeCastOptions {
                 max_time_of_impact: settings.max_distance,
@@ -590,13 +591,13 @@ impl QueryCollider for Collider {
         .flatten()
         .map(|hit| {
             let p1 = pose1 * hit.witness1;
-            let p2 = pose2 * hit.witness2 + shape_direction.adjust_precision() * hit.time_of_impact;
+            let p2 = pose2 * hit.witness2 + shape_direction.real() * hit.time_of_impact;
             let normal = pose1.rotation * hit.normal1;
             ShapeHitDataWithoutEntity {
                 point: p1,
-                normal,
-                distance: hit.time_of_impact,
-                penetration: (p2 - p1).dot(normal),
+                normal: normal.f32(),
+                distance: hit.time_of_impact.f32(),
+                penetration: (p2 - p1).dot(normal).f32(),
             }
         })
     }
@@ -607,8 +608,8 @@ impl QueryCollider for Collider {
 #[cfg(feature = "2d")]
 impl ComputeMassProperties for Collider {
     fn mass(&self, density: f32) -> f32 {
-        let props = self.shape_scaled().mass_properties(density as Scalar);
-        props.mass() as f32
+        let props = self.shape_scaled().mass_properties(density.real());
+        props.mass().f32()
     }
 
     fn unit_angular_inertia(&self) -> f32 {
@@ -616,8 +617,8 @@ impl ComputeMassProperties for Collider {
     }
 
     fn angular_inertia(&self, mass: f32) -> f32 {
-        let props = self.shape_scaled().mass_properties(mass as Scalar);
-        props.principal_inertia() as f32
+        let props = self.shape_scaled().mass_properties(mass.real());
+        props.principal_inertia().f32()
     }
 
     fn center_of_mass(&self) -> Vec2 {
@@ -626,12 +627,12 @@ impl ComputeMassProperties for Collider {
     }
 
     fn mass_properties(&self, density: f32) -> MassProperties {
-        let props = self.shape_scaled().mass_properties(density as Scalar);
+        let props = self.shape_scaled().mass_properties(density.real());
 
         MassProperties {
-            mass: props.mass() as f32,
+            mass: props.mass().f32(),
             #[cfg(feature = "2d")]
-            angular_inertia: props.principal_inertia() as f32,
+            angular_inertia: props.principal_inertia().f32(),
             #[cfg(feature = "3d")]
             principal_angular_inertia: props.principal_inertia().f32(),
             #[cfg(feature = "3d")]
@@ -644,8 +645,8 @@ impl ComputeMassProperties for Collider {
 #[cfg(feature = "3d")]
 impl ComputeMassProperties for Collider {
     fn mass(&self, density: f32) -> f32 {
-        let props = self.shape_scaled().mass_properties(density as Scalar);
-        props.mass() as f32
+        let props = self.shape_scaled().mass_properties(density.real());
+        props.mass().f32()
     }
 
     fn unit_principal_angular_inertia(&self) -> Vec3 {
@@ -653,7 +654,7 @@ impl ComputeMassProperties for Collider {
     }
 
     fn principal_angular_inertia(&self, mass: f32) -> Vec3 {
-        let props = self.shape_scaled().mass_properties(mass as Scalar);
+        let props = self.shape_scaled().mass_properties(mass.real());
         props.principal_inertia().f32()
     }
 
@@ -668,12 +669,12 @@ impl ComputeMassProperties for Collider {
     }
 
     fn mass_properties(&self, density: f32) -> MassProperties {
-        let props = self.shape_scaled().mass_properties(density as Scalar);
+        let props = self.shape_scaled().mass_properties(density.real());
 
         MassProperties {
-            mass: props.mass() as f32,
+            mass: props.mass().f32(),
             #[cfg(feature = "2d")]
-            angular_inertia: props.principal_inertia() as f32,
+            angular_inertia: props.principal_inertia().f32(),
             #[cfg(feature = "3d")]
             principal_angular_inertia: props.principal_inertia().f32(),
             #[cfg(feature = "3d")]
@@ -771,7 +772,7 @@ impl Collider {
             .into_iter()
             .map(|(p, r, c)| {
                 (
-                    make_pose(*p.into(), r.into()),
+                    make_pose(p.into(), r.into()),
                     c.into().shape_scaled().clone(),
                 )
             })
@@ -781,19 +782,19 @@ impl Collider {
 
     /// Creates a collider with a circle shape defined by its radius.
     #[cfg(feature = "2d")]
-    pub fn circle(radius: Scalar) -> Self {
-        SharedShape::ball(radius).into()
+    pub fn circle(radius: f32) -> Self {
+        SharedShape::ball(radius.real()).into()
     }
 
     /// Creates a collider with a sphere shape defined by its radius.
     #[cfg(feature = "3d")]
-    pub fn sphere(radius: Scalar) -> Self {
-        SharedShape::ball(radius).into()
+    pub fn sphere(radius: f32) -> Self {
+        SharedShape::ball(radius.real()).into()
     }
 
     /// Creates a collider with an ellipse shape defined by a half-width and half-height.
     #[cfg(feature = "2d")]
-    pub fn ellipse(half_width: Scalar, half_height: Scalar) -> Self {
+    pub fn ellipse(half_width: f32, half_height: f32) -> Self {
         SharedShape::new(EllipseColliderShape(Ellipse::new(
             half_width as f32,
             half_height as f32,
@@ -803,35 +804,40 @@ impl Collider {
 
     /// Creates a collider with a rectangle shape defined by its extents.
     #[cfg(feature = "2d")]
-    pub fn rectangle(x_length: Scalar, y_length: Scalar) -> Self {
-        SharedShape::cuboid(x_length * 0.5, y_length * 0.5).into()
+    pub fn rectangle(x_length: f32, y_length: f32) -> Self {
+        SharedShape::cuboid(x_length.real() * 0.5, y_length.real() * 0.5).into()
     }
 
     /// Creates a collider with a cuboid shape defined by its extents.
     #[cfg(feature = "3d")]
-    pub fn cuboid(x_length: Scalar, y_length: Scalar, z_length: Scalar) -> Self {
-        SharedShape::cuboid(x_length * 0.5, y_length * 0.5, z_length * 0.5).into()
+    pub fn cuboid(x_length: f32, y_length: f32, z_length: f32) -> Self {
+        SharedShape::cuboid(
+            x_length.real() * 0.5,
+            y_length.real() * 0.5,
+            z_length.real() * 0.5,
+        )
+        .into()
     }
 
     /// Creates a collider with a rectangle shape defined by its extents and rounded corners.
     #[cfg(feature = "2d")]
-    pub fn round_rectangle(x_length: Scalar, y_length: Scalar, border_radius: Scalar) -> Self {
-        SharedShape::round_cuboid(x_length * 0.5, y_length * 0.5, border_radius).into()
+    pub fn round_rectangle(x_length: f32, y_length: f32, border_radius: f32) -> Self {
+        SharedShape::round_cuboid(
+            x_length.real() * 0.5,
+            y_length.real() * 0.5,
+            border_radius.real(),
+        )
+        .into()
     }
 
     /// Creates a collider with a cuboid shape defined by its extents and rounded corners.
     #[cfg(feature = "3d")]
-    pub fn round_cuboid(
-        x_length: Scalar,
-        y_length: Scalar,
-        z_length: Scalar,
-        border_radius: Scalar,
-    ) -> Self {
+    pub fn round_cuboid(x_length: f32, y_length: f32, z_length: f32, border_radius: f32) -> Self {
         SharedShape::round_cuboid(
-            x_length * 0.5,
-            y_length * 0.5,
-            z_length * 0.5,
-            border_radius,
+            x_length.real() * 0.5,
+            y_length.real() * 0.5,
+            z_length.real() * 0.5,
+            border_radius.real(),
         )
         .into()
     }
@@ -839,42 +845,42 @@ impl Collider {
     /// Creates a collider with a cylinder shape defined by its radius
     /// on the `XZ` plane and its height along the `Y` axis.
     #[cfg(feature = "3d")]
-    pub fn cylinder(radius: Scalar, height: Scalar) -> Self {
-        SharedShape::cylinder(height * 0.5, radius).into()
+    pub fn cylinder(radius: f32, height: f32) -> Self {
+        SharedShape::cylinder(height.real() * 0.5, radius.real()).into()
     }
 
     /// Creates a collider with a cone shape defined by the radius of its base
     /// on the `XZ` plane and its height along the `Y` axis.
     #[cfg(feature = "3d")]
-    pub fn cone(radius: Scalar, height: Scalar) -> Self {
-        SharedShape::cone(height * 0.5, radius).into()
+    pub fn cone(radius: f32, height: f32) -> Self {
+        SharedShape::cone(height.real() * 0.5, radius.real()).into()
     }
 
     /// Creates a collider with a capsule shape defined by its radius
     /// and its height along the `Y` axis, excluding the hemispheres.
-    pub fn capsule(radius: Scalar, length: Scalar) -> Self {
+    pub fn capsule(radius: f32, length: f32) -> Self {
         SharedShape::capsule(
-            Vector::Y * length * 0.5,
-            Vector::NEG_Y * length * 0.5,
-            radius,
+            RVector::Y * length.real() * 0.5,
+            RVector::NEG_Y * length.real() * 0.5,
+            radius.real(),
         )
         .into()
     }
 
     /// Creates a collider with a capsule shape defined by its radius and endpoints `a` and `b`.
-    pub fn capsule_endpoints(radius: Scalar, a: Vector, b: Vector) -> Self {
-        SharedShape::capsule(a, b, radius).into()
+    pub fn capsule_endpoints(radius: f32, a: Vector, b: Vector) -> Self {
+        SharedShape::capsule(a.real(), b.real(), radius.real()).into()
     }
 
     /// Creates a collider with a [half-space](https://en.wikipedia.org/wiki/Half-space_(geometry)) shape
     /// defined by the outward normal of its planar boundary.
     pub fn half_space(outward_normal: Vector) -> Self {
-        SharedShape::halfspace(outward_normal.normalize_or_zero()).into()
+        SharedShape::halfspace(outward_normal.normalize_or_zero().real()).into()
     }
 
     /// Creates a collider with a segment shape defined by its endpoints `a` and `b`.
     pub fn segment(a: Vector, b: Vector) -> Self {
-        SharedShape::segment(a, b).into()
+        SharedShape::segment(a.real(), b.real()).into()
     }
 
     /// Creates a collider with a triangle shape defined by its points `a`, `b`, and `c`.
@@ -886,7 +892,7 @@ impl Collider {
     /// consider using [`Collider::triangle_unchecked`] instead.
     #[cfg(feature = "2d")]
     pub fn triangle(a: Vector, b: Vector, c: Vector) -> Self {
-        let mut triangle = parry::shape::Triangle::new(a, b, c);
+        let mut triangle = parry::shape::Triangle::new(a.real(), b.real(), c.real());
 
         // Make sure the triangle is counterclockwise. This is needed for collision detection.
         if triangle.orientation(1e-8) == parry::shape::TriangleOrientation::Clockwise {
@@ -904,13 +910,13 @@ impl Collider {
     /// If you are unsure about the orientation of the triangle, consider using [`Collider::triangle`] instead.
     #[cfg(feature = "2d")]
     pub fn triangle_unchecked(a: Vector, b: Vector, c: Vector) -> Self {
-        SharedShape::triangle(a, b, c).into()
+        SharedShape::triangle(a.real(), b.real(), c.real()).into()
     }
 
     /// Creates a collider with a triangle shape defined by its points `a`, `b`, and `c`.
     #[cfg(feature = "3d")]
     pub fn triangle(a: Vector, b: Vector, c: Vector) -> Self {
-        SharedShape::triangle(a, b, c).into()
+        SharedShape::triangle(a.real(), b.real(), c.real()).into()
     }
 
     /// Creates a collider with a regular polygon shape defined by the circumradius and the number of sides.
@@ -920,7 +926,7 @@ impl Collider {
     }
 
     /// Creates a collider with a polyline shape defined by its vertices and optionally an index buffer.
-    pub fn polyline(vertices: Vec<Vector>, indices: Option<Vec<[u32; 2]>>) -> Self {
+    pub fn polyline(vertices: Vec<RVector>, indices: Option<Vec<[u32; 2]>>) -> Self {
         SharedShape::polyline(vertices, indices).into()
     }
 
@@ -936,7 +942,7 @@ impl Collider {
     ///
     /// Panics if the given vertex and index buffers do not contain any triangles,
     /// there are duplicate vertices, or if at least two adjacent triangles have opposite orientations.
-    pub fn trimesh(vertices: Vec<Vector>, indices: Vec<[u32; 3]>) -> Self {
+    pub fn trimesh(vertices: Vec<RVector>, indices: Vec<[u32; 3]>) -> Self {
         Self::try_trimesh(vertices, indices)
             .unwrap_or_else(|error| panic!("Trimesh creation failed: {error:?}"))
     }
@@ -954,7 +960,7 @@ impl Collider {
     /// Returns a [`TrimeshBuilderError`] if the given vertex and index buffers do not contain any triangles,
     /// there are duplicate vertices, or if at least two adjacent triangles have opposite orientations.
     pub fn try_trimesh(
-        vertices: Vec<Vector>,
+        vertices: Vec<RVector>,
         indices: Vec<[u32; 3]>,
     ) -> Result<Self, TrimeshBuilderError> {
         SharedShape::trimesh(vertices, indices).map(|trimesh| trimesh.into())
@@ -974,7 +980,7 @@ impl Collider {
     /// Panics if after preprocessing the given vertex and index buffers do not contain any triangles,
     /// there are duplicate vertices, or if at least two adjacent triangles have opposite orientations.
     pub fn trimesh_with_config(
-        vertices: Vec<Vector>,
+        vertices: Vec<RVector>,
         indices: Vec<[u32; 3]>,
         flags: TrimeshFlags,
     ) -> Self {
@@ -996,7 +1002,7 @@ impl Collider {
     /// Returns a [`TrimeshBuilderError`] if after preprocessing the given vertex and index buffers do not contain any triangles,
     /// there are duplicate vertices, or if at least two adjacent triangles have opposite orientations.
     pub fn try_trimesh_with_config(
-        vertices: Vec<Vector>,
+        vertices: Vec<RVector>,
         indices: Vec<[u32; 3]>,
         flags: TrimeshFlags,
     ) -> Result<Self, TrimeshBuilderError> {
@@ -1007,14 +1013,14 @@ impl Collider {
     /// Creates a collider shape with a compound shape obtained from the decomposition of a given polyline
     /// defined by its vertex and index buffers.
     #[cfg(feature = "2d")]
-    pub fn convex_decomposition(vertices: Vec<Vector>, indices: Vec<[u32; 2]>) -> Self {
+    pub fn convex_decomposition(vertices: Vec<RVector>, indices: Vec<[u32; 2]>) -> Self {
         SharedShape::convex_decomposition(&vertices, &indices).into()
     }
 
     /// Creates a collider shape with a compound shape obtained from the decomposition of a given trimesh
     /// defined by its vertex and index buffers.
     #[cfg(feature = "3d")]
-    pub fn convex_decomposition(vertices: Vec<Vector>, indices: Vec<[u32; 3]>) -> Self {
+    pub fn convex_decomposition(vertices: Vec<RVector>, indices: Vec<[u32; 3]>) -> Self {
         SharedShape::convex_decomposition(&vertices, &indices).into()
     }
 
@@ -1023,7 +1029,7 @@ impl Collider {
     /// the decomposition process.
     #[cfg(feature = "2d")]
     pub fn convex_decomposition_with_config(
-        vertices: Vec<Vector>,
+        vertices: Vec<RVector>,
         indices: Vec<[u32; 2]>,
         params: &VhacdParameters,
     ) -> Self {
@@ -1036,7 +1042,7 @@ impl Collider {
     /// the decomposition process.
     #[cfg(feature = "3d")]
     pub fn convex_decomposition_with_config(
-        vertices: Vec<Vector>,
+        vertices: Vec<RVector>,
         indices: Vec<[u32; 3]>,
         params: VhacdParameters,
     ) -> Self {
@@ -1047,14 +1053,14 @@ impl Collider {
     /// Creates a collider with a [convex polygon](https://en.wikipedia.org/wiki/Convex_polygon) shape obtained after computing
     /// the [convex hull](https://en.wikipedia.org/wiki/Convex_hull) of the given points.
     #[cfg(feature = "2d")]
-    pub fn convex_hull(points: Vec<Vector>) -> Option<Self> {
+    pub fn convex_hull(points: Vec<RVector>) -> Option<Self> {
         SharedShape::convex_hull(&points).map(Into::into)
     }
 
     /// Creates a collider with a [convex polyhedron](https://en.wikipedia.org/wiki/Convex_polytope) shape obtained after computing
     /// the [convex hull](https://en.wikipedia.org/wiki/Convex_hull) of the given points.
     #[cfg(feature = "3d")]
-    pub fn convex_hull(points: Vec<Vector>) -> Option<Self> {
+    pub fn convex_hull(points: Vec<RVector>) -> Option<Self> {
         SharedShape::convex_hull(&points).map(Into::into)
     }
 
@@ -1062,7 +1068,7 @@ impl Collider {
     /// the [convex hull](https://en.wikipedia.org/wiki/Convex_hull) of the given points: convexity of the input is
     /// assumed and not checked.
     #[cfg(feature = "2d")]
-    pub fn convex_polyline(points: Vec<Vector>) -> Option<Self> {
+    pub fn convex_polyline(points: Vec<RVector>) -> Option<Self> {
         SharedShape::convex_polyline(points).map(Into::into)
     }
 
@@ -1080,37 +1086,37 @@ impl Collider {
             .iter()
             .map(|c| c.as_i64vec3())
             .collect::<Vec<_>>();
-        let shape = Voxels::new(voxel_size, grid_coordinates);
+        let shape = Voxels::new(voxel_size.real(), grid_coordinates);
         SharedShape::new(shape).into()
     }
 
     /// Creates a collider shape made of voxels.
     ///
     /// Each voxel has the size `voxel_size` and contains at least one point from `points`.
-    pub fn voxels_from_points(voxel_size: Vector, points: &[Vector]) -> Self {
-        SharedShape::voxels_from_points(voxel_size, points).into()
+    pub fn voxels_from_points(voxel_size: Vector, points: &[RVector]) -> Self {
+        SharedShape::voxels_from_points(voxel_size.real(), points).into()
     }
 
     /// Creates a voxel collider obtained from the decomposition of the given polyline into voxelized convex parts.
     #[cfg(feature = "2d")]
     pub fn voxelized_polyline(
-        vertices: &[Vector],
+        vertices: &[RVector],
         indices: &[[u32; 2]],
-        voxel_size: Scalar,
+        voxel_size: f32,
         fill_mode: FillMode,
     ) -> Self {
-        SharedShape::voxelized_mesh(vertices, indices, voxel_size, fill_mode.into()).into()
+        SharedShape::voxelized_mesh(vertices, indices, voxel_size.real(), fill_mode.into()).into()
     }
 
     /// Creates a voxel collider obtained from the decomposition of the given trimesh into voxelized convex parts.
     #[cfg(feature = "3d")]
     pub fn voxelized_trimesh(
-        vertices: &[Vector],
+        vertices: &[RVector],
         indices: &[[u32; 3]],
-        voxel_size: Scalar,
+        voxel_size: f32,
         fill_mode: FillMode,
     ) -> Self {
-        SharedShape::voxelized_mesh(vertices, indices, voxel_size, fill_mode.into()).into()
+        SharedShape::voxelized_mesh(vertices, indices, voxel_size.real(), fill_mode.into()).into()
     }
 
     /// Creates a voxel collider obtained from the decomposition of the given `Mesh` into voxelized convex parts.
@@ -1119,11 +1125,12 @@ impl Collider {
     #[cfg(feature = "collider-from-mesh")]
     pub fn voxelized_trimesh_from_mesh(
         mesh: &Mesh,
-        voxel_size: Scalar,
+        voxel_size: f32,
         fill_mode: FillMode,
     ) -> Option<Self> {
         extract_mesh_vertices_indices(mesh).map(|(vertices, indices)| {
-            SharedShape::voxelized_mesh(&vertices, &indices, voxel_size, fill_mode.into()).into()
+            SharedShape::voxelized_mesh(&vertices, &indices, voxel_size.real(), fill_mode.into())
+                .into()
         })
     }
 
@@ -1136,7 +1143,7 @@ impl Collider {
         doc = "Creates a collider with a compound shape obtained from the decomposition of the given trimesh into voxelized convex parts."
     )]
     pub fn voxelized_convex_decomposition(
-        vertices: &[Vector],
+        vertices: &[RVector],
         indices: &[[u32; DIM]],
     ) -> Vec<Self> {
         Self::voxelized_convex_decomposition_with_config(
@@ -1155,7 +1162,7 @@ impl Collider {
         doc = "Creates a collider with a compound shape obtained from the decomposition of the given trimesh into voxelized convex parts."
     )]
     pub fn voxelized_convex_decomposition_with_config(
-        vertices: &[Vector],
+        vertices: &[RVector],
         indices: &[[u32; DIM]],
         parameters: &VhacdParameters,
     ) -> Vec<Self> {
@@ -1176,8 +1183,8 @@ impl Collider {
     /// `heights` is a list indicating the altitude of each subdivision point, and `scale` controls
     /// the scaling factor along each axis.
     #[cfg(feature = "2d")]
-    pub fn heightfield(heights: Vec<Scalar>, scale: Vector) -> Self {
-        SharedShape::heightfield(heights, scale).into()
+    pub fn heightfield(heights: Vec<Real>, scale: Vector) -> Self {
+        SharedShape::heightfield(heights, scale.real()).into()
     }
 
     /// Creates a collider with a heightfield shape.
@@ -1190,10 +1197,10 @@ impl Collider {
     ///
     /// `scale` controls the scaling factor along each axis.
     #[cfg(feature = "3d")]
-    pub fn heightfield(heights: Vec<Vec<Scalar>>, scale: Vector) -> Self {
+    pub fn heightfield(heights: Vec<Vec<Real>>, scale: Vector) -> Self {
         let row_count = heights.len();
         let column_count = heights[0].len();
-        let data: Vec<Scalar> = heights.into_iter().flatten().collect();
+        let data: Vec<Real> = heights.into_iter().flatten().collect();
 
         assert_eq!(
             data.len(),
@@ -1202,7 +1209,7 @@ impl Collider {
         );
 
         let heights = parry::utils::Array2::new(row_count, column_count, data);
-        SharedShape::heightfield(heights, scale).into()
+        SharedShape::heightfield(heights, scale.real()).into()
     }
 
     /// Creates a collider with a triangle mesh shape from a `Mesh`.
@@ -1558,7 +1565,7 @@ impl Collider {
 }
 
 #[cfg(feature = "collider-from-mesh")]
-type VerticesIndices = (Vec<Vector>, Vec<[u32; 3]>);
+type VerticesIndices = (Vec<RVector>, Vec<[u32; 3]>);
 
 #[cfg(feature = "collider-from-mesh")]
 fn extract_mesh_vertices_indices(mesh: &Mesh) -> Option<VerticesIndices> {
@@ -1568,12 +1575,12 @@ fn extract_mesh_vertices_indices(mesh: &Mesh) -> Option<VerticesIndices> {
     let vtx: Vec<_> = match vertices {
         VertexAttributeValues::Float32(vtx) => Some(
             vtx.chunks(3)
-                .map(|v| [v[0] as Scalar, v[1] as Scalar, v[2] as Scalar].into())
+                .map(|v| [v[0] as Real, v[1] as Real, v[2] as Real].into())
                 .collect(),
         ),
         VertexAttributeValues::Float32x3(vtx) => Some(
             vtx.iter()
-                .map(|v| [v[0] as Scalar, v[1] as Scalar, v[2] as Scalar].into())
+                .map(|v| [v[0] as Real, v[1] as Real, v[2] as Real].into())
                 .collect(),
         ),
         _ => None,
@@ -1595,7 +1602,7 @@ fn scale_shape(
     scale: Vector,
     num_subdivisions: u32,
 ) -> Result<SharedShape, UnsupportedShape> {
-    let scale = scale.abs();
+    let scale = scale.abs().real();
     match shape.as_typed_shape() {
         TypedShape::Cuboid(s) => Ok(SharedShape::new(s.scaled(scale.abs()))),
         TypedShape::RoundCuboid(s) => Ok(SharedShape::new(RoundShape {
@@ -1749,14 +1756,14 @@ fn scale_shape(
                 scaled.push((
                     make_pose(
                         pose.translation * scale,
-                        Rotation::radians(pose.rotation.angle()),
+                        Rot::from_sin_cos(pose.rotation.sin().f32(), pose.rotation.cos().f32()),
                     ),
-                    scale_shape(shape, scale, num_subdivisions)?,
+                    scale_shape(shape, scale.f32(), num_subdivisions)?,
                 ));
                 #[cfg(feature = "3d")]
                 scaled.push((
-                    make_pose(pose.translation * scale, pose.rotation),
-                    scale_shape(shape, scale, num_subdivisions)?,
+                    make_pose(pose.translation * scale, pose.rotation.f32()),
+                    scale_shape(shape, scale.f32(), num_subdivisions)?,
                 ));
             }
             Ok(SharedShape::compound(scaled))
@@ -1781,12 +1788,12 @@ fn scale_shape(
                         let vertices = polygon
                             .vertices(0.0)
                             .into_iter()
-                            .map(|v| v.adjust_precision())
+                            .map(|v| v.real())
                             .collect::<Vec<_>>();
 
                         return scale_shape(
                             &SharedShape::convex_hull(&vertices).unwrap(),
-                            scale,
+                            scale.f32(),
                             num_subdivisions,
                         );
                     }
@@ -1801,30 +1808,31 @@ fn scale_shape(
 mod tests {
     use super::*;
     use approx::assert_relative_eq;
+    use core::f32::consts::PI;
 
     #[test]
     fn test_flatten_compound_constructors() {
         let input = vec![
             (
-                Position(Vector::new(10.0, 0.0, 0.0)),
+                Position(RVector::new(10.0, 0.0, 0.0)),
                 Rotation::default(),
                 ColliderConstructor::Sphere { radius: 1.0 },
             ),
             (
-                Position(Vector::new(5.0, 0.0, 0.0)),
-                Rotation::from(Quaternion::from_rotation_z(PI / 2.0)),
+                Position(RVector::new(5.0, 0.0, 0.0)),
+                Rotation::from(Quat::from_rotation_z(PI / 2.0)),
                 ColliderConstructor::Compound(vec![
                     (
-                        Position(Vector::new(2.0, 0.0, 0.0)),
-                        Rotation::from(Quaternion::from_rotation_y(PI)),
+                        Position(RVector::new(2.0, 0.0, 0.0)),
+                        Rotation::from(Quat::from_rotation_y(PI)),
                         ColliderConstructor::Compound(vec![(
-                            Position(Vector::new(1.0, 0.0, 0.0)),
+                            Position(RVector::new(1.0, 0.0, 0.0)),
                             Rotation::default(),
                             ColliderConstructor::Sphere { radius: 0.5 },
                         )]),
                     ),
                     (
-                        Position(Vector::new(0.0, 3.0, 0.0)),
+                        Position(RVector::new(0.0, 3.0, 0.0)),
                         Rotation::default(),
                         ColliderConstructor::Sphere { radius: 0.25 },
                     ),
@@ -1842,7 +1850,7 @@ mod tests {
         // Top level colliders should remain unchanged
         assert_eq!(
             unchanged_simple_sphere.0,
-            Position(Vector::new(10.0, 0.0, 0.0))
+            Position(RVector::new(10.0, 0.0, 0.0))
         );
         assert_eq!(unchanged_simple_sphere.1, Rotation::default());
 
@@ -1851,7 +1859,7 @@ mod tests {
         // 2. Add parent's position (2, 0, 0) -> (1, 0, 0)
         // 3. Apply grandparent's 90 Z rotation -> (0, 1, 0)
         // 4. Add grandparent's position (5, 0, 0) -> (5, 1, 0)
-        let expected_grandchild_world_pos = Vector::new(5.0, 1.0, 0.0);
+        let expected_grandchild_world_pos = RVector::new(5.0, 1.0, 0.0);
         let actual_grandchild_world_pos = flattened_grandchild.0.0;
 
         assert_relative_eq!(
@@ -1873,7 +1881,7 @@ mod tests {
         // Sibling local position: (0, 3, 0)
         // 1. Apply parent's 90 Z rotation -> (-3, 0, 0)
         // 2. Add parent's position (5, 0, 0) -> (2, 0, 0)
-        let expected_sibling_world_pos = Vector::new(2.0, 0.0, 0.0);
+        let expected_sibling_world_pos = RVector::new(2.0, 0.0, 0.0);
         let actual_sibling_world_pos = flattened_sibling.0.0;
 
         assert_relative_eq!(

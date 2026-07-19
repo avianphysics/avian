@@ -12,7 +12,7 @@ fn main() {
             PhysicsPlugins::default().with_length_unit(20.0),
         ))
         .insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.1)))
-        .insert_resource(Gravity(Vector::ZERO))
+        .insert_resource(Gravity::ZERO)
         .add_message::<MovementAction>()
         .add_systems(Startup, setup)
         .add_systems(
@@ -94,8 +94,8 @@ fn setup(
 
 #[derive(Message, Debug, Reflect)]
 pub enum MovementAction {
-    Velocity(Vector),
-    Offset(Vector),
+    Velocity(Vec2),
+    Offset(Vec2),
     Stop,
 }
 
@@ -120,8 +120,8 @@ fn keyboard_input1(
     let down = keyboard_input.any_pressed([KeyCode::KeyS]);
     let horizontal = right as i8 - left as i8;
     let vertical = up as i8 - down as i8;
-    let direction = Vector::new(horizontal as Scalar, vertical as Scalar);
-    if direction != Vector::ZERO {
+    let direction = Vec2::new(horizontal as f32, vertical as f32);
+    if direction != Vec2::ZERO {
         movement_writer.write(MovementAction::Velocity(direction));
     }
 }
@@ -140,8 +140,8 @@ fn keyboard_input2(
     let down = keyboard_input.any_pressed([KeyCode::ArrowDown]);
     let horizontal = right as i8 - left as i8;
     let vertical = up as i8 - down as i8;
-    let direction = Vector::new(horizontal as Scalar, vertical as Scalar);
-    if direction != Vector::ZERO {
+    let direction = Vec2::new(horizontal as f32, vertical as f32);
+    if direction != Vec2::ZERO {
         movement_writer.write(MovementAction::Offset(direction));
     }
 }
@@ -154,7 +154,7 @@ fn movement(
     mut movement_reader: MessageReader<MovementAction>,
     mut controllers: Query<(&mut LinearVelocity, &mut Position), With<Character>>,
 ) {
-    let delta_time = time.delta_secs_f64().adjust_precision();
+    let delta_time = time.delta_secs();
     for event in movement_reader.read() {
         for (mut linear_velocity, mut position) in &mut controllers {
             match event {
@@ -169,8 +169,8 @@ fn movement(
                 }
                 MovementAction::Offset(direction) => {
                     let speed = 100.0;
-                    position.x += direction.x * speed * delta_time;
-                    position.y += direction.y * speed * delta_time;
+                    position.x += (direction.x * speed * delta_time).real();
+                    position.y += (direction.y * speed * delta_time).real();
                 }
             }
         }

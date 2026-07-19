@@ -13,7 +13,7 @@
 
 mod plugin;
 
-use avian3d::{math::*, prelude::*};
+use avian3d::prelude::*;
 use bevy::prelude::*;
 use examples_common_3d::ExampleCommonPlugin;
 use plugin::*;
@@ -45,7 +45,7 @@ fn setup(
             30.0,
             0.92,
             7.0,
-            (30.0 as Scalar).to_radians(),
+            30f32.to_radians(),
         ),
         Friction::ZERO.with_combine_rule(CoefficientCombine::Min),
         Restitution::ZERO.with_combine_rule(CoefficientCombine::Min),

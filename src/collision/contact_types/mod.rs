@@ -181,7 +181,7 @@ pub struct ContactPair {
     /// for speculative contacts in general.
     ///
     /// The speculative distance is reset to zero each timestep.
-    pub speculative_distance: Scalar,
+    pub speculative_distance: f32,
     /// Flag indicating the status and type of the contact pair.
     pub flags: ContactPairFlags,
 }
@@ -250,7 +250,7 @@ impl ContactPair {
     ///
     /// To get the corresponding force, divide the impulse by the time step.
     #[inline]
-    pub fn total_normal_impulse_magnitude(&self) -> Scalar {
+    pub fn total_normal_impulse_magnitude(&self) -> f32 {
         self.manifolds
             .iter()
             .fold(0.0, |acc, manifold| acc + manifold.total_normal_impulse())
@@ -263,7 +263,7 @@ impl ContactPair {
     /// To get the corresponding force, divide the impulse by the time step.
     #[inline]
     pub fn max_normal_impulse(&self) -> Vector {
-        let mut magnitude: Scalar = Scalar::MIN;
+        let mut magnitude: f32 = f32::MIN;
         let mut normal = Vector::ZERO;
 
         for manifold in &self.manifolds {
@@ -280,7 +280,7 @@ impl ContactPair {
     ///
     /// To get the corresponding force, divide the impulse by the time step.
     #[inline]
-    pub fn max_normal_impulse_magnitude(&self) -> Scalar {
+    pub fn max_normal_impulse_magnitude(&self) -> f32 {
         self.manifolds
             .iter()
             .fold(0.0, |acc, manifold| acc.max(manifold.max_normal_impulse()))
@@ -366,16 +366,16 @@ pub struct ContactManifold {
     /// The same normal is shared by all `points` in a manifold.
     pub normal: Vector,
     /// The effective coefficient of dynamic [friction](Friction) used for the contact surface.
-    pub friction: Scalar,
+    pub friction: f32,
     /// The effective coefficient of [restitution](Restitution) used for the contact surface.
-    pub restitution: Scalar,
+    pub restitution: f32,
     /// The desired relative linear speed of the bodies along the surface,
     /// expressed in world space as `tangent_speed2 - tangent_speed1`.
     ///
     /// Defaults to zero. If set to a non-zero value, this can be used to simulate effects
     /// such as conveyor belts.
     #[cfg(feature = "2d")]
-    pub tangent_speed: Scalar,
+    pub tangent_speed: f32,
     // TODO: Jolt also supports a relative angular surface velocity, which can be used for making
     //       objects rotate on platforms. Would that be useful enough to warrant the extra memory usage?
     /// The desired relative linear velocity of the bodies along the surface,
@@ -411,7 +411,7 @@ impl ContactManifold {
 
     /// The sum of the impulses applied at the contact points in the manifold along the contact normal.
     #[inline]
-    pub fn total_normal_impulse(&self) -> Scalar {
+    pub fn total_normal_impulse(&self) -> f32 {
         self.points
             .iter()
             .fold(0.0, |acc, contact| acc + contact.normal_impulse)
@@ -419,7 +419,7 @@ impl ContactManifold {
 
     /// The magnitude of the largest impulse applied at a contact point in the manifold along the contact normal.
     #[inline]
-    pub fn max_normal_impulse(&self) -> Scalar {
+    pub fn max_normal_impulse(&self) -> f32 {
         self.points
             .iter()
             .map(|contact| contact.normal_impulse)
@@ -433,11 +433,7 @@ impl ContactManifold {
     /// matching is done based on contact positions using the given `distance_threshold`
     /// for determining if points are too far away from each other to be considered matching.
     #[inline]
-    pub fn match_contacts(
-        &mut self,
-        previous_contacts: &[ContactPoint],
-        distance_threshold: Scalar,
-    ) {
+    pub fn match_contacts(&mut self, previous_contacts: &[ContactPoint], distance_threshold: f32) {
         // The squared maximum distance for two contact points to be considered matching.
         let distance_threshold_squared = distance_threshold.powi(2);
 
@@ -496,10 +492,10 @@ impl ContactManifold {
 
         // We use a heuristic of `distance_to_com * penetration` to find the points we should keep.
         // Neither of these should become zero, so we clamp the minimum distance.
-        const MIN_DISTANCE_SQUARED: Scalar = 1e-6;
+        const MIN_DISTANCE_SQUARED: f32 = 1e-6;
 
         // Project the contact points onto the contact normal and compute the squared penetration depths.
-        let (projected, penetrations_squared): (Vec<Vector>, Vec<Scalar>) = self
+        let (projected, penetrations_squared): (Vec<Vector>, Vec<f32>) = self
             .points
             .iter()
             .map(|point| {
@@ -513,7 +509,7 @@ impl ContactManifold {
         // Find the point that is farthest from the center of mass, as its torque has the largest influence,
         // while also taking into account the penetration depth heuristic.
         let mut point1_index = 0;
-        let mut value = Scalar::MIN;
+        let mut value = f32::MIN;
         for (i, point) in projected.iter().enumerate() {
             let v = point.length_squared().max(MIN_DISTANCE_SQUARED) * penetrations_squared[i];
             if v > value {
@@ -526,7 +522,7 @@ impl ContactManifold {
         // Find the point farthest from the first point, forming a line segment.
         // Also consider the penetration depth heuristic.
         let mut point2_index = usize::MAX;
-        let mut max_distance = Scalar::MIN;
+        let mut max_distance = f32::MIN;
         for (i, point) in projected.iter().enumerate() {
             if i == point1_index {
                 continue;
@@ -621,19 +617,19 @@ pub struct ContactPoint {
     ///
     /// Note that because the contact point is expressed in world space,
     /// it is subject to precision loss at large coordinates.
-    pub point: Vector,
+    pub point: RVector,
     /// The penetration depth.
     ///
     /// Can be negative if the objects are separated and [speculative collision] is enabled.
     ///
     /// [speculative collision]: crate::dynamics::ccd#speculative-collision
-    pub penetration: Scalar,
+    pub penetration: f32,
     /// The total normal impulse applied to the first body at this contact point.
     /// The unit is typically N⋅s or kg⋅m/s.
     ///
     /// This can be used to determine how "strong" a contact is. To compute the corresponding
     /// contact force, divide the impulse by the time step.
-    pub normal_impulse: Scalar,
+    pub normal_impulse: f32,
     /// The relative velocity of the bodies at the contact point along the contact normal.
     /// If negative, the bodies are approaching. The unit is typically m/s.
     ///
@@ -641,26 +637,26 @@ pub struct ContactPoint {
     /// how "strong" the contact is in a mass-independent way.
     ///
     /// Internally, the `normal_speed` is used for restitution.
-    pub normal_speed: Scalar,
+    pub normal_speed: f32,
     /// The normal impulse used to warm start the contact solver.
     ///
     /// This corresponds to the clamped accumulated impulse from the last substep
     /// of the previous time step.
-    pub warm_start_normal_impulse: Scalar,
+    pub warm_start_normal_impulse: f32,
     /// The frictional impulse used to warm start the contact solver.
     ///
     /// This corresponds to the clamped accumulated impulse from the last substep
     /// of the previous time step.
     #[cfg(feature = "2d")]
     #[doc(alias = "warm_start_friction_impulse")]
-    pub warm_start_tangent_impulse: Scalar,
+    pub warm_start_tangent_impulse: f32,
     /// The frictional impulse used to warm start the contact solver.
     ///
     /// This corresponds to the clamped accumulated impulse from the last substep
     /// of the previous time step.
     #[cfg(feature = "3d")]
     #[doc(alias = "warm_start_friction_impulse")]
-    pub warm_start_tangent_impulse: Vector2,
+    pub warm_start_tangent_impulse: Vec2,
     /// The contact feature ID on the first shape. This indicates the ID of
     /// the vertex, edge, or face of the contact, if one can be determined.
     pub feature_id1: PackedFeatureId,
@@ -676,7 +672,7 @@ impl ContactPoint {
     ///
     /// [Feature IDs](PackedFeatureId) can be specified for the contact points using [`with_feature_ids`](Self::with_feature_ids).
     #[allow(clippy::too_many_arguments)]
-    pub fn new(anchor1: Vector, anchor2: Vector, world_point: Vector, penetration: Scalar) -> Self {
+    pub fn new(anchor1: Vector, anchor2: Vector, world_point: RVector, penetration: f32) -> Self {
         Self {
             anchor1,
             anchor2,
@@ -688,7 +684,7 @@ impl ContactPoint {
             #[cfg(feature = "2d")]
             warm_start_tangent_impulse: 0.0,
             #[cfg(feature = "3d")]
-            warm_start_tangent_impulse: Vector2::ZERO,
+            warm_start_tangent_impulse: Vec2::ZERO,
             feature_id1: PackedFeatureId::UNKNOWN,
             feature_id2: PackedFeatureId::UNKNOWN,
         }
@@ -748,7 +744,7 @@ pub struct SingleContact {
     /// The contact normal expressed in the local space of the second shape.
     pub local_normal2: Vector,
     /// Penetration depth.
-    pub penetration: Scalar,
+    pub penetration: f32,
 }
 
 impl SingleContact {
@@ -759,7 +755,7 @@ impl SingleContact {
         local_point2: Vector,
         local_normal1: Vector,
         local_normal2: Vector,
-        penetration: Scalar,
+        penetration: f32,
     ) -> Self {
         Self {
             local_point1,
@@ -773,26 +769,26 @@ impl SingleContact {
     /// Returns the global contact point on the first shape,
     /// transforming the local point by the given position and rotation.
     #[inline]
-    pub fn global_point1(&self, position: &Position, rotation: &Rotation) -> Vector {
-        position.0 + rotation * self.local_point1
+    pub fn global_point1(&self, position: RVector, rotation: Rot) -> RVector {
+        position + (rotation * self.local_point1).real()
     }
 
     /// Returns the global contact point on the second shape,
     /// transforming the local point by the given position and rotation.
     #[inline]
-    pub fn global_point2(&self, position: &Position, rotation: &Rotation) -> Vector {
-        position.0 + rotation * self.local_point2
+    pub fn global_point2(&self, position: RVector, rotation: Rot) -> RVector {
+        position + (rotation * self.local_point2).real()
     }
 
     /// Returns the world-space contact normal pointing from the first shape to the second.
     #[inline]
-    pub fn global_normal1(&self, rotation: &Rotation) -> Vector {
+    pub fn global_normal1(&self, rotation: Rot) -> Vector {
         rotation * self.local_normal1
     }
 
     /// Returns the world-space contact normal pointing from the second shape to the first.
     #[inline]
-    pub fn global_normal2(&self, rotation: &Rotation) -> Vector {
+    pub fn global_normal2(&self, rotation: Rot) -> Vector {
         rotation * self.local_normal2
     }
 

@@ -6,7 +6,7 @@
 
 #![allow(clippy::type_complexity)]
 
-use avian2d::{math::*, prelude::*};
+use avian2d::prelude::*;
 use bevy::{
     ecs::{
         entity::hash_set::EntityHashSet,
@@ -29,7 +29,7 @@ fn main() {
                 .with_collision_hooks::<PlatformerCollisionHooks>(),
         ))
         .insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.1)))
-        .insert_resource(Gravity(Vector::NEG_Y * 1000.0))
+        .insert_resource(Gravity(Vec2::NEG_Y * 1000.0))
         .add_systems(Startup, setup)
         .add_systems(Update, (movement, pass_through_one_way_platform))
         .run();
@@ -39,10 +39,10 @@ fn main() {
 struct Actor;
 
 #[derive(Component)]
-struct MovementSpeed(Scalar);
+struct MovementSpeed(f32);
 
 #[derive(Component)]
-struct JumpImpulse(Scalar);
+struct JumpImpulse(f32);
 
 // Enable contact modification for one-way platforms with the `ActiveCollisionHooks` component.
 // Here we use required components, but you could also add it manually.
@@ -125,8 +125,8 @@ fn setup(
     }
 
     // Spawn an actor for the user to control
-    let actor_size = Vector::new(20.0, 20.0);
-    let actor_mesh = meshes.add(Rectangle::from_size(actor_size.f32()));
+    let actor_size = Vec2::new(20.0, 20.0);
+    let actor_mesh = meshes.add(Rectangle::from_size(actor_size));
     let actor_material = materials.add(Color::srgb(0.2, 0.7, 0.9));
 
     commands.spawn((
@@ -153,7 +153,7 @@ fn movement(
         let horizontal = right as i8 - left as i8;
 
         // Move in input direction
-        linear_velocity.x = horizontal as Scalar * movement_speed.0;
+        linear_velocity.x = horizontal as f32 * movement_speed.0;
 
         // Assume "mostly stopped" to mean "grounded".
         // You should use raycasting, shapecasting or sensor colliders
@@ -316,14 +316,14 @@ impl CollisionHooks for PlatformerCollisionHooks<'_, '_> {
             Err(_) | Ok(None) | Ok(Some(PassThroughOneWayPlatform::ByNormal)) => {
                 // If all contact normals are in line with the local up vector of this platform,
                 // then this collision should occur: the entity is on top of the platform.
-                let platform_up = platform_transform.up().truncate().adjust_precision();
+                let platform_up = platform_transform.up().truncate();
                 if contacts.manifolds.iter().all(|manifold| {
                     let normal = match relevant_normal {
                         RelevantNormal::Normal1 => manifold.normal,
                         RelevantNormal::Normal2 => -manifold.normal,
                     };
 
-                    normal.length() > Scalar::EPSILON && normal.dot(platform_up) >= 0.5
+                    normal.length() > f32::EPSILON && normal.dot(platform_up) >= 0.5
                 }) {
                     true
                 } else {

@@ -35,7 +35,7 @@ pub struct DistanceJoint {
     /// The extents of the allowed relative translation between the attached bodies.
     pub limits: DistanceLimit,
     /// The joint's compliance, the inverse of stiffness (m / N).
-    pub compliance: Scalar,
+    pub compliance: f32,
 }
 
 impl EntityConstraint<2> for DistanceJoint {
@@ -62,7 +62,7 @@ impl DistanceJoint {
     ///
     /// This configures the [`JointAnchor`] of each [`JointFrame`].
     #[inline]
-    pub const fn with_anchor(mut self, anchor: Vector) -> Self {
+    pub const fn with_anchor(mut self, anchor: RVector) -> Self {
         self.anchor1 = JointAnchor::FromGlobal(anchor);
         self.anchor2 = JointAnchor::FromGlobal(anchor);
         self
@@ -113,7 +113,7 @@ impl DistanceJoint {
     /// Sets the joint's rest length, or distance the bodies will be kept at.
     #[inline]
     #[deprecated(note = "Use `with_limits` instead.", since = "0.4.0")]
-    pub const fn with_rest_length(mut self, rest_length: Scalar) -> Self {
+    pub const fn with_rest_length(mut self, rest_length: f32) -> Self {
         self.limits = DistanceLimit::new(rest_length, rest_length);
         self
     }
@@ -122,7 +122,7 @@ impl DistanceJoint {
     ///
     /// `min` and `max` should be non-negative, and `min` should be less than or equal to `max`.
     #[inline]
-    pub const fn with_limits(mut self, min: Scalar, max: Scalar) -> Self {
+    pub const fn with_limits(mut self, min: f32, max: f32) -> Self {
         self.limits = DistanceLimit::new(min, max);
         self
     }
@@ -131,7 +131,7 @@ impl DistanceJoint {
     ///
     /// If `min` is larger than the current maximum distance, the maximum distance will be set to `min`.
     #[inline]
-    pub const fn with_min_distance(mut self, min: Scalar) -> Self {
+    pub const fn with_min_distance(mut self, min: f32) -> Self {
         self.limits.min = min;
         if self.limits.max < min {
             self.limits.max = min;
@@ -143,7 +143,7 @@ impl DistanceJoint {
     ///
     /// If `max` is smaller than the current minimum distance, the minimum distance will be set to `max`.
     #[inline]
-    pub const fn with_max_distance(mut self, max: Scalar) -> Self {
+    pub const fn with_max_distance(mut self, max: f32) -> Self {
         self.limits.max = max;
         if self.limits.min > max {
             self.limits.min = max;
@@ -153,7 +153,7 @@ impl DistanceJoint {
 
     /// Sets the joint's compliance (inverse of stiffness, m / N).
     #[inline]
-    pub const fn with_compliance(mut self, compliance: Scalar) -> Self {
+    pub const fn with_compliance(mut self, compliance: f32) -> Self {
         self.compliance = compliance;
         self
     }
@@ -189,7 +189,7 @@ fn update_local_anchors(
         };
 
         let [anchor1, anchor2] =
-            JointAnchor::compute_local(joint.anchor1, joint.anchor2, pos1.0, pos2.0, rot1, rot2);
+            JointAnchor::compute_local(joint.anchor1, joint.anchor2, pos1.0, pos2.0, *rot1, *rot2);
         joint.anchor1 = anchor1;
         joint.anchor2 = anchor2;
     }
@@ -201,7 +201,7 @@ impl DebugRenderConstraint<2> for DistanceJoint {
 
     fn debug_render(
         &self,
-        positions: [Vector; 2],
+        positions: [RVector; 2],
         rotations: [Rotation; 2],
         _context: &mut Self::Context,
         gizmos: &mut Gizmos<PhysicsGizmos>,
@@ -217,8 +217,8 @@ impl DebugRenderConstraint<2> for DistanceJoint {
             return;
         };
 
-        let anchor1 = pos1 + rot1 * local_anchor1;
-        let anchor2 = pos2 + rot2 * local_anchor2;
+        let anchor1 = pos1 + (rot1 * local_anchor1).real();
+        let anchor2 = pos2 + (rot2 * local_anchor2).real();
 
         if let Some(anchor_color) = config.joint_anchor_color {
             gizmos.draw_line(pos1, anchor1, anchor_color);

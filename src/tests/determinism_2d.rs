@@ -15,10 +15,10 @@
 
 #![allow(clippy::doc_markdown)]
 
-use core::time::Duration;
+use core::{f32::consts::PI, time::Duration};
 
 use crate::{
-    math::{PI, Vector},
+    math::{RVec2, Real},
     prelude::*,
 };
 use bevy::{prelude::*, time::TimeUpdateStrategy};
@@ -60,7 +60,7 @@ fn cross_platform_determinism_2d() {
     let hash = compute_hash(app.world(), query);
 
     // Update this value if simulation behavior changes.
-    let expected = 0x89ba82f7;
+    let expected = 0x19d28f3;
 
     assert!(
         hash == expected,
@@ -73,8 +73,8 @@ fn cross_platform_determinism_2d() {
 #[derive(Pod, Zeroable, Clone, Copy)]
 #[repr(C)]
 struct Isometry {
-    translation: Vector,
-    rotation: Scalar,
+    translation: RVec2,
+    rotation: Real,
 }
 
 fn compute_hash(world: &World, mut query: QueryState<(&Position, &Rotation)>) -> u32 {
@@ -82,7 +82,7 @@ fn compute_hash(world: &World, mut query: QueryState<(&Position, &Rotation)>) ->
     for (position, rotation) in query.iter(world) {
         let isometry = Isometry {
             translation: position.0,
-            rotation: rotation.as_radians(),
+            rotation: rotation.as_radians() as Real,
         };
         hash = djb2_hash(hash, bytemuck::bytes_of(&isometry));
     }
@@ -105,7 +105,7 @@ fn setup_scene(mut commands: Commands) {
     ));
 
     let half_size = 0.25;
-    let square_collider = Collider::rectangle(2.0 * half_size as Scalar, 2.0 * half_size as Scalar);
+    let square_collider = Collider::rectangle(2.0 * half_size, 2.0 * half_size);
 
     let offset = 0.4 * half_size;
     let delta_x = 10.0 * half_size;
@@ -143,8 +143,8 @@ fn setup_scene(mut commands: Commands) {
                     RevoluteJoint::new(prev_entity.unwrap(), entity)
                         .with_angle_limits(-0.1 * PI, 0.2 * PI)
                         .with_point_compliance(0.0001)
-                        .with_local_anchor1(Vec2::splat(half_size).adjust_precision())
-                        .with_local_anchor2(Vec2::new(offset, -half_size).adjust_precision()),
+                        .with_local_anchor1(Vec2::splat(half_size))
+                        .with_local_anchor2(Vec2::new(offset, -half_size)),
                     JointCollisionDisabled,
                 ));
                 prev_entity = None;

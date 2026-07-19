@@ -19,7 +19,7 @@ fn main() {
 
 /// The acceleration used for movement.
 #[derive(Component)]
-struct MovementAcceleration(Scalar);
+struct MovementAcceleration(f32);
 
 #[derive(Component)]
 struct RayIndicator;
@@ -105,7 +105,7 @@ fn movement(
 ) {
     // Precision is adjusted so that the example works with
     // both the `f32` and `f64` features. Otherwise you don't need this.
-    let delta_time = time.delta_secs_f64().adjust_precision();
+    let delta_time = time.delta_secs();
 
     for (movement_acceleration, mut linear_velocity) in &mut query {
         let up = keyboard_input.any_pressed([KeyCode::KeyW, KeyCode::ArrowUp]);
@@ -115,11 +115,10 @@ fn movement(
 
         let horizontal = right as i8 - left as i8;
         let vertical = down as i8 - up as i8;
-        let direction =
-            Vector::new(horizontal as Scalar, 0.0, vertical as Scalar).normalize_or_zero();
+        let direction = Vec3::new(horizontal as f32, 0.0, vertical as f32).normalize_or_zero();
 
         // Move in input direction
-        if direction != Vector::ZERO {
+        if direction != Vec3::ZERO {
             linear_velocity.x += direction.x * movement_acceleration.0 * delta_time;
             linear_velocity.z += direction.z * movement_acceleration.0 * delta_time;
         }
@@ -147,19 +146,24 @@ fn raycast(
     cubes: Query<(&MeshMaterial3d<StandardMaterial>, &OutOfGlass)>,
     mut indicator_transform: Single<&mut Transform, With<RayIndicator>>,
 ) {
-    let origin = Vector::new(-200.0, 2.0, 0.0);
+    let origin = Vec3::new(-200.0, 2.0, 0.0);
     let direction = Dir3::X;
     let filter = SpatialQueryFilter::default();
 
-    if let Some(ray_hit_data) =
-        query.cast_ray_predicate(origin, direction, Scalar::MAX, true, &filter, &|entity| {
+    if let Some(ray_hit_data) = query.cast_ray_predicate(
+        origin.real(),
+        direction,
+        f32::MAX,
+        true,
+        &filter,
+        &|entity| {
             // Only look at cubes not made out of glass.
             if let Ok((_, out_of_glass)) = cubes.get(entity) {
                 return !out_of_glass.0;
             }
             true
-        })
-    {
+        },
+    ) {
         // Set the color of the hit object to red.
         if let Ok((material_handle, _)) = cubes.get(ray_hit_data.entity)
             && let Some(mut material) = materials.get_mut(material_handle)
@@ -168,7 +172,7 @@ fn raycast(
         }
 
         // Set the length of the ray indicator to look more like a laser,
-        let contact_point = (origin + direction.adjust_precision() * ray_hit_data.distance).x;
+        let contact_point = (origin + direction * ray_hit_data.distance).x;
         let target_scale = 1000.0 + contact_point * 2.0;
         indicator_transform.scale.x = target_scale as f32;
     } else {

@@ -3,8 +3,6 @@ use bevy::reflect::Reflect;
 #[cfg(feature = "serialize")]
 use bevy::reflect::{ReflectDeserialize, ReflectSerialize};
 
-pub type NormalImpulse = Scalar;
-
 // TODO: Block solver for solving two contact points simultaneously
 // TODO: One-body constraint version
 /// The normal part of a [`ContactConstraintPoint`](super::ContactConstraintPoint).
@@ -15,7 +13,7 @@ pub type NormalImpulse = Scalar;
 #[reflect(Debug, PartialEq)]
 pub struct ContactNormalPart {
     /// The magnitude of the contact impulse along the contact normal.
-    pub impulse: NormalImpulse,
+    pub impulse: f32,
 
     /// The total normal impulse applied across substeps and restitution.
     /// The unit is typically N⋅s or kg⋅m/s.
@@ -23,11 +21,11 @@ pub struct ContactNormalPart {
     /// This is used by the solver to identify speculative contacts that did not generate
     /// an impulse, but is also useful for users to determine how "strong" the contact is.
     /// This is stored for contact manifolds as [`ContactPoint::normal_impulse`].
-    pub total_impulse: Scalar,
+    pub total_impulse: f32,
 
     /// The inertial properties of the bodies projected onto the contact normal,
     /// or in other words, the mass "seen" by the constraint along the normal.
-    pub effective_mass: Scalar,
+    pub effective_mass: f32,
 
     /// The softness parameters used for tuning contact response.
     pub softness: SoftnessCoefficients,
@@ -43,7 +41,7 @@ impl ContactNormalPart {
         r1: Vector,
         r2: Vector,
         normal: Vector,
-        warm_start_impulse: Option<NormalImpulse>,
+        warm_start_impulse: Option<f32>,
         softness: SoftnessCoefficients,
     ) -> Self {
         let i1 = inverse_angular_inertia1;
@@ -115,13 +113,13 @@ impl ContactNormalPart {
     /// the incremental impulse to apply to each body.
     pub fn solve_impulse(
         &mut self,
-        separation: Scalar,
+        separation: f32,
         relative_velocity: Vector,
         normal: Vector,
         use_bias: bool,
-        max_overlap_solve_speed: Scalar,
-        delta_secs: Scalar,
-    ) -> Scalar {
+        max_overlap_solve_speed: f32,
+        delta_secs: f32,
+    ) -> f32 {
         // Compute the relative velocity along the normal.
         let normal_speed = relative_velocity.dot(normal);
 

@@ -51,7 +51,7 @@ pub struct ComputedMass {
     /// This is stored as an inverse because most physics calculations
     /// operate on the inverse mass, and storing it directly allows for
     /// fewer divisions and guards against division by zero.
-    inverse: Scalar,
+    inverse: f32,
 }
 
 impl ComputedMass {
@@ -64,7 +64,7 @@ impl ComputedMass {
     ///
     /// Panics if the mass is negative or NaN when `debug_assertions` are enabled.
     #[inline]
-    pub fn new(mass: Scalar) -> Self {
+    pub fn new(mass: f32) -> Self {
         Self::from_inverse(mass.recip_or_zero())
     }
 
@@ -74,7 +74,7 @@ impl ComputedMass {
     ///
     /// Returns [`Err(MassError)`](MassError) if the mass is negative or NaN.
     #[inline]
-    pub fn try_new(mass: Scalar) -> Result<Self, MassError> {
+    pub fn try_new(mass: f32) -> Result<Self, MassError> {
         if mass.is_nan() {
             Err(MassError::NaN)
         } else if mass < 0.0 {
@@ -90,7 +90,7 @@ impl ComputedMass {
     ///
     /// Panics if the inverse mass is negative or NaN when `debug_assertions` are enabled.
     #[inline]
-    pub fn from_inverse(inverse_mass: Scalar) -> Self {
+    pub fn from_inverse(inverse_mass: f32) -> Self {
         debug_assert!(
             inverse_mass >= 0.0 && !inverse_mass.is_nan(),
             "mass must be positive or zero"
@@ -106,7 +106,7 @@ impl ComputedMass {
     /// # Errors
     ///
     /// Returns [`Err(MassError)`](MassError) if the inverse mass is negative or NaN.
-    pub fn try_from_inverse(inverse_mass: Scalar) -> Result<Self, MassError> {
+    pub fn try_from_inverse(inverse_mass: f32) -> Result<Self, MassError> {
         if inverse_mass.is_nan() {
             Err(MassError::NaN)
         } else if inverse_mass < 0.0 {
@@ -123,7 +123,7 @@ impl ComputedMass {
     /// Note that this involves a division because [`ComputedMass`] internally stores the inverse mass.
     /// If dividing by the mass, consider using `foo * mass.inverse()` instead of `foo / mass.value()`.
     #[inline]
-    pub fn value(self) -> Scalar {
+    pub fn value(self) -> f32 {
         self.inverse.recip_or_zero()
     }
 
@@ -131,7 +131,7 @@ impl ComputedMass {
     ///
     /// This is a no-op because [`ComputedMass`] internally stores the inverse mass.
     #[inline]
-    pub fn inverse(self) -> Scalar {
+    pub fn inverse(self) -> f32 {
         self.inverse
     }
 
@@ -160,15 +160,15 @@ impl ComputedMass {
     }
 }
 
-impl From<Scalar> for ComputedMass {
-    fn from(mass: Scalar) -> Self {
+impl From<f32> for ComputedMass {
+    fn from(mass: f32) -> Self {
         Self::new(mass)
     }
 }
 
 impl From<Mass> for ComputedMass {
     fn from(mass: Mass) -> Self {
-        ComputedMass::new(mass.0 as Scalar)
+        ComputedMass::new(mass.0 as f32)
     }
 }
 
@@ -225,7 +225,7 @@ pub struct ComputedAngularInertia {
     /// This is stored as an inverse to minimize the number of divisions
     /// and to guard against division by zero. Most physics calculations
     /// use the inverse angular inertia.
-    inverse: Scalar,
+    inverse: f32,
 }
 
 #[cfg(feature = "2d")]
@@ -239,7 +239,7 @@ impl ComputedAngularInertia {
     ///
     /// Panics if the angular inertia is negative or NaN when `debug_assertions` are enabled.
     #[inline]
-    pub fn new(angular_inertia: Scalar) -> Self {
+    pub fn new(angular_inertia: f32) -> Self {
         Self::from_inverse(angular_inertia.recip_or_zero())
     }
 
@@ -249,7 +249,7 @@ impl ComputedAngularInertia {
     ///
     /// Returns [`Err(AngularInertiaError)`](AngularInertiaError) if the angular inertia is negative or NaN.
     #[inline]
-    pub fn try_new(angular_inertia: Scalar) -> Result<Self, AngularInertiaError> {
+    pub fn try_new(angular_inertia: f32) -> Result<Self, AngularInertiaError> {
         if angular_inertia.is_nan() {
             Err(AngularInertiaError::NaN)
         } else if angular_inertia < 0.0 {
@@ -265,7 +265,7 @@ impl ComputedAngularInertia {
     ///
     /// Panics if the inverse angular inertia is negative or NaN when `debug_assertions` are enabled.
     #[inline]
-    pub fn from_inverse(inverse_angular_inertia: Scalar) -> Self {
+    pub fn from_inverse(inverse_angular_inertia: f32) -> Self {
         debug_assert!(
             inverse_angular_inertia >= 0.0 && !inverse_angular_inertia.is_nan(),
             "angular inertia must be positive or zero"
@@ -282,7 +282,7 @@ impl ComputedAngularInertia {
     ///
     /// Returns [`Err(AngularInertiaError)`](AngularInertiaError) if the inverse angular inertia is negative or NaN.
     #[inline]
-    pub fn try_from_inverse(inverse_angular_inertia: Scalar) -> Result<Self, AngularInertiaError> {
+    pub fn try_from_inverse(inverse_angular_inertia: f32) -> Result<Self, AngularInertiaError> {
         if inverse_angular_inertia.is_nan() {
             Err(AngularInertiaError::NaN)
         } else if inverse_angular_inertia < 0.0 {
@@ -299,7 +299,7 @@ impl ComputedAngularInertia {
     /// Note that this involves a division because [`ComputedAngularInertia`] internally stores the inverse angular inertia.
     /// If dividing by the angular inertia, consider using `foo * angular_inertia.inverse()` instead of `foo / angular_inertia.value()`.
     #[inline]
-    pub fn value(self) -> Scalar {
+    pub fn value(self) -> f32 {
         self.inverse.recip_or_zero()
     }
 
@@ -307,7 +307,7 @@ impl ComputedAngularInertia {
     ///
     /// This is a no-op because [`ComputedAngularInertia`] internally stores the inverse angular inertia.
     #[inline]
-    pub fn inverse(self) -> Scalar {
+    pub fn inverse(self) -> f32 {
         self.inverse
     }
 
@@ -315,7 +315,7 @@ impl ComputedAngularInertia {
     ///
     /// Note that this is a no-op because [`ComputedAngularInertia`] internally stores the inverse angular inertia.
     #[inline]
-    pub fn inverse_mut(&mut self) -> &mut Scalar {
+    pub fn inverse_mut(&mut self) -> &mut f32 {
         &mut self.inverse
     }
 
@@ -327,13 +327,13 @@ impl ComputedAngularInertia {
 
     /// Computes the angular inertia shifted by the given offset, taking into account the given mass.
     #[inline]
-    pub fn shifted(&self, mass: Scalar, offset: Vector) -> Scalar {
-        AngularInertia::from(*self).shifted(mass as f32, offset.f32()) as Scalar
+    pub fn shifted(&self, mass: f32, offset: Vector) -> f32 {
+        AngularInertia::from(*self).shifted(mass as f32, offset) as f32
     }
 
     /// Computes the angular inertia shifted by the given offset, taking into account the given mass.
     #[inline]
-    pub fn shifted_inverse(&self, mass: Scalar, offset: Vector) -> Scalar {
+    pub fn shifted_inverse(&self, mass: f32, offset: Vector) -> f32 {
         self.shifted(mass, offset).recip_or_zero()
     }
 
@@ -357,8 +357,8 @@ impl ComputedAngularInertia {
 }
 
 #[cfg(feature = "2d")]
-impl From<Scalar> for ComputedAngularInertia {
-    fn from(angular_inertia: Scalar) -> Self {
+impl From<f32> for ComputedAngularInertia {
+    fn from(angular_inertia: f32) -> Self {
         Self::new(angular_inertia)
     }
 }
@@ -366,7 +366,7 @@ impl From<Scalar> for ComputedAngularInertia {
 #[cfg(feature = "2d")]
 impl From<AngularInertia> for ComputedAngularInertia {
     fn from(inertia: AngularInertia) -> Self {
-        ComputedAngularInertia::new(inertia.0 as Scalar)
+        ComputedAngularInertia::new(inertia.0 as f32)
     }
 }
 
@@ -426,9 +426,7 @@ impl From<ComputedAngularInertia> for AngularInertia {
 #[reflect(Debug, Component, PartialEq)]
 #[doc(alias = "ComputedMomentOfInertia")]
 pub struct ComputedAngularInertia {
-    // TODO: The matrix should be symmetric and positive definite.
-    //       We could add a custom `SymmetricMat3` type to enforce symmetricity and reduce memory usage.
-    inverse: SymmetricMatrix,
+    inverse: SymmetricTensor,
 }
 
 impl Default for ComputedAngularInertia {
@@ -441,7 +439,7 @@ impl Default for ComputedAngularInertia {
 impl ComputedAngularInertia {
     /// Infinite angular inertia.
     pub const INFINITY: Self = Self {
-        inverse: SymmetricMatrix::ZERO,
+        inverse: SymmetricTensor::ZERO,
     };
 
     /// Creates a new [`ComputedAngularInertia`] from the given principal angular inertia.
@@ -465,7 +463,7 @@ impl ComputedAngularInertia {
             "principal angular inertia must be positive or zero for all axes"
         );
 
-        Self::from_inverse_tensor(SymmetricMatrix::from_diagonal(
+        Self::from_inverse_tensor(SymmetricTensor::from_diagonal(
             principal_angular_inertia.recip_or_zero(),
         ))
     }
@@ -488,7 +486,7 @@ impl ComputedAngularInertia {
         } else if !principal_angular_inertia.cmpge(Vector::ZERO).all() {
             Err(AngularInertiaError::Negative)
         } else {
-            Ok(Self::from_inverse_tensor(SymmetricMatrix::from_diagonal(
+            Ok(Self::from_inverse_tensor(SymmetricTensor::from_diagonal(
                 principal_angular_inertia.recip_or_zero(),
             )))
         }
@@ -507,20 +505,17 @@ impl ComputedAngularInertia {
     /// Panics if any component of the principal angular inertia is negative or NaN when `debug_assertions` are enabled.
     #[inline]
     #[doc(alias = "from_principal_angular_inertia_with_local_frame")]
-    pub fn new_with_local_frame(
-        principal_angular_inertia: Vector,
-        orientation: Quaternion,
-    ) -> Self {
+    pub fn new_with_local_frame(principal_angular_inertia: Vector, orientation: Quat) -> Self {
         debug_assert!(
             principal_angular_inertia.cmpge(Vector::ZERO).all()
                 && !principal_angular_inertia.is_nan(),
             "principal angular inertia must be positive or zero for all axes"
         );
 
-        Self::from_inverse_tensor(SymmetricMatrix::from_mat3_unchecked(
-            Matrix::from_quat(orientation)
-                * Matrix::from_diagonal(principal_angular_inertia.recip_or_zero())
-                * Matrix::from_quat(orientation.inverse()),
+        Self::from_inverse_tensor(SymmetricTensor::from_mat3_unchecked(
+            Mat3::from_quat(orientation)
+                * Mat3::from_diagonal(principal_angular_inertia.recip_or_zero())
+                * Mat3::from_quat(orientation.inverse()),
         ))
     }
 
@@ -538,7 +533,7 @@ impl ComputedAngularInertia {
     #[inline]
     pub fn try_new_with_local_frame(
         principal_angular_inertia: Vector,
-        orientation: Quaternion,
+        orientation: Quat,
     ) -> Result<Self, AngularInertiaError> {
         if principal_angular_inertia.is_nan() {
             Err(AngularInertiaError::NaN)
@@ -546,10 +541,10 @@ impl ComputedAngularInertia {
             Err(AngularInertiaError::Negative)
         } else {
             Ok(Self::from_inverse_tensor(
-                SymmetricMatrix::from_mat3_unchecked(
-                    Matrix::from_quat(orientation)
-                        * Matrix::from_diagonal(principal_angular_inertia.recip_or_zero())
-                        * Matrix::from_quat(orientation.inverse()),
+                SymmetricTensor::from_mat3_unchecked(
+                    Mat3::from_quat(orientation)
+                        * Mat3::from_diagonal(principal_angular_inertia.recip_or_zero())
+                        * Mat3::from_quat(orientation.inverse()),
                 ),
             ))
         }
@@ -562,7 +557,7 @@ impl ComputedAngularInertia {
     /// Note that this involves an invertion because [`ComputedAngularInertia`] internally stores the inverse angular inertia.
     #[inline]
     #[doc(alias = "from_mat3")]
-    pub fn from_tensor(tensor: SymmetricMatrix) -> Self {
+    pub fn from_tensor(tensor: SymmetricTensor) -> Self {
         Self::from_inverse_tensor(tensor.inverse_or_zero())
     }
 
@@ -571,7 +566,7 @@ impl ComputedAngularInertia {
     /// The tensor should be symmetric and positive definite.
     #[inline]
     #[doc(alias = "from_inverse_mat3")]
-    pub fn from_inverse_tensor(inverse_tensor: SymmetricMatrix) -> Self {
+    pub fn from_inverse_tensor(inverse_tensor: SymmetricTensor) -> Self {
         Self {
             inverse: inverse_tensor,
         }
@@ -585,7 +580,7 @@ impl ComputedAngularInertia {
     ///
     /// Equivalent to [`ComputedAngularInertia::tensor`].
     #[inline]
-    pub fn value(self) -> SymmetricMatrix {
+    pub fn value(self) -> SymmetricTensor {
         self.tensor()
     }
 
@@ -595,7 +590,7 @@ impl ComputedAngularInertia {
     ///
     /// Equivalent to [`ComputedAngularInertia::inverse_tensor`].
     #[inline]
-    pub fn inverse(self) -> SymmetricMatrix {
+    pub fn inverse(self) -> SymmetricTensor {
         self.inverse_tensor()
     }
 
@@ -603,7 +598,7 @@ impl ComputedAngularInertia {
     ///
     /// Note that this is a no-op because [`ComputedAngularInertia`] internally stores the inverse angular inertia.
     #[inline]
-    pub(crate) fn inverse_mut(&mut self) -> &mut SymmetricMatrix {
+    pub(crate) fn inverse_mut(&mut self) -> &mut SymmetricTensor {
         self.inverse_tensor_mut()
     }
 
@@ -614,7 +609,7 @@ impl ComputedAngularInertia {
     /// instead of `angular_inertia.value().inverse() * foo`.
     #[inline]
     #[doc(alias = "as_mat3")]
-    pub fn tensor(self) -> SymmetricMatrix {
+    pub fn tensor(self) -> SymmetricTensor {
         self.inverse.inverse_or_zero()
     }
 
@@ -623,7 +618,7 @@ impl ComputedAngularInertia {
     /// Note that this is a no-op because [`ComputedAngularInertia`] internally stores the inverse angular inertia.
     #[inline]
     #[doc(alias = "as_inverse_mat3")]
-    pub fn inverse_tensor(self) -> SymmetricMatrix {
+    pub fn inverse_tensor(self) -> SymmetricTensor {
         self.inverse
     }
 
@@ -632,7 +627,7 @@ impl ComputedAngularInertia {
     /// Note that this is a no-op because [`ComputedAngularInertia`] internally stores the inverse angular inertia.
     #[inline]
     #[doc(alias = "as_inverse_mat3_mut")]
-    pub fn inverse_tensor_mut(&mut self) -> &mut SymmetricMatrix {
+    pub fn inverse_tensor_mut(&mut self) -> &mut SymmetricTensor {
         &mut self.inverse
     }
 
@@ -648,35 +643,32 @@ impl ComputedAngularInertia {
     /// The principal angular inertia represents the torque needed for a desired angular acceleration
     /// about the local coordinate axes defined by the local inertial frame.
     #[doc(alias = "diagonalize")]
-    pub fn principal_angular_inertia_with_local_frame(&self) -> (Vector, Quaternion) {
-        let angular_inertia = AngularInertia::from_tensor(self.tensor().f32());
-        (
-            angular_inertia.principal.adjust_precision(),
-            angular_inertia.local_frame.adjust_precision(),
-        )
+    pub fn principal_angular_inertia_with_local_frame(&self) -> (Vector, Quat) {
+        let angular_inertia = AngularInertia::from_tensor(self.tensor());
+        (angular_inertia.principal, angular_inertia.local_frame)
     }
 
     /// Computes the angular inertia tensor with the given rotation.
     ///
     /// This can be used to transform local angular inertia to world space.
     #[inline]
-    pub fn rotated(self, rotation: Quaternion) -> Self {
-        let rot_mat3 = Matrix::from_quat(rotation);
-        Self::from_inverse_tensor(SymmetricMatrix::from_mat3_unchecked(
+    pub fn rotated(self, rotation: Quat) -> Self {
+        let rot_mat3 = Mat3::from_quat(rotation);
+        Self::from_inverse_tensor(SymmetricTensor::from_mat3_unchecked(
             (rot_mat3 * self.inverse) * rot_mat3.transpose(),
         ))
     }
 
     /// Computes the angular inertia tensor shifted by the given offset, taking into account the given mass.
     #[inline]
-    pub fn shifted_tensor(&self, mass: Scalar, offset: Vector) -> SymmetricMatrix3 {
+    pub fn shifted_tensor(&self, mass: f32, offset: Vector) -> SymmetricTensor {
         if mass > 0.0 && mass.is_finite() && offset != Vector::ZERO {
             let diagonal_element = offset.length_squared();
-            let diagonal_mat = Matrix3::from_diagonal(Vector::splat(diagonal_element));
+            let diagonal_mat = Mat3::from_diagonal(Vector::splat(diagonal_element));
             let offset_outer_product =
-                Matrix3::from_cols(offset * offset.x, offset * offset.y, offset * offset.z);
+                Mat3::from_cols(offset * offset.x, offset * offset.y, offset * offset.z);
             self.tensor()
-                + SymmetricMatrix::from_mat3_unchecked((diagonal_mat + offset_outer_product) * mass)
+                + SymmetricTensor::from_mat3_unchecked((diagonal_mat + offset_outer_product) * mass)
         } else {
             self.tensor()
         }
@@ -684,7 +676,7 @@ impl ComputedAngularInertia {
 
     /// Computes the inverse angular inertia tensor shifted by the given offset, taking into account the given mass.
     #[inline]
-    pub fn shifted_inverse_tensor(&self, mass: Scalar, offset: Vector) -> SymmetricMatrix3 {
+    pub fn shifted_inverse_tensor(&self, mass: f32, offset: Vector) -> SymmetricTensor {
         self.shifted_tensor(mass, offset).inverse_or_zero()
     }
 
@@ -708,8 +700,8 @@ impl ComputedAngularInertia {
 }
 
 #[cfg(feature = "3d")]
-impl From<SymmetricMatrix> for ComputedAngularInertia {
-    fn from(tensor: SymmetricMatrix) -> Self {
+impl From<SymmetricTensor> for ComputedAngularInertia {
+    fn from(tensor: SymmetricTensor) -> Self {
         Self::from_tensor(tensor)
     }
 }
@@ -717,26 +709,23 @@ impl From<SymmetricMatrix> for ComputedAngularInertia {
 #[cfg(feature = "3d")]
 impl From<AngularInertia> for ComputedAngularInertia {
     fn from(inertia: AngularInertia) -> Self {
-        ComputedAngularInertia::new_with_local_frame(
-            inertia.principal.adjust_precision(),
-            inertia.local_frame.adjust_precision(),
-        )
+        ComputedAngularInertia::new_with_local_frame(inertia.principal, inertia.local_frame)
     }
 }
 
 #[cfg(feature = "3d")]
 impl From<ComputedAngularInertia> for AngularInertia {
     fn from(inertia: ComputedAngularInertia) -> Self {
-        Self::from_tensor(inertia.tensor().f32())
+        Self::from_tensor(inertia.tensor())
     }
 }
 
 #[cfg(feature = "2d")]
-impl core::ops::Mul<Scalar> for ComputedAngularInertia {
-    type Output = Scalar;
+impl core::ops::Mul<f32> for ComputedAngularInertia {
+    type Output = f32;
 
     #[inline]
-    fn mul(self, rhs: Scalar) -> Scalar {
+    fn mul(self, rhs: f32) -> f32 {
         self.value() * rhs
     }
 }
@@ -782,27 +771,27 @@ impl ComputedCenterOfMass {
     /// Creates a new [`ComputedCenterOfMass`] at the given local position.
     #[inline]
     #[cfg(feature = "2d")]
-    pub const fn new(x: Scalar, y: Scalar) -> Self {
+    pub const fn new(x: f32, y: f32) -> Self {
         Self(Vector::new(x, y))
     }
 
     /// Creates a new [`ComputedCenterOfMass`] at the given local position.
     #[inline]
     #[cfg(feature = "3d")]
-    pub const fn new(x: Scalar, y: Scalar, z: Scalar) -> Self {
+    pub const fn new(x: f32, y: f32, z: f32) -> Self {
         Self(Vector::new(x, y, z))
     }
 }
 
 impl From<CenterOfMass> for ComputedCenterOfMass {
     fn from(center_of_mass: CenterOfMass) -> Self {
-        Self(center_of_mass.adjust_precision())
+        Self(center_of_mass.0)
     }
 }
 
 impl From<ComputedCenterOfMass> for CenterOfMass {
     fn from(center_of_mass: ComputedCenterOfMass) -> Self {
-        Self(center_of_mass.f32())
+        Self(center_of_mass.0)
     }
 }
 
@@ -824,7 +813,7 @@ mod tests {
     fn zero_mass() {
         // Zero mass should be equivalent to infinite mass.
         let mass = ComputedMass::new(0.0);
-        assert_eq!(mass, ComputedMass::new(Scalar::INFINITY));
+        assert_eq!(mass, ComputedMass::new(f32::INFINITY));
         assert_eq!(mass, ComputedMass::from_inverse(0.0));
         assert_eq!(mass.value(), 0.0);
         assert_eq!(mass.inverse(), 0.0);
@@ -836,7 +825,7 @@ mod tests {
     #[test]
     fn infinite_mass() {
         let mass = ComputedMass::INFINITY;
-        assert_eq!(mass, ComputedMass::new(Scalar::INFINITY));
+        assert_eq!(mass, ComputedMass::new(f32::INFINITY));
         assert_eq!(mass, ComputedMass::from_inverse(0.0));
         assert_eq!(mass.value(), 0.0);
         assert_eq!(mass.inverse(), 0.0);
@@ -863,7 +852,7 @@ mod tests {
     #[test]
     fn nan_mass_error() {
         assert_eq!(
-            ComputedMass::try_new(Scalar::NAN),
+            ComputedMass::try_new(f32::NAN),
             Err(MassError::NaN),
             "NaN mass should return an error"
         );
@@ -883,10 +872,7 @@ mod tests {
     fn zero_angular_inertia() {
         // Zero angular inertia should be equivalent to infinite angular inertia.
         let angular_inertia = ComputedAngularInertia::new(0.0);
-        assert_eq!(
-            angular_inertia,
-            ComputedAngularInertia::new(Scalar::INFINITY)
-        );
+        assert_eq!(angular_inertia, ComputedAngularInertia::new(f32::INFINITY));
         assert_eq!(angular_inertia, ComputedAngularInertia::from_inverse(0.0));
         assert_eq!(angular_inertia.value(), 0.0);
         assert_eq!(angular_inertia.inverse(), 0.0);
@@ -899,10 +885,7 @@ mod tests {
     #[cfg(feature = "2d")]
     fn infinite_angular_inertia() {
         let angular_inertia = ComputedAngularInertia::INFINITY;
-        assert_eq!(
-            angular_inertia,
-            ComputedAngularInertia::new(Scalar::INFINITY)
-        );
+        assert_eq!(angular_inertia, ComputedAngularInertia::new(f32::INFINITY));
         assert_eq!(angular_inertia, ComputedAngularInertia::from_inverse(0.0));
         assert_eq!(angular_inertia.value(), 0.0);
         assert_eq!(angular_inertia.inverse(), 0.0);
@@ -932,7 +915,7 @@ mod tests {
     #[cfg(feature = "2d")]
     fn nan_angular_inertia_error() {
         assert_eq!(
-            ComputedAngularInertia::try_new(Scalar::NAN),
+            ComputedAngularInertia::try_new(f32::NAN),
             Err(AngularInertiaError::NaN),
             "NaN angular inertia should return an error"
         );
@@ -944,18 +927,18 @@ mod tests {
         let angular_inertia = ComputedAngularInertia::new(Vector::new(10.0, 20.0, 30.0));
         assert_relative_eq!(
             angular_inertia.inverse_tensor(),
-            ComputedAngularInertia::from_inverse_tensor(SymmetricMatrix::from_diagonal(
+            ComputedAngularInertia::from_inverse_tensor(SymmetricTensor::from_diagonal(
                 Vector::new(0.1, 0.05, 1.0 / 30.0)
             ))
             .inverse_tensor()
         );
         assert_relative_eq!(
             angular_inertia.tensor(),
-            SymmetricMatrix::from_diagonal(Vector::new(10.0, 20.0, 30.0))
+            SymmetricTensor::from_diagonal(Vector::new(10.0, 20.0, 30.0))
         );
         assert_relative_eq!(
             angular_inertia.inverse_tensor(),
-            SymmetricMatrix::from_diagonal(Vector::new(0.1, 0.05, 1.0 / 30.0))
+            SymmetricTensor::from_diagonal(Vector::new(0.1, 0.05, 1.0 / 30.0))
         );
     }
 
@@ -969,12 +952,12 @@ mod tests {
         );
         assert_eq!(
             angular_inertia,
-            ComputedAngularInertia::from_inverse_tensor(SymmetricMatrix::from_diagonal(
+            ComputedAngularInertia::from_inverse_tensor(SymmetricTensor::from_diagonal(
                 Vector::ZERO
             ))
         );
-        assert_relative_eq!(angular_inertia.tensor(), SymmetricMatrix::ZERO);
-        assert_relative_eq!(angular_inertia.inverse_tensor(), SymmetricMatrix::ZERO);
+        assert_relative_eq!(angular_inertia.tensor(), SymmetricTensor::ZERO);
+        assert_relative_eq!(angular_inertia.inverse_tensor(), SymmetricTensor::ZERO);
         assert!(angular_inertia.is_infinite());
         assert!(!angular_inertia.is_finite());
         assert!(!angular_inertia.is_nan());
@@ -990,10 +973,10 @@ mod tests {
         );
         assert_eq!(
             angular_inertia,
-            ComputedAngularInertia::from_inverse_tensor(SymmetricMatrix::ZERO)
+            ComputedAngularInertia::from_inverse_tensor(SymmetricTensor::ZERO)
         );
-        assert_relative_eq!(angular_inertia.tensor(), SymmetricMatrix::ZERO);
-        assert_relative_eq!(angular_inertia.inverse_tensor(), SymmetricMatrix::ZERO);
+        assert_relative_eq!(angular_inertia.tensor(), SymmetricTensor::ZERO);
+        assert_relative_eq!(angular_inertia.inverse_tensor(), SymmetricTensor::ZERO);
         assert!(angular_inertia.is_infinite());
         assert!(!angular_inertia.is_finite());
         assert!(!angular_inertia.is_nan());
@@ -1020,7 +1003,7 @@ mod tests {
     #[cfg(feature = "3d")]
     fn nan_angular_inertia_error() {
         assert_eq!(
-            ComputedAngularInertia::try_new(Vector::new(Scalar::NAN, 2.0, 3.0)),
+            ComputedAngularInertia::try_new(Vector::new(f32::NAN, 2.0, 3.0)),
             Err(AngularInertiaError::NaN),
             "NaN angular inertia should return an error"
         );

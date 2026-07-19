@@ -79,12 +79,11 @@ Therefore, they have 3 translational DOF and 3 rotational DOF, a total of 6 DOF.
 //! Below is an example of configuring [`JointFrame`]s for a [`RevoluteJoint`].
 //!
 //! ```
-#![cfg_attr(feature = "2d", doc = "# use avian2d::prelude::*;")]
-#![cfg_attr(feature = "3d", doc = "# use avian3d::prelude::*;")]
+#![cfg_attr(feature = "2d", doc = "# use avian2d::{math::RVec2, prelude::*};")]
+#![cfg_attr(feature = "3d", doc = "# use avian3d::{math::RVec3, prelude::*};")]
 //! # use bevy::prelude::*;
 //! # use core::f32::consts::PI;
 //! #
-//! # #[cfg(feature = "f32")]
 //! # fn setup(mut commands: Commands) {
 //! #     let body1 = commands.spawn(RigidBody::Dynamic).id();
 //! #     let body2 = commands.spawn(RigidBody::Dynamic).id();
@@ -93,8 +92,11 @@ Therefore, they have 3 translational DOF and 3 rotational DOF, a total of 6 DOF.
 //! // Set the global anchor point and rotate the first frame by 45 degrees about the local z axis.
 //! commands.spawn((
 //!     RevoluteJoint::new(body1, body2)
-#![cfg_attr(feature = "2d", doc = "        .with_anchor(Vec2::new(5.0, 2.0))")]
-#![cfg_attr(feature = "3d", doc = "        .with_anchor(Vec3::new(5.0, 2.0, 0.0))")]
+#![cfg_attr(feature = "2d", doc = "        .with_anchor(RVec2::new(5.0, 2.0))")]
+#![cfg_attr(
+    feature = "3d",
+    doc = "        .with_anchor(RVec3::new(5.0, 2.0, 0.0))"
+)]
 #![cfg_attr(feature = "2d", doc = "        .with_local_basis1(PI / 4.0),")]
 #![cfg_attr(
     feature = "3d",
@@ -188,7 +190,6 @@ Therefore, they have 3 translational DOF and 3 rotational DOF, a total of 6 DOF.
 //! #
 //! const BREAK_THRESHOLD: f32 = 500.0; // Example threshold
 //!
-//! # #[cfg(feature = "f32")]
 //! fn break_joints(
 //!     mut commands: Commands,
 //!     query: Query<(Entity, &JointForces), Without<JointDisabled>>,
@@ -236,6 +237,9 @@ use bevy::{
     prelude::*,
 };
 
+#[cfg(feature = "3d")]
+use core::f32::consts::{PI, TAU};
+
 /// A plugin for managing and initializing [joints](self).
 ///
 /// Note that this does *not* include the actual joint constraint solver.
@@ -282,14 +286,14 @@ pub trait EntityConstraint<const ENTITY_COUNT: usize>: MapEntities {
 #[reflect(Debug, PartialEq)]
 pub struct DistanceLimit {
     /// The minimum distance between two points.
-    pub min: Scalar,
+    pub min: f32,
     /// The maximum distance between two points.
-    pub max: Scalar,
+    pub max: f32,
 }
 
-impl From<Scalar> for DistanceLimit {
+impl From<f32> for DistanceLimit {
     /// Converts the given `limit` into a [`DistanceLimit`] where `min == max`.
-    fn from(limit: Scalar) -> DistanceLimit {
+    fn from(limit: f32) -> DistanceLimit {
         DistanceLimit {
             min: limit,
             max: limit,
@@ -297,16 +301,16 @@ impl From<Scalar> for DistanceLimit {
     }
 }
 
-impl From<[Scalar; 2]> for DistanceLimit {
+impl From<[f32; 2]> for DistanceLimit {
     /// Converts the given `[min, max]` array into a [`DistanceLimit`].
-    fn from([min, max]: [Scalar; 2]) -> DistanceLimit {
+    fn from([min, max]: [f32; 2]) -> DistanceLimit {
         DistanceLimit { min, max }
     }
 }
 
-impl From<(Scalar, Scalar)> for DistanceLimit {
+impl From<(f32, f32)> for DistanceLimit {
     /// Converts the given `(min, max)` pair into a [`DistanceLimit`].
-    fn from((min, max): (Scalar, Scalar)) -> DistanceLimit {
+    fn from((min, max): (f32, f32)) -> DistanceLimit {
         DistanceLimit { min, max }
     }
 }
@@ -316,16 +320,16 @@ impl DistanceLimit {
     pub const ZERO: Self = Self { min: 0.0, max: 0.0 };
 
     /// Creates a new `DistanceLimit`.
-    pub const fn new(min: Scalar, max: Scalar) -> Self {
+    pub const fn new(min: f32, max: f32) -> Self {
         Self { min, max }
     }
 
     /// Returns the direction and magnitude of the positional correction required
     /// to limit the given `separation` to be within the distance limit.
-    pub fn compute_correction(&self, separation: Vector) -> (Vector, Scalar) {
+    pub fn compute_correction(&self, separation: Vector) -> (Vector, f32) {
         let distance_squared = separation.length_squared();
 
-        if distance_squared <= Scalar::EPSILON {
+        if distance_squared <= f32::EPSILON {
             return (Vector::ZERO, 0.0);
         }
 
@@ -368,14 +372,14 @@ impl DistanceLimit {
 #[reflect(Debug, PartialEq)]
 pub struct AngleLimit {
     /// The minimum angle.
-    pub min: Scalar,
+    pub min: f32,
     /// The maximum angle.
-    pub max: Scalar,
+    pub max: f32,
 }
 
-impl From<Scalar> for AngleLimit {
+impl From<f32> for AngleLimit {
     /// Converts the given `limit` into a [`AngleLimit`] where `min == max`.
-    fn from(limit: Scalar) -> AngleLimit {
+    fn from(limit: f32) -> AngleLimit {
         AngleLimit {
             min: limit,
             max: limit,
@@ -383,16 +387,16 @@ impl From<Scalar> for AngleLimit {
     }
 }
 
-impl From<[Scalar; 2]> for AngleLimit {
+impl From<[f32; 2]> for AngleLimit {
     /// Converts the given `[min, max]` array into a [`AngleLimit`].
-    fn from([min, max]: [Scalar; 2]) -> AngleLimit {
+    fn from([min, max]: [f32; 2]) -> AngleLimit {
         AngleLimit { min, max }
     }
 }
 
-impl From<(Scalar, Scalar)> for AngleLimit {
+impl From<(f32, f32)> for AngleLimit {
     /// Converts the given `(min, max)` pair into a [`AngleLimit`].
-    fn from((min, max): (Scalar, Scalar)) -> AngleLimit {
+    fn from((min, max): (f32, f32)) -> AngleLimit {
         AngleLimit { min, max }
     }
 }
@@ -402,18 +406,14 @@ impl AngleLimit {
     pub const ZERO: Self = Self { min: 0.0, max: 0.0 };
 
     /// Creates a new `AngleLimit`.
-    pub const fn new(min: Scalar, max: Scalar) -> Self {
+    pub const fn new(min: f32, max: f32) -> Self {
         Self { min, max }
     }
 
     /// Returns the angular correction required to limit the `angle_difference`
     /// to be within the angle limits.
     #[cfg(feature = "2d")]
-    pub fn compute_correction(
-        &self,
-        angle_difference: Scalar,
-        max_correction: Scalar,
-    ) -> Option<Scalar> {
+    pub fn compute_correction(&self, angle_difference: f32, max_correction: f32) -> Option<f32> {
         let correction = if angle_difference < self.min {
             angle_difference - self.min
         } else if angle_difference > self.max {
@@ -433,7 +433,7 @@ impl AngleLimit {
         limit_axis: Vector,
         axis1: Vector,
         axis2: Vector,
-        max_correction: Scalar,
+        max_correction: f32,
     ) -> Option<Vector> {
         // [limit_axis, axis1, axis2] = [n, n1, n2] in XPBD rigid body paper.
 
@@ -467,7 +467,7 @@ impl AngleLimit {
             phi = phi.clamp(self.min, self.max);
 
             // Create a quaternion that represents the rotation.
-            let rot = Quaternion::from_axis_angle(limit_axis, phi);
+            let rot = Quat::from_axis_angle(limit_axis, phi);
 
             // Rotate axis1 by the target angle and compute the correction.
             return Some((rot * axis1).cross(axis2).clamp_length_max(max_correction));
@@ -498,7 +498,6 @@ impl AngleLimit {
 /// #
 /// const BREAK_THRESHOLD: f32 = 500.0;
 ///
-/// # #[cfg(feature = "f32")]
 /// fn break_joints(
 ///     mut commands: Commands,
 ///     query: Query<(Entity, &JointForces), Without<JointDisabled>>,
@@ -610,9 +609,9 @@ impl JointCollisionDisabled {
 #[reflect(Component, Debug, PartialEq)]
 pub struct JointDamping {
     /// Linear damping applied by the joint.
-    pub linear: Scalar,
+    pub linear: f32,
     /// Angular damping applied by the joint.
-    pub angular: Scalar,
+    pub angular: f32,
 }
 
 /// A component for reading the force and torque exerted by a [joint](self).
@@ -664,7 +663,7 @@ pub struct JointDamping {
 pub struct JointForces {
     force: Vector,
     torque: AngularVector,
-    motor_force: Scalar,
+    motor_force: f32,
 }
 
 impl JointForces {
@@ -673,7 +672,10 @@ impl JointForces {
     pub const fn new() -> Self {
         Self {
             force: Vector::ZERO,
-            torque: AngularVector::ZERO,
+            #[cfg(feature = "2d")]
+            torque: 0.0,
+            #[cfg(feature = "3d")]
+            torque: Vector::ZERO,
             motor_force: 0.0,
         }
     }
@@ -695,7 +697,7 @@ impl JointForces {
     /// For angular motors ([`AngularMotor`]), this is the torque in N·m.
     /// For linear motors ([`LinearMotor`]), this is the force in N.
     #[inline]
-    pub const fn motor_force(&self) -> Scalar {
+    pub const fn motor_force(&self) -> f32 {
         self.motor_force
     }
 
@@ -719,7 +721,7 @@ impl JointForces {
     ///
     /// This should be done automatically by the joint solver.
     #[inline]
-    pub const fn set_motor_force(&mut self, motor_force: Scalar) {
+    pub const fn set_motor_force(&mut self, motor_force: f32) {
         self.motor_force = motor_force;
     }
 }
@@ -746,12 +748,11 @@ impl JointForces {
 /// # Example
 ///
 /// ```
-#[cfg_attr(feature = "2d", doc = "# use avian2d::prelude::*;")]
-#[cfg_attr(feature = "3d", doc = "# use avian3d::prelude::*;")]
+#[cfg_attr(feature = "2d", doc = "# use avian2d::{math::RVec2, prelude::*};")]
+#[cfg_attr(feature = "3d", doc = "# use avian3d::{math::RVec3, prelude::*};")]
 /// # use bevy::prelude::*;
 /// # use core::f32::consts::PI;
 /// #
-/// # #[cfg(feature = "f32")]
 /// # fn setup(mut commands: Commands) {
 /// #     let body1 = commands.spawn(RigidBody::Dynamic).id();
 /// #     let body2 = commands.spawn(RigidBody::Dynamic).id();
@@ -760,8 +761,11 @@ impl JointForces {
 /// // Set the global anchor point and rotate the first frame by 45 degrees about the local z axis.
 /// commands.spawn((
 ///     RevoluteJoint::new(body1, body2)
-#[cfg_attr(feature = "2d", doc = "        .with_anchor(Vec2::new(5.0, 2.0))")]
-#[cfg_attr(feature = "3d", doc = "        .with_anchor(Vec3::new(5.0, 2.0, 0.0))")]
+#[cfg_attr(feature = "2d", doc = "        .with_anchor(RVec2::new(5.0, 2.0))")]
+#[cfg_attr(
+    feature = "3d",
+    doc = "        .with_anchor(RVec3::new(5.0, 2.0, 0.0))"
+)]
 #[cfg_attr(feature = "2d", doc = "        .with_local_basis1(PI / 4.0),")]
 #[cfg_attr(
     feature = "3d",
@@ -799,18 +803,12 @@ impl JointFrame {
     pub fn local(isometry: impl Into<Isometry>) -> Self {
         let isometry: Isometry = isometry.into();
         #[cfg(feature = "2d")]
-        let anchor = isometry.translation.adjust_precision();
+        let anchor = isometry.translation;
         #[cfg(feature = "3d")]
-        let anchor = Vec3::from(isometry.translation).adjust_precision();
+        let anchor = Vec3::from(isometry.translation);
         Self {
             anchor: JointAnchor::Local(anchor),
-            #[cfg(feature = "2d")]
-            basis: JointBasis::Local(Rotation::from_sin_cos(
-                isometry.rotation.sin as Scalar,
-                isometry.rotation.cos as Scalar,
-            )),
-            #[cfg(feature = "3d")]
-            basis: JointBasis::Local(isometry.rotation.adjust_precision()),
+            basis: JointBasis::Local(isometry.rotation),
         }
     }
 
@@ -822,18 +820,12 @@ impl JointFrame {
     pub fn global(isometry: impl Into<Isometry>) -> Self {
         let isometry: Isometry = isometry.into();
         #[cfg(feature = "2d")]
-        let anchor = isometry.translation.adjust_precision();
+        let anchor = isometry.translation.real();
         #[cfg(feature = "3d")]
-        let anchor = Vec3::from(isometry.translation).adjust_precision();
+        let anchor = Vec3::from(isometry.translation).real();
         Self {
             anchor: JointAnchor::FromGlobal(anchor),
-            #[cfg(feature = "2d")]
-            basis: JointBasis::FromGlobal(Rotation::from_sin_cos(
-                isometry.rotation.sin as Scalar,
-                isometry.rotation.cos as Scalar,
-            )),
-            #[cfg(feature = "3d")]
-            basis: JointBasis::FromGlobal(isometry.rotation.adjust_precision()),
+            basis: JointBasis::FromGlobal(isometry.rotation),
         }
     }
 
@@ -844,14 +836,11 @@ impl JointFrame {
     #[allow(clippy::unnecessary_cast)]
     pub fn get_local_isometry(&self) -> Option<Isometry> {
         let translation = match self.anchor {
-            JointAnchor::Local(anchor) => anchor.f32(),
+            JointAnchor::Local(anchor) => anchor,
             JointAnchor::FromGlobal(_) => return None,
         };
         let rotation = match self.basis {
-            #[cfg(feature = "2d")]
-            JointBasis::Local(basis) => Rot2::from_sin_cos(basis.sin as f32, basis.cos as f32),
-            #[cfg(feature = "3d")]
-            JointBasis::Local(basis) => basis.f32(),
+            JointBasis::Local(basis) => basis,
             JointBasis::FromGlobal(_) => return None,
         };
         Some(Isometry::new(translation, rotation))
@@ -868,10 +857,7 @@ impl JointFrame {
             JointAnchor::Local(_) => return None,
         };
         let rotation = match self.basis {
-            #[cfg(feature = "2d")]
-            JointBasis::FromGlobal(basis) => Rot2::from_sin_cos(basis.sin as f32, basis.cos as f32),
-            #[cfg(feature = "3d")]
-            JointBasis::FromGlobal(basis) => basis.f32(),
+            JointBasis::FromGlobal(basis) => basis,
             JointBasis::Local(_) => return None,
         };
         Some(Isometry::new(translation, rotation))
@@ -886,11 +872,14 @@ impl JointFrame {
     pub fn compute_local(
         frame1: Self,
         frame2: Self,
-        pos1: Vector,
-        pos2: Vector,
-        rot1: &Rotation,
-        rot2: &Rotation,
+        pos1: RVector,
+        pos2: RVector,
+        rot1: impl Into<Rot>,
+        rot2: impl Into<Rot>,
     ) -> [JointFrame; 2] {
+        let rot1 = rot1.into();
+        let rot2 = rot2.into();
+
         let [local_anchor1, local_anchor2] =
             JointAnchor::compute_local(frame1.anchor, frame2.anchor, pos1, pos2, rot1, rot2);
         let [local_basis1, local_basis2] =
@@ -926,7 +915,7 @@ pub enum JointAnchor {
     /// The anchor point is specified in local coordinates relative to the body transform.
     Local(Vector),
     /// The anchor point is specified in global coordinates.
-    FromGlobal(Vector),
+    FromGlobal(RVector),
 }
 
 impl Default for JointAnchor {
@@ -946,28 +935,31 @@ impl JointAnchor {
     pub fn compute_local(
         anchor1: Self,
         anchor2: Self,
-        pos1: Vector,
-        pos2: Vector,
-        rot1: &Rotation,
-        rot2: &Rotation,
+        pos1: RVector,
+        pos2: RVector,
+        rot1: impl Into<Rot>,
+        rot2: impl Into<Rot>,
     ) -> [Self; 2] {
+        let rot1 = rot1.into();
+        let rot2 = rot2.into();
+
         let [local_anchor1, local_anchor2] = match [anchor1, anchor2] {
             [JointAnchor::Local(anchor1), JointAnchor::Local(anchor2)] => [anchor1, anchor2],
             [
                 JointAnchor::FromGlobal(anchor1),
                 JointAnchor::FromGlobal(anchor2),
             ] => [
-                rot1.inverse() * (anchor1 - pos1),
-                rot2.inverse() * (anchor2 - pos2),
+                rot1.inverse() * (anchor1 - pos1).f32(),
+                rot2.inverse() * (anchor2 - pos2).f32(),
             ],
             [
                 JointAnchor::Local(anchor1),
                 JointAnchor::FromGlobal(anchor2),
-            ] => [anchor1, rot2.inverse() * (anchor2 - pos2)],
+            ] => [anchor1, rot2.inverse() * (anchor2 - pos2).f32()],
             [
                 JointAnchor::FromGlobal(anchor1),
                 JointAnchor::Local(anchor2),
-            ] => [rot1.inverse() * (anchor1 - pos1), anchor2],
+            ] => [rot1.inverse() * (anchor1 - pos1).f32(), anchor2],
         };
 
         [
@@ -1023,11 +1015,8 @@ impl JointBasis {
     /// The y-axis is computed as the counterclockwise perpendicular axis to the x-axis.
     #[inline]
     #[cfg(feature = "2d")]
-    pub fn from_local_x(x_axis: Vector) -> Self {
-        Self::Local(orthonormal_basis([
-            x_axis,
-            Vector::new(-x_axis.y, x_axis.x),
-        ]))
+    pub fn from_local_x(x_axis: Vec2) -> Self {
+        Self::Local(orthonormal_basis([x_axis, Vec2::new(-x_axis.y, x_axis.x)]))
     }
 
     /// Creates a [`JointBasis::Local`] from the given local `y_axis`.
@@ -1035,11 +1024,8 @@ impl JointBasis {
     /// The x-axis is computed as the clockwise perpendicular axis to the y-axis.
     #[inline]
     #[cfg(feature = "2d")]
-    pub fn from_local_y(y_axis: Vector) -> Self {
-        Self::Local(orthonormal_basis([
-            Vector::new(y_axis.y, -y_axis.x),
-            y_axis,
-        ]))
+    pub fn from_local_y(y_axis: Vec2) -> Self {
+        Self::Local(orthonormal_basis([Vec2::new(y_axis.y, -y_axis.x), y_axis]))
     }
 
     /// Creates a [`JointBasis::Local`] from the given local `x_axis` and `y_axis`.
@@ -1047,7 +1033,7 @@ impl JointBasis {
     /// The z-axis is computed as the cross product of the x and y axes.
     #[inline]
     #[cfg(feature = "3d")]
-    pub fn from_local_xy(x_axis: Vector, y_axis: Vector) -> Self {
+    pub fn from_local_xy(x_axis: Vec3, y_axis: Vec3) -> Self {
         Self::Local(orthonormal_basis([x_axis, y_axis, x_axis.cross(y_axis)]))
     }
 
@@ -1056,7 +1042,7 @@ impl JointBasis {
     /// The y-axis is computed as the cross product of the z and x axes.
     #[inline]
     #[cfg(feature = "3d")]
-    pub fn from_local_xz(x_axis: Vector, z_axis: Vector) -> Self {
+    pub fn from_local_xz(x_axis: Vec3, z_axis: Vec3) -> Self {
         Self::Local(orthonormal_basis([x_axis, z_axis.cross(x_axis), z_axis]))
     }
 
@@ -1065,7 +1051,7 @@ impl JointBasis {
     /// The x-axis is computed as the cross product of the y and z axes.
     #[inline]
     #[cfg(feature = "3d")]
-    pub fn from_local_yz(y_axis: Vector, z_axis: Vector) -> Self {
+    pub fn from_local_yz(y_axis: Vec3, z_axis: Vec3) -> Self {
         Self::Local(orthonormal_basis([y_axis.cross(z_axis), y_axis, z_axis]))
     }
 
@@ -1074,11 +1060,8 @@ impl JointBasis {
     /// The y-axis is computed as the counterclockwise perpendicular axis to the x-axis.
     #[inline]
     #[cfg(feature = "2d")]
-    pub fn from_global_x(x_axis: Vector) -> Self {
-        Self::FromGlobal(orthonormal_basis([
-            x_axis,
-            Vector::new(-x_axis.y, x_axis.x),
-        ]))
+    pub fn from_global_x(x_axis: Vec2) -> Self {
+        Self::FromGlobal(orthonormal_basis([x_axis, Vec2::new(-x_axis.y, x_axis.x)]))
     }
 
     /// Creates a [`JointBasis::FromGlobal`] from the given global `y_axis`.
@@ -1086,11 +1069,8 @@ impl JointBasis {
     /// The x-axis is computed as the clockwise perpendicular axis to the y-axis.
     #[inline]
     #[cfg(feature = "2d")]
-    pub fn from_global_y(y_axis: Vector) -> Self {
-        Self::FromGlobal(orthonormal_basis([
-            Vector::new(y_axis.y, -y_axis.x),
-            y_axis,
-        ]))
+    pub fn from_global_y(y_axis: Vec2) -> Self {
+        Self::FromGlobal(orthonormal_basis([Vec2::new(y_axis.y, -y_axis.x), y_axis]))
     }
 
     /// Creates a [`JointBasis::FromGlobal`] from the given global `x_axis` and `y_axis`.
@@ -1098,7 +1078,7 @@ impl JointBasis {
     /// The z-axis is computed as the cross product of the x and y axes.
     #[inline]
     #[cfg(feature = "3d")]
-    pub fn from_global_xy(x_axis: Vector, y_axis: Vector) -> Self {
+    pub fn from_global_xy(x_axis: Vec3, y_axis: Vec3) -> Self {
         Self::FromGlobal(orthonormal_basis([x_axis, y_axis, x_axis.cross(y_axis)]))
     }
 
@@ -1107,7 +1087,7 @@ impl JointBasis {
     /// The y-axis is computed as the cross product of the z and x axes.
     #[inline]
     #[cfg(feature = "3d")]
-    pub fn from_global_xz(x_axis: Vector, z_axis: Vector) -> Self {
+    pub fn from_global_xz(x_axis: Vec3, z_axis: Vec3) -> Self {
         Self::FromGlobal(orthonormal_basis([x_axis, z_axis.cross(x_axis), z_axis]))
     }
 
@@ -1116,13 +1096,21 @@ impl JointBasis {
     /// The x-axis is computed as the cross product of the y and z axes.
     #[inline]
     #[cfg(feature = "3d")]
-    pub fn from_global_yz(y_axis: Vector, z_axis: Vector) -> Self {
+    pub fn from_global_yz(y_axis: Vec3, z_axis: Vec3) -> Self {
         Self::FromGlobal(orthonormal_basis([y_axis.cross(z_axis), y_axis, z_axis]))
     }
 
     /// Computes a [`JointBasis::Local`] for the given [`JointBasis`]s
     /// corresponding to the transforms of two bodies constrained by a joint.
-    pub fn compute_local(rotation1: Self, rotation2: Self, rot1: &Rot, rot2: &Rot) -> [Self; 2] {
+    pub fn compute_local(
+        rotation1: Self,
+        rotation2: Self,
+        rot1: impl Into<Rot>,
+        rot2: impl Into<Rot>,
+    ) -> [Self; 2] {
+        let rot1 = rot1.into();
+        let rot2 = rot2.into();
+
         let [local_basis1, local_basis2] = match [rotation1, rotation2] {
             [JointBasis::Local(basis1), JointBasis::Local(basis2)] => [basis1, basis2],
             [

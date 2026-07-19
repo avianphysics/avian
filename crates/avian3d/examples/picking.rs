@@ -8,7 +8,7 @@
 
 use core::f32::consts::PI;
 
-use avian3d::{math::Vector, prelude::*};
+use avian3d::prelude::*;
 use bevy::{color::palettes::tailwind::*, picking::pointer::PointerInteraction, prelude::*};
 
 fn main() {
@@ -85,7 +85,7 @@ fn setup_scene(
                 MeshMaterial3d(white_matl.clone()),
                 RigidBody::Kinematic,
                 collider,
-                AngularVelocity(Vector::new(0.0, 0.5, 0.0)),
+                AngularVelocity(Vec3::new(0.0, 0.5, 0.0)),
                 Transform::from_xyz(
                     -SHAPES_X_EXTENT / 2. + i as f32 / (num_shapes - 1) as f32 * SHAPES_X_EXTENT,
                     2.0,

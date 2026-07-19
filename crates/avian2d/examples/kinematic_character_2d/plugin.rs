@@ -1,3 +1,5 @@
+use core::f32::consts::PI;
+
 use avian2d::{math::*, prelude::*};
 use bevy::{ecs::query::Has, prelude::*};
 
@@ -31,7 +33,7 @@ impl Plugin for CharacterControllerPlugin {
 /// A [`Message`] written for a movement input action.
 #[derive(Message)]
 pub enum MovementAction {
-    Move(Scalar),
+    Move(f32),
     Jump,
 }
 
@@ -48,16 +50,16 @@ pub struct CharacterController;
 #[derive(Component)]
 pub struct CharacterMovementSettings {
     /// The acceleration used for character movement.
-    pub acceleration: Scalar,
+    pub acceleration: f32,
     /// The damping coefficient used for slowing down movement.
-    pub damping: Scalar,
+    pub damping: f32,
     /// The strength of a jump.
-    pub jump_impulse: Scalar,
+    pub jump_impulse: f32,
     /// The gravitational acceleration used for the character.
-    pub gravity: Vector,
+    pub gravity: Vec2,
     /// The maximum speed that gravity can accelerate the character to.
     /// This prevents the character from accelerating indefinitely while falling.
-    pub terminal_velocity: Scalar,
+    pub terminal_velocity: f32,
 }
 
 impl Default for CharacterMovementSettings {
@@ -66,7 +68,7 @@ impl Default for CharacterMovementSettings {
             acceleration: 3500.0,
             damping: 15.0,
             jump_impulse: 400.0,
-            gravity: Vector::new(0.0, -1500.0),
+            gravity: Vec2::new(0.0, -1500.0),
             terminal_velocity: 1000.0,
         }
     }
@@ -79,9 +81,9 @@ pub struct GroundDetection {
     /// relative to the up-direction. Outside of this angle, surfaces are considered walls.
     ///
     /// **Default**: 30 degrees (π / 6 radians)
-    pub max_angle: Scalar,
+    pub max_angle: f32,
     /// The maximum distance for ground detection.
-    pub max_distance: Scalar,
+    pub max_distance: f32,
     /// The shape cast collider used for ground detection.
     pub cast_shape: Option<Collider>,
 }
@@ -115,11 +117,11 @@ pub struct CharacterCollision {
     /// The collider that was hit by the character.
     pub collider: Entity,
     /// The point of contact in world space.
-    pub point: Vector,
+    pub point: RVec2,
     /// The normal of the contact surface, pointing away from the character.
     pub normal: Dir2,
     /// The velocity of the character at the point of contact.
-    pub character_velocity: Vector,
+    pub character_velocity: Vec2,
 }
 
 /// Sends [`MovementAction`] events based on keyboard input.
@@ -131,7 +133,7 @@ fn keyboard_input(
     let right = keyboard_input.any_pressed([KeyCode::KeyD, KeyCode::ArrowRight]);
 
     let horizontal = right as i8 - left as i8;
-    let direction = horizontal as Scalar;
+    let direction = horizontal as f32;
 
     if direction != 0.0 {
         movement_writer.write(MovementAction::Move(direction));
@@ -146,7 +148,7 @@ fn keyboard_input(
 fn gamepad_input(mut movement_writer: MessageWriter<MovementAction>, gamepads: Query<&Gamepad>) {
     for gamepad in gamepads.iter() {
         if let Some(x) = gamepad.get(GamepadAxis::LeftStickX) {
-            movement_writer.write(MovementAction::Move(x as Scalar));
+            movement_writer.write(MovementAction::Move(x));
         }
 
         if gamepad.just_pressed(GamepadButton::South) {
@@ -170,8 +172,8 @@ fn update_grounded(
         // Cast the shape downward to check for ground
         let hit = spatial_query.cast_shape(
             collider,
-            global_transform.translation().xy().adjust_precision(),
-            rotation.as_radians(),
+            global_transform.translation().xy().real(),
+            rotation,
             Dir2::new_unchecked(global_transform.down().xy()),
             &ShapeCastConfig::from_max_distance(ground_detection.max_distance),
             &SpatialQueryFilter::from_excluded_entities([entity]),
@@ -179,8 +181,8 @@ fn update_grounded(
 
         // The character is grounded if we hit a surface that isn't too steep
         let is_grounded = hit.is_some_and(|hit| {
-            let up = global_transform.up().xy().adjust_precision();
-            (rotation * hit.normal1).angle_to(up).abs() <= ground_detection.max_angle
+            let up = global_transform.up().xy();
+            (rotation * hit.normal).angle_to(up).abs() <= ground_detection.max_angle
         });
 
         // Update grounded state
@@ -202,7 +204,7 @@ fn movement(
         Has<Grounded>,
     )>,
 ) {
-    let delta_secs = time.delta_secs_f64().adjust_precision();
+    let delta_secs = time.delta_secs();
 
     for event in movement_reader.read() {
         for (movement, mut linear_velocity, is_grounded) in &mut controllers {
@@ -225,7 +227,7 @@ fn apply_gravity(
     time: Res<Time>,
     mut controllers: Query<(&CharacterMovementSettings, &mut LinearVelocity)>,
 ) {
-    let delta_secs = time.delta_secs_f64().adjust_precision();
+    let delta_secs = time.delta_secs();
 
     for (movement, mut linear_velocity) in &mut controllers {
         let gravity_direction = movement.gravity.normalize_or_zero();
@@ -254,7 +256,7 @@ fn apply_movement_damping(
     mut query: Query<(&CharacterMovementSettings, &mut LinearVelocity)>,
     time: Res<Time>,
 ) {
-    let delta_secs = time.delta_secs_f64().adjust_precision();
+    let delta_secs = time.delta_secs();
 
     for (movement, mut linear_velocity) in &mut query {
         // Approximate exponential decay. We could use `LinearDamping` for this,
@@ -293,7 +295,7 @@ fn move_and_slide(
             collisions.0.clear();
         }
 
-        let up = transform.up().xy().adjust_precision();
+        let up = transform.up().xy();
 
         // Perform move-and-slide
         let MoveAndSlideOutput {
@@ -301,8 +303,8 @@ fn move_and_slide(
             projected_velocity,
         } = move_and_slide.move_and_slide(
             collider,
-            transform.translation.xy().adjust_precision(),
-            Rotation::from(transform.rotation).as_radians(),
+            transform.translation.xy().real(),
+            Rotation::from(transform.rotation),
             lin_vel.0,
             time.delta(),
             &MoveAndSlideConfig::default(),
@@ -318,7 +320,7 @@ fn move_and_slide(
                 };
 
                 // Determine if the surface is ground based on the angle between the up-vector and the hit normal.
-                let angle = up.angle_to(hit.normal.adjust_precision()).abs();
+                let angle = up.angle_to(**hit.normal).abs();
                 let is_ground = angle <= ground_detection.max_angle;
                 let is_ceiling = angle >= PI - ground_detection.max_angle;
 
@@ -388,7 +390,7 @@ fn move_and_slide(
         // to prevent accumulating velocity along the ground normal when hitting slopes,
         // and to prevent sticking to ceilings when jumping.
         if hit_ground_or_ceiling {
-            let up = transform.up().xy().adjust_precision();
+            let up = transform.up().xy();
             let velocity_along_up = lin_vel.dot(up);
             let new_velocity_along_up = projected_velocity.dot(up);
             lin_vel.0 += (new_velocity_along_up - velocity_along_up) * up;
@@ -402,14 +404,13 @@ fn move_and_slide(
 #[derive(Debug)]
 struct VelocityDecomposition {
     /// The part of the velocity that is directly against the collision normal.
-    normal_part: Vector,
+    normal_part: Vec2,
     /// The part of the velocity that is tangent to the collision surface.
-    tangent_part: Vector,
+    tangent_part: Vec2,
 }
 
 /// Decomposes a velocity vector into parts relative to a collision `normal`.
-fn decompose_hit_velocity(velocity: Vector, normal: Dir) -> VelocityDecomposition {
-    let normal = normal.adjust_precision();
+fn decompose_hit_velocity(velocity: Vec2, normal: Dir2) -> VelocityDecomposition {
     let normal_part = normal * normal.dot(velocity);
     let tangent_part = velocity - normal_part;
 
@@ -420,7 +421,7 @@ fn decompose_hit_velocity(velocity: Vector, normal: Dir) -> VelocityDecompositio
 }
 
 /// Splits a vector into horizontal and vertical components relative to a given `up` direction.
-fn split_into_components(v: Vector, up: Vector) -> [Vector; 2] {
+fn split_into_components(v: Vec2, up: Vec2) -> [Vec2; 2] {
     let vertical_component = up * v.dot(up);
     let horizontal_component = v - vertical_component;
     [horizontal_component, vertical_component]
@@ -445,7 +446,7 @@ fn apply_forces_to_dynamic_bodies(
                 continue;
             }
 
-            let touch_dir = -collision.normal.adjust_precision();
+            let touch_dir = -collision.normal;
             let relative_velocity = collision.character_velocity - forces.linear_velocity();
             let touch_velocity = touch_dir.dot(relative_velocity) * touch_dir;
             let impulse = touch_velocity * mass;

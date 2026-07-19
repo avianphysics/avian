@@ -8,6 +8,8 @@ use crate::{
 };
 use bevy::prelude::*;
 
+use core::f32::consts::PI;
+
 /// Constraint data required by the XPBD constraint solver for a [`SphericalJoint`].
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
@@ -15,26 +17,26 @@ use bevy::prelude::*;
 #[reflect(Component, Debug, PartialEq)]
 pub struct SphericalJointSolverData {
     pub(super) point_constraint: PointConstraintShared,
-    pub(super) swing_axis1: Vector,
-    pub(super) swing_axis2: Vector,
-    pub(super) twist_axis1: Vector,
-    pub(super) twist_axis2: Vector,
-    pub(super) total_swing_lagrange: Vector,
-    pub(super) total_twist_lagrange: Vector,
+    pub(super) swing_axis1: Vec3,
+    pub(super) swing_axis2: Vec3,
+    pub(super) twist_axis1: Vec3,
+    pub(super) twist_axis2: Vec3,
+    pub(super) total_swing_lagrange: Vec3,
+    pub(super) total_twist_lagrange: Vec3,
 }
 
 impl XpbdConstraintSolverData for SphericalJointSolverData {
     fn clear_lagrange_multipliers(&mut self) {
         self.point_constraint.clear_lagrange_multipliers();
-        self.total_swing_lagrange = Vector::ZERO;
-        self.total_twist_lagrange = Vector::ZERO;
+        self.total_swing_lagrange = Vec3::ZERO;
+        self.total_twist_lagrange = Vec3::ZERO;
     }
 
-    fn total_position_lagrange(&self) -> Vector {
+    fn total_position_lagrange(&self) -> Vec3 {
         self.point_constraint.total_position_lagrange()
     }
 
-    fn total_rotation_lagrange(&self) -> AngularVector {
+    fn total_rotation_lagrange(&self) -> Vec3 {
         self.total_swing_lagrange + self.total_twist_lagrange
     }
 }
@@ -63,14 +65,14 @@ impl XpbdConstraint<2> for SphericalJoint {
         };
 
         // Compute the rotation matrices since we're performing so many rotations.
-        let rot1_mat = Matrix::from_quat(body1.rotation.0);
-        let rot2_mat = Matrix::from_quat(body2.rotation.0);
+        let rot1_mat = Mat3::from_quat(body1.rotation.0);
+        let rot2_mat = Mat3::from_quat(body2.rotation.0);
 
         // Prepare the point-to-point constraint.
         let point_constraint = &mut solver_data.point_constraint;
         point_constraint.world_r1 = rot1_mat * (local_anchor1 - body1.center_of_mass.0);
         point_constraint.world_r2 = rot2_mat * (local_anchor2 - body2.center_of_mass.0);
-        point_constraint.center_difference = (body2.position.0 - body1.position.0)
+        point_constraint.center_difference = (body2.position.0 - body1.position.0).f32()
             + (body2.rotation * body2.center_of_mass.0 - body1.rotation * body1.center_of_mass.0);
 
         // Prepare the base swing and twist axes.
@@ -86,7 +88,7 @@ impl XpbdConstraint<2> for SphericalJoint {
         bodies: [&mut SolverBody; 2],
         inertias: [&SolverBodyInertia; 2],
         solver_data: &mut SphericalJointSolverData,
-        dt: Scalar,
+        dt: f32,
     ) {
         let [body1, body2] = bodies;
         let [inertia1, inertia2] = inertias;
@@ -116,7 +118,7 @@ impl SphericalJoint {
         inertia1: &SolverBodyInertia,
         inertia2: &SolverBodyInertia,
         solver_data: &mut SphericalJointSolverData,
-        dt: Scalar,
+        dt: f32,
     ) {
         if let Some(joint_limit) = self.swing_limit {
             let a1 = body1.delta_rotation * solver_data.swing_axis1;
@@ -125,7 +127,7 @@ impl SphericalJoint {
             let n = a1.cross(a2);
             let n_magnitude = n.length();
 
-            if n_magnitude <= Scalar::EPSILON {
+            if n_magnitude <= f32::EPSILON {
                 return;
             }
 
@@ -157,7 +159,7 @@ impl SphericalJoint {
         inertia1: &SolverBodyInertia,
         inertia2: &SolverBodyInertia,
         solver_data: &mut SphericalJointSolverData,
-        dt: Scalar,
+        dt: f32,
     ) {
         if let Some(joint_limit) = self.twist_limit {
             let a1 = body1.delta_rotation * solver_data.swing_axis1;
@@ -166,7 +168,7 @@ impl SphericalJoint {
             let n = a1 + a2;
             let n_magnitude = n.length();
 
-            if n_magnitude <= Scalar::EPSILON {
+            if n_magnitude <= f32::EPSILON {
                 return;
             }
 
@@ -180,7 +182,7 @@ impl SphericalJoint {
             let n1_magnitude = n1.length();
             let n2_magnitude = n2.length();
 
-            if n1_magnitude <= Scalar::EPSILON || n2_magnitude <= Scalar::EPSILON {
+            if n1_magnitude <= f32::EPSILON || n2_magnitude <= f32::EPSILON {
                 return;
             }
 

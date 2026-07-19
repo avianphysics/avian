@@ -135,10 +135,7 @@ impl<C: ScalableCollider> Plugin for ColliderBackendPlugin<C> {
                 // Make sure the collider is initialized with the correct scale.
                 // This overwrites the scale set by the constructor, but that one is
                 // meant to be only changed after initialization.
-                entity_mut
-                    .get_mut::<C>()
-                    .unwrap()
-                    .set_scale(scale.adjust_precision(), 10);
+                entity_mut.get_mut::<C>().unwrap().set_scale(scale, 10);
 
                 let collider = entity_mut.get::<C>().unwrap();
 
@@ -474,9 +471,9 @@ pub fn update_collider_scale<C: ScalableCollider>(
         // Update collider scale for root bodies
         for (transform, mut collider) in &mut colliders.p0() {
             #[cfg(feature = "2d")]
-            let scale = transform.scale.truncate().adjust_precision();
+            let scale = transform.scale.truncate();
             #[cfg(feature = "3d")]
-            let scale = transform.scale.adjust_precision();
+            let scale = transform.scale;
             if scale != collider.scale() {
                 // TODO: Support configurable subdivision count for shapes that
                 //       can't be represented without approximations after scaling.

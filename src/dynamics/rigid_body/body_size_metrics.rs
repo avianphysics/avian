@@ -14,7 +14,7 @@ use crate::{
         collider_transform::ColliderTransform,
     },
     dynamics::rigid_body::mass_properties::components::ComputedCenterOfMass,
-    math::Scalar,
+    math::ToRealPrecision,
     schedule::{PhysicsSchedule, PhysicsStepSystems},
 };
 
@@ -40,7 +40,7 @@ pub struct BodySizeMetrics {
     ///
     /// [CCD]: crate::dynamics::ccd
     /// [`ccd_thickness`]: crate::collision::collider::AnyCollider::ccd_thickness_with_context
-    pub ccd_thickness: Scalar,
+    pub ccd_thickness: f32,
 
     /// The maximum distance from the center of mass of the body to the surface
     /// of any of its colliders.
@@ -51,13 +51,13 @@ pub struct BodySizeMetrics {
     /// This can be useful for determining the maximum velocity that a point
     /// on the body can have, which can be used for sleeping and contact recycling
     /// thresholds, for example.
-    pub sweep_radius: Scalar,
+    pub sweep_radius: f32,
 }
 
 impl Default for BodySizeMetrics {
     fn default() -> Self {
         Self {
-            ccd_thickness: Scalar::INFINITY,
+            ccd_thickness: f32::INFINITY,
             sweep_radius: 0.0,
         }
     }
@@ -104,8 +104,8 @@ fn update_body_size_metrics<C: AnyCollider>(
             continue;
         }
 
-        let mut ccd_thickness: Scalar = Scalar::INFINITY;
-        let mut sweep_radius: Scalar = 0.0;
+        let mut ccd_thickness: f32 = f32::INFINITY;
+        let mut sweep_radius: f32 = 0.0;
 
         // Find the minimum CCD thickness and maximum sweep radius.
         for (entity, collider, collider_transform) in colliders.iter_many(rb_colliders) {
@@ -117,7 +117,7 @@ fn update_body_size_metrics<C: AnyCollider>(
             // Compute the sweep radius
             let ctx = ColliderContext::new(entity, &context);
             let point = com.0 - collider_transform.translation;
-            let distance_to_com = collider.max_distance_to_point_with_context(point, ctx);
+            let distance_to_com = collider.max_distance_to_point_with_context(point.real(), ctx);
             sweep_radius = sweep_radius.max(distance_to_com);
         }
 

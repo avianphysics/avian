@@ -145,7 +145,7 @@ fn setup(
 
 You can find lots of 2D and 3D examples in [/crates/avian2d/examples](/crates/avian2d/examples) and [/crates/avian3d/examples](/crates/avian3d/examples) respectively.
 
-The examples support both `f32` and `f64` precisions, so the code contains some feature-dependent types like `Scalar` and `Vector`.
+The examples support both `f32` and `f64` precisions, so the code contains some feature-dependent types like `Real` and `RVector`.
 In actual usage these are not needed, so you can just use `f32` or `f64` types depending on the features you have chosen.
 
 By default the examples use `f32`. To run the `f64` versions, you need to disable default features and manually choose the dimension

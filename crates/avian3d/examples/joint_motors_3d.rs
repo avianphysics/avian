@@ -10,7 +10,7 @@
 //! - W/S: Adjust right motor target position
 //! - Space: Toggle motors on/off
 
-use avian3d::{math::*, prelude::*};
+use avian3d::prelude::*;
 use bevy::prelude::*;
 use examples_common_3d::ExampleCommonPlugin;
 
@@ -85,7 +85,7 @@ fn setup(
     // Revolute joint with velocity-controlled motor
     commands.spawn((
         RevoluteJoint::new(velocity_anchor, velocity_wheel)
-            .with_hinge_axis(Vector::Z)
+            .with_hinge_axis(Vec3::Z)
             .with_motor(AngularMotor {
                 target_velocity: 5.0,
                 max_torque: 1000.0,
@@ -124,14 +124,14 @@ fn setup(
     // Revolute joint with position-controlled motor (servo behavior)
     commands.spawn((
         RevoluteJoint::new(position_anchor, servo_arm)
-            .with_hinge_axis(Vector::Z)
+            .with_hinge_axis(Vec3::Z)
             .with_motor(
                 AngularMotor::new(MotorModel::SpringDamper {
                     frequency: 5.0,
                     damping_ratio: 1.0,
                 })
                 .with_target_position(0.0)
-                .with_max_torque(Scalar::MAX),
+                .with_max_torque(f32::MAX),
             ),
         PositionMotorJoint,
     ));
@@ -162,7 +162,7 @@ fn setup(
     // Prismatic joint with linear motor
     commands.spawn((
         PrismaticJoint::new(piston_base, piston)
-            .with_slider_axis(Vector::Y)
+            .with_slider_axis(Vec3::Y)
             .with_limits(-1.0, 1.0)
             .with_motor(
                 LinearMotor::new(MotorModel::SpringDamper {
@@ -170,7 +170,7 @@ fn setup(
                     damping_ratio: 1.0,
                 })
                 .with_target_position(1.0)
-                .with_max_force(Scalar::MAX),
+                .with_max_force(f32::MAX),
             ),
         PrismaticMotorJoint,
     ));

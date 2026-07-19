@@ -96,10 +96,8 @@ impl<C: AnyCollider> Plugin for ColliderTreeUpdatePlugin<C> {
                     // TODO: Should we instead do this in `add_to_tree_on`?
                     // Update tight-fitting AABB.
                     let context = ColliderContext::new(trigger.entity, &*collider_context);
-                    let growth = Vector::splat(contact_tolerance + collision_margin);
-                    *aabb = collider
-                        .aabb_with_context(pos.0, *rot, context)
-                        .grow(growth);
+                    let growth = contact_tolerance + collision_margin;
+                    *aabb = collider.aabb_with_context(pos.0, *rot, growth, context);
 
                     // Compute and cache the size-relative AABB margin for the collider.
                     let context = ColliderContext::new(trigger.entity, &*collider_context);
@@ -713,7 +711,7 @@ fn update_solver_body_aabbs<C: AnyCollider>(
     // can predict slightly separated contacts.
     let contact_tolerance = length_unit.0 * narrow_phase_config.contact_tolerance;
 
-    let delta_secs = time.delta_seconds_adjusted();
+    let delta_secs = time.delta_secs();
 
     let collider_query = colliders.p0();
 
@@ -737,7 +735,7 @@ fn update_solver_body_aabbs<C: AnyCollider>(
                 let collision_margin = collision_margin.map_or(0.0, |margin| margin.0);
 
                 let context = ColliderContext::new(collider_entity, &*collider_context);
-                let growth = Vector::splat(contact_tolerance + collision_margin);
+                let growth = contact_tolerance + collision_margin;
 
                 *aabb = if let Some(max_distance) = speculative_ccd.map(|s| s.max_distance) {
                     // Opt-in velocity-expanded AABB: sweep the collider from its current pose to
@@ -748,9 +746,9 @@ fn update_solver_body_aabbs<C: AnyCollider>(
 
                     // Velocity of this collider. For off-center (child) colliders on a rotating
                     // body, the collider orbits the center of mass, which adds to its velocity.
-                    let offset = pos.0 - rb_pos.0 - center_of_mass.0;
+                    let offset = (pos.0 - rb_pos.0).f32() - center_of_mass.0;
                     #[cfg(feature = "2d")]
-                    let vel = lin_vel.0 + Vector::new(-ang_vel.0 * offset.y, ang_vel.0 * offset.x);
+                    let vel = lin_vel.0 + Vec2::new(-ang_vel.0 * offset.y, ang_vel.0 * offset.x);
                     #[cfg(feature = "3d")]
                     let vel = lin_vel.0 + ang_vel.0.cross(offset);
 
@@ -761,16 +759,14 @@ fn update_solver_body_aabbs<C: AnyCollider>(
                     let end_rot = *rot * Rotation::radians(ang_vel.0 * delta_secs);
                     #[cfg(feature = "3d")]
                     let end_rot =
-                        Rotation(Quaternion::from_scaled_axis(ang_vel.0 * delta_secs) * rot.0)
+                        (Quat::from_scaled_axis(ang_vel.0 * delta_secs) * rot.0)
                             .fast_renormalize();
 
                     collider
-                        .swept_aabb_with_context(pos.0, *rot, pos.0 + movement, end_rot, context)
-                        .grow(growth)
+                        .swept_aabb_with_context(pos.0, *rot, pos.0 + movement.real(), end_rot,growth, context)
                 } else {
                     collider
-                        .aabb_with_context(pos.0, *rot, context)
-                        .grow(growth)
+                        .aabb_with_context(pos.0, *rot, growth, context)
                 };
 
                 // Recompute the cached AABB margin if the collider shape changed.
@@ -921,10 +917,8 @@ pub fn update_moved_collider_aabbs<C: AnyCollider>(
 
             // Update tight-fitting AABB.
             let context = ColliderContext::new(entity, &*collider_context);
-            let growth = Vector::splat(contact_tolerance + collision_margin);
-            *aabb = collider
-                .aabb_with_context(pos.0, *rot, context)
-                .grow(growth);
+            let growth = contact_tolerance + collision_margin;
+            *aabb = collider.aabb_with_context(pos.0, *rot, growth, context);
 
             // Recompute the cached AABB margin if the collider shape changed.
             if collider_changed {

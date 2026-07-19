@@ -1,6 +1,7 @@
 use dynamics::solver::solver_body::SolverBody;
 
 use crate::{dynamics::solver::solver_body::SolverBodyInertia, prelude::*};
+use bevy_math::*;
 
 /// A positional constraint applies a positional correction
 /// with a given direction and magnitude at the local contact points `r1` and  `r2`.
@@ -31,7 +32,7 @@ pub trait PositionConstraint {
         #[cfg(feature = "3d")]
         {
             let delta_quat = Self::get_delta_rot(inv_angular_inertia1, r1, impulse);
-            body1.delta_rotation.0 = delta_quat * body1.delta_rotation.0;
+            body1.delta_rotation = delta_quat * body1.delta_rotation;
         }
 
         body2.delta_position -= impulse * inv_mass2;
@@ -44,7 +45,7 @@ pub trait PositionConstraint {
         #[cfg(feature = "3d")]
         {
             let delta_quat = Self::get_delta_rot(inv_angular_inertia2, r2, -impulse);
-            body2.delta_rotation.0 = delta_quat * body2.delta_rotation.0;
+            body2.delta_rotation = delta_quat * body2.delta_rotation;
         }
     }
 
@@ -53,11 +54,11 @@ pub trait PositionConstraint {
     #[cfg(feature = "2d")]
     fn compute_generalized_inverse_mass(
         &self,
-        inverse_mass: Scalar,
+        inverse_mass: f32,
         inverse_angular_inertia: SymmetricTensor,
-        r: Vector,
-        n: Vector,
-    ) -> Scalar {
+        r: Vec2,
+        n: Vec2,
+    ) -> f32 {
         inverse_mass + inverse_angular_inertia * r.perp_dot(n).powi(2)
     }
 
@@ -66,11 +67,11 @@ pub trait PositionConstraint {
     #[cfg(feature = "3d")]
     fn compute_generalized_inverse_mass(
         &self,
-        inverse_mass: Scalar,
+        inverse_mass: f32,
         inverse_angular_inertia: SymmetricTensor,
-        r: Vector,
-        n: Vector,
-    ) -> Scalar {
+        r: Vec3,
+        n: Vec3,
+    ) -> f32 {
         let r_cross_n = r.cross(n); // Compute the cross product only once
 
         // The line below is equivalent to Eq (2) because the component-wise multiplication of a transposed vector and another vector is equal to the dot product of the two vectors.
@@ -80,20 +81,20 @@ pub trait PositionConstraint {
 
     /// Computes the update in rotation when applying a positional correction `p` at point `r`.
     #[cfg(feature = "2d")]
-    fn get_delta_rot(inverse_angular_inertia: SymmetricTensor, r: Vector, p: Vector) -> Scalar {
+    fn get_delta_rot(inverse_angular_inertia: SymmetricTensor, r: Vec2, p: Vec2) -> f32 {
         // Equation 8/9 but in 2D
         inverse_angular_inertia * r.perp_dot(p)
     }
 
     /// Computes the update in rotation when applying a positional correction `p` at point `r`.
     #[cfg(feature = "3d")]
-    fn get_delta_rot(inverse_angular_inertia: SymmetricTensor, r: Vector, p: Vector) -> Quaternion {
+    fn get_delta_rot(inverse_angular_inertia: SymmetricTensor, r: Vec3, p: Vec3) -> Quat {
         // Equation 8/9
-        Quaternion::from_scaled_axis(inverse_angular_inertia * r.cross(p))
+        Quat::from_scaled_axis(inverse_angular_inertia * r.cross(p))
     }
 
     /// Computes the force acting along the constraint using the equation f = lambda * n / h^2
-    fn compute_force(&self, lagrange: Scalar, direction: Vector, dt: Scalar) -> Vector {
+    fn compute_force(&self, lagrange: f32, direction: Vector, dt: f32) -> Vector {
         lagrange * direction / dt.powi(2)
     }
 }

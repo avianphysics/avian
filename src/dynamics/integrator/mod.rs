@@ -130,7 +130,6 @@ pub type IntegrationSet = IntegrationSystems;
 #[cfg_attr(feature = "3d", doc = "use avian3d::prelude::*;")]
 /// use bevy::prelude::*;
 ///
-/// # #[cfg(feature = "f32")]
 /// fn main() {
 ///     App::new()
 ///         .add_plugins((DefaultPlugins, PhysicsPlugins::default()))
@@ -144,8 +143,6 @@ pub type IntegrationSet = IntegrationSystems;
 )]
 ///         .run();
 /// }
-/// # #[cfg(not(feature = "f32"))]
-/// # fn main() {} // Doc test needs main
 /// ```
 ///
 /// You can also modify gravity while the app is running.
@@ -226,10 +223,10 @@ pub struct VelocityIntegrationData {
     pub angular_increment: AngularVector,
     /// The right-hand side of the linear damping equation,
     /// `1 / (1 + dt * c)`, where `c` is the damping coefficient.
-    pub linear_damping_rhs: Scalar,
+    pub linear_damping_rhs: f32,
     /// The right-hand side of the angular damping equation,
     /// `1 / (1 + dt * c)`, where `c` is the damping coefficient.
-    pub angular_damping_rhs: Scalar,
+    pub angular_damping_rhs: f32,
 }
 
 impl VelocityIntegrationData {
@@ -245,13 +242,13 @@ impl VelocityIntegrationData {
 
     /// Updates the cached right-hand side of the linear damping equation,
     /// `1 / (1 + dt * c)`, where `c` is the damping coefficient.
-    pub fn update_linear_damping_rhs(&mut self, damping_coefficient: Scalar, delta_secs: Scalar) {
+    pub fn update_linear_damping_rhs(&mut self, damping_coefficient: f32, delta_secs: f32) {
         self.linear_damping_rhs = 1.0 / (1.0 + delta_secs * damping_coefficient);
     }
 
     /// Updates the cached right-hand side of the angular damping equation,
     /// `1 / (1 + dt * c)`, where `c` is the damping coefficient.
-    pub fn update_angular_damping_rhs(&mut self, damping_coefficient: Scalar, delta_secs: Scalar) {
+    pub fn update_angular_damping_rhs(&mut self, damping_coefficient: f32, delta_secs: f32) {
         self.angular_damping_rhs = 1.0 / (1.0 + delta_secs * damping_coefficient);
     }
 }
@@ -272,7 +269,7 @@ pub fn pre_process_velocity_increments(
 ) {
     let start = crate::utils::Instant::now();
 
-    let delta_secs = time.delta_secs_f64() as Scalar;
+    let delta_secs = time.delta_secs();
 
     // TODO: Do we want to skip kinematic bodies here?
     bodies.par_iter_mut().for_each(
@@ -321,7 +318,7 @@ fn clear_velocity_increments(
 
     bodies.par_iter_mut().for_each(|mut integration| {
         integration.linear_increment = Vector::ZERO;
-        integration.angular_increment = AngularVector::ZERO;
+        integration.angular_increment = default();
     });
 
     diagnostics.update_velocity_increments += start.elapsed();
@@ -351,7 +348,7 @@ pub fn integrate_velocities(
     let start = crate::utils::Instant::now();
 
     #[cfg(feature = "3d")]
-    let delta_secs = time.delta_secs_f64() as Scalar;
+    let delta_secs = time.delta_secs();
 
     bodies.par_iter_mut().for_each(|mut body| {
         if body.solver_body.flags.is_kinematic() {
@@ -376,7 +373,7 @@ pub fn integrate_velocities(
                 //       This needs to be done because the gyroscopic torque relies on up-to-date rotations
                 //       and world-space angular inertia tensors. Omitting the change in orientation would
                 //       lead to worse accuracy and angular momentum not being conserved.
-                let rotation = body.solver_body.delta_rotation.0 * body.rotation.0;
+                let rotation = body.solver_body.delta_rotation * Rot::from(*body.rotation);
                 solve_gyroscopic_torque(
                     &mut body.solver_body.angular_velocity,
                     rotation,
@@ -402,9 +399,9 @@ pub fn integrate_velocities(
 #[inline]
 pub fn solve_gyroscopic_torque(
     ang_vel: &mut Vector,
-    rotation: Quaternion,
+    rotation: Quat,
     local_inertia: &ComputedAngularInertia,
-    delta_secs: Scalar,
+    delta_secs: f32,
 ) {
     // References:
     // - The "Gyroscopic Motion" section of Erin Catto's GDC 2015 slides on Numerical Methods.
@@ -507,7 +504,7 @@ pub fn integrate_positions(
 ) {
     let start = crate::utils::Instant::now();
 
-    let delta_secs = time.delta_seconds_adjusted();
+    let delta_secs = time.delta_secs();
 
     solver_bodies.par_iter_mut().for_each(|body| {
         let SolverBody {
@@ -522,12 +519,12 @@ pub fn integrate_positions(
         #[cfg(feature = "2d")]
         {
             // Note: We should probably use `add_angle_fast` here
-            *delta_rotation = Rotation::radians(*angular_velocity * delta_secs) * *delta_rotation;
+            *delta_rotation = Rot2::radians(*angular_velocity * delta_secs) * *delta_rotation;
         }
         #[cfg(feature = "3d")]
         {
-            delta_rotation.0 =
-                Quaternion::from_scaled_axis(*angular_velocity * delta_secs) * delta_rotation.0;
+            *delta_rotation =
+                Quat::from_scaled_axis(*angular_velocity * delta_secs) * *delta_rotation;
         }
     });
 
@@ -579,7 +576,7 @@ mod tests {
                 {
                     (
                         MassPropertiesBundle::from_shape(&Cuboid::from_length(1.0), 1.0),
-                        AngularVelocity(Vector::Z * 2.0),
+                        AngularVelocity(Vec3::Z * 2.0),
                     )
                 },
             ))
@@ -606,7 +603,7 @@ mod tests {
         let angular_velocity = entity_ref.get::<AngularVelocity>().unwrap().0;
 
         // Euler methods have some precision issues, but this seems weirdly inaccurate.
-        assert_relative_eq!(position, Vector::NEG_Y * 490.5, epsilon = 10.0);
+        assert_relative_eq!(position, RVector::NEG_Y * 490.5, epsilon = 10.0);
 
         #[cfg(feature = "2d")]
         assert_relative_eq!(
@@ -615,11 +612,7 @@ mod tests {
             epsilon = 0.00001
         );
         #[cfg(feature = "3d")]
-        assert_relative_eq!(
-            rotation.0,
-            Quaternion::from_rotation_z(20.0),
-            epsilon = 0.01
-        );
+        assert_relative_eq!(rotation.0, Quat::from_rotation_z(20.0), epsilon = 0.01);
 
         assert_relative_eq!(linear_velocity, Vector::NEG_Y * 98.1, epsilon = 0.0001);
         #[cfg(feature = "2d")]

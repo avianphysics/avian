@@ -10,7 +10,7 @@ use bevy::reflect::Reflect;
 #[cfg(feature = "serialize")]
 use bevy::reflect::{ReflectDeserialize, ReflectSerialize};
 
-use crate::{Scalar, TAU};
+use core::f32::consts::TAU;
 
 /// Soft constraint tuning parameters used for dampening
 /// constraint response and controlling stiffness.
@@ -20,10 +20,10 @@ pub struct SoftnessParameters {
     ///
     /// This is stored as two times the damping ratio to avoid
     /// unnecessary computations in [`SoftnessParameters::compute_coefficients`].
-    double_damping_ratio: Scalar,
+    double_damping_ratio: f32,
 
     /// The angular frequency (omega ω). Controls the rate of oscillation.
-    angular_frequency: Scalar,
+    angular_frequency: f32,
 }
 
 impl SoftnessParameters {
@@ -33,7 +33,7 @@ impl SoftnessParameters {
     /// The damping ratio (zeta ζ) controls the amount of oscillation,
     /// and the frequency controls the constraint's cycles per second.
     #[inline]
-    pub fn new(damping_ratio: Scalar, frequency_hz: Scalar) -> Self {
+    pub fn new(damping_ratio: f32, frequency_hz: f32) -> Self {
         Self {
             double_damping_ratio: 2.0 * damping_ratio,
             angular_frequency: TAU * frequency_hz,
@@ -42,26 +42,26 @@ impl SoftnessParameters {
 
     /// Returns the damping ratio that controls the amount of oscillation.
     #[inline]
-    pub fn damping_ratio(self) -> Scalar {
+    pub fn damping_ratio(self) -> f32 {
         self.double_damping_ratio * 0.5
     }
 
     /// Returns the frequency that controls the rate of oscillation.
     #[inline]
-    pub fn frequency(self) -> Scalar {
+    pub fn frequency(self) -> f32 {
         self.angular_frequency / TAU
     }
 
     /// Returns the angular frequency that controls the rate of oscillation.
     /// This is the [`frequency`](Self::frequency) multiplied by `2.0 * PI`.
     #[inline]
-    pub const fn angular_frequency(self) -> Scalar {
+    pub const fn angular_frequency(self) -> f32 {
         self.angular_frequency
     }
 
     /// Computes [`SoftnessCoefficients`] based on the parameters in `self` and the time step.
     #[inline]
-    pub fn compute_coefficients(self, delta_secs: Scalar) -> SoftnessCoefficients {
+    pub fn compute_coefficients(self, delta_secs: f32) -> SoftnessCoefficients {
         // Largely based on Erin Catto's Solver2D and Box2D: https://box2d.org/posts/2024/02/solver2d#soft-constraints
         // See /docs/soft_constraint.md for in-depth explanation and derivation.
 
@@ -87,14 +87,14 @@ impl SoftnessParameters {
 pub struct SoftnessCoefficients {
     /// The bias coefficient used for scaling how strongly impulses
     /// are biased based on the separation distance.
-    pub bias: Scalar,
+    pub bias: f32,
 
     /// The mass coefficient used for scaling the effective mass
     /// "seen" by the constraint.
-    pub mass_scale: Scalar,
+    pub mass_scale: f32,
 
     /// The impulse coefficient used for scaling the accumulated impulse
     /// that is subtracted from the total impulse to prevent
     /// the total impulse from becoming too large.
-    pub impulse_scale: Scalar,
+    pub impulse_scale: f32,
 }

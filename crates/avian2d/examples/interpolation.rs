@@ -15,7 +15,7 @@
 //! the next positions based on velocity. This makes movement feel much more responsive, but can cause
 //! jumpy results when the prediction is wrong, such as when the velocity of an object is suddenly altered.
 
-use avian2d::{math::*, prelude::*};
+use avian2d::prelude::*;
 use bevy::{
     color::palettes::{
         css::WHITE,
@@ -43,7 +43,7 @@ fn main() {
     // app.add_plugins(PhysicsPlugins::default().set(PhysicsInterpolationPlugin::interpolate_all()));
 
     // Set gravity.
-    app.insert_resource(Gravity(Vector::NEG_Y * 900.0));
+    app.insert_resource(Gravity(Vec2::NEG_Y * 900.0));
 
     // Set the fixed timestep to just 10 Hz for demonstration purposes.
     app.insert_resource(Time::from_hz(10.0));

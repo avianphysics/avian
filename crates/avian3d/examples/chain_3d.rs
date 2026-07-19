@@ -1,6 +1,6 @@
 #![allow(clippy::unnecessary_cast)]
 
-use avian3d::{math::*, prelude::*};
+use avian3d::prelude::*;
 use bevy::prelude::*;
 use examples_common_3d::ExampleCommonPlugin;
 
@@ -17,7 +17,7 @@ fn main() {
             ..default()
         })
         .insert_resource(SubstepCount(80))
-        .insert_resource(Gravity(Vector::NEG_Y * 9.81 * 2.0))
+        .insert_resource(Gravity(Vec3::NEG_Y * 9.81 * 2.0))
         .add_systems(Startup, (setup, ui))
         .add_systems(Update, movement)
         .run();
@@ -25,7 +25,7 @@ fn main() {
 
 /// The acceleration used for movement.
 #[derive(Component)]
-struct MovementAcceleration(Scalar);
+struct MovementAcceleration(f32);
 
 fn setup(
     mut commands: Commands,
@@ -65,8 +65,8 @@ fn setup(
 
         commands.spawn(
             SphericalJoint::new(previous_particle, current_particle)
-                .with_local_anchor1(Vector::NEG_Y * particle_radius * 1.1)
-                .with_local_anchor2(Vector::Y * particle_radius * 1.1)
+                .with_local_anchor1(Vec3::NEG_Y * particle_radius * 1.1)
+                .with_local_anchor2(Vec3::Y * particle_radius * 1.1)
                 .with_point_compliance(0.00001),
         );
 
@@ -87,7 +87,7 @@ fn movement(
 ) {
     // Precision is adjusted so that the example works with
     // both the `f32` and `f64` features. Otherwise you don't need this.
-    let delta_time = time.delta_secs_f64().adjust_precision();
+    let delta_time = time.delta_secs();
 
     for (movement_acceleration, mut linear_velocity) in &mut query {
         let up = keyboard_input.any_pressed([KeyCode::KeyW, KeyCode::ArrowUp]);
@@ -97,8 +97,7 @@ fn movement(
 
         let horizontal = right as i8 - left as i8;
         let vertical = down as i8 - up as i8;
-        let direction =
-            Vector::new(horizontal as Scalar, 0.0, vertical as Scalar).normalize_or_zero();
+        let direction = Vec3::new(horizontal as f32, 0.0, vertical as f32).normalize_or_zero();
 
         // Move in input direction
         linear_velocity.x += direction.x * movement_acceleration.0 * delta_time;
