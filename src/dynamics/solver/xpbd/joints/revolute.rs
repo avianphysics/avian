@@ -11,6 +11,8 @@ use crate::{
 };
 use bevy::prelude::*;
 
+use core::f32::consts::{PI, TAU};
+
 /// Constraint data required by the XPBD constraint solver for a [`RevoluteJoint`].
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
@@ -19,7 +21,7 @@ use bevy::prelude::*;
 pub struct RevoluteJointSolverData {
     pub(super) point_constraint: PointConstraintShared,
     #[cfg(feature = "2d")]
-    pub(super) rotation_difference: Scalar,
+    pub(super) rotation_difference: f32,
     #[cfg(feature = "3d")]
     pub(super) a1: Vector,
     #[cfg(feature = "3d")]
@@ -40,14 +42,14 @@ pub struct RevoluteJointSolverData {
 impl XpbdConstraintSolverData for RevoluteJointSolverData {
     fn clear_lagrange_multipliers(&mut self) {
         self.point_constraint.clear_lagrange_multipliers();
-        self.total_align_lagrange = AngularVector::ZERO;
-        self.total_limit_lagrange = AngularVector::ZERO;
+        self.total_align_lagrange = AngularVector::default();
+        self.total_limit_lagrange = AngularVector::default();
         // Save motor lagrange for warm starting before clearing.
         self.warm_start_motor_lagrange = self.total_motor_lagrange;
-        self.total_motor_lagrange = AngularVector::ZERO;
+        self.total_motor_lagrange = AngularVector::default();
     }
 
-    fn total_motor_lagrange(&self) -> Scalar {
+    fn total_motor_lagrange(&self) -> f32 {
         #[cfg(feature = "2d")]
         {
             self.total_motor_lagrange
@@ -96,18 +98,20 @@ impl XpbdConstraint<2> for RevoluteJoint {
         // Prepare the base rotation difference.
         #[cfg(feature = "2d")]
         {
-            solver_data.rotation_difference = (*bodies[0].rotation * local_basis1)
-                .angle_between(*bodies[1].rotation * local_basis2);
+            solver_data.rotation_difference = (Rot::from(*bodies[0].rotation) * local_basis1)
+                .angle_to(Rot::from(*bodies[1].rotation) * local_basis2);
         }
         #[cfg(feature = "3d")]
         {
             // Prepare the base axes.
-            solver_data.a1 = *bodies[0].rotation * local_basis1 * self.hinge_axis;
-            solver_data.a2 = *bodies[1].rotation * local_basis2 * self.hinge_axis;
-            solver_data.b1 =
-                *bodies[0].rotation * local_basis1 * self.hinge_axis.any_orthonormal_vector();
-            solver_data.b2 =
-                *bodies[1].rotation * local_basis2 * self.hinge_axis.any_orthonormal_vector();
+            solver_data.a1 = Rot::from(*bodies[0].rotation) * local_basis1 * self.hinge_axis;
+            solver_data.a2 = Rot::from(*bodies[1].rotation) * local_basis2 * self.hinge_axis;
+            solver_data.b1 = Rot::from(*bodies[0].rotation)
+                * local_basis1
+                * self.hinge_axis.any_orthonormal_vector();
+            solver_data.b2 = Rot::from(*bodies[1].rotation)
+                * local_basis2
+                * self.hinge_axis.any_orthonormal_vector();
         }
     }
 
@@ -116,7 +120,7 @@ impl XpbdConstraint<2> for RevoluteJoint {
         bodies: [&mut SolverBody; 2],
         inertias: [&SolverBodyInertia; 2],
         solver_data: &mut RevoluteJointSolverData,
-        dt: Scalar,
+        dt: f32,
     ) {
         let [body1, body2] = bodies;
         let [inertia1, inertia2] = inertias;
@@ -175,8 +179,8 @@ impl XpbdConstraint<2> for RevoluteJoint {
         bodies: [&mut SolverBody; 2],
         inertias: [&SolverBodyInertia; 2],
         solver_data: &mut RevoluteJointSolverData,
-        _dt: Scalar,
-        warm_start_coefficient: Scalar,
+        _dt: f32,
+        warm_start_coefficient: f32,
     ) {
         if !self.motor.enabled {
             return;
@@ -193,7 +197,7 @@ impl XpbdConstraint<2> for RevoluteJoint {
         body1.angular_velocity -= inv_angular_inertia1 * impulse;
         body2.angular_velocity += inv_angular_inertia2 * impulse;
 
-        solver_data.warm_start_motor_lagrange = AngularVector::ZERO;
+        solver_data.warm_start_motor_lagrange = AngularVector::default();
     }
 }
 
@@ -206,13 +210,13 @@ impl RevoluteJoint {
         inv_angular_inertia1: SymmetricTensor,
         inv_angular_inertia2: SymmetricTensor,
         solver_data: &mut RevoluteJointSolverData,
-        dt: Scalar,
+        dt: f32,
     ) {
         let Some(Some(correction)) = self.angle_limit.map(|angle_limit| {
             #[cfg(feature = "2d")]
             {
                 let rotation_difference = solver_data.rotation_difference
-                    + body1.delta_rotation.angle_between(body2.delta_rotation);
+                    + body1.delta_rotation.angle_to(body2.delta_rotation);
                 angle_limit.compute_correction(rotation_difference, PI)
             }
             #[cfg(feature = "3d")]
@@ -249,7 +253,7 @@ impl RevoluteJoint {
         inv_angular_inertia1: SymmetricTensor,
         inv_angular_inertia2: SymmetricTensor,
         solver_data: &mut RevoluteJointSolverData,
-        dt: Scalar,
+        dt: f32,
     ) {
         let motor = &self.motor;
 
@@ -258,8 +262,8 @@ impl RevoluteJoint {
         }
 
         #[cfg(feature = "2d")]
-        let current_angle = solver_data.rotation_difference
-            + body1.delta_rotation.angle_between(body2.delta_rotation);
+        let current_angle =
+            solver_data.rotation_difference + body1.delta_rotation.angle_to(body2.delta_rotation);
         #[cfg(feature = "3d")]
         let a1 = body1.delta_rotation * solver_data.a1;
         #[cfg(feature = "3d")]
@@ -287,7 +291,7 @@ impl RevoluteJoint {
                     a1,
                 );
 
-        if w_sum <= Scalar::EPSILON {
+        if w_sum <= f32::EPSILON {
             return;
         }
 
@@ -336,12 +340,12 @@ impl RevoluteJoint {
     ///
     /// Returns `None` if the correction is negligible.
     fn compute_angular_motor_lagrange(
-        velocity_error: Scalar,
-        position_error: Scalar,
-        w_sum: Scalar,
+        velocity_error: f32,
+        position_error: f32,
+        w_sum: f32,
         motor: &AngularMotor,
-        dt: Scalar,
-    ) -> Option<Scalar> {
+        dt: f32,
+    ) -> Option<f32> {
         let target_velocity_change = match motor.motor_model {
             MotorModel::SpringDamper {
                 frequency,
@@ -364,14 +368,14 @@ impl RevoluteJoint {
         };
 
         let correction = target_velocity_change * dt;
-        if correction.abs() <= Scalar::EPSILON {
+        if correction.abs() <= f32::EPSILON {
             return None;
         }
 
         let delta_lagrange = correction / w_sum;
 
         // Clamp to limit instantaneous torque per substep.
-        let delta_lagrange = if motor.max_torque < Scalar::MAX && motor.max_torque > 0.0 {
+        let delta_lagrange = if motor.max_torque < f32::MAX && motor.max_torque > 0.0 {
             let max_delta = motor.max_torque * dt * dt;
             delta_lagrange.clamp(-max_delta, max_delta)
         } else {

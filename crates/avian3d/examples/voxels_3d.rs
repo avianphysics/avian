@@ -6,18 +6,21 @@
 #![allow(clippy::unnecessary_cast)]
 
 use avian3d::{
-    math::{AsF32, PI, Scalar, Vector},
+    math::{RVec3, Real, ToRealPrecision},
     prelude::*,
 };
 use bevy::{
     asset::RenderAssetUsages,
     camera::Exposure,
     core_pipeline::tonemapping::Tonemapping,
+    light::{Atmosphere, atmosphere::ScatteringMedium},
     mesh::{Indices, PrimitiveTopology},
-    pbr::{Atmosphere, ScatteringMedium},
+    pbr::AtmosphereSettings,
     prelude::*,
 };
 use examples_common_3d::ExampleCommonPlugin;
+
+const PI: Real = core::f64::consts::PI as Real;
 
 fn main() {
     App::new()
@@ -38,15 +41,15 @@ fn setup(
 ) {
     // Create a voxelized bowl-like surface by sampling points.
     let mut points = vec![];
-    let voxel_size = Vector::splat(0.25);
+    let voxel_size = Vec3::splat(0.25);
     let n = 200;
     for i in 0..n {
         for j in 0..n {
-            let x = i as Scalar;
-            let z = j as Scalar;
-            let y = -40.0
-                * ((x / n as Scalar * PI).sin() * (z / n as Scalar * PI).sin()).clamp(0.1, 0.9);
-            points.push(voxel_size * Vector::new(x, y, z));
+            let x = i as Real;
+            let z = j as Real;
+            let y =
+                -40.0 * ((x / n as Real * PI).sin() * (z / n as Real * PI).sin()).clamp(0.1, 0.9);
+            points.push(voxel_size.real() * RVec3::new(x, y, z));
         }
     }
 
@@ -75,14 +78,11 @@ fn setup(
         Friction::new(0.2),
         Mesh3d(meshes.add(mesh)),
         MeshMaterial3d(materials.add(Color::srgb(0.4, 0.6, 0.4))),
-        Transform::from_translation(
-            Vector::new(
-                -n as Scalar / 2.0 * voxel_size.x,
-                -5.0 * voxel_size.y,
-                -n as Scalar / 2.0 * voxel_size.z,
-            )
-            .f32(),
-        ),
+        Transform::from_translation(Vec3::new(
+            -n as f32 / 2.0 * voxel_size.x,
+            -5.0 * voxel_size.y,
+            -n as f32 / 2.0 * voxel_size.z,
+        )),
     ));
 
     // Spawn a grid of various dynamic primitives that will fall onto the surface.
@@ -138,16 +138,21 @@ fn setup(
     commands.spawn((
         DirectionalLight {
             illuminance: 14e4,
-            shadows_enabled: true,
+            shadow_maps_enabled: true,
             ..default()
         },
         Transform::from_xyz(1.0, 2.0, 2.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 
-    // Camera and atmosphere
+    // Atmosphere
+    commands.spawn(Atmosphere::earth(
+        scattering_media.add(ScatteringMedium::default()),
+    ));
+
+    // Camera
     commands.spawn((
         Camera3d::default(),
-        Atmosphere::earthlike(scattering_media.add(ScatteringMedium::default())),
+        AtmosphereSettings::default(),
         AmbientLight {
             brightness: 4000.0,
             color: Color::WHITE,

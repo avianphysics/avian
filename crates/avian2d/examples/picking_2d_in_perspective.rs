@@ -1,4 +1,4 @@
-use avian2d::{math::*, prelude::*};
+use avian2d::prelude::*;
 use bevy::{camera::ScalingMode, prelude::*};
 use examples_common_2d::ExampleCommonPlugin;
 
@@ -11,7 +11,7 @@ fn main() {
             PhysicsPickingPlugin,
         ))
         .insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.1)))
-        .insert_resource(Gravity(Vector::NEG_Y))
+        .insert_resource(Gravity(Vec2::NEG_Y))
         .add_systems(Startup, setup)
         .add_systems(Update, control_camera_and_plane)
         .run();
@@ -106,10 +106,10 @@ fn setup(
                     .id();
 
                 // Revolute joint with velocity-controlled motor
-                // Default anchors are at body centers (Vector::ZERO)
+                // Default anchors are at body centers
                 child_spawner_commands.spawn((RevoluteJoint::new(velocity_anchor, velocity_wheel)
                     .with_motor(AngularMotor {
-                        target_velocity: 5.0 * flip.adjust_precision(),
+                        target_velocity: 5.0 * flip,
                         max_torque: 1000.0,
                         motor_model: MotorModel::AccelerationBased {
                             stiffness: 0.0,

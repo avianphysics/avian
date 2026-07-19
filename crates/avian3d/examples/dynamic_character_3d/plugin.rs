@@ -1,3 +1,5 @@
+use core::f32::consts::PI;
+
 use avian3d::{math::*, prelude::*};
 use bevy::{ecs::query::Has, prelude::*};
 
@@ -22,7 +24,7 @@ impl Plugin for CharacterControllerPlugin {
 /// A [`Message`] written for a movement input action.
 #[derive(Message)]
 pub enum MovementAction {
-    Move(Vector2),
+    Move(Vec2),
     Jump,
 }
 
@@ -37,21 +39,21 @@ pub struct Grounded;
 
 /// The acceleration used for character movement.
 #[derive(Component)]
-pub struct MovementAcceleration(Scalar);
+pub struct MovementAcceleration(f32);
 
 /// The damping factor used for slowing down movement.
 #[derive(Component)]
-pub struct MovementDampingFactor(Scalar);
+pub struct MovementDampingFactor(f32);
 
 /// The strength of a jump.
 #[derive(Component)]
-pub struct JumpImpulse(Scalar);
+pub struct JumpImpulse(f32);
 
 /// The maximum angle a slope can have for a character controller
 /// to be able to climb and jump. If the slope is steeper than this angle,
 /// the character will slide down.
 #[derive(Component)]
-pub struct MaxSlopeAngle(Scalar);
+pub struct MaxSlopeAngle(f32);
 
 /// A bundle that contains the components needed for a basic
 /// kinematic character controller.
@@ -76,10 +78,10 @@ pub struct MovementBundle {
 
 impl MovementBundle {
     pub const fn new(
-        acceleration: Scalar,
-        damping: Scalar,
-        jump_impulse: Scalar,
-        max_slope_angle: Scalar,
+        acceleration: f32,
+        damping: f32,
+        jump_impulse: f32,
+        max_slope_angle: f32,
     ) -> Self {
         Self {
             acceleration: MovementAcceleration(acceleration),
@@ -100,7 +102,7 @@ impl CharacterControllerBundle {
     pub fn new(collider: Collider) -> Self {
         // Create shape caster as a slightly smaller version of collider
         let mut caster_shape = collider.clone();
-        caster_shape.set_scale(Vector::ONE * 0.99, 10);
+        caster_shape.set_scale(Vec3::ONE * 0.99, 10);
 
         Self {
             character_controller: CharacterController,
@@ -108,8 +110,8 @@ impl CharacterControllerBundle {
             collider,
             ground_caster: ShapeCaster::new(
                 caster_shape,
-                Vector::ZERO,
-                Quaternion::default(),
+                RVec3::ZERO,
+                Quat::default(),
                 Dir3::NEG_Y,
             )
             .with_max_distance(0.2),
@@ -120,10 +122,10 @@ impl CharacterControllerBundle {
 
     pub fn with_movement(
         mut self,
-        acceleration: Scalar,
-        damping: Scalar,
-        jump_impulse: Scalar,
-        max_slope_angle: Scalar,
+        acceleration: f32,
+        damping: f32,
+        jump_impulse: f32,
+        max_slope_angle: f32,
     ) -> Self {
         self.movement = MovementBundle::new(acceleration, damping, jump_impulse, max_slope_angle);
         self
@@ -142,9 +144,9 @@ fn keyboard_input(
 
     let horizontal = right as i8 - left as i8;
     let vertical = up as i8 - down as i8;
-    let direction = Vector2::new(horizontal as Scalar, vertical as Scalar).clamp_length_max(1.0);
+    let direction = Vec2::new(horizontal as f32, vertical as f32).clamp_length_max(1.0);
 
-    if direction != Vector2::ZERO {
+    if direction != Vec2::ZERO {
         movement_writer.write(MovementAction::Move(direction));
     }
 
@@ -160,9 +162,7 @@ fn gamepad_input(mut movement_writer: MessageWriter<MovementAction>, gamepads: Q
             gamepad.get(GamepadAxis::LeftStickX),
             gamepad.get(GamepadAxis::LeftStickY),
         ) {
-            movement_writer.write(MovementAction::Move(
-                Vector2::new(x as Scalar, y as Scalar).clamp_length_max(1.0),
-            ));
+            movement_writer.write(MovementAction::Move(Vec2::new(x, y).clamp_length_max(1.0)));
         }
 
         if gamepad.just_pressed(GamepadButton::South) {
@@ -184,7 +184,7 @@ fn update_grounded(
         // that isn't too steep.
         let is_grounded = hits.iter().any(|hit| {
             if let Some(angle) = max_slope_angle {
-                (rotation * -hit.normal2).angle_between(Vector::Y).abs() <= angle.0
+                (rotation * -hit.normal2).angle_between(Vec3::Y).abs() <= angle.0
             } else {
                 true
             }
@@ -211,7 +211,7 @@ fn movement(
 ) {
     // Precision is adjusted so that the example works with
     // both the `f32` and `f64` features. Otherwise you don't need this.
-    let delta_time = time.delta_secs_f64().adjust_precision();
+    let delta_time = time.delta_secs();
 
     for event in movement_reader.read() {
         for (movement_acceleration, jump_impulse, mut linear_velocity, is_grounded) in

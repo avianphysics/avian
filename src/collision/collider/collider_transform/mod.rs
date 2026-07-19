@@ -21,7 +21,7 @@ pub struct ColliderTransform {
     /// The translation of a collider in a rigid body's frame of reference.
     pub translation: Vector,
     /// The rotation of a collider in a rigid body's frame of reference.
-    pub rotation: Rotation,
+    pub rotation: Rot,
     /// The global scale of a collider. Equivalent to the `GlobalTransform` scale.
     pub scale: Vector,
 }
@@ -41,7 +41,7 @@ impl Default for ColliderTransform {
     fn default() -> Self {
         Self {
             translation: Vector::ZERO,
-            rotation: Rotation::default(),
+            rotation: Rot::default(),
             scale: Vector::ONE,
         }
     }
@@ -51,14 +51,17 @@ impl From<Transform> for ColliderTransform {
     fn from(value: Transform) -> Self {
         Self {
             #[cfg(feature = "2d")]
-            translation: value.translation.truncate().adjust_precision(),
+            translation: value.translation.truncate(),
             #[cfg(feature = "3d")]
-            translation: value.translation.adjust_precision(),
-            rotation: Rotation::from(value.rotation.adjust_precision()),
+            translation: value.translation,
             #[cfg(feature = "2d")]
-            scale: value.scale.truncate().adjust_precision(),
+            rotation: Rot::radians(value.rotation.to_euler(EulerRot::XYZ).2),
             #[cfg(feature = "3d")]
-            scale: value.scale.adjust_precision(),
+            rotation: value.rotation,
+            #[cfg(feature = "2d")]
+            scale: value.scale.truncate(),
+            #[cfg(feature = "3d")]
+            scale: value.scale,
         }
     }
 }

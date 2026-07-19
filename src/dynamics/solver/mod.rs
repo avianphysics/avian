@@ -35,7 +35,7 @@ use bevy::{app::PluginGroupBuilder, prelude::*};
 /// | [`SolverBodyPlugin`]              | Manages [solver bodies](dynamics::solver::solver_body::SolverBody).                                                                                        |
 /// | [`IntegratorPlugin`]              | Handles motion caused by velocity, and applies external forces and gravity.                                                                                |
 /// | [`SolverPlugin`]                  | Manages and solves contacts, [joints](dynamics::joints), and other constraints.                                                                            |
-/// | [`CcdPlugin`]                     | Performs sweep-based [Continuous Collision Detection](dynamics::ccd) for bodies with the [`SweptCcd`] component.                                           |
+/// | [`CcdPlugin`]                     | Performs [Continuous Collision Detection (CCD)](dynamics::ccd) for fast dynamic bodies.                                                                    |
 /// | [`IslandPlugin`]                  | Manages [simulation islands](dynamics::solver::islands) for sleeping and waking.                                                                           |
 /// | [`IslandSleepingPlugin`]          | Manages sleeping and waking of [simulation islands](dynamics::solver::islands).                                                                            |
 /// | [`JointGraphPlugin`]              | Manages the [`JointGraph`] for each joint type.                                                          |
@@ -44,7 +44,7 @@ use bevy::{app::PluginGroupBuilder, prelude::*};
 /// Refer to the documentation of the plugins for more information about their responsibilities and implementations.
 #[derive(Debug, Default)]
 pub struct SolverPlugins {
-    length_unit: Scalar,
+    length_unit: f32,
 }
 
 impl SolverPlugins {
@@ -52,7 +52,7 @@ impl SolverPlugins {
     ///
     /// The length unit will be used for initializing the [`PhysicsLengthUnit`]
     /// resource unless it already exists.
-    pub fn new_with_length_unit(unit: Scalar) -> Self {
+    pub fn new_with_length_unit(unit: f32) -> Self {
         Self { length_unit: unit }
     }
 }

@@ -1,6 +1,6 @@
 use core::iter::once;
 
-use crate::prelude::*;
+use crate::{math::Real, prelude::*};
 use bevy::{platform::collections::HashMap, prelude::*};
 use itertools::Either;
 
@@ -11,7 +11,7 @@ use itertools::Either;
 ///
 /// In contrast to [`ColliderConstructor`], this component will *not* generate a collider on its own entity.
 ///
-/// If this component is used on a scene, such as one spawned by a [`SceneRoot`], it will
+/// If this component is used on a scene, such as one spawned by a `WorldAssetRoot`, it will
 /// wait until the scene is loaded before generating colliders. Note that this requires
 /// the `bevy_scene` feature to be enabled.
 ///
@@ -51,7 +51,7 @@ use itertools::Either;
     doc = "    // Spawn the scene and automatically generate triangle mesh colliders"
 )]
 ///     commands.spawn((
-///         SceneRoot(scene.clone()),
+///         WorldAssetRoot(scene.clone()),
 #[cfg_attr(
     feature = "2d",
     doc = "        ColliderConstructorHierarchy::new(ColliderConstructor::Circle { radius: 2.0 }),"
@@ -64,7 +64,7 @@ use itertools::Either;
 ///
 ///     // Specify configuration for specific meshes by name
 ///     commands.spawn((
-///         SceneRoot(scene.clone()),
+///         WorldAssetRoot(scene.clone()),
 #[cfg_attr(
     feature = "2d",
     doc = "        ColliderConstructorHierarchy::new(ColliderConstructor::Circle { radius: 2.0 })
@@ -81,7 +81,7 @@ use itertools::Either;
 ///
 ///     // Only generate colliders for specific meshes by name
 ///     commands.spawn((
-///         SceneRoot(scene.clone()),
+///         WorldAssetRoot(scene.clone()),
 ///         ColliderConstructorHierarchy::new(None)
 #[cfg_attr(
     feature = "2d",
@@ -95,7 +95,7 @@ use itertools::Either;
 ///
 ///     // Generate colliders for everything except specific meshes by name
 ///     commands.spawn((
-///         SceneRoot(scene),
+///         WorldAssetRoot(scene),
 #[cfg_attr(
     feature = "2d",
     doc = "        ColliderConstructorHierarchy::new(ColliderConstructor::Circle { radius: 2.0 })
@@ -316,55 +316,48 @@ pub struct ColliderConstructorHierarchyConfig {
 pub enum ColliderConstructor {
     /// Constructs a collider with [`Collider::circle`].
     #[cfg(feature = "2d")]
-    Circle { radius: Scalar },
+    Circle { radius: f32 },
     /// Constructs a collider with [`Collider::sphere`].
     #[cfg(feature = "3d")]
-    Sphere { radius: Scalar },
+    Sphere { radius: f32 },
     /// Constructs a collider with [`Collider::ellipse`].
     #[cfg(feature = "2d")]
-    Ellipse {
-        half_width: Scalar,
-        half_height: Scalar,
-    },
+    Ellipse { half_width: f32, half_height: f32 },
     /// Constructs a collider with [`Collider::rectangle`].
     #[cfg(feature = "2d")]
-    Rectangle { x_length: Scalar, y_length: Scalar },
+    Rectangle { x_length: f32, y_length: f32 },
     /// Constructs a collider with [`Collider::cuboid`].
     #[cfg(feature = "3d")]
     Cuboid {
-        x_length: Scalar,
-        y_length: Scalar,
-        z_length: Scalar,
+        x_length: f32,
+        y_length: f32,
+        z_length: f32,
     },
     /// Constructs a collider with [`Collider::round_rectangle`].
     #[cfg(feature = "2d")]
     RoundRectangle {
-        x_length: Scalar,
-        y_length: Scalar,
-        border_radius: Scalar,
+        x_length: f32,
+        y_length: f32,
+        border_radius: f32,
     },
     /// Constructs a collider with [`Collider::round_cuboid`].
     #[cfg(feature = "3d")]
     RoundCuboid {
-        x_length: Scalar,
-        y_length: Scalar,
-        z_length: Scalar,
-        border_radius: Scalar,
+        x_length: f32,
+        y_length: f32,
+        z_length: f32,
+        border_radius: f32,
     },
     /// Constructs a collider with [`Collider::cylinder`].
     #[cfg(feature = "3d")]
-    Cylinder { radius: Scalar, height: Scalar },
+    Cylinder { radius: f32, height: f32 },
     /// Constructs a collider with [`Collider::cone`].
     #[cfg(feature = "3d")]
-    Cone { radius: Scalar, height: Scalar },
+    Cone { radius: f32, height: f32 },
     /// Constructs a collider with [`Collider::capsule`].
-    Capsule { radius: Scalar, height: Scalar },
+    Capsule { radius: f32, height: f32 },
     /// Constructs a collider with [`Collider::capsule_endpoints`].
-    CapsuleEndpoints {
-        radius: Scalar,
-        a: Vector,
-        b: Vector,
-    },
+    CapsuleEndpoints { radius: f32, a: Vector, b: Vector },
     /// Constructs a collider with [`Collider::half_space`].
     HalfSpace { outward_normal: Vector },
     /// Constructs a collider with [`Collider::segment`].
@@ -376,55 +369,55 @@ pub enum ColliderConstructor {
     RegularPolygon { circumradius: f32, sides: u32 },
     /// Constructs a collider with [`Collider::polyline`].
     Polyline {
-        vertices: Vec<Vector>,
+        vertices: Vec<RVector>,
         indices: Option<Vec<[u32; 2]>>,
     },
     /// Constructs a collider with [`Collider::trimesh`].
     Trimesh {
-        vertices: Vec<Vector>,
+        vertices: Vec<RVector>,
         indices: Vec<[u32; 3]>,
     },
     /// Constructs a collider with [`Collider::trimesh_with_config`].
     TrimeshWithConfig {
-        vertices: Vec<Vector>,
+        vertices: Vec<RVector>,
         indices: Vec<[u32; 3]>,
         flags: TrimeshFlags,
     },
     /// Constructs a collider with [`Collider::convex_decomposition`].
     #[cfg(feature = "2d")]
     ConvexDecomposition {
-        vertices: Vec<Vector>,
+        vertices: Vec<RVector>,
         indices: Vec<[u32; 2]>,
     },
     /// Constructs a collider with [`Collider::convex_decomposition`].
     #[cfg(feature = "3d")]
     ConvexDecomposition {
-        vertices: Vec<Vector>,
+        vertices: Vec<RVector>,
         indices: Vec<[u32; 3]>,
     },
     /// Constructs a collider with [`Collider::convex_decomposition_with_config`].
     #[cfg(feature = "2d")]
     ConvexDecompositionWithConfig {
-        vertices: Vec<Vector>,
+        vertices: Vec<RVector>,
         indices: Vec<[u32; 2]>,
         params: VhacdParameters,
     },
     /// Constructs a collider with [`Collider::convex_decomposition_with_config`].
     #[cfg(feature = "3d")]
     ConvexDecompositionWithConfig {
-        vertices: Vec<Vector>,
+        vertices: Vec<RVector>,
         indices: Vec<[u32; 3]>,
         params: VhacdParameters,
     },
     /// Constructs a collider with [`Collider::convex_hull`].
     #[cfg(feature = "2d")]
-    ConvexHull { points: Vec<Vector> },
+    ConvexHull { points: Vec<RVector> },
     /// Constructs a collider with [`Collider::convex_hull`].
     #[cfg(feature = "3d")]
-    ConvexHull { points: Vec<Vector> },
+    ConvexHull { points: Vec<RVector> },
     /// Constructs a collider with [`Collider::convex_polyline`].
     #[cfg(feature = "2d")]
-    ConvexPolyline { points: Vec<Vector> },
+    ConvexPolyline { points: Vec<RVector> },
     /// Constructs a collider with [`Collider::voxels`].
     Voxels {
         voxel_size: Vector,
@@ -433,26 +426,26 @@ pub enum ColliderConstructor {
     /// Constructs a collider with [`Collider::voxelized_polyline`].
     #[cfg(feature = "2d")]
     VoxelizedPolyline {
-        vertices: Vec<Vector>,
+        vertices: Vec<RVector>,
         indices: Vec<[u32; 2]>,
-        voxel_size: Scalar,
+        voxel_size: f32,
         fill_mode: FillMode,
     },
     /// Constructs a collider with [`Collider::voxelized_trimesh`].
     #[cfg(feature = "3d")]
     VoxelizedTrimesh {
-        vertices: Vec<Vector>,
+        vertices: Vec<RVector>,
         indices: Vec<[u32; 3]>,
-        voxel_size: Scalar,
+        voxel_size: f32,
         fill_mode: FillMode,
     },
     /// Constructs a collider with [`Collider::heightfield`].
     #[cfg(feature = "2d")]
-    Heightfield { heights: Vec<Scalar>, scale: Vector },
+    Heightfield { heights: Vec<Real>, scale: Vector },
     /// Constructs a collider with [`Collider::heightfield`].
     #[cfg(feature = "3d")]
     Heightfield {
-        heights: Vec<Vec<Scalar>>,
+        heights: Vec<Vec<Real>>,
         scale: Vector,
     },
     /// Constructs a collider with [`Collider::trimesh_from_mesh`].
@@ -482,7 +475,7 @@ pub enum ColliderConstructor {
     /// Constructs a collider with [`Collider::voxelized_trimesh_from_mesh`].
     #[cfg(feature = "collider-from-mesh")]
     VoxelizedTrimeshFromMesh {
-        voxel_size: Scalar,
+        voxel_size: f32,
         fill_mode: FillMode,
     },
     /// Constructs a collider with [`Collider::compound`].
@@ -528,7 +521,7 @@ impl ColliderConstructor {
                     Either::Left(Self::flatten_compound_constructors(nested).into_iter().map(
                         move |(nested_pos, nested_rot, nested_constructor)| {
                             (
-                                Position(pos.0 + rot * nested_pos.0),
+                                Position(pos.0 + rot.real() * nested_pos.0),
                                 rot * nested_rot,
                                 nested_constructor,
                             )
@@ -545,7 +538,7 @@ impl ColliderConstructor {
 mod tests {
     use super::*;
     #[cfg(feature = "bevy_scene")]
-    use bevy::scene::ScenePlugin;
+    use bevy::world_serialization::WorldSerializationPlugin;
     use bevy::{ecs::query::QueryData, mesh::MeshPlugin};
 
     #[test]
@@ -759,7 +752,8 @@ mod tests {
         let mut app = create_gltf_test_app();
 
         app.add_observer(
-            |_trigger: On<bevy::scene::SceneInstanceReady>, mut commands: Commands| {
+            |_trigger: On<bevy::world_serialization::WorldInstanceReady>,
+             mut commands: Commands| {
                 commands.insert_resource(SceneReady);
             },
         );
@@ -772,7 +766,7 @@ mod tests {
         let hierarchy = app
             .world_mut()
             .spawn((
-                SceneRoot(scene_handle),
+                WorldAssetRoot(scene_handle),
                 ColliderConstructorHierarchy::new(ColliderConstructor::ConvexDecompositionFromMesh)
                     // Use a primitive collider for the left arm.
                     .with_constructor_for_name("armL_mesh.ferris_material", PRIMITIVE_COLLIDER)
@@ -791,7 +785,7 @@ mod tests {
             app.update();
             counter += 1;
             if counter > 1000 {
-                panic!("SceneInstanceReady was never triggered");
+                panic!("WorldInstanceReady was never triggered");
             }
         }
         app.update();
@@ -844,7 +838,7 @@ mod tests {
             MinimalPlugins,
             AssetPlugin::default(),
             #[cfg(feature = "bevy_scene")]
-            ScenePlugin,
+            WorldSerializationPlugin,
             MeshPlugin,
             PhysicsPlugins::default(),
         ));
@@ -858,7 +852,7 @@ mod tests {
 
         // Todo: it would be best to disable all rendering-related plugins,
         // but we have so far not succeeded in finding the right plugin combination
-        // that still results in `SceneInstanceReady` being triggered.
+        // that still results in `WorldInstanceReady` being triggered.
         let mut app = App::new();
         app.add_plugins((
             DefaultPlugins

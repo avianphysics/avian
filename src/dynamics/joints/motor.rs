@@ -1,4 +1,3 @@
-use crate::prelude::*;
 use bevy::prelude::*;
 
 /// Determines how the joint motor force/torque is computed.
@@ -30,9 +29,9 @@ pub enum MotorModel {
     ///   - < 1.0 = underdamped (overshoots and oscillates)
     SpringDamper {
         /// The natural frequency of the spring in Hz.
-        frequency: Scalar,
+        frequency: f32,
         /// The damping ratio.
-        damping_ratio: Scalar,
+        damping_ratio: f32,
     },
 
     /// The motor force/torque is computed directly from the stiffness and damping parameters.
@@ -54,9 +53,9 @@ pub enum MotorModel {
     /// - `damping`: The damping coefficient for velocity control.
     ForceBased {
         /// The stiffness coefficient for position control.
-        stiffness: Scalar,
+        stiffness: f32,
         /// The damping coefficient for velocity control.
-        damping: Scalar,
+        damping: f32,
     },
 
     /// The motor force/torque is computed based on the acceleration required to reach the target.
@@ -81,9 +80,9 @@ pub enum MotorModel {
     /// - `damping`: The damping coefficient for velocity control.
     AccelerationBased {
         /// The stiffness coefficient for position control.
-        stiffness: Scalar,
+        stiffness: f32,
         /// The damping coefficient for velocity control.
-        damping: Scalar,
+        damping: f32,
     },
 }
 
@@ -117,6 +116,8 @@ impl MotorModel {
 ///         .with_target_position(target_angle)
 ///     )
 /// ```
+///
+/// [`RevoluteJoint`]: crate::dynamics::joints::revolute::RevoluteJoint
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
@@ -125,11 +126,11 @@ pub struct AngularMotor {
     /// Whether the motor is enabled.
     pub enabled: bool,
     /// The target angular velocity (rad/s).
-    pub target_velocity: Scalar,
+    pub target_velocity: f32,
     /// The target angle (rad) for position control.
-    pub target_position: Scalar,
+    pub target_position: f32,
     /// The maximum torque the motor can apply (N·m).
-    pub max_torque: Scalar,
+    pub max_torque: f32,
     /// The motor model used for computing the motor torque.
     pub motor_model: MotorModel,
 }
@@ -148,7 +149,7 @@ impl AngularMotor {
             enabled: true,
             target_velocity: 0.0,
             target_position: 0.0,
-            max_torque: Scalar::MAX,
+            max_torque: f32::MAX,
             motor_model,
         }
     }
@@ -173,21 +174,21 @@ impl AngularMotor {
 
     /// Sets the target angular velocity in radians per second.
     #[inline]
-    pub const fn with_target_velocity(mut self, velocity: Scalar) -> Self {
+    pub const fn with_target_velocity(mut self, velocity: f32) -> Self {
         self.target_velocity = velocity;
         self
     }
 
     /// Sets the target position.
     #[inline]
-    pub const fn with_target_position(mut self, target_position: Scalar) -> Self {
+    pub const fn with_target_position(mut self, target_position: f32) -> Self {
         self.target_position = target_position;
         self
     }
 
     /// Sets the maximum torque the motor can apply.
     #[inline]
-    pub const fn with_max_torque(mut self, max_torque: Scalar) -> Self {
+    pub const fn with_max_torque(mut self, max_torque: f32) -> Self {
         self.max_torque = max_torque;
         self
     }
@@ -221,6 +222,8 @@ impl AngularMotor {
 ///         .with_target_position(target_position)
 ///     )
 /// ```
+///
+/// [`PrismaticJoint`]: crate::dynamics::joints::prismatic::PrismaticJoint
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
@@ -229,11 +232,11 @@ pub struct LinearMotor {
     /// Whether the motor is enabled.
     pub enabled: bool,
     /// The target linear velocity (m/s).
-    pub target_velocity: Scalar,
+    pub target_velocity: f32,
     /// The target position (m) for position control.
-    pub target_position: Scalar,
+    pub target_position: f32,
     /// The maximum force the motor can apply (N).
-    pub max_force: Scalar,
+    pub max_force: f32,
     /// The motor model used for computing the motor force.
     pub motor_model: MotorModel,
 }
@@ -252,7 +255,7 @@ impl LinearMotor {
             enabled: true,
             target_velocity: 0.0,
             target_position: 0.0,
-            max_force: Scalar::MAX,
+            max_force: f32::MAX,
             motor_model,
         }
     }
@@ -277,21 +280,21 @@ impl LinearMotor {
 
     /// Sets the target linear velocity in meters per second.
     #[inline]
-    pub const fn with_target_velocity(mut self, velocity: Scalar) -> Self {
+    pub const fn with_target_velocity(mut self, velocity: f32) -> Self {
         self.target_velocity = velocity;
         self
     }
 
     /// Sets the target position.
     #[inline]
-    pub const fn with_target_position(mut self, target_position: Scalar) -> Self {
+    pub const fn with_target_position(mut self, target_position: f32) -> Self {
         self.target_position = target_position;
         self
     }
 
     /// Sets the maximum force the motor can apply.
     #[inline]
-    pub const fn with_max_force(mut self, max_force: Scalar) -> Self {
+    pub const fn with_max_force(mut self, max_force: f32) -> Self {
         self.max_force = max_force;
         self
     }

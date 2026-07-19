@@ -286,9 +286,9 @@ impl<N, E> StableUnGraph<N, E> {
     pub fn remove_edge(&mut self, e: EdgeIndex) -> Option<E> {
         // Every edge is part of two lists, outgoing and incoming edges.
         // Remove it from both.
-        let (is_edge, edge_node, edge_next) = match self.graph.edges.get(e.index()) {
-            None => return None,
-            Some(x) => (x.weight.is_some(), x.node, x.next),
+        let (is_edge, edge_node, edge_next) = {
+            let x = self.graph.edges.get(e.index())?;
+            (x.weight.is_some(), x.node, x.next)
         };
 
         if !is_edge {

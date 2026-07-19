@@ -117,7 +117,7 @@ pub enum ColliderTreeSystems {
 /// Trees for accelerating queries on a set of colliders.
 ///
 /// See the [`collider_tree`](crate::collider_tree) module for more information.
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Clone)]
 pub struct ColliderTrees {
     /// A tree for the colliders of dynamic bodies.
     pub dynamic_tree: ColliderTree,
