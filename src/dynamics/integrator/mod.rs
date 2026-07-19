@@ -399,10 +399,10 @@ pub fn integrate_velocities(
 #[cfg(feature = "new_gyro")]
 #[inline]
 pub fn solve_gyroscopic_torque(
-    ang_vel: &mut Vector,
-    rotation: Quaternion,
+    ang_vel: &mut Vec3,
+    rotation: Quat,
     local_inertia: &ComputedAngularInertia,
-    delta_secs: Scalar,
+    delta_secs: f32,
 ) {
     // Convert angular velocity to body space so that we can use the local angular inertia.
     let local_ang_vel = rotation.inverse() * *ang_vel;

@@ -11,7 +11,7 @@
 //!
 //! Avian handles gyroscopic motion automatically. No special setup is required.
 
-use avian3d::{math::*, prelude::*};
+use avian3d::prelude::*;
 use bevy::prelude::*;
 use examples_common_3d::ExampleCommonPlugin;
 
@@ -35,7 +35,7 @@ fn main() {
 /// The angular velocities of bodies with this component
 /// are updated whenever their moments of inertia change
 #[derive(Component)]
-struct InitialAngularMomentum(Vector);
+struct InitialAngularMomentum(Vec3);
 
 fn setup(
     mut commands: Commands,
@@ -49,7 +49,7 @@ fn setup(
     commands.spawn((
         Name::new("Long Bar"),
         RigidBody::Dynamic,
-        InitialAngularMomentum(Vector::Y * 10.0),
+        InitialAngularMomentum(Vec3::Y * 10.0),
         Transform::from_xyz(-4.0, 0.0, 0.0).with_rotation(Quat::from_rotation_z(0.3)),
         Collider::from(bar),
         Mesh3d(meshes.add(bar)),
@@ -61,7 +61,7 @@ fn setup(
     commands.spawn((
         Name::new("Flat Plate"),
         RigidBody::Dynamic,
-        InitialAngularMomentum(Vector::Y * 500.0),
+        InitialAngularMomentum(Vec3::Y * 500.0),
         Transform::from_xyz(4.0, 0.0, 0.0).with_rotation(Quat::from_rotation_z(0.3)),
         Collider::from(plate),
         Mesh3d(meshes.add(plate)),
@@ -72,7 +72,7 @@ fn setup(
     commands.spawn((
         DirectionalLight {
             illuminance: 3000.0,
-            shadows_enabled: true,
+            shadow_maps_enabled: true,
             ..default()
         },
         Transform::default().looking_at(Vec3::new(-1.0, -2.5, -1.5), Vec3::Y),
