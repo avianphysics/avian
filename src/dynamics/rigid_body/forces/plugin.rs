@@ -5,7 +5,7 @@ use crate::{
         },
         solver::{
             SolverDiagnostics,
-            solver_body::{SolverBody, SolverBodyInertia},
+            solver_body::{SolverBodies, SolverBodyIndex},
         },
     },
     prelude::*,
@@ -105,15 +105,15 @@ fn apply_constant_forces(
 
 /// Applies [`ConstantTorque`] to the accumulated torques.
 fn apply_constant_torques(
-    mut bodies: Query<(
-        &mut VelocityIntegrationData,
-        &SolverBodyInertia,
-        &ConstantTorque,
-    )>,
+    solver_bodies: Res<SolverBodies>,
+    mut bodies: Query<(&SolverBodyIndex, &mut VelocityIntegrationData, &ConstantTorque)>,
 ) {
     bodies
         .iter_mut()
-        .for_each(|(mut integration, inertia, constant_torque)| {
+        .for_each(|(index, mut integration, constant_torque)| {
+            let Some(inertia) = solver_bodies.get_inertia(*index) else {
+                return;
+            };
             integration.angular_increment +=
                 inertia.effective_inv_angular_inertia() * constant_torque.0;
         })
@@ -205,8 +205,9 @@ fn apply_constant_local_angular_acceleration(
 ///
 /// This should run in the substepping loop, just before [`IntegrationSystems::Velocity`].
 fn apply_local_acceleration(
-    mut bodies: Query<
-        (&mut SolverBody, &AccumulatedLocalAcceleration, &Rotation),
+    mut solver_bodies: ResMut<SolverBodies>,
+    bodies: Query<
+        (&SolverBodyIndex, &AccumulatedLocalAcceleration, &Rotation),
         Without<CustomVelocityIntegration>,
     >,
     mut diagnostics: ResMut<SolverDiagnostics>,
@@ -216,26 +217,27 @@ fn apply_local_acceleration(
 
     let delta_secs = time.delta_secs();
 
-    bodies
-        .iter_mut()
-        .for_each(|(mut body, acceleration, rotation)| {
-            let rotation = body.delta_rotation * Rot::from(*rotation);
-            let locked_axes = body.flags.locked_axes();
+    let access = solver_bodies.access();
 
-            // Compute the world space velocity increments with locked axes applied.
-            let world_linear_acceleration =
-                locked_axes.apply_to_vec(rotation * acceleration.linear);
-            #[cfg(feature = "3d")]
-            let world_angular_acceleration =
-                locked_axes.apply_to_vec(rotation * acceleration.angular);
+    bodies.iter().for_each(|(index, acceleration, rotation)| {
+        // SAFETY: Each entity has a unique solver body index, so the accessed bodies are disjoint.
+        let body = unsafe { access.body_unchecked_mut(*index) };
 
-            // Apply acceleration.
-            body.linear_velocity += world_linear_acceleration * delta_secs;
-            #[cfg(feature = "3d")]
-            {
-                body.angular_velocity += world_angular_acceleration * delta_secs;
-            }
-        });
+        let rotation = body.delta_rotation * Rot::from(*rotation);
+        let locked_axes = body.flags.locked_axes();
+
+        // Compute the world space velocity increments with locked axes applied.
+        let world_linear_acceleration = locked_axes.apply_to_vec(rotation * acceleration.linear);
+        #[cfg(feature = "3d")]
+        let world_angular_acceleration = locked_axes.apply_to_vec(rotation * acceleration.angular);
+
+        // Apply acceleration.
+        body.linear_velocity += world_linear_acceleration * delta_secs;
+        #[cfg(feature = "3d")]
+        {
+            body.angular_velocity += world_angular_acceleration * delta_secs;
+        }
+    });
 
     diagnostics.integrate_velocities += start.elapsed();
 }

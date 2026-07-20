@@ -17,7 +17,7 @@ use crate::{
         joints::EntityConstraint,
         solver::{
             islands::{BodyIslandNode, PhysicsIslands},
-            solver_body::{SolverBody, SolverBodyFlags},
+            solver_body::{SolverBodies, SolverBodyFlags, SolverBodyIndex},
         },
     },
     prelude::*,
@@ -292,7 +292,8 @@ fn debug_render_colliders(
         Option<&DebugRender>,
     )>,
     sleeping: Query<(), With<Sleeping>>,
-    solver_bodies: Query<&SolverBody>,
+    body_indices: Query<&SolverBodyIndex>,
+    solver_bodies: Res<SolverBodies>,
     mut gizmos: Gizmos<PhysicsGizmos>,
     store: Res<GizmoConfigStore>,
 ) {
@@ -304,8 +305,9 @@ fn debug_render_colliders(
             let collider_rb = collider_rb.map_or(entity, |c| c.body);
 
             let ccd_color = (render_config.is_none())
-                .then(|| solver_bodies.get(collider_rb).ok())
+                .then(|| body_indices.get(collider_rb).ok().copied())
                 .flatten()
+                .and_then(|index| solver_bodies.get(index))
                 .and_then(|solver_body| {
                     if solver_body
                         .flags

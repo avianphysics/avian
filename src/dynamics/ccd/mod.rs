@@ -215,7 +215,7 @@
 //! However, this comes at the cost of worse performance for the entire simulation.
 
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
-use super::solver::solver_body::{SolverBody, SolverBodyFlags};
+use super::solver::solver_body::{SolverBodies, SolverBody, SolverBodyFlags, SolverBodyIndex};
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 use crate::prelude::*;
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
@@ -544,7 +544,7 @@ impl SpeculativeCcd {
 #[derive(QueryData)]
 struct CcdBodyQuery {
     entity: Entity,
-    body: &'static SolverBody,
+    index: &'static SolverBodyIndex,
     position: &'static Position,
     rotation: &'static Rotation,
     com: &'static ComputedCenterOfMass,
@@ -556,8 +556,8 @@ struct CcdBodyQuery {
 /// A time-of-impact result for a single fast body.
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 struct CcdResult {
-    /// The fast body that was swept.
-    entity: Entity,
+    /// The [`SolverBodyIndex`] of the fast body that was swept.
+    index: SolverBodyIndex,
     /// The time of impact fraction in `[0, 1]`,
     fraction: f32,
     /// Details of the earliest impact, if one was found.
@@ -589,7 +589,8 @@ struct CcdImpact {
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 fn solve_continuous(
     colliders: Query<(&Collider, &Position, &Rotation)>,
-    mut bodies: ParamSet<(Query<CcdBodyQuery>, Query<&mut SolverBody>)>,
+    ccd_query: Query<CcdBodyQuery>,
+    mut solver_bodies: ResMut<SolverBodies>,
     trees: Res<ColliderTrees>,
     mut contact_graph: ResMut<ContactGraph>,
     time: Res<Time>,
@@ -602,6 +603,10 @@ fn solve_continuous(
         return;
     }
     let inv_dt = 1.0 / delta_secs;
+
+    // Shared, read-only access to the solver bodies for the parallel sweep phase below.
+    // Time-of-impact corrections are written back into the resource afterwards.
+    let bodies = &*solver_bodies;
 
     // Avian's approach to CCD is heavily inspired by Box2D by Erin Catto,
     // with some notable differences (as of Box2D 3.1.0):
@@ -627,10 +632,14 @@ fn solve_continuous(
     // This runs in parallel over solver bodies. The order of TOI sweeps does not matter,
     // as each fast body only reads the trees and produces its own deterministic result.
     // This combines parts of `b2FinalizeBodiesTask` and `b2SolveContinuous` from Box2D.
-    let ccd_query = bodies.p0();
     ccd_query.par_iter().for_each(|fast| {
+        // Fetch the fast body's solver body state.
+        let Some(body) = bodies.get(*fast.index) else {
+            return;
+        };
+
         // Only dynamic bodies support CCD.
-        if !fast.body.flags.is_dynamic() {
+        if !body.flags.is_dynamic() {
             return;
         }
 
@@ -640,7 +649,6 @@ fn solve_continuous(
             return;
         }
 
-        let body = fast.body;
         let ccd_thickness = fast.size_metrics.ccd_thickness;
         let sweep_radius = fast.size_metrics.sweep_radius;
 
@@ -683,7 +691,7 @@ fn solve_continuous(
                 .get_or(|| RefCell::new(Vec::new()))
                 .borrow_mut()
                 .push(CcdResult {
-                    entity: fast.entity,
+                    index: *fast.index,
                     fraction,
                     impact,
                 });
@@ -785,18 +793,22 @@ fn solve_continuous(
                     let (motion2, mode2) = match proxy.body {
                         Some(body2_entity) => match ccd_query.get(body2_entity) {
                             Ok(body2) => {
-                                let target_com_world =
-                                    body2.position.0 + (body2.rotation * body2.com.0).real();
-                                (
-                                    collider_sweep_motion(
-                                        target_pos.0,
-                                        target_rot,
-                                        target_com_world,
-                                        body2.body,
-                                        inv_dt,
-                                    ),
-                                    body2.ccd.map_or(SweepMode::NonLinear, |ccd| ccd.mode),
-                                )
+                                if let Some(solver_body2) = bodies.get(*body2.index) {
+                                    let target_com_world =
+                                        body2.position.0 + (body2.rotation * body2.com.0).real();
+                                    (
+                                        collider_sweep_motion(
+                                            target_pos.0,
+                                            target_rot,
+                                            target_com_world,
+                                            solver_body2,
+                                            inv_dt,
+                                        ),
+                                        body2.ccd.map_or(SweepMode::NonLinear, |ccd| ccd.mode),
+                                    )
+                                } else {
+                                    (static_motion(target_pos.0, target_rot), SweepMode::Linear)
+                                }
                             }
                             Err(_) => (static_motion(target_pos.0, target_rot), SweepMode::Linear),
                         },
@@ -842,7 +854,7 @@ fn solve_continuous(
         .into_iter()
         .flat_map(|cell| cell.into_inner())
         .collect();
-    results.sort_unstable_by_key(|result| result.entity);
+    results.sort_unstable_by_key(|result| result.index);
 
     // Mark fast bodies and apply any time-of-impact corrections.
     //
@@ -850,14 +862,13 @@ fn solve_continuous(
     // and request a speculative distance to help ensure the contact is detected
     // by the discrete solver next timestep.
     if !results.is_empty() {
-        let mut body_query = bodies.p1();
         for CcdResult {
-            entity,
+            index,
             fraction,
             impact,
         } in results
         {
-            if let Ok(mut solver_body) = body_query.get_mut(entity) {
+            if let Some(solver_body) = solver_bodies.get_mut(index) {
                 // Note: This flag is only retained for debug rendering.
                 solver_body.flags.insert(SolverBodyFlags::IS_FAST);
 

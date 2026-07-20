@@ -33,7 +33,7 @@ use crate::{
         solver::{
             constraint_graph::ConstraintGraph,
             islands::{BodyIslandNode, IslandId, PhysicsIslands},
-            solver_body::SolverBody,
+            solver_body::{SolverBodies, SolverBodyIndex},
         },
     },
     prelude::*,
@@ -48,9 +48,9 @@ impl Plugin for IslandSleepingPlugin {
         app.init_resource::<AwakeIslandBitVec>();
         app.init_resource::<TimeToSleep>();
 
-        // Insert `SleepThreshold` and `SleepTimer` for each `SolverBody`.
-        app.register_required_components::<SolverBody, SleepThreshold>();
-        app.register_required_components::<SolverBody, SleepTimer>();
+        // Insert `SleepThreshold` and `SleepTimer` for each body that has a solver body.
+        app.register_required_components::<SolverBodyIndex, SleepThreshold>();
+        app.register_required_components::<SolverBodyIndex, SleepTimer>();
 
         // Set up cached system states for sleeping and waking bodies or islands.
         let cached_system_state1 = CachedBodySleepingSystemState(SystemState::new(app.world_mut()));
@@ -186,11 +186,12 @@ fn wake_islands_with_sleeping_disabled(
 fn update_sleeping_states(
     mut awake_island_bit_vec: ResMut<AwakeIslandBitVec>,
     mut islands: ResMut<PhysicsIslands>,
+    solver_bodies: Res<SolverBodies>,
     mut query: Query<
         (
             &mut SleepTimer,
             &SleepThreshold,
-            &SolverBody,
+            &SolverBodyIndex,
             &BodyIslandNode,
         ),
         (Without<Sleeping>, Without<SleepingDisabled>),
@@ -205,7 +206,10 @@ fn update_sleeping_states(
     islands.split_candidate_sleep_timer = 0.0;
 
     // TODO: This would be nice to do in parallel.
-    for (mut sleep_timer, sleep_threshold, solver_body, island_data) in query.iter_mut() {
+    for (mut sleep_timer, sleep_threshold, index, island_data) in query.iter_mut() {
+        let Some(solver_body) = solver_bodies.get(*index) else {
+            continue;
+        };
         let lin_vel_squared = solver_body.linear_velocity.length_squared();
         #[cfg(feature = "2d")]
         let ang_vel_squared = solver_body.angular_velocity * solver_body.angular_velocity;

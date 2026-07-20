@@ -60,7 +60,7 @@ use crate::{
     data_structures::stable_vec::StableVec,
     dynamics::{
         joints::joint_graph::{JointGraph, JointId},
-        solver::solver_body::SolverBody,
+        solver::solver_body::SolverBodyIndex,
     },
     prelude::{
         ContactGraph, PhysicsSchedule, RigidBody, RigidBodyColliders, RigidBodyDisabled,
@@ -77,8 +77,8 @@ impl Plugin for IslandPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PhysicsIslands>();
 
-        // Insert `BodyIslandNode` for each `SolverBody`.
-        app.register_required_components::<SolverBody, BodyIslandNode>();
+        // Insert `BodyIslandNode` for each body that has a solver body.
+        app.register_required_components::<SolverBodyIndex, BodyIslandNode>();
 
         // Add `BodyIslandNode` for each dynamic and kinematic rigid body
         // when the associated rigid body is enabled.

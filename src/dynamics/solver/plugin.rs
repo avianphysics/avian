@@ -13,7 +13,9 @@ use crate::{
             islands::{BodyIslandNode, IslandId, PhysicsIslands, WakeIslands},
             schedule::SubstepSolverSystems,
             softness_parameters::{SoftnessCoefficients, SoftnessParameters},
-            solver_body::{SolverBody, SolverBodyInertia},
+            solver_body::{
+                SolverBodies, SolverBodiesAccess, SolverBody, SolverBodyIndex, SolverBodyInertia,
+            },
         },
     },
     prelude::*,
@@ -654,7 +656,7 @@ pub struct ContactConstraints(pub Vec<ContactConstraint>);
 pub(super) struct BodyQuery {
     pub(super) rb: Read<RigidBody>,
     pub(super) linear_velocity: Read<LinearVelocity>,
-    pub(super) inertia: Option<Read<SolverBodyInertia>>,
+    pub(super) index: Option<Read<SolverBodyIndex>>,
 }
 
 fn prepare_contact_constraints(
@@ -662,6 +664,7 @@ fn prepare_contact_constraints(
     mut constraint_graph: ResMut<ConstraintGraph>,
     mut diagnostics: ResMut<SolverDiagnostics>,
     bodies: Query<BodyQuery, RigidBodyActiveFilter>,
+    solver_bodies: Res<SolverBodies>,
     narrow_phase_config: Res<NarrowPhaseConfig>,
     contact_softness: Res<ContactSoftnessCoefficients>,
 ) {
@@ -718,11 +721,24 @@ fn prepare_contact_constraints(
                 continue;
             }
 
+            // Look up the solver body indices and inertias, falling back to dummy inertia
+            // for static bodies without an associated solver body.
+            let index1 = body1.index.copied().unwrap_or(SolverBodyIndex::INVALID);
+            let index2 = body2.index.copied().unwrap_or(SolverBodyIndex::INVALID);
+            let inertia1 = solver_bodies
+                .get_inertia(index1)
+                .unwrap_or(&SolverBodyInertia::DUMMY);
+            let inertia2 = solver_bodies
+                .get_inertia(index2)
+                .unwrap_or(&SolverBodyInertia::DUMMY);
+
             let constraint = ContactConstraint::generate(
-                body1_entity,
-                body2_entity,
-                body1,
-                body2,
+                index1,
+                index2,
+                inertia1,
+                inertia2,
+                body1.linear_velocity.0,
+                body2.linear_velocity.0,
                 contact_pair.contact_id,
                 manifold,
                 manifold_index,
@@ -748,19 +764,21 @@ fn prepare_contact_constraints(
 ///
 /// See [`SubstepSolverSystems::WarmStart`] for more information.
 fn warm_start(
-    bodies: Query<(&mut SolverBody, &SolverBodyInertia)>,
+    mut solver_bodies: ResMut<SolverBodies>,
     mut constraint_graph: ResMut<ConstraintGraph>,
     solver_config: Res<SolverConfig>,
     mut diagnostics: ResMut<SolverDiagnostics>,
 ) {
     let start = crate::utils::Instant::now();
 
+    let access = solver_bodies.access();
+
     // Warm start overflow constraints serially. They have lower priority, so they are solved first.
     for constraint in constraint_graph.colors[COLOR_OVERFLOW_INDEX]
         .contact_constraints
         .iter_mut()
     {
-        warm_start_internal(&bodies, constraint, solver_config.warm_start_coefficient);
+        warm_start_internal(&access, constraint, solver_config.warm_start_coefficient);
     }
 
     // Warm start constraints in each color in parallel.
@@ -771,7 +789,7 @@ fn warm_start(
         .filter(|color| !color.contact_constraints.is_empty())
     {
         crate::utils::par_for_each(&mut color.contact_constraints, 64, |_i, constraint| {
-            warm_start_internal(&bodies, constraint, solver_config.warm_start_coefficient);
+            warm_start_internal(&access, constraint, solver_config.warm_start_coefficient);
         });
     }
 
@@ -779,7 +797,7 @@ fn warm_start(
 }
 
 fn warm_start_internal(
-    bodies: &Query<(&mut SolverBody, &SolverBodyInertia)>,
+    access: &SolverBodiesAccess,
     constraint: &mut ContactConstraint,
     warm_start_coefficient: f32,
 ) {
@@ -791,13 +809,19 @@ fn warm_start_internal(
     let (mut body1, mut inertia1) = (&mut dummy_body1, &SolverBodyInertia::DUMMY);
     let (mut body2, mut inertia2) = (&mut dummy_body2, &SolverBodyInertia::DUMMY);
 
-    // Get the solver bodies for the two colliding entities.
-    if let Ok((body, inertia)) = unsafe { bodies.get_unchecked(constraint.body1) } {
-        body1 = body.into_inner();
+    // Get the solver bodies for the two colliding bodies. A dummy body is used
+    // for static bodies without an associated solver body.
+    //
+    // SAFETY: Constraint graph coloring guarantees that the two bodies are distinct, and that no
+    //         other constraint solved in parallel within this color touches the same bodies.
+    let (b1, b2) =
+        unsafe { access.get_pair_unchecked_mut(constraint.body_index1, constraint.body_index2) };
+    if let Some((body, inertia)) = b1 {
+        body1 = body;
         inertia1 = inertia;
     }
-    if let Ok((body, inertia)) = unsafe { bodies.get_unchecked(constraint.body2) } {
-        body2 = body.into_inner();
+    if let Some((body, inertia)) = b2 {
+        body2 = body;
         inertia2 = inertia;
     }
 
@@ -826,7 +850,7 @@ fn warm_start_internal(
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::type_complexity)]
 fn solve_contacts<const USE_BIAS: bool>(
-    bodies: Query<(&mut SolverBody, &SolverBodyInertia)>,
+    mut solver_bodies: ResMut<SolverBodies>,
     mut constraint_graph: ResMut<ConstraintGraph>,
     solver_config: Res<SolverConfig>,
     length_unit: Res<PhysicsLengthUnit>,
@@ -838,13 +862,15 @@ fn solve_contacts<const USE_BIAS: bool>(
     let delta_secs = time.delta_secs();
     let max_overlap_solve_speed = solver_config.max_overlap_solve_speed * length_unit.0;
 
+    let access = solver_bodies.access();
+
     // Solve overflow constraints serially. They have lower priority, so they are solved first.
     for constraint in constraint_graph.colors[COLOR_OVERFLOW_INDEX]
         .contact_constraints
         .iter_mut()
     {
         solve_contacts_internal::<USE_BIAS>(
-            &bodies,
+            &access,
             constraint,
             max_overlap_solve_speed,
             delta_secs,
@@ -860,7 +886,7 @@ fn solve_contacts<const USE_BIAS: bool>(
     {
         crate::utils::par_for_each(&mut color.contact_constraints, 64, |_i, constraint| {
             solve_contacts_internal::<USE_BIAS>(
-                &bodies,
+                &access,
                 constraint,
                 max_overlap_solve_speed,
                 delta_secs,
@@ -876,7 +902,7 @@ fn solve_contacts<const USE_BIAS: bool>(
 }
 
 fn solve_contacts_internal<const USE_BIAS: bool>(
-    bodies: &Query<(&mut SolverBody, &SolverBodyInertia)>,
+    access: &SolverBodiesAccess,
     constraint: &mut ContactConstraint,
     max_overlap_solve_speed: f32,
     delta_secs: f32,
@@ -887,13 +913,19 @@ fn solve_contacts_internal<const USE_BIAS: bool>(
     let (mut body1, mut inertia1) = (&mut dummy_body1, &SolverBodyInertia::DUMMY);
     let (mut body2, mut inertia2) = (&mut dummy_body2, &SolverBodyInertia::DUMMY);
 
-    // Get the solver bodies for the two colliding entities.
-    if let Ok((body, inertia)) = unsafe { bodies.get_unchecked(constraint.body1) } {
-        body1 = body.into_inner();
+    // Get the solver bodies for the two colliding bodies. A dummy body is used
+    // for static bodies without an associated solver body.
+    //
+    // SAFETY: Constraint graph coloring guarantees that the two bodies are distinct, and that no
+    //         other constraint solved in parallel within this color touches the same bodies.
+    let (b1, b2) =
+        unsafe { access.get_pair_unchecked_mut(constraint.body_index1, constraint.body_index2) };
+    if let Some((body, inertia)) = b1 {
+        body1 = body;
         inertia1 = inertia;
     }
-    if let Ok((body, inertia)) = unsafe { bodies.get_unchecked(constraint.body2) } {
-        body2 = body.into_inner();
+    if let Some((body, inertia)) = b2 {
+        body2 = body;
         inertia2 = inertia;
     }
 
@@ -925,7 +957,7 @@ fn solve_contacts_internal<const USE_BIAS: bool>(
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::type_complexity)]
 fn solve_restitution(
-    bodies: Query<(&mut SolverBody, &SolverBodyInertia)>,
+    mut solver_bodies: ResMut<SolverBodies>,
     mut constraint_graph: ResMut<ConstraintGraph>,
     solver_config: Res<SolverConfig>,
     length_unit: Res<PhysicsLengthUnit>,
@@ -936,13 +968,15 @@ fn solve_restitution(
     // The restitution threshold determining the speed required for restitution to be applied.
     let threshold = solver_config.restitution_threshold * length_unit.0;
 
+    let access = solver_bodies.access();
+
     // Solve restitution for overflow constraints serially. They have lower priority, so they are solved first.
     for constraint in constraint_graph.colors[COLOR_OVERFLOW_INDEX]
         .contact_constraints
         .iter_mut()
     {
         solve_restitution_internal(
-            &bodies,
+            &access,
             constraint,
             threshold,
             solver_config.restitution_iterations,
@@ -958,7 +992,7 @@ fn solve_restitution(
     {
         crate::utils::par_for_each(&mut color.contact_constraints, 64, |_i, constraint| {
             solve_restitution_internal(
-                &bodies,
+                &access,
                 constraint,
                 threshold,
                 solver_config.restitution_iterations,
@@ -970,7 +1004,7 @@ fn solve_restitution(
 }
 
 fn solve_restitution_internal(
-    bodies: &Query<(&mut SolverBody, &SolverBodyInertia)>,
+    access: &SolverBodiesAccess,
     constraint: &mut ContactConstraint,
     threshold: f32,
     iterations: usize,
@@ -987,13 +1021,19 @@ fn solve_restitution_internal(
     let (mut body1, mut inertia1) = (&mut dummy_body1, &SolverBodyInertia::DUMMY);
     let (mut body2, mut inertia2) = (&mut dummy_body2, &SolverBodyInertia::DUMMY);
 
-    // Get the solver bodies for the two colliding entities.
-    if let Ok((body, inertia)) = unsafe { bodies.get_unchecked(constraint.body1) } {
-        body1 = body.into_inner();
+    // Get the solver bodies for the two colliding bodies. A dummy body is used
+    // for static bodies without an associated solver body.
+    //
+    // SAFETY: Constraint graph coloring guarantees that the two bodies are distinct, and that no
+    //         other constraint solved in parallel within this color touches the same bodies.
+    let (b1, b2) =
+        unsafe { access.get_pair_unchecked_mut(constraint.body_index1, constraint.body_index2) };
+    if let Some((body, inertia)) = b1 {
+        body1 = body;
         inertia1 = inertia;
     }
-    if let Ok((body, inertia)) = unsafe { bodies.get_unchecked(constraint.body2) } {
-        body2 = body.into_inner();
+    if let Some((body, inertia)) = b2 {
+        body2 = body;
         inertia2 = inertia;
     }
 
@@ -1054,11 +1094,14 @@ fn store_contact_impulses(
 /// Applies velocity corrections caused by joint damping.
 #[allow(clippy::type_complexity)]
 pub fn joint_damping<T: Component + EntityConstraint<2>>(
-    bodies: Query<(&mut SolverBody, &SolverBodyInertia)>,
+    mut solver_bodies: ResMut<SolverBodies>,
+    index_query: Query<&SolverBodyIndex>,
     joints: Query<(&T, &JointDamping)>,
     time: Res<Time>,
 ) {
     let delta_secs = time.delta_secs();
+
+    let access = solver_bodies.access();
 
     let mut dummy_body1 = SolverBody::DUMMY;
     let mut dummy_body2 = SolverBody::DUMMY;
@@ -1066,16 +1109,32 @@ pub fn joint_damping<T: Component + EntityConstraint<2>>(
     for (joint, damping) in &joints {
         let entities = joint.entities();
 
+        // Map the two jointed entities to their solver body indices, using an invalid index
+        // for static bodies without an associated solver body.
+        let index1 = index_query
+            .get(entities[0])
+            .copied()
+            .unwrap_or(SolverBodyIndex::INVALID);
+        let index2 = index_query
+            .get(entities[1])
+            .copied()
+            .unwrap_or(SolverBodyIndex::INVALID);
+
+        debug_assert_ne!(index1, index2, "Joint connects the same body to itself");
+
         let (mut body1, mut inertia1) = (&mut dummy_body1, &SolverBodyInertia::DUMMY);
         let (mut body2, mut inertia2) = (&mut dummy_body2, &SolverBodyInertia::DUMMY);
 
-        // Get the solver bodies for the two jointed entities.
-        if let Ok((body, inertia)) = unsafe { bodies.get_unchecked(entities[0]) } {
-            body1 = body.into_inner();
+        // Get the solver bodies for the two jointed bodies.
+        //
+        // SAFETY: The two jointed bodies are distinct, and joints are processed serially here.
+        let (b1, b2) = unsafe { access.get_pair_unchecked_mut(index1, index2) };
+        if let Some((body, inertia)) = b1 {
+            body1 = body;
             inertia1 = inertia;
         }
-        if let Ok((body, inertia)) = unsafe { bodies.get_unchecked(entities[1]) } {
-            body2 = body.into_inner();
+        if let Some((body, inertia)) = b2 {
+            body2 = body;
             inertia2 = inertia;
         }
 

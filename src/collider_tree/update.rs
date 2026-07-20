@@ -9,7 +9,7 @@ use crate::{
     },
     collision::collider::{ColliderAabbMargin, EnlargedAabb},
     data_structures::bit_vec::BitVec,
-    dynamics::solver::solver_body::SolverBody,
+    dynamics::solver::solver_body::SolverBodyIndex,
     prelude::*,
     schedule::LastPhysicsTick,
 };
@@ -664,7 +664,7 @@ fn update_solver_body_aabbs<C: AnyCollider>(
             &RigidBodyColliders,
             Option<&SpeculativeCcd>,
         ),
-        With<SolverBody>,
+        With<SolverBodyIndex>,
     >,
     mut colliders: ParamSet<(
         Query<

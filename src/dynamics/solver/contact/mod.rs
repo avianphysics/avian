@@ -9,19 +9,13 @@ pub use tangent_part::ContactTangentPart;
 use core::cmp::Ordering;
 
 use crate::{
-    collision::contact_types::ContactId,
-    dynamics::solver::{BodyQueryItem, ContactSoftnessCoefficients},
-    prelude::*,
+    collision::contact_types::ContactId, dynamics::solver::ContactSoftnessCoefficients, prelude::*,
 };
 #[cfg(feature = "serialize")]
 use bevy::reflect::{ReflectDeserialize, ReflectSerialize};
-use bevy::{
-    ecs::entity::{Entity, EntityMapper, MapEntities},
-    reflect::Reflect,
-    utils::default,
-};
+use bevy::{reflect::Reflect, utils::default};
 
-use super::solver_body::{SolverBody, SolverBodyInertia};
+use super::solver_body::{SolverBody, SolverBodyIndex, SolverBodyInertia};
 
 // TODO: One-body constraint version
 /// Data and logic for solving a single contact point for a [`ContactConstraint`].
@@ -62,10 +56,12 @@ pub struct ContactConstraintPoint {
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, PartialEq)]
 pub struct ContactConstraint {
-    /// The first rigid body entity in the contact.
-    pub body1: Entity,
-    /// The second rigid body entity in the contact.
-    pub body2: Entity,
+    /// The [`SolverBodyIndex`] of the first body in the contact,
+    /// or [`SolverBodyIndex::INVALID`] if it is static or sleeping.
+    pub body_index1: SolverBodyIndex,
+    /// The [`SolverBodyIndex`] of the second body in the contact,
+    /// or [`SolverBodyIndex::INVALID`] if it is static or sleeping.
+    pub body_index2: SolverBodyIndex,
     /// The relative dominance of the bodies.
     ///
     /// If the relative dominance is positive, the first body is dominant
@@ -107,21 +103,20 @@ pub struct ContactConstraint {
 
 impl ContactConstraint {
     /// Generates a new [`ContactConstraint`] from the given bodies and contact manifold.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn generate(
-        body1_entity: Entity,
-        body2_entity: Entity,
-        body1: BodyQueryItem,
-        body2: BodyQueryItem,
+        body_index1: SolverBodyIndex,
+        body_index2: SolverBodyIndex,
+        inertia1: &SolverBodyInertia,
+        inertia2: &SolverBodyInertia,
+        linear_velocity1: Vector,
+        linear_velocity2: Vector,
         contact_id: ContactId,
         manifold: &ContactManifold,
         manifold_index: usize,
         warm_start_enabled: bool,
         softness: &ContactSoftnessCoefficients,
     ) -> Self {
-        // Get the solver body inertia if it exists, or use a dummy inertia for static bodies.
-        let inertia1 = body1.inertia.unwrap_or(&SolverBodyInertia::DUMMY);
-        let inertia2 = body2.inertia.unwrap_or(&SolverBodyInertia::DUMMY);
-
         // Compute the relative dominance of the bodies.
         let relative_dominance = inertia1.dominance() - inertia2.dominance();
 
@@ -155,11 +150,8 @@ impl ContactConstraint {
 
         let effective_inverse_mass_sum = inv_mass1 + inv_mass2;
 
-        let tangents = compute_tangent_directions(
-            manifold.normal,
-            body1.linear_velocity.0,
-            body2.linear_velocity.0,
-        );
+        let tangents =
+            compute_tangent_directions(manifold.normal, linear_velocity1, linear_velocity2);
 
         let mut points = Vec::with_capacity(manifold.points.len());
 
@@ -201,8 +193,8 @@ impl ContactConstraint {
         }
 
         ContactConstraint {
-            body1: body1_entity,
-            body2: body2_entity,
+            body_index1,
+            body_index2,
             relative_dominance,
             friction: manifold.friction,
             restitution: manifold.restitution,
@@ -445,12 +437,5 @@ fn compute_tangent_directions(
             .unwrap_or(force_direction.any_orthonormal_vector());
         let bitangent = force_direction.cross(tangent);
         [tangent, bitangent]
-    }
-}
-
-impl MapEntities for ContactConstraint {
-    fn map_entities<M: EntityMapper>(&mut self, entity_mapper: &mut M) {
-        self.body1 = entity_mapper.get_mapped(self.body1);
-        self.body2 = entity_mapper.get_mapped(self.body2);
     }
 }
