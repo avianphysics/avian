@@ -5,7 +5,7 @@
 
 use crate::prelude::*;
 use bevy::{
-    ecs::schedule::{ExecutorKind, LogLevel, ScheduleBuildSettings, ScheduleLabel},
+    ecs::schedule::{LogLevel, ScheduleBuildSettings, ScheduleLabel, SingleThreadedExecutor},
     prelude::*,
 };
 use dynamics::integrator::IntegrationSystems;
@@ -38,6 +38,7 @@ impl Plugin for SolverSchedulePlugin {
                 SolverSystems::Substep,
                 SolverSystems::PostSubstep,
                 SolverSystems::Restitution,
+                SolverSystems::ContinuousCollision,
                 SolverSystems::Finalize,
                 SolverSystems::StoreContactImpulses,
             )
@@ -51,7 +52,7 @@ impl Plugin for SolverSchedulePlugin {
         // Set up the substep schedule, the schedule that runs systems in the inner substepping loop.
         app.edit_schedule(SubstepSchedule, |schedule| {
             schedule
-                .set_executor_kind(ExecutorKind::SingleThreaded)
+                .set_executor(SingleThreadedExecutor::new())
                 .set_build_settings(ScheduleBuildSettings {
                     ambiguity_detection: LogLevel::Error,
                     ..default()
@@ -87,8 +88,9 @@ pub struct SubstepSchedule;
 /// 3. Prepare contact constraints ([`SolverSystems::PrepareContactConstraints`])
 /// 4. Substepping loop (runs the [`SubstepSchedule`] [`SubstepCount`] times; see [`SolverSystems::Substep`])
 /// 5. Apply restitution ([`SolverSystems::Restitution`])
-/// 6. Write back solver body data to rigid bodies. ([`SolverSystems::Finalize`])
-/// 7. Store contact impulses for next frame's warm starting ([`SolverSystems::StoreContactImpulses`])
+/// 6. Perform Continuous Collision Detection (CCD) for fast dynamic bodies ([`SolverSystems::ContinuousCollision`])
+/// 7. Write back solver body data to rigid bodies. ([`SolverSystems::Finalize`])
+/// 8. Store contact impulses for next frame's warm starting ([`SolverSystems::StoreContactImpulses`])
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SolverSystems {
     /// Prepares [solver bodies] for the substepping loop.
@@ -107,6 +109,8 @@ pub enum SolverSystems {
     PostSubstep,
     /// Applies [restitution](Restitution) for bodies after solving overlap.
     Restitution,
+    /// Performs [Continuous Collision Detection (CCD)](dynamics::ccd) for fast dynamic bodies.
+    ContinuousCollision,
     /// Writes back solver body data to rigid bodies.
     Finalize,
     /// Copies contact impulses from [`ContactConstraints`] to the contacts in the [`ContactGraph`].

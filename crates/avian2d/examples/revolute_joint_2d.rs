@@ -1,4 +1,4 @@
-use avian2d::{math::*, prelude::*};
+use avian2d::prelude::*;
 use bevy::prelude::*;
 use examples_common_2d::ExampleCommonPlugin;
 
@@ -11,7 +11,7 @@ fn main() {
         ))
         .insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.1)))
         .insert_resource(SubstepCount(50))
-        .insert_resource(Gravity(Vector::NEG_Y * 1000.0))
+        .insert_resource(Gravity(Vec2::NEG_Y * 1000.0))
         .add_systems(Startup, setup)
         .run();
 }
@@ -44,7 +44,7 @@ fn setup(mut commands: Commands) {
 
     commands.spawn(
         RevoluteJoint::new(anchor, object)
-            .with_local_anchor2(Vector::Y * 100.0)
+            .with_local_anchor2(Vec2::Y * 100.0)
             .with_angle_limits(-1.0, 1.0),
     );
 }

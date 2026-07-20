@@ -82,9 +82,9 @@ pub mod prelude {
     #[cfg(all(feature = "collider-from-mesh", feature = "default-collider"))]
     pub use super::collider::ColliderCachePlugin;
     pub use super::collider::{
-        AabbContext, AnyCollider, ColliderAabb, ColliderBackendPlugin, ColliderDisabled,
-        ColliderMarker, CollidingEntities, CollisionLayers, CollisionMargin,
-        ContactManifoldContext, IntoCollider, LayerMask, PhysicsLayer, ScalableCollider, Sensor,
+        AnyCollider, ColliderAabb, ColliderAabbMargin, ColliderBackendPlugin, ColliderContext,
+        ColliderDisabled, ColliderMarker, ColliderPairContext, CollidingEntities, CollisionLayers,
+        CollisionMargin, IntoCollider, LayerMask, PhysicsLayer, ScalableCollider, Sensor,
         SimpleCollider,
         collider_hierarchy::{ColliderHierarchyPlugin, ColliderOf, RigidBodyColliders},
         collider_transform::{ColliderTransform, ColliderTransformPlugin},
@@ -109,7 +109,8 @@ pub mod prelude {
     pub use super::hooks::{ActiveCollisionHooks, CollisionHooks};
     #[expect(deprecated)]
     pub use super::narrow_phase::{
-        NarrowPhaseConfig, NarrowPhasePlugin, NarrowPhaseSet, NarrowPhaseSystems,
+        ContactStatusChange, ContactStatusChangeQueue, NarrowPhaseConfig, NarrowPhasePlugin,
+        NarrowPhaseSet, NarrowPhaseSystems,
     };
 }
 

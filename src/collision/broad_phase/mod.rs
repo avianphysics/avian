@@ -68,11 +68,11 @@
 //! ```
 #![cfg_attr(
     feature = "2d",
-    doc = "# use avian2d::{dynamics::solver::joint_graph::JointGraph, prelude::*};"
+    doc = "# use avian2d::{dynamics::joints::joint_graph::JointGraph, prelude::*};"
 )]
 #![cfg_attr(
     not(feature = "2d"),
-    doc = "# use avian3d::{dynamics::solver::joint_graph::JointGraph, prelude::*};"
+    doc = "# use avian3d::{dynamics::joints::joint_graph::JointGraph, prelude::*};"
 )]
 //! # use bevy::prelude::*;
 //! #
@@ -157,7 +157,7 @@ mod bvh_broad_phase;
 pub use bvh_broad_phase::BvhBroadPhasePlugin;
 
 use crate::{
-    collision::CollisionDiagnostics, dynamics::solver::joint_graph::JointGraph, prelude::*,
+    collision::CollisionDiagnostics, dynamics::joints::joint_graph::JointGraph, prelude::*,
 };
 use bevy::prelude::*;
 

@@ -18,7 +18,7 @@ use crate::prelude::*;
 /// # Example
 ///
 /// ```
-/// # use avian3d::{prelude::*, math::Vector};
+/// # use avian3d::{prelude::*, math::RVector};
 ///
 /// let collider = Collider::sphere(1.0);
 ///
@@ -44,7 +44,7 @@ use crate::prelude::*;
 /// // Generating the trimesh with a transformation
 /// let trimesh = collider
 ///     .trimesh_builder()
-///     .translated(Vector::new(1.0, 0.0, 0.0))
+///     .translated(RVector::new(1.0, 0.0, 0.0))
 ///     .build()
 ///     .unwrap();
 /// ```
@@ -53,9 +53,9 @@ pub struct TrimeshBuilder {
     /// The shape to be converted into a triangle mesh.
     pub shape: SharedShape,
     /// The position of the shape. The default is [0, 0, 0].
-    pub position: Position,
+    pub position: RVector,
     /// The rotation of the shape. The default is the identity rotation.
-    pub rotation: Rotation,
+    pub rotation: Rot,
     /// Whether a failure to trimesh a subshape in a compound shape should fail the entire build process.
     /// Default is true.
     pub fail_on_compound_error: bool,
@@ -79,9 +79,9 @@ pub struct TrimeshBuilder {
 /// A generic triangle mesh representation.
 #[derive(Debug, Clone, PartialEq, Reflect, Default)]
 pub struct Trimesh {
-    /// The vertices in
-    pub vertices: Vec<Vector>,
-    /// The indices in counter-clockwise winding
+    /// The vertices of the mesh.
+    pub vertices: Vec<RVector>,
+    /// The triangle indices in counterclockwise winding.
     pub indices: Vec<[u32; 3]>,
 }
 
@@ -126,13 +126,13 @@ impl TrimeshBuilder {
     }
 
     /// Translates the mesh. Subsequent calls to this method will add to the previous translation.
-    pub fn translated(&mut self, position: impl Into<Position>) -> &mut Self {
-        self.position.0 += position.into().0;
+    pub fn translated(&mut self, position: RVector) -> &mut Self {
+        self.position += position;
         self
     }
 
     /// Rotates the mesh. Subsequent calls to this method will add to the previous rotation.
-    pub fn rotated(&mut self, rotation: impl Into<Rotation>) -> &mut Self {
+    pub fn rotated(&mut self, rotation: impl Into<Rot>) -> &mut Self {
         self.rotation = rotation.into() * self.rotation;
         self
     }
@@ -255,14 +255,14 @@ impl TrimeshBuilder {
             // Compounds need to be unpacked
             TypedShape::Compound(compound) => {
                 let mut sub_builder = self.clone();
+                let rot = self.rotation.real();
                 return compound.shapes().iter().try_fold(
                     Trimesh::default(),
                     move |mut compound_trimesh, (sub_pos, shape)| {
                         sub_builder.shape = shape.clone();
-                        sub_builder.position =
-                            Position(self.position.0 + self.rotation * sub_pos.translation);
+                        sub_builder.position = self.position + rot * sub_pos.translation;
                         sub_builder.rotation =
-                            self.rotation.mul_quat(sub_pos.rotation).normalize().into();
+                            self.rotation.mul_quat(sub_pos.rotation.f32()).normalize();
                         let trimesh = match sub_builder.build() {
                             Ok(trimesh) => trimesh,
                             Err(error) => {
@@ -319,11 +319,9 @@ impl TrimeshBuilder {
             }
         };
         let pos = self.position;
+        let rot = self.rotation.real();
         Ok(Trimesh {
-            vertices: vertices
-                .into_iter()
-                .map(|v| pos.0 + self.rotation * v)
-                .collect(),
+            vertices: vertices.into_iter().map(|v| pos + rot * v).collect(),
             indices,
         })
     }
@@ -370,6 +368,7 @@ impl From<Trimesh> for Mesh {
 
 #[cfg(test)]
 mod tests {
+    use approx::assert_relative_eq;
     use bevy_math::DVec3;
 
     use super::*;
@@ -387,9 +386,9 @@ mod tests {
         let a = Collider::cuboid(1.0, 2.0, 3.0);
         let b = Collider::sphere(0.4);
         let collider = Collider::compound(vec![
-            (Vector::new(1.0, 2.0, 3.0), Quat::from_rotation_z(0.2), a),
+            (RVector::new(1.0, 2.0, 3.0), Quat::from_rotation_z(0.2), a),
             (
-                Vector::new(-12.0, 4.0, -0.01),
+                RVector::new(-12.0, 4.0, -0.01),
                 Quat::from_rotation_x(0.1),
                 b,
             ),
@@ -397,39 +396,29 @@ mod tests {
         let trimesh = collider
             .trimesh_builder()
             .fallback_subdivisions(2)
-            .translated(Vector::new(3.0, -2.0, 0.0))
+            .translated(RVector::new(3.0, -2.0, 0.0))
             .rotated(Quat::from_rotation_y(-3.0))
             .build()
             .unwrap();
-        assert_eq!(
-            trimesh.vertices,
-            vec![
-                DVec3::new(1.663415604680207, -1.0794012104819937, -4.354963570435039)
-                    .adjust_precision(),
-                DVec3::new(2.0867756033225007, -1.0794012104819934, -1.3849860769934488)
-                    .adjust_precision(),
-                DVec3::new(1.116517045301514, -0.8807318727109547, -1.246679082171598)
-                    .adjust_precision(),
-                DVec3::new(0.6931570466592203, -0.8807318727109547, -4.216656575613189)
-                    .adjust_precision(),
-                DVec3::new(2.056777912558161, 0.8807319423722882, -4.411036004147714)
-                    .adjust_precision(),
-                DVec3::new(2.4801379112004547, 0.8807319423722882, -1.4410585107061238)
-                    .adjust_precision(),
-                DVec3::new(1.5098793531794679, 1.0794012801433273, -1.302751515884273)
-                    .adjust_precision(),
-                DVec3::new(1.086519354537174, 1.079401280143327, -4.272729009325864)
-                    .adjust_precision(),
-                DVec3::new(14.886956777274035, 1.6019984034862897, -1.6440063661356903)
-                    .adjust_precision(),
-                DVec3::new(14.485324381553463, 2.0000000696613336, -1.6270920990914757)
-                    .adjust_precision(),
-                DVec3::new(15.277318379804553, 2.0000000696613336, -1.739988098729421)
-                    .adjust_precision(),
-                DVec3::new(14.875685984083981, 2.3980017358363774, -1.7230738316852063)
-                    .adjust_precision(),
-            ]
-        );
+        let expected_vertices = vec![
+            DVec3::new(1.663415604680207, -1.0794012104819937, -4.354963570435039).real(),
+            DVec3::new(2.0867756033225007, -1.0794012104819934, -1.3849860769934488).real(),
+            DVec3::new(1.116517045301514, -0.8807318727109547, -1.246679082171598).real(),
+            DVec3::new(0.6931570466592203, -0.8807318727109547, -4.216656575613189).real(),
+            DVec3::new(2.056777912558161, 0.8807319423722882, -4.411036004147714).real(),
+            DVec3::new(2.4801379112004547, 0.8807319423722882, -1.4410585107061238).real(),
+            DVec3::new(1.5098793531794679, 1.0794012801433273, -1.302751515884273).real(),
+            DVec3::new(1.086519354537174, 1.079401280143327, -4.272729009325864).real(),
+            DVec3::new(14.886956777274035, 1.6019984034862897, -1.6440063661356903).real(),
+            DVec3::new(14.485324381553463, 2.0000000696613336, -1.6270920990914757).real(),
+            DVec3::new(15.277318379804553, 2.0000000696613336, -1.739988098729421).real(),
+            DVec3::new(14.875685984083981, 2.3980017358363774, -1.7230738316852063).real(),
+        ];
+        trimesh
+            .vertices
+            .iter()
+            .zip(expected_vertices.iter())
+            .for_each(|(v, expected)| assert_relative_eq!(*v, *expected, epsilon = 1e-6));
         assert_eq!(
             trimesh.indices,
             vec![

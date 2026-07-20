@@ -21,11 +21,11 @@
 //! ```toml
 //! # For 2D applications:
 //! [dependencies]
-//! avian2d = "0.6"
+//! avian2d = "0.7"
 //!
 //! # For 3D applications:
 //! [dependencies]
-//! avian3d = "0.6"
+//! avian3d = "0.7"
 //!
 //! # If you want to use the most up-to-date version, you can follow the main branch:
 //! [dependencies]
@@ -39,17 +39,18 @@
 //! [dependencies]
 //! # Add 3D Avian with double-precision floating point numbers.
 //! # `parry-f64` enables collision detection using Parry.
-//! avian3d = { version = "0.6", default-features = false, features = ["3d", "f64", "parry-f64", "xpbd_joints"] }
+//! avian3d = { version = "0.7", default-features = false, features = ["3d", "f64", "parry-f64", "xpbd_joints"] }
 //! ```
 //!
 //! ## Feature Flags
+//!
+//! The following feature flags are available for customizing Avian.
 //!
 //! | Feature                | Description                                                                                                                                        | Default feature |
 //! | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
 //! | `2d`                   | Enables 2D physics. Incompatible with `3d`.                                                                                                        | Yes (`avian2d`) |
 //! | `3d`                   | Enables 3D physics. Incompatible with `2d`.                                                                                                        | Yes (`avian3d`) |
-//! | `f32`                  | Enables `f32` precision for physics. Incompatible with `f64`.                                                                                      | Yes             |
-//! | `f64`                  | Enables `f64` precision for physics. Incompatible with `f32`.                                                                                      | No              |
+//! | `f64`                  | Enables double-precision numbers. See [Large Worlds](#large-worlds).                                                                               | No              |
 //! | `default-collider`     | Enables the default [`Collider`]. Required for [spatial queries](spatial_query). Requires either the `parry-f32` or `parry-f64` feature.           | Yes             |
 //! | `parry-f32`            | Enables the `f32` version of the Parry collision detection library. Also enables the `default-collider` feature.                                   | Yes             |
 //! | `parry-f64`            | Enables the `f64` version of the Parry collision detection library. Also enables the `default-collider` feature.                                   | No              |
@@ -136,8 +137,8 @@
 //! - [Lock translational and rotational axes](LockedAxes)
 //! - [Dominance]
 //! - [Continuous Collision Detection (CCD)](dynamics::ccd)
-//!     - [Speculative collision](dynamics::ccd#speculative-collision)
 //!     - [Swept CCD](dynamics::ccd#swept-ccd)
+//!     - [Speculative collision](dynamics::ccd#speculative-collision)
 //! - [`Transform` interpolation and extrapolation](PhysicsInterpolationPlugin)
 //! - [Temporarily disabling a rigid body](RigidBodyDisabled)
 //! - [Automatic deactivation with sleeping](Sleeping)
@@ -197,6 +198,7 @@
 //! - [`Transform` interpolation and extrapolation](PhysicsInterpolationPlugin)
 //! - [Physics speed](Physics#physics-speed)
 //! - [Configure simulation fidelity with substeps](SubstepCount)
+//! - [Large worlds](#large-worlds)
 //!
 //! ## Debugging and Profiling
 //!
@@ -220,6 +222,33 @@
 //!
 //! - [List of plugins and their responsibilities](PhysicsPlugins)
 //! - [Custom plugins](PhysicsPlugins#custom-plugins)
+//!
+//! # Large Worlds
+//!
+//! Avian supports double-precision floating-point numbers using the `f64` feature.
+//! This can significantly improve the accuracy of physics simulations far from the origin.
+//! With single-precision numbers, at a distance of `1e7` units from the origin, the precision
+//! of `f32` is only about one unit, which would cause bodies to snap to a coarse grid, but with `f64`,
+//! precision remains at sub-millimeter resolution out to planetary distances.
+//!
+//! To support both `f32` and `f64` precision, Avian uses type aliases such as [`Real`],
+//! [`RVec2`], and [`RVec3`]. For example, [`RVec2`] is an alias for [`Vec2`] in single-precision
+//! mode and [`DVec2`](bevy::math::DVec2) in double-precision mode.
+//!
+//! Only world-space coordinates such as body positions, ray cast origins, and world-space
+//! contact points use double-precision numbers. Everything else, including velocities, forces,
+//! contact manifolds, joints, broad phase acceleration structures, and the physics solver,
+//! remain in single-precision. This limits the cost of double-precision numbers to just a few percent,
+//! while still maintaining high accuracy far from the origin.
+//!
+//! Note that because the broad phase acceleration structures remain in single-precision,
+//! the bounding boxes of colliders will become more conservative and inflated at large distances.
+//! The correctness of the simulation is not affected, but the effectiveness of the broad phase
+//! may be reduced. See [`ColliderAabb`] for more information.
+//!
+//! This approach to double-precision support is inspired by [Jolt].
+//!
+//! [Jolt]: https://jrouwe.github.io/JoltPhysics/index.html#big-worlds
 //!
 //! # Frequently Asked Questions
 //!
@@ -461,12 +490,6 @@
 )]
 #![warn(clippy::doc_markdown, missing_docs)]
 
-#[cfg(all(not(feature = "f32"), not(feature = "f64")))]
-compile_error!("either feature \"f32\" or \"f64\" must be enabled");
-
-#[cfg(all(feature = "f32", feature = "f64"))]
-compile_error!("feature \"f32\" and feature \"f64\" cannot be enabled at the same time");
-
 #[cfg(all(not(feature = "2d"), not(feature = "3d")))]
 compile_error!("either feature \"2d\" or \"3d\" must be enabled");
 
@@ -475,7 +498,7 @@ compile_error!("feature \"2d\" and feature \"3d\" cannot be enabled at the same 
 
 #[cfg(all(
     feature = "default-collider",
-    feature = "f32",
+    not(feature = "f64"),
     not(feature = "parry-f32")
 ))]
 compile_error!(
@@ -489,6 +512,11 @@ compile_error!(
 ))]
 compile_error!(
     "feature \"default-collider\" requires the feature \"parry-f64\" when \"f64\" is enabled"
+);
+
+#[cfg(all(feature = "parry-f32", feature = "parry-f64"))]
+compile_error!(
+    "features \"parry-f32\" and \"parry-f64\" cannot be enabled at the same time; please disable default features, and choose only one of them"
 );
 
 extern crate alloc;
@@ -537,8 +565,6 @@ pub mod prelude {
     pub use crate::diagnostics::PhysicsDiagnosticsPlugin;
     #[cfg(feature = "diagnostic_ui")]
     pub use crate::diagnostics::ui::{PhysicsDiagnosticsUiPlugin, PhysicsDiagnosticsUiSettings};
-    #[cfg(feature = "default-collider")]
-    pub(crate) use crate::physics_transform::RotationValue;
     #[cfg(feature = "bevy_picking")]
     pub use crate::picking::{
         PhysicsPickable, PhysicsPickingFilter, PhysicsPickingPlugin, PhysicsPickingSettings,
@@ -548,7 +574,7 @@ pub mod prelude {
         PhysicsPlugins,
         collider_tree::{ColliderTreeOptimization, ColliderTreePlugin, TreeOptimizationMode},
         collision::prelude::*,
-        dynamics::{self, ccd::SpeculativeMargin, prelude::*},
+        dynamics::{self, prelude::*},
         interpolation::*,
         physics_transform::{PhysicsTransformHelper, PhysicsTransformPlugin, Position, Rotation},
         schedule::{
@@ -567,7 +593,6 @@ pub mod prelude {
         diagnostics::AppDiagnosticsExt,
         math::*,
         physics_transform::{PreSolveDeltaPosition, PreSolveDeltaRotation},
-        schedule::TimePrecisionAdjusted,
     };
     pub use avian_derive::*;
 }
@@ -609,6 +634,7 @@ use prelude::*;
 /// | [`JointPlugin`]                   | A plugin for managing and initializing [joints](dynamics::joints). Does *not* include the actual joint solver.                                             |
 /// | [`MassPropertyPlugin`]            | Manages mass properties of dynamic [rigid bodies](RigidBody).                                                                                              |
 /// | [`ForcePlugin`]                   | Manages and applies external forces, torques, and acceleration for rigid bodies. See the [module-level documentation](dynamics::rigid_body::forces).       |
+/// | [`BodySizeMetricsPlugin`]         | Manages [`BodySizeMetrics`] for rigid bodies, which are used for various optimizations.                                                                    |
 /// | [`SpatialQueryPlugin`]            | Handles spatial queries like [raycasting](spatial_query#raycasting) and [shapecasting](spatial_query#shapecasting).                                        |
 /// | [`PhysicsInterpolationPlugin`]    | [`Transform`] interpolation and extrapolation for rigid bodies.                                                                                            |
 /// | [`PhysicsTransformPlugin`]        | Manages physics transforms and synchronizes them with [`Transform`].                                                                                       |
@@ -680,7 +706,7 @@ use prelude::*;
 /// ```
 pub struct PhysicsPlugins {
     schedule: Interned<dyn ScheduleLabel>,
-    length_unit: Scalar,
+    length_unit: f32,
 }
 
 impl PhysicsPlugins {
@@ -717,8 +743,8 @@ impl PhysicsPlugins {
     ///
     /// Note that this is *not* used to scale forces or any other user-facing inputs or outputs.
     /// Instead, the value is only used to scale some internal length-based tolerances, such as
-    /// [`SleepingThreshold::linear`] and [`NarrowPhaseConfig::default_speculative_margin`],
-    /// as well as the scale used for [debug rendering](PhysicsDebugPlugin).
+    /// [`SleepingThreshold::linear`] and [`NarrowPhaseConfig::contact_tolerance`], as well as
+    /// the scale used for [debug rendering](PhysicsDebugPlugin).
     ///
     /// Choosing the appropriate length unit can help improve stability and robustness.
     ///
@@ -742,7 +768,7 @@ impl PhysicsPlugins {
     /// # #[cfg(not(feature = "2d"))]
     /// # fn main() {} // Doc test needs main
     /// ```
-    pub fn with_length_unit(mut self, unit: Scalar) -> Self {
+    pub fn with_length_unit(mut self, unit: f32) -> Self {
         self.length_unit = unit;
         self
     }
@@ -773,7 +799,8 @@ impl PluginGroup for PhysicsPlugins {
         let builder = builder
             .add(ColliderBackendPlugin::<Collider>::new(self.schedule))
             .add(ColliderTreePlugin::<Collider>::default())
-            .add(NarrowPhasePlugin::<Collider>::default());
+            .add(NarrowPhasePlugin::<Collider>::default())
+            .add(BodySizeMetricsPlugin::<Collider>::default());
 
         // Add solver plugins.
         let builder = builder.add_group(SolverPlugins::new_with_length_unit(self.length_unit));
@@ -812,7 +839,7 @@ impl<H: CollisionHooks> PhysicsPluginsWithHooks<H> {
     /// that adjusts the engine's internal properties to the scale of the world.
     ///
     /// See [`PhysicsPlugins::with_length_unit`] for more information.
-    pub fn with_length_unit(mut self, unit: Scalar) -> Self {
+    pub fn with_length_unit(mut self, unit: f32) -> Self {
         self.plugins.length_unit = unit;
         self
     }

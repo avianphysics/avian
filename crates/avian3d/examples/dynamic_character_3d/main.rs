@@ -13,7 +13,7 @@
 
 mod plugin;
 
-use avian3d::{math::*, prelude::*};
+use avian3d::prelude::*;
 use bevy::prelude::*;
 use examples_common_3d::ExampleCommonPlugin;
 use plugin::*;
@@ -45,7 +45,7 @@ fn setup(
             30.0,
             0.92,
             7.0,
-            (30.0 as Scalar).to_radians(),
+            30f32.to_radians(),
         ),
         Friction::ZERO.with_combine_rule(CoefficientCombine::Min),
         Restitution::ZERO.with_combine_rule(CoefficientCombine::Min),
@@ -63,7 +63,7 @@ fn setup(
 
     // Environment (see the `collider_constructors` example for creating colliders from scenes)
     commands.spawn((
-        SceneRoot(assets.load("character_controller_demo.glb#Scene0")),
+        WorldAssetRoot(assets.load("character_controller_demo.glb#Scene0")),
         Transform::from_rotation(Quat::from_rotation_y(-core::f32::consts::PI * 0.5)),
         ColliderConstructorHierarchy::new(ColliderConstructor::ConvexHullFromMesh),
         RigidBody::Static,
@@ -74,7 +74,7 @@ fn setup(
         PointLight {
             intensity: 2_000_000.0,
             range: 50.0,
-            shadows_enabled: true,
+            shadow_maps_enabled: true,
             ..default()
         },
         Transform::from_xyz(0.0, 15.0, 0.0),

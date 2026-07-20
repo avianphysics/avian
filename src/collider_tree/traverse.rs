@@ -1,5 +1,3 @@
-#![allow(clippy::unnecessary_cast)]
-
 use obvhs::{aabb::Aabb, bvh2::node::Bvh2Node, fast_stack};
 
 use crate::{
@@ -8,7 +6,7 @@ use crate::{
         obvhs_ext::{Sweep, SweepHit},
         obvhs_ray,
     },
-    math::{AsF32, Dir, Ray, Scalar, Vector},
+    math::{Dir, RVector, Ray, ToF32Precision, Vector},
 };
 
 impl ColliderTree {
@@ -21,25 +19,25 @@ impl ColliderTree {
     /// - `intersection_fn`: A function that takes a proxy ID, and returns the distance to the intersection with that proxy.
     ///   This function is called for each potential intersection found during traversal.
     #[inline(always)]
-    pub fn ray_traverse_closest<F: FnMut(ProxyId) -> Scalar>(
+    pub fn ray_traverse_closest<F: FnMut(ProxyId) -> f32>(
         &self,
         ray: Ray,
-        max_distance: Scalar,
+        max_distance: f32,
         mut intersection_fn: F,
-    ) -> Option<(ProxyId, Scalar)> {
-        let obvhs_ray = obvhs_ray(&ray, max_distance as f32);
+    ) -> Option<(ProxyId, f32)> {
+        let obvhs_ray = obvhs_ray(&ray, max_distance);
         let mut hit = obvhs::ray::RayHit::none();
 
         let found_hit = self
             .bvh
             .ray_traverse(obvhs_ray, &mut hit, |_ray, primitive_id| {
                 let proxy_id = ProxyId::new(self.bvh.primitive_indices[primitive_id]);
-                intersection_fn(proxy_id) as f32
+                intersection_fn(proxy_id)
             });
 
         if found_hit {
             let proxy_id = ProxyId::new(self.bvh.primitive_indices[hit.primitive_id as usize]);
-            Some((proxy_id, hit.t as Scalar))
+            Some((proxy_id, hit.t))
         } else {
             None
         }
@@ -59,10 +57,10 @@ impl ColliderTree {
     pub fn ray_traverse_all<F: FnMut(ProxyId) -> bool>(
         &self,
         ray: Ray,
-        max_distance: Scalar,
+        max_distance: f32,
         mut intersection_fn: F,
     ) {
-        let obvhs_ray = obvhs_ray(&ray, max_distance as f32);
+        let obvhs_ray = obvhs_ray(&ray, max_distance);
 
         self.bvh
             .ray_traverse_anyhit(obvhs_ray, |_ray, primitive_id| {
@@ -82,19 +80,19 @@ impl ColliderTree {
     /// - `intersection_fn`: A function that takes a proxy ID, and returns the distance to the intersection with that proxy.
     ///   This function is called for each potential intersection found during traversal.
     #[inline(always)]
-    pub fn sweep_traverse_closest<F: FnMut(ProxyId) -> Scalar>(
+    pub fn sweep_traverse_closest<F: FnMut(ProxyId) -> f32>(
         &self,
         aabb: Aabb,
         direction: Dir,
-        max_distance: Scalar,
-        target_distance: Scalar,
+        max_distance: f32,
+        target_distance: f32,
         mut intersection_fn: F,
-    ) -> Option<(ProxyId, Scalar)> {
+    ) -> Option<(ProxyId, f32)> {
         #[cfg(feature = "2d")]
         let direction = direction.extend(0.0).to_array().into();
         #[cfg(feature = "3d")]
         let direction = direction.to_array().into();
-        let sweep = Sweep::new(aabb, direction, target_distance as f32, max_distance as f32);
+        let sweep = Sweep::new(aabb, direction, target_distance, max_distance);
 
         let mut hit = SweepHit::none();
 
@@ -102,12 +100,12 @@ impl ColliderTree {
             .bvh
             .sweep_traverse(sweep, &mut hit, |_sweep, primitive_id| {
                 let proxy_id = ProxyId::new(self.bvh.primitive_indices[primitive_id]);
-                intersection_fn(proxy_id) as f32
+                intersection_fn(proxy_id)
             });
 
         if found_hit {
             let proxy_id = ProxyId::new(self.bvh.primitive_indices[hit.primitive_id as usize]);
-            Some((proxy_id, hit.t as Scalar))
+            Some((proxy_id, hit.t))
         } else {
             None
         }
@@ -128,15 +126,15 @@ impl ColliderTree {
         &self,
         aabb: Aabb,
         direction: Dir,
-        target_distance: Scalar,
-        max_distance: Scalar,
+        target_distance: f32,
+        max_distance: f32,
         mut intersection_fn: F,
     ) {
         #[cfg(feature = "2d")]
         let direction = direction.extend(0.0).to_array().into();
         #[cfg(feature = "3d")]
         let direction = direction.to_array().into();
-        let sweep = Sweep::new(aabb, direction, target_distance as f32, max_distance as f32);
+        let sweep = Sweep::new(aabb, direction, target_distance, max_distance);
 
         let mut intersect_prims = |node: &Bvh2Node, _sweep: &mut Sweep, _hit: &mut SweepHit| {
             for primitive_id in node.first_index..node.first_index + node.prim_count {
@@ -161,12 +159,12 @@ impl ColliderTree {
     /// - `max_distance_squared`: The maximum distance from the point to consider for projections.
     /// - `eval`: A function that takes a proxy ID and returns the squared distance from the point to that proxy. This function is called for each potential projection found during traversal.
     #[inline(always)]
-    pub fn squared_distance_traverse_closest<F: FnMut(ProxyId) -> Scalar>(
+    pub fn squared_distance_traverse_closest<F: FnMut(ProxyId) -> f32>(
         &self,
-        point: Vector,
-        max_distance_squared: Scalar,
+        point: RVector,
+        max_distance_squared: f32,
         mut eval: F,
-    ) -> Option<(ProxyId, Scalar)> {
+    ) -> Option<(ProxyId, f32)> {
         #[cfg(feature = "2d")]
         let point = point.f32().extend(0.0).to_array().into();
         #[cfg(feature = "3d")]
@@ -174,16 +172,16 @@ impl ColliderTree {
 
         let closest_leaf = self.bvh.squared_distance_traverse(
             point,
-            max_distance_squared as f32,
+            max_distance_squared,
             |_point, primitive_id| {
                 let proxy_id = ProxyId::new(self.bvh.primitive_indices[primitive_id]);
-                eval(proxy_id) as f32
+                eval(proxy_id)
             },
         );
 
         if let Some((primitive_id, distance_squared)) = closest_leaf {
             let proxy_id = ProxyId::new(self.bvh.primitive_indices[primitive_id as usize]);
-            Some((proxy_id, distance_squared as Scalar))
+            Some((proxy_id, distance_squared))
         } else {
             None
         }
@@ -199,9 +197,9 @@ impl ColliderTree {
     #[inline(always)]
     pub fn point_traverse<F: FnMut(ProxyId) -> bool>(&self, point: Vector, mut eval: F) {
         #[cfg(feature = "2d")]
-        let point = point.f32().extend(0.0).to_array().into();
+        let point = point.extend(0.0).to_array().into();
         #[cfg(feature = "3d")]
-        let point = point.f32().to_array().into();
+        let point = point.to_array().into();
 
         self.bvh.point_traverse(point, |bvh, node_index| {
             let node = &bvh.nodes[node_index as usize];

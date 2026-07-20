@@ -82,14 +82,14 @@ impl MassPropertyHelper<'_, '_> {
         if no_auto_mass {
             if let Some(mass) = mass {
                 mass_props.set_mass(mass.0, !no_auto_inertia);
-                computed_mass.set(mass_props.mass as Scalar);
+                computed_mass.set(mass_props.mass);
             } else if !no_auto_inertia {
                 // Make sure the angular inertia is scaled to match the existing computed mass.
                 #[allow(clippy::unnecessary_cast)]
-                mass_props.set_mass(computed_mass.value() as f32, true);
+                mass_props.set_mass(computed_mass.value(), true);
             }
         } else {
-            computed_mass.set(mass_props.mass as Scalar);
+            computed_mass.set(mass_props.mass);
         }
 
         if no_auto_inertia {
@@ -97,28 +97,28 @@ impl MassPropertyHelper<'_, '_> {
                 #[cfg(feature = "2d")]
                 {
                     mass_props.angular_inertia = angular_inertia.0;
-                    computed_inertia.set(mass_props.angular_inertia as Scalar);
+                    computed_inertia.set(mass_props.angular_inertia);
                 }
                 #[cfg(feature = "3d")]
                 {
                     mass_props.principal_angular_inertia = angular_inertia.principal;
                     mass_props.local_inertial_frame = angular_inertia.local_frame;
                     *computed_inertia = ComputedAngularInertia::new_with_local_frame(
-                        mass_props.principal_angular_inertia.adjust_precision(),
-                        mass_props.local_inertial_frame.adjust_precision(),
+                        mass_props.principal_angular_inertia,
+                        mass_props.local_inertial_frame,
                     );
                 }
             }
         } else {
             #[cfg(feature = "2d")]
             {
-                computed_inertia.set(mass_props.angular_inertia as Scalar);
+                computed_inertia.set(mass_props.angular_inertia);
             }
             #[cfg(feature = "3d")]
             {
                 *computed_inertia = ComputedAngularInertia::new_with_local_frame(
-                    mass_props.principal_angular_inertia.adjust_precision(),
-                    mass_props.local_inertial_frame.adjust_precision(),
+                    mass_props.principal_angular_inertia,
+                    mass_props.local_inertial_frame,
                 );
             }
         }
@@ -126,10 +126,10 @@ impl MassPropertyHelper<'_, '_> {
         if no_auto_com {
             if let Some(center_of_mass) = center_of_mass {
                 mass_props.center_of_mass = center_of_mass.0;
-                computed_com.0 = mass_props.center_of_mass.adjust_precision();
+                computed_com.0 = mass_props.center_of_mass;
             }
         } else {
-            computed_com.0 = mass_props.center_of_mass.adjust_precision();
+            computed_com.0 = mass_props.center_of_mass;
         }
     }
 
@@ -203,15 +203,15 @@ impl MassPropertyHelper<'_, '_> {
             #[cfg(feature = "2d")]
             {
                 mass_props.transform_by(Isometry2d::new(
-                    collider_transform.translation.f32(),
-                    Rot2::from(collider_transform.rotation),
+                    collider_transform.translation,
+                    collider_transform.rotation,
                 ));
             }
             #[cfg(feature = "3d")]
             {
                 mass_props.transform_by(Isometry3d::new(
-                    collider_transform.translation.f32(),
-                    collider_transform.rotation.f32(),
+                    collider_transform.translation,
+                    collider_transform.rotation,
                 ));
             }
         }

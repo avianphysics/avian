@@ -1,6 +1,6 @@
 #![allow(clippy::unnecessary_cast)]
 
-use avian2d::{math::*, prelude::*};
+use avian2d::prelude::*;
 use bevy::prelude::*;
 use examples_common_2d::ExampleCommonPlugin;
 
@@ -14,7 +14,7 @@ fn main() {
             PhysicsPlugins::default().with_length_unit(15.0),
         ))
         .insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.1)))
-        .insert_resource(Gravity(Vector::NEG_Y * 1000.0))
+        .insert_resource(Gravity(Vec2::NEG_Y * 1000.0))
         .add_systems(Startup, setup)
         .run();
 }
@@ -77,7 +77,7 @@ fn setup(
                     0.0,
                 ),
                 RigidBody::Dynamic,
-                Collider::circle(marble_radius as Scalar),
+                Collider::circle(marble_radius),
                 CollisionLayers::new([Layer::Blue], [Layer::Blue]),
             ));
         }
@@ -96,7 +96,7 @@ fn setup(
                     0.0,
                 ),
                 RigidBody::Dynamic,
-                Collider::circle(marble_radius as Scalar),
+                Collider::circle(marble_radius),
                 CollisionLayers::new([Layer::Red], [Layer::Red]),
             ));
         }

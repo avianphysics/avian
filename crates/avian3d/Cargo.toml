@@ -1,6 +1,6 @@
 [package]
 name = "avian3d"
-version = "0.7.0-dev"
+version = "0.8.0-dev"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 authors = ["Joona Aalto <jondolf.dev@gmail.com>"]
@@ -14,7 +14,6 @@ categories = ["game-development", "science", "simulation"]
 [features]
 default = [
     "3d",
-    "f32",
     "parry-f32",
     "debug-plugin",
     "xpbd_joints",
@@ -24,7 +23,6 @@ default = [
     "bevy_picking",
 ]
 3d = []
-f32 = []
 f64 = []
 
 debug-plugin = ["bevy/bevy_gizmos", "bevy/bevy_render"]
@@ -39,16 +37,14 @@ enhanced-determinism = [
 ]
 
 default-collider = []
-# We unfortunately can't reuse the f32 and f64 features for this,
-# because Parry uses separate crates for f32 and f64.
-parry-f32 = ["f32", "dep:parry3d", "default-collider"]
+parry-f32 = ["dep:parry3d", "default-collider"]
 parry-f64 = ["f64", "dep:parry3d-f64", "default-collider"]
 
 # Enables the XPBD constraint solver for joints.
 xpbd_joints = []
 
 collider-from-mesh = ["bevy/bevy_mesh", "bevy/bevy_mikktspace", "3d"]
-bevy_scene = ["bevy/bevy_scene"]
+bevy_scene = ["bevy/bevy_world_serialization"]
 bevy_picking = ["bevy/bevy_picking"]
 serialize = [
     "dep:serde",
@@ -79,40 +75,35 @@ bench = false
 
 [dependencies]
 avian_derive = { path = "../avian_derive", version = "0.2" }
-bevy = { version = "0.18.0", default-features = false, features = [
+bevy = { version = "0.19.0", default-features = false, features = [
     "std",
     "bevy_log",
 ] }
-bevy_math = { version = "0.18.0", features = ["approx"] }
-glam_matrix_extras = { version = "0.2", features = ["bevy_reflect"] }
-bevy_heavy = { version = "0.4" }
-bevy_transform_interpolation = { version = "0.4" }
+bevy_math = { version = "0.19.0", features = ["approx"] }
+glam_matrix_extras = { version = "0.3", features = ["bevy_reflect"] }
+bevy_heavy = { version = "0.5" }
+bevy_transform_interpolation = { version = "0.5" }
 libm = { version = "0.2", optional = true }
 approx = "0.5"
-parry3d = { version = "0.26", optional = true }
-parry3d-f64 = { version = "0.26", optional = true }
+parry3d = { version = "0.27", optional = true }
+parry3d-f64 = { version = "0.27", optional = true }
 obvhs = { version = "0.3" }
 serde = { version = "1", features = ["derive"], optional = true }
 derive_more = "2"
 thiserror = "2"
 smallvec = "1.15"
-itertools = "0.14"
+itertools = "0.15"
 bitflags = "2.5.0"
 thread_local = { version = "1.1" }
 disqualified = { version = "1.0" }
 
 [dev-dependencies]
 examples_common_3d = { path = "../examples_common_3d" }
-bevy = { version = "0.18.0", features = [
-    "3d",
-    "ui",
-    "https",
-    "experimental_bevy_feathers",
-] }
-bevy_heavy = { version = "0.4", features = ["approx"] }
+bevy = { version = "0.19.0", features = ["3d", "ui", "https", "bevy_feathers"] }
+bevy_heavy = { version = "0.5", features = ["approx"] }
 criterion = { version = "0.8", features = ["html_reports"] }
-bevy_mod_debugdump = { version = "0.15" }
-rand = "0.9"
+bevy_mod_debugdump = { version = "0.16" }
+rand = "0.10"
 
 [lints]
 workspace = true

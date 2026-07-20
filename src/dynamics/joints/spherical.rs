@@ -47,17 +47,17 @@ pub struct SphericalJoint {
     /// defining which axes the bodies can swing around.
     ///
     /// By default, this is the y-axis.
-    pub twist_axis: Vector,
+    pub twist_axis: Vec3,
     /// The extents of the allowed relative rotation of the bodies about a swing axis perpendicular to the [`twist_axis`](SphericalJoint::twist_axis).
     pub swing_limit: Option<AngleLimit>,
     /// The extents of the allowed relative rotation of the bodies about the [`twist_axis`](SphericalJoint::twist_axis).
     pub twist_limit: Option<AngleLimit>,
     /// The compliance of the point-to-point constraint (inverse of stiffness, m / N).
-    pub point_compliance: Scalar,
+    pub point_compliance: f32,
     /// The compliance for swing (inverse of stiffness, N * m / rad).
-    pub swing_compliance: Scalar,
+    pub swing_compliance: f32,
     /// The compliance for twist (inverse of stiffness, N * m / rad).
-    pub twist_compliance: Scalar,
+    pub twist_compliance: f32,
 }
 
 impl EntityConstraint<2> for SphericalJoint {
@@ -68,7 +68,7 @@ impl EntityConstraint<2> for SphericalJoint {
 
 impl SphericalJoint {
     /// The default [`twist_axis`](Self::twist_axis) for a spherical joint.
-    pub const DEFAULT_TWIST_AXIS: Vector = Vector::Y;
+    pub const DEFAULT_TWIST_AXIS: Vec3 = Vec3::Y;
 
     /// Creates a new [`SphericalJoint`] between two entities.
     #[inline]
@@ -94,7 +94,7 @@ impl SphericalJoint {
     ///
     /// By default, this is the y-axis.
     #[inline]
-    pub const fn with_twist_axis(mut self, twist_axis: Vector) -> Self {
+    pub const fn with_twist_axis(mut self, twist_axis: Vec3) -> Self {
         self.twist_axis = twist_axis;
         self
     }
@@ -117,7 +117,7 @@ impl SphericalJoint {
     ///
     /// This configures the [`JointAnchor`] of each [`JointFrame`].
     #[inline]
-    pub const fn with_anchor(mut self, anchor: Vector) -> Self {
+    pub const fn with_anchor(mut self, anchor: RVector) -> Self {
         self.frame1.anchor = JointAnchor::FromGlobal(anchor);
         self.frame2.anchor = JointAnchor::FromGlobal(anchor);
         self
@@ -127,7 +127,7 @@ impl SphericalJoint {
     ///
     /// This configures the [`JointAnchor`] of the first [`JointFrame`].
     #[inline]
-    pub const fn with_local_anchor1(mut self, anchor: Vector) -> Self {
+    pub const fn with_local_anchor1(mut self, anchor: Vec3) -> Self {
         self.frame1.anchor = JointAnchor::Local(anchor);
         self
     }
@@ -136,7 +136,7 @@ impl SphericalJoint {
     ///
     /// This configures the [`JointAnchor`] of the second [`JointFrame`].
     #[inline]
-    pub const fn with_local_anchor2(mut self, anchor: Vector) -> Self {
+    pub const fn with_local_anchor2(mut self, anchor: Vec3) -> Self {
         self.frame2.anchor = JointAnchor::Local(anchor);
         self
     }
@@ -197,7 +197,7 @@ impl SphericalJoint {
     /// If the [`JointAnchor`] is set to [`FromGlobal`](JointAnchor::FromGlobal),
     /// and the local anchor has not yet been computed, this will return `None`.
     #[inline]
-    pub const fn local_anchor1(&self) -> Option<Vector> {
+    pub const fn local_anchor1(&self) -> Option<Vec3> {
         match self.frame1.anchor {
             JointAnchor::Local(anchor) => Some(anchor),
             _ => None,
@@ -209,7 +209,7 @@ impl SphericalJoint {
     /// If the [`JointAnchor`] is set to [`FromGlobal`](JointAnchor::FromGlobal),
     /// and the local anchor has not yet been computed, this will return `None`.
     #[inline]
-    pub const fn local_anchor2(&self) -> Option<Vector> {
+    pub const fn local_anchor2(&self) -> Option<Vec3> {
         match self.frame2.anchor {
             JointAnchor::Local(anchor) => Some(anchor),
             _ => None,
@@ -248,7 +248,7 @@ impl SphericalJoint {
     /// If the [`JointBasis`] is set to [`FromGlobal`](JointBasis::FromGlobal),
     /// and the local basis has not yet been computed, this will return `None`.
     #[inline]
-    pub fn local_twist_axis1(&self) -> Option<Vector> {
+    pub fn local_twist_axis1(&self) -> Option<Vec3> {
         match self.frame1.basis {
             JointBasis::Local(basis) => Some(basis * self.twist_axis),
             _ => None,
@@ -263,7 +263,7 @@ impl SphericalJoint {
     /// If the [`JointBasis`] is set to [`FromGlobal`](JointBasis::FromGlobal),
     /// and the local basis has not yet been computed, this will return `None`.
     #[inline]
-    pub fn local_twist_axis2(&self) -> Option<Vector> {
+    pub fn local_twist_axis2(&self) -> Option<Vec3> {
         match self.frame2.basis {
             JointBasis::Local(basis) => Some(basis * self.twist_axis),
             _ => None,
@@ -272,14 +272,14 @@ impl SphericalJoint {
 
     /// Sets the limits of the allowed relative rotation about a swing axis perpendicular to the [`twist_axis`](Self::twist_axis).
     #[inline]
-    pub const fn with_swing_limits(mut self, min: Scalar, max: Scalar) -> Self {
+    pub const fn with_swing_limits(mut self, min: f32, max: f32) -> Self {
         self.swing_limit = Some(AngleLimit::new(min, max));
         self
     }
 
     /// Sets the limits of the allowed relative rotation about the [`twist_axis`](Self::twist_axis).
     #[inline]
-    pub const fn with_twist_limits(mut self, min: Scalar, max: Scalar) -> Self {
+    pub const fn with_twist_limits(mut self, min: f32, max: f32) -> Self {
         self.twist_limit = Some(AngleLimit::new(min, max));
         self
     }
@@ -290,7 +290,7 @@ impl SphericalJoint {
         since = "0.4.0",
         note = "Use `with_point_compliance`, `with_swing_compliance`, and `with_twist_compliance` instead."
     )]
-    pub const fn with_compliance(mut self, compliance: Scalar) -> Self {
+    pub const fn with_compliance(mut self, compliance: f32) -> Self {
         self.point_compliance = compliance;
         self.swing_compliance = compliance;
         self.twist_compliance = compliance;
@@ -299,21 +299,21 @@ impl SphericalJoint {
 
     /// Sets the compliance of the axis alignment constraint (inverse of stiffness, m / N).
     #[inline]
-    pub const fn with_point_compliance(mut self, compliance: Scalar) -> Self {
+    pub const fn with_point_compliance(mut self, compliance: f32) -> Self {
         self.point_compliance = compliance;
         self
     }
 
     /// Sets the compliance of the swing limit (inverse of stiffness, N * m / rad).
     #[inline]
-    pub const fn with_swing_compliance(mut self, compliance: Scalar) -> Self {
+    pub const fn with_swing_compliance(mut self, compliance: f32) -> Self {
         self.swing_compliance = compliance;
         self
     }
 
     /// Sets the compliance of the twist limit (inverse of stiffness, N * m / rad).
     #[inline]
-    pub const fn with_twist_compliance(mut self, compliance: Scalar) -> Self {
+    pub const fn with_twist_compliance(mut self, compliance: f32) -> Self {
         self.twist_compliance = compliance;
         self
     }
@@ -351,7 +351,7 @@ fn update_local_frames(
         };
 
         let [frame1, frame2] =
-            JointFrame::compute_local(joint.frame1, joint.frame2, pos1.0, pos2.0, rot1, rot2);
+            JointFrame::compute_local(joint.frame1, joint.frame2, pos1.0, pos2.0, *rot1, *rot2);
         joint.frame1 = frame1;
         joint.frame2 = frame2;
     }
@@ -363,7 +363,7 @@ impl DebugRenderConstraint<2> for SphericalJoint {
 
     fn debug_render(
         &self,
-        positions: [Vector; 2],
+        positions: [RVector; 2],
         rotations: [Rotation; 2],
         _context: &mut Self::Context,
         gizmos: &mut Gizmos<PhysicsGizmos>,
@@ -379,8 +379,8 @@ impl DebugRenderConstraint<2> for SphericalJoint {
             return;
         };
 
-        let anchor1 = pos1 + rot1 * local_anchor1;
-        let anchor2 = pos2 + rot2 * local_anchor2;
+        let anchor1 = pos1 + (rot1 * local_anchor1).real();
+        let anchor2 = pos2 + (rot2 * local_anchor2).real();
 
         if let Some(anchor_color) = config.joint_anchor_color {
             gizmos.draw_line(pos1, anchor1, anchor_color);

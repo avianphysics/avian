@@ -59,6 +59,15 @@ pub struct PhysicsGizmos {
     /// The colors (in HSLA) for [sleeping](Sleeping) bodies will be multiplied by this array.
     /// If `None`, sleeping will have no effect on the colors.
     pub sleeping_color_multiplier: Option<[f32; 4]>,
+    /// The color used for the [collider](Collider) wireframes of bodies that were treated as
+    /// fast-moving and swept by [Continuous Collision Detection](crate::dynamics::ccd) during the
+    /// last physics step. If `None`, fast bodies use the normal [`collider_color`](Self::collider_color).
+    pub fast_body_color: Option<Color>,
+    /// The color used for the [collider](Collider) wireframes of bodies whose motion was stopped at
+    /// a time of impact by [Continuous Collision Detection](crate::dynamics::ccd) during the last
+    /// physics step. Takes priority over [`fast_body_color`](Self::fast_body_color). If `None`,
+    /// these bodies use the normal [`collider_color`](Self::collider_color).
+    pub time_of_impact_color: Option<Color>,
     /// The color of the contact points. If `None`, the contact points will not be rendered.
     pub contact_point_color: Option<Color>,
     /// The color of the contact normals. If `None`, the contact normals will not be rendered.
@@ -99,6 +108,8 @@ impl Default for PhysicsGizmos {
             aabb_color: None,
             collider_color: Some(ORANGE.into()),
             sleeping_color_multiplier: Some([1.0, 1.0, 0.4, 1.0]),
+            fast_body_color: Some(SALMON.into()),
+            time_of_impact_color: Some(Color::srgb(0.0, 1.0, 0.0)),
             contact_point_color: None,
             contact_normal_color: None,
             contact_normal_scale: ContactGizmoScale::default(),
@@ -125,9 +136,9 @@ impl Default for PhysicsGizmos {
 #[reflect(PartialEq)]
 pub enum ContactGizmoScale {
     /// The length of the rendered contact normal is constant.
-    Constant(Scalar),
+    Constant(f32),
     /// The length of the rendered contact normal is scaled by the contact force and the given scaling factor.
-    Scaled(Scalar),
+    Scaled(f32),
 }
 
 impl Default for ContactGizmoScale {
@@ -144,6 +155,8 @@ impl PhysicsGizmos {
             aabb_color: Some(Color::srgb(0.8, 0.8, 0.8)),
             collider_color: Some(ORANGE.into()),
             sleeping_color_multiplier: Some([1.0, 1.0, 0.4, 1.0]),
+            fast_body_color: Some(SALMON.into()),
+            time_of_impact_color: Some(Color::srgb(0.0, 1.0, 0.0)),
             contact_point_color: Some(LIGHT_CYAN.into()),
             contact_normal_color: Some(RED.into()),
             contact_normal_scale: ContactGizmoScale::default(),
@@ -171,6 +184,8 @@ impl PhysicsGizmos {
             aabb_color: None,
             collider_color: None,
             sleeping_color_multiplier: None,
+            fast_body_color: None,
+            time_of_impact_color: None,
             contact_point_color: None,
             contact_normal_color: None,
             contact_normal_scale: ContactGizmoScale::default(),

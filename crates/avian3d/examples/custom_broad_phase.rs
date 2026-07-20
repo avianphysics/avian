@@ -1,4 +1,4 @@
-use avian3d::{dynamics::solver::joint_graph::JointGraph, math::*, prelude::*};
+use avian3d::{dynamics::joints::joint_graph::JointGraph, prelude::*};
 use bevy::prelude::*;
 use examples_common_3d::ExampleCommonPlugin;
 
@@ -37,14 +37,14 @@ fn setup(
         MeshMaterial3d(materials.add(Color::srgb(0.8, 0.7, 0.6))),
         Transform::from_xyz(0.0, 4.0, 0.0),
         RigidBody::Dynamic,
-        AngularVelocity(Vector::new(2.5, 3.4, 1.6)),
+        AngularVelocity(Vec3::new(2.5, 3.4, 1.6)),
         Collider::cuboid(1.0, 1.0, 1.0),
     ));
     // Light
     commands.spawn((
         PointLight {
             intensity: 2_000_000.0,
-            shadows_enabled: true,
+            shadow_maps_enabled: true,
             ..default()
         },
         Transform::from_xyz(4.0, 8.0, 4.0),

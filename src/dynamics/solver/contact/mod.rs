@@ -45,12 +45,12 @@ pub struct ContactConstraintPoint {
     pub anchor2: Vector,
 
     /// The pre-solve relative velocity of the bodies along the normal at the contact point.
-    pub normal_speed: Scalar,
+    pub normal_speed: f32,
 
     /// The pre-solve separation distance between the bodies.
     ///
     /// A negative separation indicates penetration.
-    pub initial_separation: Scalar,
+    pub initial_separation: f32,
 }
 
 /// A contact constraint used for resolving inter-penetration between two bodies.
@@ -72,16 +72,16 @@ pub struct ContactConstraint {
     /// and is considered to have infinite mass.
     pub relative_dominance: i16,
     /// The combined coefficient of dynamic [friction](Friction) of the bodies.
-    pub friction: Scalar,
+    pub friction: f32,
     /// The combined coefficient of [restitution](Restitution) of the bodies.
-    pub restitution: Scalar,
+    pub restitution: f32,
     /// The desired relative linear speed of the bodies along the surface,
     /// expressed in world space as `tangent_speed2 - tangent_speed1`.
     ///
     /// Defaults to zero. If set to a non-zero value, this can be used to simulate effects
     /// such as conveyor belts.
     #[cfg(feature = "2d")]
-    pub tangent_speed: Scalar,
+    pub tangent_speed: f32,
     /// The desired relative linear velocity of the bodies along the surface,
     /// expressed in world space as `tangent_velocity2 - tangent_velocity1`.
     ///
@@ -226,7 +226,7 @@ impl ContactConstraint {
         body2: &mut SolverBody,
         inertia1: &SolverBodyInertia,
         inertia2: &SolverBodyInertia,
-        warm_start_coefficient: Scalar,
+        warm_start_coefficient: f32,
     ) {
         let inv_mass1 = inertia1.effective_inv_mass();
         let inv_mass2 = inertia2.effective_inv_mass();
@@ -270,9 +270,9 @@ impl ContactConstraint {
         body2: &mut SolverBody,
         inertia1: &SolverBodyInertia,
         inertia2: &SolverBodyInertia,
-        delta_secs: Scalar,
+        delta_secs: f32,
         use_bias: bool,
-        max_overlap_solve_speed: Scalar,
+        max_overlap_solve_speed: f32,
     ) {
         let inv_mass1 = inertia1.effective_inv_mass();
         let inv_mass2 = inertia2.effective_inv_mass();
@@ -361,7 +361,7 @@ impl ContactConstraint {
         body2: &mut SolverBody,
         inertia1: &SolverBodyInertia,
         inertia2: &SolverBodyInertia,
-        threshold: Scalar,
+        threshold: f32,
     ) {
         let inv_mass1 = inertia1.effective_inv_mass();
         let inv_mass2 = inertia2.effective_inv_mass();

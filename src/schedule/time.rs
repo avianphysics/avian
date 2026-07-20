@@ -1,6 +1,5 @@
 //! Clocks used for tracking physics simulation time.
 
-use crate::prelude::*;
 use bevy::prelude::*;
 
 /// The clock representing physics time, following the [`Time`] clock used by the schedule that physics runs in.
@@ -10,6 +9,8 @@ use bevy::prelude::*;
 ///
 /// [`Time<Physics>`](Physics) is automatically set as the generic [`Time`] resource for
 /// the [`PhysicsSchedule`].
+///
+/// [`PhysicsSchedule`]: crate::schedule::PhysicsSchedule
 ///
 /// # Usage
 ///
@@ -267,26 +268,8 @@ impl PhysicsTime for Time<Physics> {
 ///
 /// The clock is automatically set as the generic `Time` resource for
 /// the [`SubstepSchedule`].
+///
+/// [`SubstepCount`]: crate::dynamics::solver::schedule::SubstepCount
+/// [`SubstepSchedule`]: crate::schedule::SubstepSchedule
 #[derive(Reflect, Clone, Copy, Debug, Default, PartialEq)]
 pub struct Substeps;
-
-pub(crate) trait TimePrecisionAdjusted {
-    /// Returns how much time has advanced since the last update
-    /// as [`Scalar`] seconds.
-    fn delta_seconds_adjusted(&self) -> Scalar;
-}
-
-impl TimePrecisionAdjusted for Time {
-    /// Returns how much time has advanced since the last [`update`](#method.update)
-    /// as [`Scalar`] seconds.
-    fn delta_seconds_adjusted(&self) -> Scalar {
-        #[cfg(feature = "f32")]
-        {
-            self.delta_secs()
-        }
-        #[cfg(feature = "f64")]
-        {
-            self.delta_secs_f64()
-        }
-    }
-}

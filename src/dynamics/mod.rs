@@ -74,7 +74,7 @@ pub mod prelude {
     pub use super::solver::xpbd::XpbdSolverPlugin;
     #[expect(deprecated)]
     pub use super::{
-        ccd::{CcdPlugin, SpeculativeMargin, SweepMode, SweptCcd},
+        ccd::{CcdFilter, CcdPlugin, SpeculativeCcd, SweepMode, SweptCcd},
         integrator::{
             CustomPositionIntegration, CustomVelocityIntegration, Gravity, IntegratorPlugin,
         },
@@ -82,8 +82,10 @@ pub mod prelude {
             AngleLimit, AngularMotor, DistanceJoint, DistanceLimit, FixedJoint, JointAnchor,
             JointBasis, JointCollisionDisabled, JointDamping, JointDisabled, JointForces,
             JointFrame, JointPlugin, LinearMotor, MotorModel, PrismaticJoint, RevoluteJoint,
+            joint_graph::JointGraph,
         },
         rigid_body::{
+            body_size_metrics::{BodySizeMetrics, BodySizeMetricsPlugin},
             forces::{
                 ConstantAngularAcceleration, ConstantForce, ConstantLinearAcceleration,
                 ConstantLocalForce, ConstantLocalLinearAcceleration, ConstantTorque, ForcePlugin,

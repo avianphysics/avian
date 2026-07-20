@@ -15,7 +15,10 @@ use crate::{
     collider_tree::ColliderTrees,
     dynamics::{
         joints::EntityConstraint,
-        solver::islands::{BodyIslandNode, PhysicsIslands},
+        solver::{
+            islands::{BodyIslandNode, PhysicsIslands},
+            solver_body::{SolverBody, SolverBodyFlags},
+        },
     },
     prelude::*,
 };
@@ -176,17 +179,17 @@ fn debug_render_axes(
                 Color::hsla(120.0 * mul[0], 1.0 * mul[1], 0.4 * mul[2], 1.0 * mul[3]),
                 Color::hsla(220.0 * mul[0], 1.0 * mul[1], 0.6 * mul[2], 1.0 * mul[3]),
             ];
-            let global_com = pos.0 + rot * local_com.0;
+            let global_com = pos.0 + (rot * local_com.0).real();
 
-            let x = rot * (Vector::X * lengths.x);
+            let x = (rot * (Vector::X * lengths.x)).real();
             gizmos.draw_line(global_com - x, global_com + x, x_color);
 
-            let y = rot * (Vector::Y * lengths.y);
+            let y = (rot * (Vector::Y * lengths.y)).real();
             gizmos.draw_line(global_com - y, global_com + y, y_color);
 
             #[cfg(feature = "3d")]
             {
-                let z = rot * (Vector::Z * lengths.z);
+                let z = (rot * (Vector::Z * lengths.z)).real();
                 gizmos.draw_line(global_com - z, global_com + z, _z_color);
             }
         }
@@ -220,7 +223,7 @@ fn debug_render_aabbs(
                 }
             }
 
-            gizmos.rect_2d(aabb.center().f32(), aabb.size().f32(), color);
+            gizmos.rect_2d(aabb.center().f32(), aabb.size(), color);
         }
     }
 
@@ -243,8 +246,8 @@ fn debug_render_aabbs(
 
             gizmos.aabb_3d(
                 Aabb3d {
-                    min: Vec3A::from(aabb.min.f32()),
-                    max: Vec3A::from(aabb.max.f32()),
+                    min: Vec3A::from(aabb.min),
+                    max: Vec3A::from(aabb.max),
                 },
                 Transform::IDENTITY,
                 color,
@@ -289,6 +292,7 @@ fn debug_render_colliders(
         Option<&DebugRender>,
     )>,
     sleeping: Query<(), With<Sleeping>>,
+    solver_bodies: Query<&SolverBody>,
     mut gizmos: Gizmos<PhysicsGizmos>,
     store: Res<GizmoConfigStore>,
 ) {
@@ -299,8 +303,26 @@ fn debug_render_colliders(
         if let Some(mut color) = render_config.map_or(config.collider_color, |c| c.collider_color) {
             let collider_rb = collider_rb.map_or(entity, |c| c.body);
 
-            // If the body is sleeping, multiply the color by the sleeping color multiplier
-            if sleeping.contains(collider_rb) {
+            let ccd_color = (render_config.is_none())
+                .then(|| solver_bodies.get(collider_rb).ok())
+                .flatten()
+                .and_then(|solver_body| {
+                    if solver_body
+                        .flags
+                        .contains(SolverBodyFlags::HAD_TIME_OF_IMPACT)
+                    {
+                        config.time_of_impact_color
+                    } else if solver_body.flags.contains(SolverBodyFlags::IS_FAST) {
+                        config.fast_body_color
+                    } else {
+                        None
+                    }
+                });
+
+            if let Some(ccd_color) = ccd_color {
+                color = ccd_color;
+            } else if sleeping.contains(collider_rb) {
+                // If the body is sleeping, multiply the color by the sleeping color multiplier.
                 let hsla = Hsla::from(color).to_vec4();
                 if let Some(mul) = render_config.map_or(config.sleeping_color_multiplier, |c| {
                     c.sleeping_color_multiplier
@@ -308,7 +330,8 @@ fn debug_render_colliders(
                     color = Hsla::from_vec4(hsla * Vec4::from_array(mul)).into();
                 }
             }
-            gizmos.draw_collider(collider, position, rotation, color);
+
+            gizmos.draw_collider(collider, position.0, rotation, color);
         }
     }
 }
@@ -320,6 +343,7 @@ fn debug_render_contacts(
     time: Res<Time<Substeps>>,
     length_unit: Res<PhysicsLengthUnit>,
 ) {
+    let delta_secs = time.delta_secs();
     let config = store.config::<PhysicsGizmos>().1;
 
     if config.contact_point_color.is_none() && config.contact_normal_color.is_none() {
@@ -330,7 +354,7 @@ fn debug_render_contacts(
         for manifold in contacts.manifolds.iter() {
             for contact in manifold.points.iter() {
                 // Don't render contacts that aren't penetrating
-                if contact.penetration <= Scalar::EPSILON {
+                if contact.penetration <= f32::EPSILON {
                     continue;
                 }
 
@@ -353,14 +377,13 @@ fn debug_render_contacts(
                         * match config.contact_normal_scale {
                             ContactGizmoScale::Constant(length) => length,
                             ContactGizmoScale::Scaled(scale) => {
-                                scale * contact.normal_impulse
-                                    / time.delta_secs_f64().adjust_precision()
+                                scale * contact.normal_impulse / delta_secs
                             }
                         };
 
                     gizmos.draw_arrow(
                         contact.point,
-                        contact.point + manifold.normal * length,
+                        contact.point + (manifold.normal * length).real(),
                         0.1 * length_unit.0,
                         color,
                     );
@@ -380,7 +403,7 @@ pub trait DebugRenderConstraint<const N: usize>: EntityConstraint<N> {
     /// Renders the debug information for the constraint.
     fn debug_render(
         &self,
-        positions: [Vector; N],
+        positions: [RVector; N],
         rotations: [Rotation; N],
         context: &mut SystemParamItem<Self::Context>,
         gizmos: &mut Gizmos<PhysicsGizmos>,
@@ -399,7 +422,7 @@ pub fn debug_render_constraint<T: Component + DebugRenderConstraint<N>, const N:
     let config = store.config::<PhysicsGizmos>().1;
     for constraint in &constraints {
         if let Ok(bodies) = bodies.get_many(constraint.entities()) {
-            let positions: [Vector; N] = bodies
+            let positions: [RVector; N] = bodies
                 .iter()
                 .map(|transform| Position::from(**transform).0)
                 .collect::<Vec<_>>()
@@ -527,7 +550,7 @@ fn debug_render_islands(
             // Render the island's AABB.
             #[cfg(feature = "2d")]
             {
-                gizmos.rect_2d(aabb.center().f32(), aabb.size().f32(), color);
+                gizmos.rect_2d(aabb.center().f32(), aabb.size(), color);
             }
             #[cfg(feature = "3d")]
             {
@@ -535,8 +558,8 @@ fn debug_render_islands(
 
                 gizmos.aabb_3d(
                     Aabb3d {
-                        min: Vec3A::from(aabb.min.f32()),
-                        max: Vec3A::from(aabb.max.f32()),
+                        min: Vec3A::from(aabb.min),
+                        max: Vec3A::from(aabb.max),
                     },
                     Transform::IDENTITY,
                     color,

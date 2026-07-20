@@ -1,3 +1,5 @@
+use core::f32::consts::PI;
+
 use avian2d::{math::*, prelude::*};
 use bevy::{ecs::query::Has, prelude::*};
 
@@ -22,7 +24,7 @@ impl Plugin for CharacterControllerPlugin {
 /// A [`Message`] written for a movement input action.
 #[derive(Message)]
 pub enum MovementAction {
-    Move(Scalar),
+    Move(f32),
     Jump,
 }
 
@@ -37,21 +39,21 @@ pub struct Grounded;
 
 /// The acceleration used for character movement.
 #[derive(Component)]
-pub struct MovementAcceleration(Scalar);
+pub struct MovementAcceleration(f32);
 
 /// The damping factor used for slowing down movement.
 #[derive(Component)]
-pub struct MovementDampingFactor(Scalar);
+pub struct MovementDampingFactor(f32);
 
 /// The strength of a jump.
 #[derive(Component)]
-pub struct JumpImpulse(Scalar);
+pub struct JumpImpulse(f32);
 
 /// The maximum angle a slope can have for a character controller
 /// to be able to climb and jump. If the slope is steeper than this angle,
 /// the character will slide down.
 #[derive(Component)]
-pub struct MaxSlopeAngle(Scalar);
+pub struct MaxSlopeAngle(f32);
 
 /// A bundle that contains the components needed for a basic
 /// kinematic character controller.
@@ -76,10 +78,10 @@ pub struct MovementBundle {
 
 impl MovementBundle {
     pub const fn new(
-        acceleration: Scalar,
-        damping: Scalar,
-        jump_impulse: Scalar,
-        max_slope_angle: Scalar,
+        acceleration: f32,
+        damping: f32,
+        jump_impulse: f32,
+        max_slope_angle: f32,
     ) -> Self {
         Self {
             acceleration: MovementAcceleration(acceleration),
@@ -100,13 +102,13 @@ impl CharacterControllerBundle {
     pub fn new(collider: Collider) -> Self {
         // Create shape caster as a slightly smaller version of collider
         let mut caster_shape = collider.clone();
-        caster_shape.set_scale(Vector::ONE * 0.99, 10);
+        caster_shape.set_scale(Vec2::ONE * 0.99, 10);
 
         Self {
             character_controller: CharacterController,
             body: RigidBody::Dynamic,
             collider,
-            ground_caster: ShapeCaster::new(caster_shape, Vector::ZERO, 0.0, Dir2::NEG_Y)
+            ground_caster: ShapeCaster::new(caster_shape, RVec2::ZERO, 0.0, Dir2::NEG_Y)
                 .with_max_distance(10.0),
             locked_axes: LockedAxes::ROTATION_LOCKED,
             movement: MovementBundle::default(),
@@ -115,10 +117,10 @@ impl CharacterControllerBundle {
 
     pub fn with_movement(
         mut self,
-        acceleration: Scalar,
-        damping: Scalar,
-        jump_impulse: Scalar,
-        max_slope_angle: Scalar,
+        acceleration: f32,
+        damping: f32,
+        jump_impulse: f32,
+        max_slope_angle: f32,
     ) -> Self {
         self.movement = MovementBundle::new(acceleration, damping, jump_impulse, max_slope_angle);
         self
@@ -134,7 +136,7 @@ fn keyboard_input(
     let right = keyboard_input.any_pressed([KeyCode::KeyD, KeyCode::ArrowRight]);
 
     let horizontal = right as i8 - left as i8;
-    let direction = horizontal as Scalar;
+    let direction = horizontal as f32;
 
     if direction != 0.0 {
         movement_writer.write(MovementAction::Move(direction));
@@ -149,7 +151,7 @@ fn keyboard_input(
 fn gamepad_input(mut movement_writer: MessageWriter<MovementAction>, gamepads: Query<&Gamepad>) {
     for gamepad in gamepads.iter() {
         if let Some(x) = gamepad.get(GamepadAxis::LeftStickX) {
-            movement_writer.write(MovementAction::Move(x as Scalar));
+            movement_writer.write(MovementAction::Move(x));
         }
 
         if gamepad.just_pressed(GamepadButton::South) {
@@ -171,7 +173,7 @@ fn update_grounded(
         // that isn't too steep.
         let is_grounded = hits.iter().any(|hit| {
             if let Some(angle) = max_slope_angle {
-                (rotation * -hit.normal2).angle_to(Vector::Y).abs() <= angle.0
+                (rotation * -hit.normal2).angle_to(Vec2::Y).abs() <= angle.0
             } else {
                 true
             }
@@ -198,7 +200,7 @@ fn movement(
 ) {
     // Precision is adjusted so that the example works with
     // both the `f32` and `f64` features. Otherwise you don't need this.
-    let delta_time = time.delta_secs_f64().adjust_precision();
+    let delta_time = time.delta_secs();
 
     for event in movement_reader.read() {
         for (movement_acceleration, jump_impulse, mut linear_velocity, is_grounded) in
@@ -225,7 +227,7 @@ fn apply_movement_damping(
 ) {
     // Precision is adjusted so that the example works with
     // both the `f32` and `f64` features. Otherwise you don't need this.
-    let delta_time = time.delta_secs_f64().adjust_precision();
+    let delta_time = time.delta_secs();
 
     for (damping_factor, mut linear_velocity) in &mut query {
         // We could use `LinearDamping`, but we don't want to dampen movement along the Y axis

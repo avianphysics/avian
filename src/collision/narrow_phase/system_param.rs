@@ -7,16 +7,10 @@ use crate::{
         contact_types::{ContactEdgeFlags, ContactId},
     },
     data_structures::{bit_vec::BitVec, pair_key::PairKey},
-    dynamics::solver::{
-        constraint_graph::ConstraintGraph,
-        islands::{BodyIslandNode, IslandId, PhysicsIslands, WakeIslands},
-        joint_graph::JointGraph,
-    },
     prelude::*,
 };
 use bevy::{
     ecs::{
-        entity_disabling::Disabled,
         query::QueryData,
         system::{SystemParam, SystemParamItem, lifetimeless::Read},
     },
@@ -38,7 +32,6 @@ struct ColliderQuery<C: AnyCollider> {
     friction: Option<Read<Friction>>,
     restitution: Option<Read<Restitution>>,
     collision_margin: Option<Read<CollisionMargin>>,
-    speculative_margin: Option<Read<SpeculativeMargin>>,
     is_sensor: Has<Sensor>,
 }
 
@@ -55,7 +48,7 @@ struct RigidBodyQuery {
     friction: Option<Read<Friction>>,
     restitution: Option<Read<Restitution>>,
     collision_margin: Option<Read<CollisionMargin>>,
-    speculative_margin: Option<Read<SpeculativeMargin>>,
+    speculative_ccd: Option<Read<SpeculativeCcd>>,
 }
 
 /// A system parameter for managing the narrow phase.
@@ -65,20 +58,19 @@ struct RigidBodyQuery {
 /// - Updates each active [`ContactPair`] in the [`ContactGraph`].
 /// - Sends [collision events](crate::collision::collision_events) when colliders start or stop touching.
 /// - Removes contact pairs from the [`ContactGraph`] when AABBs stop overlapping.
-/// - Adds [`ContactManifold`]s to the [`ConstraintGraph`] when they are created.
-/// - Removes [`ContactManifold`]s from the [`ConstraintGraph`] when they are destroyed.
+/// - Records [`ContactStatusChange`]s for the solver when contacts start or stop generating contact manifolds.
+///
+/// [`ConstraintGraph`]: crate::dynamics::solver::constraint_graph::ConstraintGraph
+/// [`PhysicsIslands`]: crate::dynamics::solver::islands::PhysicsIslands
 #[derive(SystemParam)]
 #[expect(missing_docs)]
 pub struct NarrowPhase<'w, 's, C: AnyCollider> {
     collider_query: Query<'w, 's, ColliderQuery<C>, Without<ColliderDisabled>>,
     colliding_entities_query: Query<'w, 's, &'static mut CollidingEntities>,
     body_query: Query<'w, 's, RigidBodyQuery, Without<RigidBodyDisabled>>,
-    body_islands:
-        Query<'w, 's, &'static mut BodyIslandNode, Or<(With<Disabled>, Without<Disabled>)>>,
     pub contact_graph: ResMut<'w, ContactGraph>,
-    pub joint_graph: ResMut<'w, JointGraph>,
-    pub constraint_graph: ResMut<'w, ConstraintGraph>,
-    pub islands: Option<ResMut<'w, PhysicsIslands>>,
+    /// The queue of contact status changess.
+    pub contact_status_changes: ResMut<'w, ContactStatusChangeQueue>,
     contact_status_bits: ResMut<'w, ContactStatusBits>,
     #[cfg(feature = "parallel")]
     thread_local_contact_status_bits: ResMut<'w, ThreadLocalContactStatusBits>,
@@ -86,9 +78,6 @@ pub struct NarrowPhase<'w, 's, C: AnyCollider> {
     default_friction: Res<'w, DefaultFriction>,
     default_restitution: Res<'w, DefaultRestitution>,
     length_unit: Res<'w, PhysicsLengthUnit>,
-    // These are scaled by the length unit.
-    default_speculative_margin: Local<'s, Scalar>,
-    contact_tolerance: Local<'s, Scalar>,
 }
 
 /// A bit vector for tracking contact status changes.
@@ -106,38 +95,72 @@ pub(super) struct ContactStatusBits(pub BitVec);
 #[derive(Resource, Default, Deref, DerefMut)]
 pub(super) struct ThreadLocalContactStatusBits(pub ThreadLocal<RefCell<BitVec>>);
 
+/// A change in a contact's solver status, recorded by the narrow phase
+/// and applied by the solver.
+///
+/// The narrow phase only *detects and records* these changes.
+/// The solver drains the [`ContactStatusChangeQueue`] queue and applies them,
+/// keeping the narrow phase and solver decoupled.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ContactStatusChange {
+    /// The contact started touching and should generate constraints.
+    StartedGeneratingConstraints(ContactId),
+    /// The contact stopped touching and should stop generating constraints.
+    ///
+    /// The bodies are captured here because the contact edge no longer exists.
+    StoppedGeneratingConstraints {
+        /// The contact whose constraints should be removed.
+        contact_id: ContactId,
+        /// The first body in the contact.
+        body1: Entity,
+        /// The second body in the contact.
+        body2: Entity,
+    },
+    /// The number of manifolds of a touching contact changed by `delta`.
+    /// Constraints should be added (if `delta > 0`) or removed (if `delta < 0`)
+    /// to match the new manifold count.
+    ManifoldCountChanged {
+        /// The contact whose manifold count changed.
+        contact: ContactId,
+        /// The first body in the contact.
+        body1: Entity,
+        /// The second body in the contact.
+        body2: Entity,
+        /// The signed change in the number of manifolds.
+        delta: i16,
+    },
+}
+
+/// A queue of [`ContactStatusChange`]s recorded by the narrow phase
+/// and applied by the solver.
+#[derive(Resource, Default, Debug, Deref, DerefMut)]
+pub struct ContactStatusChangeQueue(pub Vec<ContactStatusChange>);
+
 impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
     /// Updates the narrow phase.
     ///
     /// - Updates each active [`ContactPair`] in the [`ContactGraph`].
     /// - Sends [collision events](crate::collision::collision_events) when colliders start or stop touching.
     /// - Removes contact pairs from the [`ContactGraph`] when AABBs stop overlapping.
-    /// - Adds [`ContactManifold`]s to the [`ConstraintGraph`] when they are created.
-    /// - Removes [`ContactManifold`]s from the [`ConstraintGraph`] when they are destroyed.
+    /// - Records [`ContactStatusChange`]s into [`ContactStatusChangeQueue`] for the solver to apply.
     pub fn update<H: CollisionHooks>(
         &mut self,
         collision_started_writer: &mut MessageWriter<CollisionStart>,
         collision_ended_writer: &mut MessageWriter<CollisionEnd>,
-        delta_secs: Scalar,
+        delta_secs: f32,
         hooks: &SystemParamItem<H>,
         context: &SystemParamItem<C::Context>,
         commands: &mut ParallelCommands,
     ) where
         for<'w, 's> SystemParamItem<'w, 's, H>: CollisionHooks,
     {
-        // Cache default margins scaled by the length unit.
-        if self.config.is_changed() {
-            *self.default_speculative_margin =
-                self.length_unit.0 * self.config.default_speculative_margin;
-            *self.contact_tolerance = self.length_unit.0 * self.config.contact_tolerance;
-        }
-
         // Update contacts for all contact pairs.
         self.update_contacts::<H>(delta_secs, hooks, context, commands);
 
-        let mut islands_to_wake: Vec<IslandId> = Vec::with_capacity(128);
-
         // Process contact status changes, iterating over set bits serially to maintain determinism.
+        //
+        // The narrow phase only updates the `ContactGraph` and records `ContactStatusChange`s.
+        // The solver applies those changes to the constraint graph and physics islands.
         //
         // Iterating over set bits is done efficiently with the "count trailing zeros" method:
         // https://lemire.me/blog/2018/02/21/iterating-over-set-bits-quickly/
@@ -184,27 +207,13 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     if contact_pair.generates_constraints()
                         && let (Some(body1), Some(body2)) = (contact_pair.body1, contact_pair.body2)
                     {
-                        let has_island = contact_edge.island.is_some();
-
-                        // Remove the contact pair from the constraint graph.
-                        for _ in 0..contact_edge.constraint_handles.len() {
-                            self.constraint_graph.pop_manifold(
-                                &mut self.contact_graph.edges,
+                        self.contact_status_changes.push(
+                            ContactStatusChange::StoppedGeneratingConstraints {
                                 contact_id,
                                 body1,
                                 body2,
-                            );
-                        }
-
-                        // Unlink the contact pair from its island.
-                        if has_island && let Some(islands) = &mut self.islands {
-                            islands.remove_contact(
-                                contact_id,
-                                &mut self.body_islands,
-                                &mut self.contact_graph.edges,
-                                &self.joint_graph,
-                            );
-                        }
+                            },
+                        );
                     }
 
                     // Remove the contact edge from the contact graph.
@@ -238,28 +247,9 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                         .set(ContactPairFlags::STARTED_TOUCHING, false);
 
                     if contact_pair.generates_constraints() {
-                        // Add the contact pair to the constraint graph.
-                        for _ in contact_pair.manifolds.iter() {
-                            self.constraint_graph
-                                .push_manifold(contact_edge, contact_pair);
-                        }
-
-                        // Link the contact pair to an island.
-                        if let Some(islands) = &mut self.islands {
-                            let island = islands.add_contact(
-                                contact_id,
-                                &mut self.body_islands,
-                                &mut self.contact_graph,
-                                &mut self.joint_graph,
-                            );
-
-                            if let Some(island) = island
-                                && island.is_sleeping
-                            {
-                                // Wake up the island if it was previously sleeping.
-                                islands_to_wake.push(island.id);
-                            }
-                        }
+                        self.contact_status_changes.push(
+                            ContactStatusChange::StartedGeneratingConstraints(contact_id),
+                        );
                     }
                 } else if contact_pair
                     .flags
@@ -292,35 +282,16 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                         .flags
                         .set(ContactPairFlags::STOPPED_TOUCHING, false);
 
-                    // Remove the contact pair from the constraint graph.
                     if contact_pair.generates_constraints()
-                        && !contact_edge.constraint_handles.is_empty()
                         && let (Some(body1), Some(body2)) = (contact_pair.body1, contact_pair.body2)
                     {
-                        for _ in 0..contact_edge.constraint_handles.len() {
-                            self.constraint_graph.pop_manifold(
-                                &mut self.contact_graph.edges,
+                        self.contact_status_changes.push(
+                            ContactStatusChange::StoppedGeneratingConstraints {
                                 contact_id,
                                 body1,
                                 body2,
-                            );
-                        }
-
-                        // Unlink the contact pair from its island.
-                        if let Some(islands) = &mut self.islands {
-                            let island = islands.remove_contact(
-                                contact_id,
-                                &mut self.body_islands,
-                                &mut self.contact_graph.edges,
-                                &self.joint_graph,
-                            );
-
-                            // TODO: Do we need this?
-                            if island.is_sleeping {
-                                // Wake up the island if it was previously sleeping.
-                                islands_to_wake.push(island.id);
-                            }
-                        }
+                            },
+                        );
                     }
                 } else if contact_pair.is_touching()
                     && contact_pair
@@ -332,73 +303,33 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                         .flags
                         .set(ContactPairFlags::STARTED_GENERATING_CONSTRAINTS, false);
 
-                    // Add the contact pair to the constraint graph.
-                    for _ in contact_pair.manifolds.iter() {
-                        self.constraint_graph
-                            .push_manifold(contact_edge, contact_pair);
-                    }
-
-                    // Link the contact pair to an island.
-                    if let Some(islands) = &mut self.islands {
-                        let island = islands.add_contact(
-                            contact_id,
-                            &mut self.body_islands,
-                            &mut self.contact_graph,
-                            &mut self.joint_graph,
-                        );
-
-                        if let Some(island) = island
-                            && island.is_sleeping
-                        {
-                            // Wake up the island if it was previously sleeping.
-                            islands_to_wake.push(island.id);
-                        }
-                    }
+                    self.contact_status_changes.push(
+                        ContactStatusChange::StartedGeneratingConstraints(contact_id),
+                    );
                 } else if contact_pair.is_touching()
                     && contact_pair.generates_constraints()
-                    && contact_pair.manifold_count_change > 0
+                    && contact_pair.manifold_count_change != 0
                 {
-                    // The contact pair is still touching, but the manifold count has increased.
-                    // Add the new manifolds to the constraint graph.
-                    for _ in 0..contact_pair.manifold_count_change {
-                        self.constraint_graph
-                            .push_manifold(contact_edge, contact_pair);
-                    }
-                    contact_pair.manifold_count_change = 0;
-                } else if contact_pair.is_touching()
-                    && contact_pair.generates_constraints()
-                    && contact_pair.manifold_count_change < 0
-                {
-                    // The contact pair is still touching, but the manifold count has decreased.
-                    // Remove the excess manifolds from the constraint graph.
-                    let removal_count = contact_pair.manifold_count_change.unsigned_abs() as usize;
+                    // The contact pair is still touching, but the manifold count changed.
+                    // Let the solver add or remove the corresponding constraints.
+                    let delta = contact_pair.manifold_count_change;
                     contact_pair.manifold_count_change = 0;
 
                     if let (Some(body1), Some(body2)) = (contact_pair.body1, contact_pair.body2) {
-                        for _ in 0..removal_count {
-                            self.constraint_graph.pop_manifold(
-                                &mut self.contact_graph.edges,
-                                contact_id,
+                        self.contact_status_changes.push(
+                            ContactStatusChange::ManifoldCountChanged {
+                                contact: contact_id,
                                 body1,
                                 body2,
-                            );
-                        }
+                                delta,
+                            },
+                        );
                     }
                 }
 
                 // Clear the least significant set bit.
                 bits &= bits - 1;
             }
-        }
-
-        if !islands_to_wake.is_empty() {
-            islands_to_wake.sort_unstable();
-            islands_to_wake.dedup();
-
-            // Wake up the islands that were previously sleeping.
-            commands.command_scope(|mut commands| {
-                commands.queue(WakeIslands(islands_to_wake));
-            });
         }
     }
 
@@ -439,13 +370,17 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
     /// The order of contact pairs is preserved.
     fn update_contacts<H: CollisionHooks>(
         &mut self,
-        delta_secs: Scalar,
+        delta_secs: f32,
         hooks: &SystemParamItem<H>,
         collider_context: &SystemParamItem<C::Context>,
         par_commands: &mut ParallelCommands,
     ) where
         for<'w, 's> SystemParamItem<'w, 's, H>: CollisionHooks,
     {
+        let length_unit = self.length_unit.0;
+        let contact_tolerance = length_unit * self.config.contact_tolerance;
+        let inv_delta_secs = delta_secs.recip();
+
         // Contact bit vecs must be sized based on the full contact capacity,
         // not the number of active contact pairs, because pair indices
         // are unstable and can be invalidated when pairs are removed.
@@ -507,8 +442,17 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                 return;
             };
 
+            // An extra speculative distance requested for this timestep.
+            // This can be used to ensure that TOI impacts are handled by the discrete solver,
+            // or more generally for speculative contacts.
+            let mut speculative_distance = core::mem::take(&mut contacts.speculative_distance);
+
             // Check if the AABBs of the colliders still overlap and the contact pair is valid.
-            let overlap = collider1.enlarged_aabb.intersects(collider2.enlarged_aabb);
+            let overlap = collider1.enlarged_aabb.intersects(
+                &collider2
+                    .enlarged_aabb
+                    .grow(Vector::splat(speculative_distance)),
+            );
 
             // Also check if the collision layers are still compatible and the contact pair is valid.
             // TODO: Ideally, we would have fine-grained change detection for `CollisionLayers`
@@ -527,29 +471,29 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     .of
                     .and_then(|&ColliderOf { body }| self.body_query.get(body).ok());
 
-                // The rigid body's friction, restitution, collision margin, and speculative margin
+                // The rigid body's friction, restitution, and collision margin
                 // will be used if the collider doesn't have them specified.
                 let (
                     is_static1,
                     collider_offset1,
                     world_com1,
-                    mut lin_vel1,
+                    lin_vel1,
                     ang_vel1,
                     rb_friction1,
                     rb_collision_margin1,
-                    rb_speculative_margin1,
+                    speculative_ccd1,
                 ) = body1_bundle
                     .as_ref()
                     .map(|body| {
                         (
                             body.rb.is_static(),
-                            collider1.position.0 - body.position.0,
+                            (collider1.position.0 - body.position.0).f32(),
                             body.rotation * body.center_of_mass.0,
                             body.linear_velocity.0,
                             body.angular_velocity.0,
                             body.friction,
                             body.collision_margin,
-                            body.speculative_margin,
+                            body.speculative_ccd.copied(),
                         )
                     })
                     .unwrap_or_default();
@@ -557,23 +501,23 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     is_static2,
                     collider_offset2,
                     world_com2,
-                    mut lin_vel2,
+                    lin_vel2,
                     ang_vel2,
                     rb_friction2,
                     rb_collision_margin2,
-                    rb_speculative_margin2,
+                    speculative_ccd2,
                 ) = body2_bundle
                     .as_ref()
                     .map(|body| {
                         (
                             body.rb.is_static(),
-                            collider2.position.0 - body.position.0,
+                            (collider2.position.0 - body.position.0).f32(),
                             body.rotation * body.center_of_mass.0,
                             body.linear_velocity.0,
                             body.angular_velocity.0,
                             body.friction,
                             body.collision_margin,
-                            body.speculative_margin,
+                            body.speculative_ccd.copied(),
                         )
                     })
                     .unwrap_or_default();
@@ -643,52 +587,37 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     .map_or(0.0, |margin| margin.0);
                 let collision_margin_sum = collision_margin1 + collision_margin2;
 
-                // Use the collider's own speculative margin if specified, and fall back to the body's
-                // speculative margin.
-                //
-                // The speculative margin is used to predict contacts that might happen during the frame.
-                // This is used for speculative collision. See the CCD and `SpeculativeMargin` documentation
-                // for more details.
-                let speculative_margin1 = collider1
-                    .speculative_margin
-                    .map_or(rb_speculative_margin1.map(|margin| margin.0), |margin| {
-                        Some(margin.0)
-                    });
-                let speculative_margin2 = collider2
-                    .speculative_margin
-                    .map_or(rb_speculative_margin2.map(|margin| margin.0), |margin| {
-                        Some(margin.0)
-                    });
+                // The relative linear velocity is used below to compute the normal speed
+                // at each contact point for restitution and speculative contact pruning.
+                let relative_linear_velocity = lin_vel2 - lin_vel1;
 
-                let relative_linear_velocity: Vector;
+                // Compute the effective speculative margin from the opt-in `SpeculativeCcd` component.
+                let max_distance1 = speculative_ccd1.map_or(0.0, |s| s.max_distance);
+                let max_distance2 = speculative_ccd2.map_or(0.0, |s| s.max_distance);
 
-                // Compute the effective speculative margin, clamping it based on velocities and the maximum bound.
-                let effective_speculative_margin = {
-                    let speculative_margin1 =
-                        speculative_margin1.unwrap_or(*self.default_speculative_margin);
-                    let speculative_margin2 =
-                        speculative_margin2.unwrap_or(*self.default_speculative_margin);
-                    let inv_delta_secs = delta_secs.recip();
+                if max_distance1 != 0.0 || max_distance2 != 0.0 {
+                    // Clamp each body's contribution to its maximum speculative distance.
+                    let clamped_vel1 = if max_distance1 < f32::MAX {
+                        lin_vel1.clamp_length_max(max_distance1 * inv_delta_secs)
+                    } else {
+                        lin_vel1
+                    };
+                    let clamped_vel2 = if max_distance2 < f32::MAX {
+                        lin_vel2.clamp_length_max(max_distance2 * inv_delta_secs)
+                    } else {
+                        lin_vel2
+                    };
 
-                    // Clamp velocities to the maximum speculative margins.
-                    if speculative_margin1 < Scalar::MAX {
-                        lin_vel1 = lin_vel1.clamp_length_max(speculative_margin1 * inv_delta_secs);
-                    }
-                    if speculative_margin2 < Scalar::MAX {
-                        lin_vel2 = lin_vel2.clamp_length_max(speculative_margin2 * inv_delta_secs);
-                    }
+                    // The margin is how far the bodies are expected to move relative to each other.
+                    let margin = (clamped_vel2 - clamped_vel1).length() * delta_secs;
+                    speculative_distance = margin.max(speculative_distance);
+                }
 
-                    // Compute the effective margin based on how much the bodies
-                    // are expected to move relative to each other.
-                    relative_linear_velocity = lin_vel2 - lin_vel1;
-                    delta_secs * relative_linear_velocity.length()
-                };
+                // Ensure that the speculative distance is at least as large as the contact tolerance.
+                speculative_distance = speculative_distance.max(contact_tolerance);
 
                 // The maximum distance at which contacts are detected.
-                // At least as large as the contact tolerance.
-                let max_contact_distance = effective_speculative_margin
-                    .max(*self.contact_tolerance)
-                    + collision_margin_sum;
+                let max_contact_distance = collision_margin_sum + speculative_distance;
 
                 let was_touching = contacts.flags.contains(ContactPairFlags::TOUCHING);
 
@@ -697,12 +626,9 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
 
                 // TODO: It'd be good to persist the manifolds and let Parry match contacts.
                 //       This isn't currently done because it requires using Parry's contact manifold type.
-                // Compute the contact manifolds using the effective speculative margin.
-                let context = ContactManifoldContext::new(
-                    collider1.entity,
-                    collider2.entity,
-                    collider_context,
-                );
+                // Compute the contact manifolds.
+                let context =
+                    ColliderPairContext::new(collider1.entity, collider2.entity, collider_context);
                 collider1.shape.contact_manifolds_with_context(
                     collider2.shape,
                     collider1.position.0,
@@ -725,7 +651,7 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     }
                     #[cfg(feature = "3d")]
                     {
-                        manifold.tangent_velocity = Vector::ZERO;
+                        manifold.tangent_velocity = Vec3::ZERO;
                     }
 
                     let normal = manifold.normal;
@@ -733,8 +659,8 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     // Transform and prune contact points.
                     manifold.retain_points_mut(|point| {
                         // Transform contact points to be relative to the centers of mass of the bodies.
-                        point.anchor1 = point.anchor1 + collider_offset1 - world_com1;
-                        point.anchor2 = point.anchor2 + collider_offset2 - world_com2;
+                        point.anchor1 += collider_offset1 - world_com1;
+                        point.anchor2 += collider_offset2 - world_com2;
 
                         // Add the collision margin to the penetration depth.
                         point.penetration += collision_margin_sum;
@@ -753,9 +679,9 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
 
                         // Keep the contact if (1) the separation distance is below the required threshold,
                         // or if (2) the bodies are expected to come into contact within the next time step.
-                        -point.penetration < effective_speculative_margin || {
+                        -point.penetration < speculative_distance || {
                             let delta_distance = normal_speed * delta_secs;
-                            delta_distance - point.penetration < effective_speculative_margin
+                            delta_distance - point.penetration < speculative_distance
                         }
                     });
 

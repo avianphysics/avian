@@ -7,7 +7,7 @@ use crate::{
     },
     collision::{CollisionDiagnostics, contact_types::ContactEdgeFlags},
     data_structures::pair_key::PairKey,
-    dynamics::solver::joint_graph::JointGraph,
+    dynamics::joints::joint_graph::JointGraph,
     prelude::*,
 };
 use bevy::{

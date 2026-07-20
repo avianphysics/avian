@@ -6,8 +6,9 @@ use bevy::{
 use super::{SolverBody, SolverBodyInertia};
 use crate::{
     AngularVelocity, LinearVelocity, PhysicsSchedule, Position, RigidBody, RigidBodyActiveFilter,
-    RigidBodyDisabled, Rotation, Sleeping, SolverSystems, Vector,
+    RigidBodyDisabled, Rot, Rotation, Sleeping, SolverSystems, Vector,
     dynamics::solver::{SolverDiagnostics, solver_body::SolverBodyFlags},
+    math::ToRealPrecision,
     prelude::{
         AppDiagnosticsExt, ComputedAngularInertia, ComputedCenterOfMass, ComputedMass, Dominance,
         LockedAxes,
@@ -15,7 +16,7 @@ use crate::{
 };
 #[cfg(feature = "3d")]
 use crate::{
-    MatExt,
+    MatExt, QuatExt,
     dynamics::integrator::{IntegrationSystems, integrate_positions},
     prelude::SubstepSchedule,
 };
@@ -209,7 +210,7 @@ fn prepare_solver_bodies(
             solver_body.linear_velocity = linear_velocity.0;
             solver_body.angular_velocity = angular_velocity.0;
             solver_body.delta_position = Vector::ZERO;
-            solver_body.delta_rotation = Rotation::IDENTITY;
+            solver_body.delta_rotation = Rot::IDENTITY;
 
             let locked_axes = locked_axes.copied().unwrap_or_default();
             *inertial_properties = SolverBodyInertia::new(
@@ -278,9 +279,11 @@ fn writeback_solver_bodies(
             // Write back the position and rotation deltas,
             // rotating the body around its center of mass.
             let old_world_com = *rot * com.0;
-            *rot = (solver_body.delta_rotation * *rot).fast_renormalize();
+            *rot = (solver_body.delta_rotation * Rot::from(*rot))
+                .fast_renormalize()
+                .into();
             let new_world_com = *rot * com.0;
-            pos.0 += solver_body.delta_position + old_world_com - new_world_com;
+            pos.0 += (solver_body.delta_position + (old_world_com - new_world_com)).real();
 
             // Write back velocities.
             lin_vel.0 = solver_body.linear_velocity;

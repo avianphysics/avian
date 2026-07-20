@@ -1,0 +1,22 @@
+name: Commit Checks
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+    no-ai-commits:
+        name: No AI Commits
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  # Required so the full commit range is available
+                  fetch-depth: 0
+            - uses: Jondolf/ai-commit-check@v1

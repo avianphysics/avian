@@ -1,146 +1,120 @@
-use super::AdjustPrecision;
+use super::ToRealPrecision;
+use crate::{math::DRot2, physics_transform::Rotation};
 use bevy_math::*;
 use glam_matrix_extras::*;
 
-/// The floating point number type used by Avian.
-pub type Scalar = f32;
-/// The PI/2 constant.
-pub const FRAC_PI_2: Scalar = core::f32::consts::FRAC_PI_2;
-/// The PI constant.
-pub const PI: Scalar = core::f32::consts::PI;
-/// The TAU constant.
-pub const TAU: Scalar = core::f32::consts::TAU;
-/// 1/sqrt(2)
-pub const FRAC_1_SQRT_2: Scalar = core::f32::consts::FRAC_1_SQRT_2;
+/// The real number type used by Avian.
+///
+/// This is a type alias for `f32` in single-precision mode
+/// and `f64` in double-precision mode.
+pub type Real = f32;
 
-/// The vector type used by Avian.
-#[cfg(feature = "2d")]
-pub type Vector = Vec2;
-/// The vector type used by Avian.
-#[cfg(feature = "3d")]
-pub type Vector = Vec3;
-/// The vector type used by Avian. This is always a 2D vector regardless of the chosen dimension.
-pub type Vector2 = Vec2;
-/// The vector type used by Avian. This is always a 3D vector regardless of the chosen dimension.
-pub type Vector3 = Vec3;
+/// The real number 2D vector type used by Avian.
+///
+/// This is a type alias for `Vec2` in single-precision mode
+/// and `DVec2` in double-precision mode.
+pub type RVec2 = Vec2;
 
-/// The dimension-specific matrix type used by Avian.
-#[cfg(feature = "2d")]
-pub type Matrix = Mat2;
-/// The dimension-specific matrix type used by Avian.
-#[cfg(feature = "3d")]
-pub type Matrix = Mat3;
-/// The 2x2 matrix type used by Avian.
-pub type Matrix2 = Mat2;
-/// The 3x3 matrix type used by Avian.
-pub type Matrix3 = Mat3;
-/// The dimension-specific matrix type used by Avian.
-#[cfg(feature = "2d")]
-pub type SymmetricMatrix = SymmetricMat2;
-/// The dimension-specific matrix type used by Avian.
-#[cfg(feature = "3d")]
-pub type SymmetricMatrix = SymmetricMat3;
-/// The 2x2 matrix type used by Avian.
-pub type SymmetricMatrix2 = SymmetricMat2;
-/// The 3x3 matrix type used by Avian.
-pub type SymmetricMatrix3 = SymmetricMat3;
-/// The quaternion type used by Avian.
-pub type Quaternion = Quat;
+/// The real number 3D vector type used by Avian.
+///
+/// This is a type alias for `Vec3` in single-precision mode
+/// and `DVec3` in double-precision mode.
+pub type RVec3 = Vec3;
 
-impl AdjustPrecision for f32 {
-    type Adjusted = Scalar;
-    fn adjust_precision(&self) -> Self::Adjusted {
-        *self as Scalar
+/// The real number 2x2 matrix type used by Avian.
+///
+/// This is a type alias for `Mat2` in single-precision mode
+/// and `DMat2` in double-precision mode.
+pub type RMat2 = Mat2;
+
+/// The real number 3x3 matrix type used by Avian.
+///
+/// This is a type alias for `Mat3` in single-precision mode
+/// and `DMat3` in double-precision mode.
+pub type RMat3 = Mat3;
+
+impl ToRealPrecision for f32 {
+    type Adjusted = Real;
+    fn real(&self) -> Self::Adjusted {
+        *self as Real
     }
 }
 
-impl AdjustPrecision for f64 {
-    type Adjusted = Scalar;
-    fn adjust_precision(&self) -> Self::Adjusted {
-        *self as Scalar
+impl ToRealPrecision for f64 {
+    type Adjusted = Real;
+    fn real(&self) -> Self::Adjusted {
+        *self as Real
     }
 }
 
-impl AdjustPrecision for Vec3 {
-    type Adjusted = Vector3;
-    fn adjust_precision(&self) -> Self::Adjusted {
+impl ToRealPrecision for Vec3 {
+    type Adjusted = Vec3;
+    fn real(&self) -> Self::Adjusted {
         *self
     }
 }
 
-impl AdjustPrecision for DVec3 {
-    type Adjusted = Vector3;
-    fn adjust_precision(&self) -> Self::Adjusted {
+impl ToRealPrecision for DVec3 {
+    type Adjusted = Vec3;
+    fn real(&self) -> Self::Adjusted {
         self.as_vec3()
     }
 }
 
-impl AdjustPrecision for Vec2 {
-    type Adjusted = Vector2;
-    fn adjust_precision(&self) -> Self::Adjusted {
+impl ToRealPrecision for Vec2 {
+    type Adjusted = Vec2;
+    fn real(&self) -> Self::Adjusted {
         *self
     }
 }
 
-impl AdjustPrecision for DVec2 {
-    type Adjusted = Vector2;
-    fn adjust_precision(&self) -> Self::Adjusted {
+impl ToRealPrecision for DVec2 {
+    type Adjusted = Vec2;
+    fn real(&self) -> Self::Adjusted {
         self.as_vec2()
     }
 }
 
-impl AdjustPrecision for Quat {
-    type Adjusted = Quaternion;
-    fn adjust_precision(&self) -> Self::Adjusted {
+impl ToRealPrecision for Quat {
+    type Adjusted = Quat;
+    fn real(&self) -> Self::Adjusted {
         *self
     }
 }
 
-impl AdjustPrecision for DQuat {
-    type Adjusted = Quaternion;
-    fn adjust_precision(&self) -> Self::Adjusted {
+impl ToRealPrecision for DQuat {
+    type Adjusted = Quat;
+    fn real(&self) -> Self::Adjusted {
         self.as_quat()
     }
 }
 
-impl AdjustPrecision for Mat3 {
-    type Adjusted = Matrix3;
-    fn adjust_precision(&self) -> Self::Adjusted {
+impl ToRealPrecision for Rot2 {
+    type Adjusted = Rot2;
+    fn real(&self) -> Self::Adjusted {
         *self
     }
 }
 
-impl AdjustPrecision for DMat3 {
-    type Adjusted = Matrix3;
-    fn adjust_precision(&self) -> Self::Adjusted {
-        self.as_mat3()
+impl ToRealPrecision for DRot2 {
+    type Adjusted = Rot2;
+    fn real(&self) -> Self::Adjusted {
+        Rot2::from_sin_cos(self.sin as f32, self.cos as f32)
     }
 }
 
-impl AdjustPrecision for SymmetricMat2 {
-    type Adjusted = SymmetricMatrix2;
-    fn adjust_precision(&self) -> Self::Adjusted {
-        *self
+#[cfg(feature = "2d")]
+impl ToRealPrecision for Rotation {
+    type Adjusted = Rot2;
+    fn real(&self) -> Self::Adjusted {
+        Rot2::from_sin_cos(self.sin, self.cos)
     }
 }
 
-impl AdjustPrecision for SymmetricDMat2 {
-    type Adjusted = SymmetricMatrix2;
-    fn adjust_precision(&self) -> Self::Adjusted {
-        self.as_symmetric_mat2()
-    }
-}
-
-impl AdjustPrecision for SymmetricMat3 {
-    type Adjusted = SymmetricMatrix3;
-    fn adjust_precision(&self) -> Self::Adjusted {
-        *self
-    }
-}
-
-impl AdjustPrecision for SymmetricDMat3 {
-    type Adjusted = SymmetricMatrix3;
-    fn adjust_precision(&self) -> Self::Adjusted {
-        self.as_symmetric_mat3()
+#[cfg(feature = "3d")]
+impl ToRealPrecision for Rotation {
+    type Adjusted = Quat;
+    fn real(&self) -> Self::Adjusted {
+        self.0
     }
 }
