@@ -135,11 +135,11 @@ pub type IntegrationSet = IntegrationSystems;
 ///         .add_plugins((DefaultPlugins, PhysicsPlugins::default()))
 #[cfg_attr(
     feature = "2d",
-    doc = "         .insert_resource(Gravity(Vec2::NEG_Y * 100.0))"
+    doc = "        .insert_resource(Gravity(Vec2::NEG_Y * 100.0))"
 )]
 #[cfg_attr(
     feature = "3d",
-    doc = "         .insert_resource(Gravity(Vec3::NEG_Y * 19.6))"
+    doc = "        .insert_resource(Gravity(Vec3::NEG_Y * 19.6))"
 )]
 ///         .run();
 /// }
