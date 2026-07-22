@@ -164,8 +164,22 @@ pub struct ContactPair {
     ///
     /// The speculative distance is reset to zero each timestep.
     pub speculative_distance: f32,
+    /// A cache of data used for recycling contacts across timesteps.
+    pub recycling_cache: Option<ContactRecyclingCache>,
     /// Flag indicating the status and type of the contact pair.
     pub flags: ContactPairFlags,
+}
+
+/// A cache of data used for recycling contacts across timesteps.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+pub struct ContactRecyclingCache {
+    /// The cached rotation of the first collider from the previous timestep.
+    pub rotation1: Rot,
+    /// The cached rotation of the second collider from the previous timestep.
+    pub rotation2: Rot,
+    /// The cached relative pose of the two colliders from the previous timestep.
+    pub relative_pose: Isometry,
 }
 
 /// Flags indicating the status and type of a [contact pair](ContactPair).
@@ -212,6 +226,7 @@ impl ContactPair {
             manifolds: Vec::new(),
             manifold_count_change: 0,
             speculative_distance: 0.0,
+            recycling_cache: None,
             flags: ContactPairFlags::empty(),
         }
     }
@@ -606,6 +621,13 @@ pub struct ContactPoint {
     ///
     /// [speculative collision]: crate::dynamics::ccd#speculative-collision
     pub penetration: f32,
+    /// The original penetration depth computed by the narrow phase.
+    ///
+    /// The current [`penetration`](Self::penetration) may be updated by contact recycling
+    /// without computing the full contact manifolds again. The base penetration is stored
+    /// as a reference so that the updated penetration can be computed using the relative
+    /// motion of the two colliders.
+    pub base_penetration: f32,
     /// The total normal impulse applied to the first body at this contact point.
     /// The unit is typically N⋅s or kg⋅m/s.
     ///
@@ -660,6 +682,7 @@ impl ContactPoint {
             anchor2,
             point: world_point,
             penetration,
+            base_penetration: penetration,
             normal_impulse: 0.0,
             normal_speed: 0.0,
             warm_start_normal_impulse: 0.0,
@@ -700,6 +723,7 @@ impl ContactPoint {
             anchor2: self.anchor1,
             point: self.point,
             penetration: self.penetration,
+            base_penetration: self.base_penetration,
             normal_impulse: -self.normal_impulse,
             normal_speed: self.normal_speed,
             warm_start_normal_impulse: -self.warm_start_normal_impulse,

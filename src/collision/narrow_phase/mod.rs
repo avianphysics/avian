@@ -187,6 +187,25 @@ pub struct NarrowPhaseConfig {
     /// Default: `0.02`
     pub contact_tolerance: f32,
 
+    /// The distance at which contact points can be recycled from the previous frame
+    /// to the current frame.
+    ///
+    /// Setting this to zero will disable contact recycling.
+    ///
+    /// This is implicitly scaled by the [`PhysicsLengthUnit`].
+    ///
+    /// Default: `0.05`
+    pub recycle_distance: f32,
+
+    /// The cosine of the angle between the previous contact normal and the current contact normal
+    /// at which contact points can be recycled from the previous frame to the current frame.
+    ///
+    /// This is a value between `-1.0` and `1.0`, where `1.0` means the normals are identical,
+    /// and `-1.0` means the normals are opposite.
+    ///
+    /// Default: `0.98` (approximately 11.5 degrees)
+    pub recycle_angle_cos: f32,
+
     /// If `true`, the current contacts will be matched with the previous contacts
     /// based on feature IDs or contact positions, and the contact impulses from
     /// the previous frame will be copied over for the new contacts.
@@ -203,6 +222,8 @@ impl Default for NarrowPhaseConfig {
         Self {
             // TODO: Investigate if this could be smaller
             contact_tolerance: 0.02,
+            recycle_distance: 0.05,
+            recycle_angle_cos: 0.98,
             match_contacts: true,
         }
     }
