@@ -178,8 +178,10 @@ pub struct ContactRecyclingCache {
     pub rotation1: Rot,
     /// The cached rotation of the second collider from the previous timestep.
     pub rotation2: Rot,
-    /// The cached relative pose of the two colliders from the previous timestep.
-    pub relative_pose: Isometry,
+    /// The cached relative translation of the two colliders from the previous timestep.
+    pub relative_translation: Vector,
+    /// The cached relative rotation of the two colliders from the previous timestep.
+    pub relative_rotation: Rot,
 }
 
 /// Flags indicating the status and type of a [contact pair](ContactPair).

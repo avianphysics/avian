@@ -197,14 +197,12 @@ pub struct NarrowPhaseConfig {
     /// Default: `0.05`
     pub recycle_distance: f32,
 
-    /// The cosine of the angle between the previous contact normal and the current contact normal
+    /// The angle (in radians) between the previous contact normal and the current contact normal
     /// at which contact points can be recycled from the previous frame to the current frame.
     ///
-    /// This is a value between `-1.0` and `1.0`, where `1.0` means the normals are identical,
-    /// and `-1.0` means the normals are opposite.
-    ///
-    /// Default: `0.98` (approximately 11.5 degrees)
-    pub recycle_angle_cos: f32,
+    #[cfg_attr(feature = "2d", doc = "Default: `0.2` (approximately 11.5 degrees)")]
+    #[cfg_attr(feature = "3d", doc = "Default: 0.175 (approximately 10 degrees)")]
+    pub recycle_angle: f32,
 
     /// If `true`, the current contacts will be matched with the previous contacts
     /// based on feature IDs or contact positions, and the contact impulses from
@@ -223,7 +221,11 @@ impl Default for NarrowPhaseConfig {
             // TODO: Investigate if this could be smaller
             contact_tolerance: 0.02,
             recycle_distance: 0.05,
-            recycle_angle_cos: 0.98,
+            // NOTE: These defaults are from Box2D and Box3D
+            #[cfg(feature = "2d")]
+            recycle_angle: 0.2,
+            #[cfg(feature = "3d")]
+            recycle_angle: 0.175,
             match_contacts: true,
         }
     }

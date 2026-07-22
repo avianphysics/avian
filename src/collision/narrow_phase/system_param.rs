@@ -9,6 +9,8 @@ use crate::{
     data_structures::{bit_vec::BitVec, pair_key::PairKey},
     prelude::*,
 };
+#[cfg(feature = "3d")]
+use bevy::math::ops::FloatPow;
 use bevy::{
     ecs::{
         query::QueryData,
@@ -382,6 +384,10 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
         let contact_tolerance = length_unit * self.config.contact_tolerance;
         let recycle_distance = length_unit * self.config.recycle_distance;
         let recycle_distance_non_touching = recycle_distance.min(contact_tolerance);
+        #[cfg(feature = "2d")]
+        let recycle_angle_cos = ops::cos(self.config.recycle_angle);
+        #[cfg(feature = "3d")]
+        let recycle_angular_distance = ops::cos(self.config.recycle_angle * 0.5).squared();
         let inv_delta_secs = delta_secs.recip();
 
         // Contact bit vecs must be sized based on the full contact capacity,
@@ -554,9 +560,17 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                 // This is inspired by persistent contact manifolds used in some physics engines,
                 // but allows larger relative motion, and has fewer tuning parameters (distance and angle).
                 // This has a huge impact on the performance and stability of stacks and resting bodies.
-                if recycle_distance > 0.0
-                    && let Some(cache) = contacts.recycling_cache.as_ref()
-                {
+                'recycle: {
+                    if recycle_distance <= 0.0 {
+                        // Recycling is disabled.
+                        break 'recycle;
+                    }
+
+                    let Some(cache) = contacts.recycling_cache.as_ref() else {
+                        // No previous contact data to recycle.
+                        break 'recycle;
+                    };
+
                     #[cfg(feature = "2d")]
                     {
                         let cos1 = body_rot1.cos * cache.rotation1.cos
@@ -564,55 +578,98 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                         let cos2 = body_rot2.cos * cache.rotation2.cos
                             + body_rot2.sin * cache.rotation2.sin;
                         let min_cos = cos1.min(cos2);
-
-                        let sweep_radius1 = if is_static1 {
-                            0.0
-                        } else {
-                            size_metrics1.sweep_radius
-                        };
-                        let sweep_radius2 = if is_static2 {
-                            0.0
-                        } else {
-                            size_metrics2.sweep_radius
-                        };
-                        let max_extent = sweep_radius1.max(sweep_radius2);
-                        let distance = pos12_1.distance(cache.relative_pose.translation);
-                        let delta_rotation = rot12_1.inverse() * cache.relative_pose.rotation;
-
-                        let tolerance = if was_touching {
-                            recycle_distance
-                        } else {
-                            recycle_distance_non_touching
-                        };
-
-                        if min_cos > self.config.recycle_angle_cos
-                            && distance + max_extent * delta_rotation.sin.abs() < tolerance
-                        {
-                            let delta_rot1 = body_rot1 * cache.rotation1.inverse();
-                            let delta_rot2 = body_rot2 * cache.rotation2.inverse();
-                            let com12 = world_com2 - world_com1 + pos12;
-
-                            contacts.manifolds.iter_mut().for_each(|manifold| {
-                                manifold.points.iter_mut().for_each(|point| {
-                                    // Keep anchors but update separation. This eliminates jitter.
-                                    let r1 = delta_rot1 * point.anchor1;
-                                    let r2 = delta_rot2 * point.anchor2;
-                                    let delta_separation = com12 + (r2 - r1);
-                                    point.penetration = point.base_penetration
-                                        - delta_separation.dot(manifold.normal);
-                                });
-                            });
-
-                            return;
+                        if min_cos <= recycle_angle_cos {
+                            // The relative rotation has changed too much.
+                            break 'recycle;
                         }
                     }
+                    #[cfg(feature = "3d")]
+                    {
+                        let angle1 = body_rot1.dot(cache.rotation1);
+                        let angle2 = body_rot2.dot(cache.rotation2);
+                        let min_angle = (angle1 * angle1).min(angle2 * angle2);
+                        if min_angle <= recycle_angular_distance {
+                            // The relative rotation has changed too much.
+                            break 'recycle;
+                        }
+                    }
+
+                    let sweep_radius1 = if is_static1 {
+                        0.0
+                    } else {
+                        size_metrics1.sweep_radius
+                    };
+                    let sweep_radius2 = if is_static2 {
+                        0.0
+                    } else {
+                        size_metrics2.sweep_radius
+                    };
+                    let max_extent = sweep_radius1.max(sweep_radius2);
+                    let distance_squared = pos12_1.distance_squared(cache.relative_translation);
+
+                    let tolerance = if was_touching {
+                        recycle_distance
+                    } else {
+                        recycle_distance_non_touching
+                    };
+
+                    #[cfg(feature = "2d")]
+                    {
+                        let distance = distance_squared.sqrt();
+                        let delta_rotation = rot12_1.inverse() * cache.relative_rotation;
+                        if distance + max_extent * delta_rotation.sin.abs() >= tolerance {
+                            // The relative motion is too large.
+                            break 'recycle;
+                        }
+                    }
+                    #[cfg(feature = "3d")]
+                    {
+                        if distance_squared >= tolerance * tolerance {
+                            // The relative motion is too large.
+                            break 'recycle;
+                        } else {
+                            // Check the maximum motion along the arc of the relative rotation.
+                            let distance = distance_squared.sqrt();
+                            let slack = tolerance - distance;
+                            let delta_rotation = cache.relative_rotation.inverse() * rot12_1;
+                            // TODO: Use a Vec3 max_extent and a symmetric cross product
+                            let arc = delta_rotation.chord_length() * max_extent;
+                            if arc >= slack {
+                                // The relative motion is too large.
+                                break 'recycle;
+                            }
+                        }
+                    }
+
+                    // The relative motion is small enough for contact recycling!
+                    let delta_rot1 = body_rot1 * cache.rotation1.inverse();
+                    let delta_rot2 = body_rot2 * cache.rotation2.inverse();
+                    #[cfg(feature = "3d")]
+                    let delta_rot1 = Mat3::from_quat(delta_rot1);
+                    #[cfg(feature = "3d")]
+                    let delta_rot2 = Mat3::from_quat(delta_rot2);
+                    let com12 = world_com2 - world_com1 + pos12;
+
+                    contacts.manifolds.iter_mut().for_each(|manifold| {
+                        manifold.points.iter_mut().for_each(|point| {
+                            // Keep anchors but update separation. This eliminates jitter.
+                            let r1 = delta_rot1 * point.anchor1;
+                            let r2 = delta_rot2 * point.anchor2;
+                            let delta_separation = com12 + (r2 - r1);
+                            point.penetration =
+                                point.base_penetration - delta_separation.dot(manifold.normal);
+                        });
+                    });
+
+                    return;
                 }
 
                 // Update the recycling cache for the next frame.
                 contacts.recycling_cache = Some(ContactRecyclingCache {
                     rotation1: body_rot1,
                     rotation2: body_rot2,
-                    relative_pose: Isometry::new(pos12_1, rot12_1),
+                    relative_translation: pos12_1,
+                    relative_rotation: rot12_1,
                 });
 
                 // If either collider is a sensor or either body is disabled, no constraints should be generated.
