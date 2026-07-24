@@ -222,6 +222,7 @@ use crate::prelude::*;
 use crate::{
     collider_tree::{ColliderTree, ColliderTreeProxyFlags, ColliderTrees},
     math::make_pose,
+    utils::{MIN_PAR_ITER_ENTITIES, ParallelQueryForEach},
 };
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 use bevy::ecs::query::QueryData;
@@ -628,7 +629,7 @@ fn solve_continuous(
     // as each fast body only reads the trees and produces its own deterministic result.
     // This combines parts of `b2FinalizeBodiesTask` and `b2SolveContinuous` from Box2D.
     let ccd_query = bodies.p0();
-    ccd_query.par_iter().for_each(|fast| {
+    ccd_query.par_for_each(MIN_PAR_ITER_ENTITIES, |fast| {
         // Only dynamic bodies support CCD.
         if !fast.body.flags.is_dynamic() {
             return;

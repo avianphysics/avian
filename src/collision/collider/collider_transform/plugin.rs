@@ -2,6 +2,7 @@ use crate::{
     ancestor_marker::{AncestorMarker, AncestorMarkerPlugin},
     physics_transform::PhysicsTransformSystems,
     prelude::*,
+    utils::{MIN_PAR_ITER_ENTITIES, ParallelQueryForEach},
 };
 use bevy::{
     ecs::{intern::Interned, schedule::ScheduleLabel},
@@ -118,7 +119,8 @@ pub(crate) fn propagate_collider_transforms(
     >,
     parent_query: Query<(Entity, Ref<Transform>, Has<RigidBody>, Ref<ChildOf>), ShouldPropagate>,
 ) {
-    root_query.par_iter_mut().for_each(
+    root_query.par_for_each_mut(
+        MIN_PAR_ITER_ENTITIES,
         |(entity, transform, children)| {
             for (child, child_transform, is_child_rb, child_of) in parent_query.iter_many(children) {
                 assert_eq!(

@@ -12,6 +12,7 @@ use crate::{
     dynamics::solver::solver_body::SolverBody,
     prelude::*,
     schedule::LastPhysicsTick,
+    utils::{MIN_PAR_ITER_ENTITIES, ParallelQueryForEach},
 };
 use bevy::{
     ecs::{
@@ -715,7 +716,8 @@ fn update_solver_body_aabbs<C: AnyCollider>(
 
     let collider_query = colliders.p0();
 
-    body_query.par_iter().for_each(
+    body_query.par_for_each(
+        MIN_PAR_ITER_ENTITIES,
         |(rb_pos, center_of_mass, lin_vel, ang_vel, body_colliders, speculative_ccd)| {
             for collider_entity in body_colliders.iter() {
                 let Ok((
@@ -892,7 +894,8 @@ pub fn update_moved_collider_aabbs<C: AnyCollider>(
     //       We should overall rework CCD to not rely on velocity-based AABB enlargement for all bodies.
     // TODO: par-iter over all colliders, check if they have actually changed since the `LastPhysicsTick`
     let mut collider_query = colliders.p0();
-    collider_query.par_iter_mut().for_each(
+    collider_query.par_for_each_mut(
+        MIN_PAR_ITER_ENTITIES,
         |(
             entity,
             pos,
