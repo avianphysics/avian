@@ -229,7 +229,23 @@ fn build_diagnostic_texts(cmd: &mut RelatedSpawnerCommands<ChildOf>) {
         // Other counters
         cmd.counter_text("Colliders", PhysicsEntityDiagnostics::COLLIDER_COUNT);
         cmd.counter_text("Joints", PhysicsEntityDiagnostics::JOINT_COUNT);
-        cmd.counter_text("Contact Pairs", CollisionDiagnostics::CONTACT_COUNT);
+        cmd.diagnostic_row().with_children(|cmd| {
+            cmd.spawn((PhysicsDiagnosticName, Text::new("Contact Pairs")));
+            cmd.spawn(Node::default()).with_children(|cmd| {
+                cmd.spawn((
+                    PhysicsDiagnosticCounter,
+                    PhysicsDiagnosticPath(CollisionDiagnostics::CONTACT_COUNT),
+                    Text::new("-"),
+                ));
+                cmd.spawn((Text::new(" ("), diagnostic_font()));
+                cmd.spawn((
+                    PhysicsDiagnosticCounter,
+                    PhysicsDiagnosticPath(CollisionDiagnostics::RECYCLED_COUNT),
+                    Text::new("-"),
+                ));
+                cmd.spawn((Text::new(" recycled)"), diagnostic_font()));
+            });
+        });
         cmd.counter_text(
             "Contact Constraints",
             SolverDiagnostics::CONTACT_CONSTRAINT_COUNT,

@@ -3,6 +3,7 @@ use core::cell::RefCell;
 
 use crate::{
     collision::{
+        CollisionDiagnostics,
         collider::EnlargedAabb,
         contact_types::{ContactEdgeFlags, ContactId, ContactRecyclingCache},
     },
@@ -76,7 +77,7 @@ pub struct NarrowPhase<'w, 's, C: AnyCollider> {
     pub contact_status_changes: ResMut<'w, ContactStatusChangeQueue>,
     contact_status_bits: ResMut<'w, ContactStatusBits>,
     #[cfg(feature = "parallel")]
-    thread_local_contact_status_bits: ResMut<'w, ThreadLocalContactStatusBits>,
+    thread_locals: ResMut<'w, NarrowPhaseThreadLocals>,
     pub config: Res<'w, NarrowPhaseConfig>,
     default_friction: Res<'w, DefaultFriction>,
     default_restitution: Res<'w, DefaultRestitution>,
@@ -88,15 +89,25 @@ pub struct NarrowPhase<'w, 's, C: AnyCollider> {
 #[derive(Resource, Default, Deref, DerefMut)]
 pub(super) struct ContactStatusBits(pub BitVec);
 
-// TODO: We could just combine all the bit vectors into the first one
-//       instead of having a separate `ContactStatusBits` resource.
-/// A thread-local bit vector for tracking contact status changes.
-/// Set bits correspond to contact pairs that were either added or removed.
-///
-/// The thread-local bit vectors are combined with the global [`ContactStatusBits`].
+/// Thread-local data for the narrow phase contact updates.
 #[cfg(feature = "parallel")]
 #[derive(Resource, Default, Deref, DerefMut)]
-pub(super) struct ThreadLocalContactStatusBits(pub ThreadLocal<RefCell<BitVec>>);
+pub(super) struct NarrowPhaseThreadLocals(pub ThreadLocal<RefCell<NarrowPhaseThreadContext>>);
+
+/// A thread-local context for the narrow phase contact updates.
+#[cfg(feature = "parallel")]
+#[derive(Default)]
+pub(super) struct NarrowPhaseThreadContext {
+    /// Bit vector for tracking contact status changes.
+    ///
+    /// Set bits correspond to contact pairs that were either added or removed.
+    ///
+    /// The thread-local bit vectors are combined with the global [`ContactStatusBits`].
+    // TODO: We could just combine all the bit vectors into the first one
+    pub contact_status_bits: BitVec,
+    /// The number of contacts recycled by the narrow phase on this thread.
+    pub recycled_count: u32,
+}
 
 /// A change in a contact's solver status, recorded by the narrow phase
 /// and applied by the solver.
@@ -153,12 +164,13 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
         delta_secs: f32,
         hooks: &SystemParamItem<H>,
         context: &SystemParamItem<C::Context>,
+        diagnostics: &mut CollisionDiagnostics,
         commands: &mut ParallelCommands,
     ) where
         for<'w, 's> SystemParamItem<'w, 's, H>: CollisionHooks,
     {
         // Update contacts for all contact pairs.
-        self.update_contacts::<H>(delta_secs, hooks, context, commands);
+        self.update_contacts::<H>(delta_secs, hooks, context, diagnostics, commands);
 
         // Process contact status changes, iterating over set bits serially to maintain determinism.
         //
@@ -376,6 +388,7 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
         delta_secs: f32,
         hooks: &SystemParamItem<H>,
         collider_context: &SystemParamItem<C::Context>,
+        diagnostics: &mut CollisionDiagnostics,
         par_commands: &mut ParallelCommands,
     ) where
         for<'w, 's> SystemParamItem<'w, 's, H>: CollisionHooks,
@@ -399,12 +412,13 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
         self.contact_status_bits.set_bit_count_and_clear(bit_count);
 
         #[cfg(feature = "parallel")]
-        self.thread_local_contact_status_bits
-            .iter_mut()
-            .for_each(|context| {
-                let bit_vec_mut = &mut context.borrow_mut();
-                bit_vec_mut.set_bit_count_and_clear(bit_count);
-            });
+        self.thread_locals.iter_mut().for_each(|context| {
+            let thread_locals = &mut context.borrow_mut();
+            thread_locals
+                .contact_status_bits
+                .set_bit_count_and_clear(bit_count);
+            thread_locals.recycled_count = 0;
+        });
 
         // Compute contacts for all contact pairs in parallel or serially
         // based on the `parallel` feature.
@@ -425,23 +439,33 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
             let contact_id = contacts.contact_id.0 as usize;
 
             #[cfg(not(feature = "parallel"))]
-            let status_change_bits = &mut self.contact_status_bits;
+            let contact_status_bits = &mut self.contact_status_bits;
+            #[cfg(not(feature = "parallel"))]
+            let recycled_count = &mut diagnostics.recycled_count;
 
             // TODO: Move this out of the chunk iteration? Requires refactoring `par_for_each!`.
             #[cfg(feature = "parallel")]
             // Get the thread-local narrow phase context.
             let mut thread_context = self
-                .thread_local_contact_status_bits
+                .thread_locals
                 .get_or(|| {
                     // No thread-local bit vector exists for this thread yet.
                     // Create a new one with the same capacity as the global bit vector.
                     let mut contact_status_bits = BitVec::new(bit_count);
                     contact_status_bits.set_bit_count_and_clear(bit_count);
-                    RefCell::new(contact_status_bits)
+                    NarrowPhaseThreadContext {
+                        contact_status_bits,
+                        recycled_count: 0,
+                    }
+                    .into()
                 })
                 .borrow_mut();
+
             #[cfg(feature = "parallel")]
-            let status_change_bits = &mut *thread_context;
+            let NarrowPhaseThreadContext {
+                contact_status_bits,
+                recycled_count,
+            } = &mut *thread_context;
 
             // Get the colliders for the contact pair.
             let Ok([collider1, collider2]) = self
@@ -469,7 +493,7 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
             if !overlap || !collider1.layers.interacts_with(*collider2.layers) {
                 // The AABBs no longer overlap. The contact pair should be removed.
                 contacts.flags.set(ContactPairFlags::DISJOINT_AABB, true);
-                status_change_bits.set(contact_id);
+                contact_status_bits.set(contact_id);
             } else {
                 // The AABBs overlap. Compute contacts.
 
@@ -661,6 +685,8 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                         });
                     });
 
+                    *recycled_count += 1;
+
                     return;
                 }
 
@@ -683,7 +709,7 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     contacts
                         .flags
                         .set(ContactPairFlags::STARTED_GENERATING_CONSTRAINTS, true);
-                    status_change_bits.set(contact_id);
+                    contact_status_bits.set(contact_id);
                 }
 
                 contacts
@@ -879,15 +905,15 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                 if touching && !was_touching {
                     // The colliders started touching.
                     contacts.flags.set(ContactPairFlags::STARTED_TOUCHING, true);
-                    status_change_bits.set(contact_id);
+                    contact_status_bits.set(contact_id);
                 } else if !touching && was_touching {
                     // The colliders stopped touching.
                     contacts.flags.set(ContactPairFlags::STOPPED_TOUCHING, true);
-                    status_change_bits.set(contact_id);
+                    contact_status_bits.set(contact_id);
                 } else if contacts.manifold_count_change != 0 {
                     // The manifold count changed, but the colliders are still touching.
                     // This is used to add or remove contact constraints in the `ConstraintGraph`.
-                    status_change_bits.set(contact_id);
+                    contact_status_bits.set(contact_id);
                 }
             };
         });
@@ -895,12 +921,12 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
         #[cfg(feature = "parallel")]
         {
             // Combine the thread-local bit vectors serially using bit-wise OR.
-            self.thread_local_contact_status_bits
-                .iter_mut()
-                .for_each(|context| {
-                    let contact_status_bits = context.borrow();
-                    self.contact_status_bits.or(&contact_status_bits);
-                });
+            self.thread_locals.iter_mut().for_each(|context| {
+                let thread_context = context.borrow();
+                let contact_status_bits = &thread_context.contact_status_bits;
+                self.contact_status_bits.or(contact_status_bits);
+                diagnostics.recycled_count += thread_context.recycled_count;
+            });
         }
     }
 }
