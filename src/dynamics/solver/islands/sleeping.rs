@@ -371,12 +371,14 @@ impl Command for SleepIslands {
                 state.0.get_mut(world).unwrap();
 
             let mut bodies_to_sleep = Vec::<(Entity, Sleeping)>::new();
+            let mut colliders_to_sleep = Vec::<Entity>::new();
 
+            // First, mark every island in this batch as sleeping and gather their bodies and colliders.
             for island_id in self.0 {
                 if let Some(island) = islands.get_mut(island_id) {
                     if island.is_sleeping {
                         // The island is already sleeping, no need to sleep it again.
-                        return;
+                        continue;
                     }
 
                     island.is_sleeping = true;
@@ -389,36 +391,46 @@ impl Command for SleepIslands {
                             continue;
                         };
 
-                        // Transfer the contact pairs to the sleeping set, and remove the body from the constraint graph.
                         if let Some(colliders) = colliders {
-                            for collider in colliders {
-                                contact_graph.sleep_entity_with(
-                                    collider,
-                                    |_graph, contact_pair| {
-                                        // Remove touching contacts from the constraint graph.
-                                        if !contact_pair.is_touching()
-                                            || !contact_pair.generates_constraints()
-                                        {
-                                            return;
-                                        }
-                                        if let (Some(body1), Some(body2)) =
-                                            (contact_pair.body1, contact_pair.body2)
-                                        {
-                                            constraint_graph.remove_contact(
-                                                contact_pair.contact_id,
-                                                body1,
-                                                body2,
-                                            );
-                                        }
-                                    },
-                                );
-                            }
+                            colliders_to_sleep.extend(colliders);
                         }
 
                         bodies_to_sleep.push((entity, Sleeping));
                         body = body_island.next;
                     }
                 }
+            }
+
+            // A pair may only be put to sleep once its other body is also asleep or immovable.
+            let is_other_body_asleep = |other_body: Option<Entity>| -> bool {
+                let Some(other) = other_body else {
+                    return true;
+                };
+                match bodies.get(other) {
+                    Ok((body_island, _, _)) => islands
+                        .get(body_island.island_id)
+                        .is_none_or(|island| island.is_sleeping),
+                    Err(_) => true,
+                }
+            };
+
+            // Transfer the contact pairs to the sleeping set, and remove touching contacts
+            // from the constraint graph.
+            for collider in colliders_to_sleep {
+                contact_graph.sleep_entity_with(
+                    collider,
+                    |_graph, contact_pair| {
+                        // Remove touching contacts from the constraint graph.
+                        if !contact_pair.is_touching() || !contact_pair.generates_constraints() {
+                            return;
+                        }
+                        if let (Some(body1), Some(body2)) = (contact_pair.body1, contact_pair.body2)
+                        {
+                            constraint_graph.remove_contact(contact_pair.contact_id, body1, body2);
+                        }
+                    },
+                    is_other_body_asleep,
+                );
             }
 
             // Batch insert `Sleeping` to the bodies.
