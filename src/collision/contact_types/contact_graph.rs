@@ -96,6 +96,14 @@ pub struct ContactGraph {
 
     /// A map from entities to their corresponding node indices in the contact graph.
     entity_to_node: SparseSecondaryEntityMap<NodeIndex>,
+
+    /// A reusable scratch buffer of contact IDs used when transferring contacts
+    /// between the active and sleeping sets, to avoid allocating on every call
+    /// to [`sleep_entity_with`] and [`wake_entity_with`].
+    ///
+    /// [`sleep_entity_with`]: Self::sleep_entity_with
+    /// [`wake_entity_with`]: Self::wake_entity_with
+    scratch_contact_ids: Vec<ContactId>,
 }
 
 /// An undirected graph where each node is an entity and each edge is a [`ContactEdge`].
@@ -704,7 +712,7 @@ impl ContactGraph {
         }
     }
 
-    /// Transfers touching contacts of a body from the sleeping contacts to the active contacts,
+    /// Transfers the contacts of a body from the sleeping contacts to the active contacts,
     /// calling the given callback for each [`ContactPair`] that is moved to active contacts.
     #[inline]
     pub fn wake_entity_with<F>(&mut self, entity: Entity, mut pair_callback: F)
@@ -717,23 +725,19 @@ impl ContactGraph {
         };
 
         // Find all edges connected to the entity.
-        let contact_ids: Vec<ContactId> = self
-            .edges
-            .edge_weights(index)
-            .filter_map(|edge| edge.is_sleeping().then_some(edge.id))
-            .collect();
+        let mut contact_ids = core::mem::take(&mut self.scratch_contact_ids);
+        contact_ids.extend(
+            self.edges
+                .edge_weights(index)
+                .filter_map(|edge| edge.is_sleeping().then_some(edge.id)),
+        );
 
         // Iterate over the edges and move sleeping contacts to active contacts.
-        for id in contact_ids {
+        for &id in &contact_ids {
             let edge = self
                 .edges
                 .edge_weight_mut(id.into())
                 .expect("edge should exist");
-
-            if !edge.is_touching() {
-                // Only wake touching contacts.
-                continue;
-            }
 
             let pair_index = edge.pair_index;
 
@@ -765,14 +769,23 @@ impl ContactGraph {
                 moved_edge.pair_index = pair_index;
             }
         }
+
+        // Restore the scratch buffer.
+        contact_ids.clear();
+        self.scratch_contact_ids = contact_ids;
     }
 
-    /// Transfers touching contacts of a body from the active contacts to the sleeping contacts,
+    /// Transfers the contacts of a body from the active contacts to the sleeping contacts,
     /// calling the given callback for each [`ContactPair`] that is moved to sleeping contacts.
+    ///
+    /// A contact is only moved to the sleeping set if `should_sleep` returns `true` for the
+    /// other body in the pair. This prevents a non-touching pair between this body and a still-awake
+    /// body from being put to sleep. A pair may sleep only once *both* of its bodies are asleep or immovable.
     #[inline]
-    pub fn sleep_entity_with<F>(&mut self, entity: Entity, mut pair_callback: F)
+    pub fn sleep_entity_with<F, S>(&mut self, entity: Entity, mut pair_callback: F, should_sleep: S)
     where
         F: FnMut(&mut ContactGraph, &ContactPair),
+        S: Fn(Option<Entity>) -> bool,
     {
         // Get the index of the entity in the graph.
         let Some(index) = self.entity_to_node(entity) else {
@@ -780,21 +793,28 @@ impl ContactGraph {
         };
 
         // Find all edges connected to the entity.
-        let contact_ids: Vec<ContactId> = self
-            .edges
-            .edge_weights(index)
-            .filter_map(|edge| (!edge.is_sleeping()).then_some(edge.id))
-            .collect();
+        let mut contact_ids = core::mem::take(&mut self.scratch_contact_ids);
+        contact_ids.extend(
+            self.edges
+                .edge_weights(index)
+                .filter_map(|edge| (!edge.is_sleeping()).then_some(edge.id)),
+        );
 
         // Iterate over the edges and move active contacts to sleeping contacts.
-        for id in contact_ids {
+        for &id in &contact_ids {
             let edge = self
                 .edges
                 .edge_weight_mut(id.into())
                 .expect("edge should exist");
 
-            if !edge.is_touching() {
-                // Only sleep touching contacts.
+            // Only sleep the contact if the other body is also asleep or immovable.
+            // Otherwise the pair must stay active so the narrow phase keeps updating it.
+            let other_body = if edge.collider1 == entity {
+                edge.body2
+            } else {
+                edge.body1
+            };
+            if !should_sleep(other_body) {
                 continue;
             }
 
@@ -828,6 +848,10 @@ impl ContactGraph {
                 moved_edge.pair_index = pair_index;
             }
         }
+
+        // Restore the scratch buffer.
+        contact_ids.clear();
+        self.scratch_contact_ids = contact_ids;
     }
 
     /// Clears all contact pairs and the contact graph.
