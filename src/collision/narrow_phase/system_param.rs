@@ -4,11 +4,13 @@ use core::cell::RefCell;
 use crate::{
     collision::{
         collider::EnlargedAabb,
-        contact_types::{ContactEdgeFlags, ContactId},
+        contact_types::{ContactEdgeFlags, ContactId, ContactRecyclingCache},
     },
     data_structures::{bit_vec::BitVec, pair_key::PairKey},
     prelude::*,
 };
+#[cfg(feature = "3d")]
+use bevy::math::ops::FloatPow;
 use bevy::{
     ecs::{
         query::QueryData,
@@ -49,6 +51,7 @@ struct RigidBodyQuery {
     restitution: Option<Read<Restitution>>,
     collision_margin: Option<Read<CollisionMargin>>,
     speculative_ccd: Option<Read<SpeculativeCcd>>,
+    size_metrics: Read<BodySizeMetrics>,
 }
 
 /// A system parameter for managing the narrow phase.
@@ -379,6 +382,12 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
     {
         let length_unit = self.length_unit.0;
         let contact_tolerance = length_unit * self.config.contact_tolerance;
+        let recycle_distance = length_unit * self.config.recycle_distance;
+        let recycle_distance_non_touching = recycle_distance.min(contact_tolerance);
+        #[cfg(feature = "2d")]
+        let recycle_angle_cos = ops::cos(self.config.recycle_angle);
+        #[cfg(feature = "3d")]
+        let recycle_angular_distance = ops::cos(self.config.recycle_angle * 0.5).squared();
         let inv_delta_secs = delta_secs.recip();
 
         // Contact bit vecs must be sized based on the full contact capacity,
@@ -464,6 +473,8 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
             } else {
                 // The AABBs overlap. Compute contacts.
 
+                let was_touching = contacts.flags.contains(ContactPairFlags::TOUCHING);
+
                 let body1_bundle = collider1
                     .of
                     .and_then(|&ColliderOf { body }| self.body_query.get(body).ok());
@@ -477,11 +488,14 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     is_static1,
                     collider_offset1,
                     world_com1,
+                    body_pos1,
+                    body_rot1,
                     lin_vel1,
                     ang_vel1,
                     rb_friction1,
                     rb_collision_margin1,
                     speculative_ccd1,
+                    size_metrics1,
                 ) = body1_bundle
                     .as_ref()
                     .map(|body| {
@@ -489,11 +503,14 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                             body.rb.is_static(),
                             (collider1.position.0 - body.position.0).f32(),
                             body.rotation * body.center_of_mass.0,
+                            body.position.0,
+                            Rot::from(*body.rotation),
                             body.linear_velocity.0,
                             body.angular_velocity.0,
                             body.friction,
                             body.collision_margin,
                             body.speculative_ccd.copied(),
+                            *body.size_metrics,
                         )
                     })
                     .unwrap_or_default();
@@ -501,11 +518,14 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     is_static2,
                     collider_offset2,
                     world_com2,
+                    body_pos2,
+                    body_rot2,
                     lin_vel2,
                     ang_vel2,
                     rb_friction2,
                     rb_collision_margin2,
                     speculative_ccd2,
+                    size_metrics2,
                 ) = body2_bundle
                     .as_ref()
                     .map(|body| {
@@ -513,11 +533,14 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                             body.rb.is_static(),
                             (collider2.position.0 - body.position.0).f32(),
                             body.rotation * body.center_of_mass.0,
+                            body.position.0,
+                            Rot::from(*body.rotation),
                             body.linear_velocity.0,
                             body.angular_velocity.0,
                             body.friction,
                             body.collision_margin,
                             body.speculative_ccd.copied(),
+                            *body.size_metrics,
                         )
                     })
                     .unwrap_or_default();
@@ -526,6 +549,128 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                 // when processing status changes for the constraint graph.
                 contacts.flags.set(ContactPairFlags::STATIC1, is_static1);
                 contacts.flags.set(ContactPairFlags::STATIC2, is_static2);
+
+                // Compute the relative pose of the bodies in the local space of the first body.
+                let inv_rot1 = body_rot1.inverse();
+                let pos12 = (body_pos2 - body_pos1).f32();
+                let rot12_1 = inv_rot1 * body_rot2;
+                let pos12_1 = inv_rot1 * pos12;
+
+                // Contact recycling optimization, based on Box2D/Box3D by Erin Catto.
+                // This is inspired by persistent contact manifolds used in some physics engines,
+                // but allows larger relative motion, and has fewer tuning parameters (distance and angle).
+                // This has a huge impact on the performance and stability of stacks and resting bodies.
+                'recycle: {
+                    if recycle_distance <= 0.0 {
+                        // Recycling is disabled.
+                        break 'recycle;
+                    }
+
+                    let Some(cache) = contacts.recycling_cache.as_ref() else {
+                        // No previous contact data to recycle.
+                        break 'recycle;
+                    };
+
+                    #[cfg(feature = "2d")]
+                    {
+                        let cos1 = body_rot1.cos * cache.rotation1.cos
+                            + body_rot1.sin * cache.rotation1.sin;
+                        let cos2 = body_rot2.cos * cache.rotation2.cos
+                            + body_rot2.sin * cache.rotation2.sin;
+                        let min_cos = cos1.min(cos2);
+                        if min_cos <= recycle_angle_cos {
+                            // The relative rotation has changed too much.
+                            break 'recycle;
+                        }
+                    }
+                    #[cfg(feature = "3d")]
+                    {
+                        let angle1 = body_rot1.dot(cache.rotation1);
+                        let angle2 = body_rot2.dot(cache.rotation2);
+                        let min_angle = (angle1 * angle1).min(angle2 * angle2);
+                        if min_angle <= recycle_angular_distance {
+                            // The relative rotation has changed too much.
+                            break 'recycle;
+                        }
+                    }
+
+                    let sweep_radius1 = if is_static1 {
+                        0.0
+                    } else {
+                        size_metrics1.sweep_radius
+                    };
+                    let sweep_radius2 = if is_static2 {
+                        0.0
+                    } else {
+                        size_metrics2.sweep_radius
+                    };
+                    let max_extent = sweep_radius1.max(sweep_radius2);
+                    let distance_squared = pos12_1.distance_squared(cache.relative_translation);
+
+                    let tolerance = if was_touching {
+                        recycle_distance
+                    } else {
+                        recycle_distance_non_touching
+                    };
+
+                    #[cfg(feature = "2d")]
+                    {
+                        let distance = distance_squared.sqrt();
+                        let delta_rotation = rot12_1.inverse() * cache.relative_rotation;
+                        if distance + max_extent * delta_rotation.sin.abs() >= tolerance {
+                            // The relative motion is too large.
+                            break 'recycle;
+                        }
+                    }
+                    #[cfg(feature = "3d")]
+                    {
+                        if distance_squared >= tolerance * tolerance {
+                            // The relative motion is too large.
+                            break 'recycle;
+                        } else {
+                            // Check the maximum motion along the arc of the relative rotation.
+                            let distance = distance_squared.sqrt();
+                            let slack = tolerance - distance;
+                            let delta_rotation = cache.relative_rotation.inverse() * rot12_1;
+                            // TODO: Use a Vec3 max_extent and a symmetric cross product
+                            let arc = delta_rotation.chord_length() * max_extent;
+                            if arc >= slack {
+                                // The relative motion is too large.
+                                break 'recycle;
+                            }
+                        }
+                    }
+
+                    // The relative motion is small enough for contact recycling!
+                    let delta_rot1 = body_rot1 * cache.rotation1.inverse();
+                    let delta_rot2 = body_rot2 * cache.rotation2.inverse();
+                    #[cfg(feature = "3d")]
+                    let delta_rot1 = Mat3::from_quat(delta_rot1);
+                    #[cfg(feature = "3d")]
+                    let delta_rot2 = Mat3::from_quat(delta_rot2);
+                    let com12 = world_com2 - world_com1 + pos12;
+
+                    contacts.manifolds.iter_mut().for_each(|manifold| {
+                        manifold.points.iter_mut().for_each(|point| {
+                            // Keep anchors but update separation. This eliminates jitter.
+                            let r1 = delta_rot1 * point.anchor1;
+                            let r2 = delta_rot2 * point.anchor2;
+                            let delta_separation = com12 + (r2 - r1);
+                            point.penetration =
+                                point.base_penetration - delta_separation.dot(manifold.normal);
+                        });
+                    });
+
+                    return;
+                }
+
+                // Update the recycling cache for the next frame.
+                contacts.recycling_cache = Some(ContactRecyclingCache {
+                    rotation1: body_rot1,
+                    rotation2: body_rot2,
+                    relative_translation: pos12_1,
+                    relative_rotation: rot12_1,
+                });
 
                 // If either collider is a sensor or either body is disabled, no constraints should be generated.
                 let is_disabled = body1_bundle.is_none()
@@ -619,8 +764,6 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                 // The maximum distance at which contacts are detected.
                 let max_contact_distance = collision_margin_sum + speculative_distance;
 
-                let was_touching = contacts.flags.contains(ContactPairFlags::TOUCHING);
-
                 // Save the old manifolds for warm starting.
                 let old_manifolds = contacts.manifolds.clone();
 
@@ -664,6 +807,9 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
 
                         // Add the collision margin to the penetration depth.
                         point.penetration += collision_margin_sum;
+
+                        // Store the base penetration depth for contact recycling.
+                        point.base_penetration = point.penetration;
 
                         // Compute the relative velocity along the contact normal.
                         #[cfg(feature = "2d")]

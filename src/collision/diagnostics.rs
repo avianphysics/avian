@@ -17,6 +17,8 @@ pub struct CollisionDiagnostics {
     pub narrow_phase: Duration,
     /// The number of contacts.
     pub contact_count: u32,
+    /// The number of contacts that were recycled from the previous timestep.
+    pub recycled_count: u32,
 }
 
 impl PhysicsDiagnostics for CollisionDiagnostics {
@@ -28,7 +30,10 @@ impl PhysicsDiagnostics for CollisionDiagnostics {
     }
 
     fn counter_paths(&self) -> Vec<(&'static DiagnosticPath, u32)> {
-        vec![(Self::CONTACT_COUNT, self.contact_count)]
+        vec![
+            (Self::CONTACT_COUNT, self.contact_count),
+            (Self::RECYCLED_COUNT, self.recycled_count),
+        ]
     }
 }
 
@@ -37,5 +42,6 @@ impl_diagnostic_paths! {
         BROAD_PHASE: "avian/collision/broad_phase",
         NARROW_PHASE: "avian/collision/update_contacts",
         CONTACT_COUNT: "avian/collision/contact_count",
+        RECYCLED_COUNT: "avian/collision/recycled_count",
     }
 }
