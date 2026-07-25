@@ -285,7 +285,7 @@ impl ContactConstraint {
             let r1 = body1.delta_rotation * point.anchor1;
             let r2 = body2.delta_rotation * point.anchor2;
 
-            // Compute current saparation.
+            // Compute current separation.
             let delta_separation = delta_translation + (r2 - r1);
             let separation = delta_separation.dot(self.normal) + point.initial_separation;
 
