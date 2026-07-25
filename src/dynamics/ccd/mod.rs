@@ -591,7 +591,7 @@ struct CcdImpact {
 fn solve_continuous(
     colliders: Query<(&Collider, &Position, &Rotation)>,
     ccd_query: Query<CcdBodyQuery>,
-    mut solver_bodies: ResMut<SolverBodies>,
+    mut bodies: ResMut<SolverBodies>,
     trees: Res<ColliderTrees>,
     mut contact_graph: ResMut<ContactGraph>,
     time: Res<Time>,
@@ -604,10 +604,6 @@ fn solve_continuous(
         return;
     }
     let inv_dt = 1.0 / delta_secs;
-
-    // Shared, read-only access to the solver bodies for the parallel sweep phase below.
-    // Time-of-impact corrections are written back into the resource afterwards.
-    let bodies = &*solver_bodies;
 
     // Avian's approach to CCD is heavily inspired by Box2D by Erin Catto,
     // with some notable differences (as of Box2D 3.1.0):
@@ -869,7 +865,7 @@ fn solve_continuous(
             impact,
         } in results
         {
-            if let Some(solver_body) = solver_bodies.get_mut(index) {
+            if let Some(solver_body) = bodies.get_mut(index) {
                 // Note: This flag is only retained for debug rendering.
                 solver_body.flags.insert(SolverBodyFlags::IS_FAST);
 
