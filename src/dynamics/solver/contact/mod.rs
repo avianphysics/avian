@@ -103,7 +103,6 @@ pub struct ContactConstraint {
 
 impl ContactConstraint {
     /// Generates a new [`ContactConstraint`] from the given bodies and contact manifold.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn generate(
         body_index1: SolverBodyIndex,
         body_index2: SolverBodyIndex,
