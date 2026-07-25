@@ -111,12 +111,11 @@ impl ContactNormalPart {
 
     /// Solves the non-penetration constraint, updating the total impulse in `self` and returning
     /// the incremental impulse to apply to each body.
-    pub fn solve_impulse(
+    pub fn solve_impulse<const USE_BIAS: bool>(
         &mut self,
         separation: f32,
         relative_velocity: Vector,
         normal: Vector,
-        use_bias: bool,
         max_overlap_solve_speed: f32,
         delta_secs: f32,
     ) -> f32 {
@@ -127,7 +126,7 @@ impl ContactNormalPart {
         let mut impulse = if separation > 0.0 {
             // Speculative contact: Push back the part of the velocity that would cause penetration.
             -self.effective_mass * (normal_speed + separation / delta_secs)
-        } else if use_bias {
+        } else if USE_BIAS {
             // Contact using bias: Incorporate softness parameters.
             //
             // 1. Velocity bias: Allows the constraint to solve overlap by boosting

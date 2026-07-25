@@ -16,6 +16,7 @@ use crate::{
         AppDiagnosticsExt, ComputedAngularInertia, ComputedCenterOfMass, ComputedMass, Dominance,
         LockedAxes,
     },
+    utils::{MIN_PAR_ITER_ENTITIES, ParallelQueryForEach},
 };
 #[cfg(feature = "3d")]
 use crate::{
@@ -250,7 +251,8 @@ fn prepare_solver_bodies(
     let access = solver_bodies.access();
 
     #[allow(unused_variables)]
-    query.par_iter().for_each(
+    query.par_for_each(
+        MIN_PAR_ITER_ENTITIES,
         |(
             rb,
             index,
@@ -340,9 +342,9 @@ fn writeback_solver_bodies(
 ) {
     let start = bevy::platform::time::Instant::now();
 
-    query
-        .par_iter_mut()
-        .for_each(|(index, mut pos, mut rot, com, mut lin_vel, mut ang_vel)| {
+    query.par_for_each_mut(
+        MIN_PAR_ITER_ENTITIES,
+        |(index, mut pos, mut rot, com, mut lin_vel, mut ang_vel)| {
             let Some(solver_body) = solver_bodies.get(*index) else {
                 return;
             };
@@ -359,7 +361,8 @@ fn writeback_solver_bodies(
             // Write back velocities.
             lin_vel.0 = solver_body.linear_velocity;
             ang_vel.0 = solver_body.angular_velocity;
-        });
+        },
+    );
 
     diagnostics.finalize += start.elapsed();
 }
@@ -371,14 +374,15 @@ pub(crate) fn update_solver_body_angular_inertia(
 ) {
     let access = solver_bodies.access();
 
-    query
-        .par_iter()
-        .for_each(|(index, angular_inertia, rotation)| {
+    query.par_for_each_mut(
+        MIN_PAR_ITER_ENTITIES,
+        |(index, angular_inertia, rotation)| {
             // SAFETY: Each entity has a unique, valid solver body index, so the writes below
             //         target disjoint inertias.
             let inertia = unsafe { access.inertia_unchecked_mut(*index) };
             inertia.update_effective_inv_angular_inertia(angular_inertia, rotation.0);
-        });
+        },
+    );
 }
 
 #[cfg(test)]

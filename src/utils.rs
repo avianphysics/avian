@@ -1,6 +1,87 @@
 //! Miscallaneous utility functions.
 
+use bevy::ecs::{
+    query::{IterQueryData, QueryFilter, QueryItem, ROQueryItem, ReadOnlyQueryData},
+    system::Query,
+};
+
 pub(crate) use bevy::platform::time::Instant;
+
+/// A conservative default minimum number of matched entities required before query iteration
+/// switches from serial to parallel. This is used by the [`ParallelQueryForEach`] extension trait
+/// and its [`par_for_each`] and [`par_for_each_mut`] methods.
+///
+/// This threshold was chosen by measuring the rough entity count where parallel iteration
+/// outperforms serial iteration for cheap per-entity workloads such as position integration.
+///
+/// [`par_for_each`]: ParallelQueryForEach::par_for_each
+/// [`par_for_each_mut`]: ParallelQueryForEach::par_for_each_mut
+pub(crate) const MIN_PAR_ITER_ENTITIES: usize = 4096;
+
+/// An extension trait for [`Query`] that chooses between serial and parallel
+/// iteration based on the number of matched entities.
+///
+/// # Note
+///
+/// The entity count is determined with [`Query::count`], which is cheap for
+/// archetypal queries but iterates the query for non-archetypal ones.
+pub trait ParallelQueryForEach<'w, 's, D: IterQueryData, F: QueryFilter> {
+    /// Iterates over the read-only query items, calling `f` for each one either
+    /// serially or in parallel depending on `min_parallel_len`.
+    ///
+    /// See the [trait-level documentation](ParallelQueryForEach) for details.
+    fn par_for_each<FN>(&self, min_parallel_len: usize, f: FN)
+    where
+        D: ReadOnlyQueryData,
+        FN: for<'a> Fn(ROQueryItem<'a, 's, D>) + Send + Sync + Clone;
+
+    /// Iterates over the mutable query items, calling `f` for each one either
+    /// serially or in parallel depending on `min_parallel_len`.
+    ///
+    /// See the [trait-level documentation](ParallelQueryForEach) for details.
+    fn par_for_each_mut<FN>(&mut self, min_parallel_len: usize, f: FN)
+    where
+        FN: for<'a> Fn(QueryItem<'a, 's, D>) + Send + Sync + Clone;
+}
+
+impl<'w, 's, D: IterQueryData, F: QueryFilter> ParallelQueryForEach<'w, 's, D, F>
+    for Query<'w, 's, D, F>
+{
+    #[inline(always)]
+    #[allow(unused_variables)]
+    fn par_for_each<FN>(&self, min_parallel_len: usize, f: FN)
+    where
+        D: ReadOnlyQueryData,
+        FN: for<'a> Fn(ROQueryItem<'a, 's, D>) + Send + Sync + Clone,
+    {
+        #[cfg(feature = "parallel")]
+        {
+            let task_pool = bevy::tasks::ComputeTaskPool::get();
+            if task_pool.thread_num() > 1 && self.count() >= min_parallel_len {
+                self.par_iter().for_each(f);
+                return;
+            }
+        }
+        self.iter().for_each(f);
+    }
+
+    #[inline(always)]
+    #[allow(unused_variables)]
+    fn par_for_each_mut<FN>(&mut self, min_parallel_len: usize, f: FN)
+    where
+        FN: for<'a> Fn(QueryItem<'a, 's, D>) + Send + Sync + Clone,
+    {
+        #[cfg(feature = "parallel")]
+        {
+            let task_pool = bevy::tasks::ComputeTaskPool::get();
+            if task_pool.thread_num() > 1 && self.count() >= min_parallel_len {
+                self.par_iter_mut().for_each(f);
+                return;
+            }
+        }
+        self.iter_mut().for_each(f);
+    }
+}
 
 // TODO: The single-threaded and multi-threaded versions are duplicated here because
 //       of the different trait bounds on `F`. Unify them somehow?

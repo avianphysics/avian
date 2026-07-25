@@ -255,14 +255,13 @@ impl ContactConstraint {
     }
 
     /// Solves the [`ContactConstraint`], applying an impulse to the given bodies.
-    pub fn solve(
+    pub fn solve<const USE_BIAS: bool>(
         &mut self,
         body1: &mut SolverBody,
         body2: &mut SolverBody,
         inertia1: &SolverBodyInertia,
         inertia2: &SolverBodyInertia,
         delta_secs: f32,
-        use_bias: bool,
         max_overlap_solve_speed: f32,
     ) {
         let inv_mass1 = inertia1.effective_inv_mass();
@@ -289,11 +288,10 @@ impl ContactConstraint {
             let relative_velocity = body2.velocity_at_point(r2) - body1.velocity_at_point(r1);
 
             // Compute the incremental impulse. The clamping and impulse accumulation is handled by the method.
-            let impulse_magnitude = point.normal_part.solve_impulse(
+            let impulse_magnitude = point.normal_part.solve_impulse::<USE_BIAS>(
                 separation,
                 relative_velocity,
                 self.normal,
-                use_bias,
                 max_overlap_solve_speed,
                 delta_secs,
             );
@@ -308,39 +306,42 @@ impl ContactConstraint {
             body2.angular_velocity += inv_angular_inertia2 * cross(r2, impulse);
         }
 
-        let tangent_directions = self.tangent_directions();
+        // Friction impulses, only during the relaxation stage.
+        // Applying friction during the bias stage does not meaningfully improve quality for the cost.
+        if !USE_BIAS {
+            let tangent_directions = self.tangent_directions();
 
-        // Friction
-        for point in self.points.iter_mut() {
-            let Some(ref mut friction_part) = point.tangent_part else {
-                continue;
-            };
+            for point in self.points.iter_mut() {
+                let Some(ref mut friction_part) = point.tangent_part else {
+                    continue;
+                };
 
-            // Fixed anchors
-            let r1 = point.anchor1;
-            let r2 = point.anchor2;
+                // Fixed anchors
+                let r1 = point.anchor1;
+                let r2 = point.anchor2;
 
-            // Relative velocity at contact point
-            let relative_velocity = body2.velocity_at_point(r2) - body1.velocity_at_point(r1);
+                // Relative velocity at contact point
+                let relative_velocity = body2.velocity_at_point(r2) - body1.velocity_at_point(r1);
 
-            // Compute the incremental impulse. The clamping and impulse accumulation is handled by the method.
-            let impulse = friction_part.solve_impulse(
-                tangent_directions,
-                relative_velocity,
-                #[cfg(feature = "2d")]
-                self.tangent_speed,
-                #[cfg(feature = "3d")]
-                self.tangent_velocity,
-                self.friction,
-                point.normal_part.impulse,
-            );
+                // Compute the incremental impulse. The clamping and impulse accumulation is handled by the method.
+                let impulse = friction_part.solve_impulse(
+                    tangent_directions,
+                    relative_velocity,
+                    #[cfg(feature = "2d")]
+                    self.tangent_speed,
+                    #[cfg(feature = "3d")]
+                    self.tangent_velocity,
+                    self.friction,
+                    point.normal_part.impulse,
+                );
 
-            // Apply the impulse.
-            body1.linear_velocity -= impulse * inv_mass1;
-            body1.angular_velocity -= inv_angular_inertia1 * cross(r1, impulse);
+                // Apply the impulse.
+                body1.linear_velocity -= impulse * inv_mass1;
+                body1.angular_velocity -= inv_angular_inertia1 * cross(r1, impulse);
 
-            body2.linear_velocity += impulse * inv_mass2;
-            body2.angular_velocity += inv_angular_inertia2 * cross(r2, impulse);
+                body2.linear_velocity += impulse * inv_mass2;
+                body2.angular_velocity += inv_angular_inertia2 * cross(r2, impulse);
+            }
         }
     }
 

@@ -3,7 +3,11 @@
 //!
 //! See [`IntegratorPlugin`].
 
-use crate::{dynamics::solver::solver_body::SolverBodyFlags, prelude::*, utils::par_for_each};
+use crate::{
+    dynamics::solver::solver_body::SolverBodyFlags,
+    prelude::*,
+    utils::{MIN_PAR_ITER_ENTITIES, ParallelQueryForEach, par_for_each},
+};
 use bevy::{
     ecs::{intern::Interned, query::QueryData, schedule::ScheduleLabel},
     prelude::*,
@@ -135,11 +139,11 @@ pub type IntegrationSet = IntegrationSystems;
 ///         .add_plugins((DefaultPlugins, PhysicsPlugins::default()))
 #[cfg_attr(
     feature = "2d",
-    doc = "         .insert_resource(Gravity(Vec2::NEG_Y * 100.0))"
+    doc = "        .insert_resource(Gravity(Vec2::NEG_Y * 100.0))"
 )]
 #[cfg_attr(
     feature = "3d",
-    doc = "         .insert_resource(Gravity(Vec3::NEG_Y * 19.6))"
+    doc = "        .insert_resource(Gravity(Vec3::NEG_Y * 19.6))"
 )]
 ///         .run();
 /// }
@@ -272,7 +276,8 @@ pub fn pre_process_velocity_increments(
     let delta_secs = time.delta_secs();
 
     // TODO: Do we want to skip kinematic bodies here?
-    bodies.par_iter_mut().for_each(
+    bodies.par_for_each_mut(
+        MIN_PAR_ITER_ENTITIES,
         |(rb, mut integration, lin_damping, ang_damping, gravity_scale, locked_axes)| {
             if !rb.is_dynamic() {
                 // Skip non-dynamic bodies.
@@ -316,7 +321,7 @@ fn clear_velocity_increments(
 ) {
     let start = crate::utils::Instant::now();
 
-    bodies.par_iter_mut().for_each(|mut integration| {
+    bodies.par_for_each_mut(MIN_PAR_ITER_ENTITIES, |mut integration| {
         integration.linear_increment = Vector::ZERO;
         integration.angular_increment = default();
     });
@@ -353,7 +358,7 @@ pub fn integrate_velocities(
 
     let access = solver_bodies.access();
 
-    bodies.par_iter_mut().for_each(|body| {
+    bodies.par_for_each_mut(MIN_PAR_ITER_ENTITIES, |body| {
         // SAFETY: Each entity has a unique solver body index, so the accessed bodies are disjoint.
         let solver_body = unsafe { access.body_unchecked_mut(*body.index) };
 

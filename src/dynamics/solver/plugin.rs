@@ -936,13 +936,12 @@ fn solve_contacts_internal<const USE_BIAS: bool>(
         _ => {}
     }
 
-    constraint.solve(
+    constraint.solve::<USE_BIAS>(
         body1,
         body2,
         inertia1,
         inertia2,
         delta_secs,
-        USE_BIAS,
         max_overlap_solve_speed,
     );
 }

@@ -20,7 +20,7 @@
 mod system_param;
 use system_param::ContactStatusBits;
 #[cfg(feature = "parallel")]
-use system_param::ThreadLocalContactStatusBits;
+use system_param::NarrowPhaseThreadLocals;
 pub use system_param::{ContactStatusChange, ContactStatusChangeQueue, NarrowPhase};
 
 use core::marker::PhantomData;
@@ -94,7 +94,7 @@ where
             .init_resource::<DefaultRestitution>();
 
         #[cfg(feature = "parallel")]
-        app.init_resource::<ThreadLocalContactStatusBits>();
+        app.init_resource::<NarrowPhaseThreadLocals>();
 
         app.add_message::<CollisionStart>()
             .add_message::<CollisionEnd>();
@@ -266,6 +266,7 @@ fn update_narrow_phase<C: AnyCollider, H: CollisionHooks + 'static>(
         time.delta_secs(),
         &hooks,
         &context,
+        &mut diagnostics,
         &mut commands,
     );
 
