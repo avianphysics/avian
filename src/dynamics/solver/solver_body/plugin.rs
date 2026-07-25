@@ -7,7 +7,10 @@ use super::{SolverBodies, SolverBody, SolverBodyIndex, SolverBodyInertia};
 use crate::{
     AngularVelocity, LinearVelocity, PhysicsSchedule, Position, RigidBody, RigidBodyActiveFilter,
     RigidBodyDisabled, Rot, Rotation, Sleeping, SolverSystems, Vector,
-    dynamics::solver::{SolverDiagnostics, solver_body::SolverBodyFlags},
+    dynamics::{
+        integrator::CustomPositionIntegration,
+        solver::{SolverDiagnostics, solver_body::SolverBodyFlags},
+    },
     math::ToRealPrecision,
     prelude::{
         AppDiagnosticsExt, ComputedAngularInertia, ComputedCenterOfMass, ComputedMass, Dominance,
@@ -186,7 +189,11 @@ fn add_solver_body<F: QueryFilter>(
 }
 
 /// Pushes a new solver body for `entity` and inserts its [`SolverBodyIndex`] component.
-fn add_solver_body_inner(entity: Entity, solver_bodies: &mut SolverBodies, commands: &mut Commands) {
+fn add_solver_body_inner(
+    entity: Entity,
+    solver_bodies: &mut SolverBodies,
+    commands: &mut Commands,
+) {
     let index = solver_bodies.push(entity, SolverBody::default(), SolverBodyInertia::default());
     commands.entity(entity).try_insert(index);
 }
@@ -237,6 +244,7 @@ fn prepare_solver_bodies(
         &ComputedAngularInertia,
         Option<&LockedAxes>,
         Option<&Dominance>,
+        Has<CustomPositionIntegration>,
     )>,
 ) {
     let access = solver_bodies.access();
@@ -253,6 +261,7 @@ fn prepare_solver_bodies(
             angular_inertia,
             locked_axes,
             dominance,
+            custom_position_integration,
         )| {
             // SAFETY: Each entity has a unique, valid solver body index, so the writes below
             //         target disjoint bodies and inertias.
@@ -279,6 +288,10 @@ fn prepare_solver_bodies(
             solver_body
                 .flags
                 .set(SolverBodyFlags::IS_KINEMATIC, rb.is_kinematic());
+            solver_body.flags.set(
+                SolverBodyFlags::CUSTOM_POSITION_INTEGRATION,
+                custom_position_integration,
+            );
 
             #[cfg(feature = "3d")]
             {
@@ -327,8 +340,9 @@ fn writeback_solver_bodies(
 ) {
     let start = bevy::platform::time::Instant::now();
 
-    query.par_iter_mut().for_each(
-        |(index, mut pos, mut rot, com, mut lin_vel, mut ang_vel)| {
+    query
+        .par_iter_mut()
+        .for_each(|(index, mut pos, mut rot, com, mut lin_vel, mut ang_vel)| {
             let Some(solver_body) = solver_bodies.get(*index) else {
                 return;
             };
@@ -345,8 +359,7 @@ fn writeback_solver_bodies(
             // Write back velocities.
             lin_vel.0 = solver_body.linear_velocity;
             ang_vel.0 = solver_body.angular_velocity;
-        },
-    );
+        });
 
     diagnostics.finalize += start.elapsed();
 }

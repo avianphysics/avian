@@ -158,12 +158,14 @@ bitflags::bitflags! {
         const IS_KINEMATIC = 1 << 6;
         /// Set if gyroscopic motion is enabled.
         const GYROSCOPIC_MOTION = 1 << 7;
+        /// Set if the body has a custom position integration implementation.
+        const CUSTOM_POSITION_INTEGRATION = 1 << 8;
         /// Set during the continuous collision stage if the body moved fast enough
         /// to be treated as a "fast body" and have its motion swept. Transient.
-        const IS_FAST = 1 << 8;
+        const IS_FAST = 1 << 9;
         /// Set during the continuous collision stage if the body's motion was stopped
         /// at a time of impact. Transient.
-        const HAD_TIME_OF_IMPACT = 1 << 9;
+        const HAD_TIME_OF_IMPACT = 1 << 10;
     }
 }
 
@@ -593,6 +595,36 @@ impl SolverBodies {
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.bodies.is_empty()
+    }
+
+    /// Returns a slice of the entities that have solver bodies.
+    #[inline]
+    pub fn entities(&self) -> &[Entity] {
+        &self.entities
+    }
+
+    /// Returns a slice of the solver bodies.
+    #[inline]
+    pub fn bodies(&self) -> &[SolverBody] {
+        &self.bodies
+    }
+
+    /// Returns a mutable slice of the solver bodies.
+    #[inline]
+    pub fn bodies_mut(&mut self) -> &mut [SolverBody] {
+        &mut self.bodies
+    }
+
+    /// Returns a slice of the solver body inertias.
+    #[inline]
+    pub fn inertias(&self) -> &[SolverBodyInertia] {
+        &self.inertias
+    }
+
+    /// Returns a mutable slice of the solver body inertias.
+    #[inline]
+    pub fn inertias_mut(&mut self) -> &mut [SolverBodyInertia] {
+        &mut self.inertias
     }
 
     /// Returns `true` if the given [`SolverBodyIndex`] refers to a body in this collection.

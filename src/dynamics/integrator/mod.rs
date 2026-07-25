@@ -3,7 +3,7 @@
 //!
 //! See [`IntegratorPlugin`].
 
-use crate::prelude::*;
+use crate::{dynamics::solver::solver_body::SolverBodyFlags, prelude::*, utils::par_for_each};
 use bevy::{
     ecs::{intern::Interned, query::QueryData, schedule::ScheduleLabel},
     prelude::*,
@@ -511,8 +511,7 @@ fn clamp_velocities(
 
 /// Integrates the positions of bodies based on their velocities and the time step.
 pub fn integrate_positions(
-    mut solver_bodies: ResMut<SolverBodies>,
-    bodies: Query<&SolverBodyIndex, Without<CustomPositionIntegration>>,
+    mut bodies: ResMut<SolverBodies>,
     time: Res<Time>,
     mut diagnostics: ResMut<SolverDiagnostics>,
 ) {
@@ -520,17 +519,22 @@ pub fn integrate_positions(
 
     let delta_secs = time.delta_secs();
 
-    let access = solver_bodies.access();
+    par_for_each(bodies.bodies_mut(), 4096, |_index, body| {
+        // Skip bodies that have custom position integration.
+        if body
+            .flags
+            .contains(SolverBodyFlags::CUSTOM_POSITION_INTEGRATION)
+        {
+            return;
+        }
 
-    bodies.par_iter().for_each(|index| {
-        // SAFETY: Each entity has a unique solver body index, so the accessed bodies are disjoint.
         let SolverBody {
             linear_velocity,
             angular_velocity,
             delta_position,
             delta_rotation,
             ..
-        } = unsafe { access.body_unchecked_mut(*index) };
+        } = body;
 
         *delta_position += *linear_velocity * delta_secs;
         #[cfg(feature = "2d")]
