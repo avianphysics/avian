@@ -106,7 +106,11 @@ fn apply_constant_forces(
 /// Applies [`ConstantTorque`] to the accumulated torques.
 fn apply_constant_torques(
     solver_bodies: Res<SolverBodies>,
-    mut bodies: Query<(&SolverBodyIndex, &mut VelocityIntegrationData, &ConstantTorque)>,
+    mut bodies: Query<(
+        &SolverBodyIndex,
+        &mut VelocityIntegrationData,
+        &ConstantTorque,
+    )>,
 ) {
     bodies
         .iter_mut()

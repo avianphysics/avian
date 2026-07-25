@@ -191,7 +191,9 @@ pub fn solve_xpbd_joint<
             .copied()
             .unwrap_or(SolverBodyIndex::INVALID);
 
-        debug_assert_ne!(index1, index2, "Joint connects the same body to itself");
+        if index1 == index2 {
+            continue;
+        }
 
         let (mut body1, mut inertia1) = (&mut dummy_body1, &SolverBodyInertia::DUMMY);
         let (mut body2, mut inertia2) = (&mut dummy_body2, &SolverBodyInertia::DUMMY);
@@ -259,7 +261,9 @@ pub fn warm_start_xpbd_motors<
             .copied()
             .unwrap_or(SolverBodyIndex::INVALID);
 
-        debug_assert_ne!(index1, index2, "Joint connects the same body to itself");
+        if index1 == index2 {
+            continue;
+        }
 
         let (mut body1, mut inertia1) = (&mut dummy_body1, &SolverBodyInertia::DUMMY);
         let (mut body2, mut inertia2) = (&mut dummy_body2, &SolverBodyInertia::DUMMY);

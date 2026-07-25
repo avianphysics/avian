@@ -542,6 +542,8 @@ impl SolverBodyInertia {
 /// and should not be modified by users.
 #[derive(Component, Clone, Copy, Debug, Deref, PartialEq, Eq, PartialOrd, Ord, Hash, Reflect)]
 #[reflect(Component, Debug, PartialEq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 pub struct SolverBodyIndex(pub u32);
 
 impl SolverBodyIndex {

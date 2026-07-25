@@ -652,6 +652,8 @@ impl EnlargedProxiesBitVec {
 
 /// Updates the AABBs of the colliders of each [`SolverBody`] (awake dynamic and kinematic bodies)
 /// after the physics step.
+///
+/// [`SolverBody`]: crate::dynamics::solver::solver_body::SolverBody
 // TODO: Once dynamic an kinematic bodies have their own marker components,
 //       we should use those instead of `SolverBody`. Solver bodies should
 //       be an implementation detail of the solver.
