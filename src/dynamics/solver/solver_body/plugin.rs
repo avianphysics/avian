@@ -370,7 +370,7 @@ fn writeback_solver_bodies(
 #[cfg(feature = "3d")]
 pub(crate) fn update_solver_body_angular_inertia(
     mut solver_bodies: ResMut<SolverBodies>,
-    query: Query<(&SolverBodyIndex, &ComputedAngularInertia, &Rotation)>,
+    mut query: Query<(&SolverBodyIndex, &ComputedAngularInertia, &Rotation)>,
 ) {
     let access = solver_bodies.access();
 
