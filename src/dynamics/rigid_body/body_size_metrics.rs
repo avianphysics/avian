@@ -6,7 +6,10 @@
 
 use core::marker::PhantomData;
 
-use bevy::{ecs::system::StaticSystemParam, prelude::*};
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_ecs::system::StaticSystemParam;
+use bevy_reflect::prelude::*;
 
 use crate::{
     collision::collider::{

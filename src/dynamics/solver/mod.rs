@@ -21,7 +21,8 @@ use crate::{
     dynamics::{joints::joint_graph::JointGraphPlugin, solver::solver_body::SolverBodyPlugin},
     prelude::*,
 };
-use bevy::{app::PluginGroupBuilder, prelude::*};
+use bevy_app::PluginGroupBuilder;
+use bevy_app::prelude::*;
 
 /// A plugin group that contains Avian's default solver plugins.
 ///

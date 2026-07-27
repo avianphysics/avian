@@ -9,7 +9,8 @@ use crate::{
     },
     prelude::*,
 };
-use bevy::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_reflect::prelude::*;
 
 use core::f32::consts::{PI, TAU};
 

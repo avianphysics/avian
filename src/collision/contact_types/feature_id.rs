@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy_reflect::prelude::*;
 
 /// A feature ID indicating the type of a geometric feature: a vertex, an edge, or (in 3D) a face.
 ///

@@ -69,7 +69,7 @@
 //! ## One-Time Forces and Impulses
 //!
 //! It is common to apply many individual forces and impulses to dynamic rigid bodies,
-//! and to clear them afterwards. This can be done using the [`Forces`] helper [`QueryData`](bevy::ecs::query::QueryData).
+//! and to clear them afterwards. This can be done using the [`Forces`] helper [`QueryData`](bevy_ecs::query::QueryData).
 //!
 //! To use [`Forces`], add it to a [`Query`] (without `&` or `&mut`), and use the associated methods
 //! to apply forces, impulses, and accelerations to the rigid bodies.
@@ -216,7 +216,9 @@ pub use query_data::{
 };
 
 use crate::prelude::*;
-use bevy::prelude::*;
+use bevy_derive::{Deref, DerefMut};
+use bevy_ecs::prelude::*;
+use bevy_reflect::prelude::*;
 
 #[cfg(feature = "2d")]
 pub(crate) trait FloatZero {
@@ -257,7 +259,7 @@ impl FloatZero for f32 {
 ///
 /// # Related Types
 ///
-/// - [`Forces`]: A helper [`QueryData`](bevy::ecs::query::QueryData) for applying forces, impulses, and acceleration to entities.
+/// - [`Forces`]: A helper [`QueryData`](bevy_ecs::query::QueryData) for applying forces, impulses, and acceleration to entities.
 /// - [`ConstantLocalForce`]: Applies a constant force in local space.
 /// - [`ConstantTorque`]: Applies a constant torque in world space.
 /// - [`ConstantLinearAcceleration`]: Applies a constant linear acceleration in world space.
@@ -311,7 +313,7 @@ impl ConstantForce {
 ///
 /// # Related Types
 ///
-/// - [`Forces`]: A helper [`QueryData`](bevy::ecs::query::QueryData) for applying forces, impulses, and acceleration to entities.
+/// - [`Forces`]: A helper [`QueryData`](bevy_ecs::query::QueryData) for applying forces, impulses, and acceleration to entities.
 #[cfg_attr(
     feature = "3d",
     doc = "- [`ConstantLocalTorque`]: Applies a constant torque in local space."
@@ -362,7 +364,7 @@ impl ConstantTorque {
 ///
 /// # Related Types
 ///
-/// - [`Forces`]: A helper [`QueryData`](bevy::ecs::query::QueryData) for applying forces, impulses, and acceleration to entities.
+/// - [`Forces`]: A helper [`QueryData`](bevy_ecs::query::QueryData) for applying forces, impulses, and acceleration to entities.
 /// - [`ConstantForce`]: Applies a constant force in world space.
 #[cfg_attr(
     feature = "3d",
@@ -420,7 +422,7 @@ impl ConstantLocalForce {
 ///
 /// # Related Types
 ///
-/// - [`Forces`]: A helper [`QueryData`](bevy::ecs::query::QueryData) for applying forces, impulses, and acceleration to entities.
+/// - [`Forces`]: A helper [`QueryData`](bevy_ecs::query::QueryData) for applying forces, impulses, and acceleration to entities.
 /// - [`ConstantTorque`]: Applies a constant torque in world space.
 /// - [`ConstantLocalForce`]: Applies a constant force in local space.
 /// - [`ConstantLocalLinearAcceleration`]: Applies a constant linear acceleration in local space.
@@ -475,7 +477,7 @@ impl ConstantLocalTorque {
 ///
 /// # Related Types
 ///
-/// - [`Forces`]: A helper [`QueryData`](bevy::ecs::query::QueryData) for applying forces, impulses, and acceleration to entities.
+/// - [`Forces`]: A helper [`QueryData`](bevy_ecs::query::QueryData) for applying forces, impulses, and acceleration to entities.
 /// - [`ConstantLocalLinearAcceleration`]: Applies a constant linear acceleration in local space.
 /// - [`ConstantForce`]: Applies a constant force in world space.
 /// - [`ConstantTorque`]: Applies a constant torque in world space.
@@ -532,7 +534,7 @@ impl ConstantLinearAcceleration {
 ///
 /// # Related Types
 ///
-/// - [`Forces`]: A helper [`QueryData`](bevy::ecs::query::QueryData) for applying forces, impulses, and acceleration to entities.
+/// - [`Forces`]: A helper [`QueryData`](bevy_ecs::query::QueryData) for applying forces, impulses, and acceleration to entities.
 #[cfg_attr(
     feature = "3d",
     doc = "- [`ConstantLocalAngularAcceleration`]: Applies a constant angular acceleration in local space."
@@ -589,7 +591,7 @@ impl ConstantAngularAcceleration {
 ///
 /// # Related Types
 ///
-/// - [`Forces`]: A helper [`QueryData`](bevy::ecs::query::QueryData) for applying forces, impulses, and acceleration to entities.
+/// - [`Forces`]: A helper [`QueryData`](bevy_ecs::query::QueryData) for applying forces, impulses, and acceleration to entities.
 /// - [`ConstantLinearAcceleration`]: Applies a constant linear acceleration in world space.
 /// - [`ConstantLocalForce`]: Applies a constant force in local space.
 #[cfg_attr(
@@ -647,7 +649,7 @@ impl ConstantLocalLinearAcceleration {
 ///
 /// # Related Types
 ///
-/// - [`Forces`]: A helper [`QueryData`](bevy::ecs::query::QueryData) for applying forces, impulses, and acceleration to entities.
+/// - [`Forces`]: A helper [`QueryData`](bevy_ecs::query::QueryData) for applying forces, impulses, and acceleration to entities.
 /// - [`ConstantAngularAcceleration`]: Applies a constant angular acceleration in world space.
 /// - [`ConstantLocalForce`]: Applies a constant force in local space.
 /// - [`ConstantLocalTorque`]: Applies a constant torque in local space.

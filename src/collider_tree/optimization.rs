@@ -5,11 +5,12 @@ use crate::{
     data_structures::stable_vec::StableVec,
     prelude::*,
 };
-use bevy::{
-    ecs::world::CommandQueue,
-    prelude::*,
-    tasks::{AsyncComputeTaskPool, Task, block_on},
-};
+use bevy_app::prelude::*;
+use bevy_derive::{Deref, DerefMut};
+use bevy_ecs::prelude::*;
+use bevy_ecs::world::CommandQueue;
+use bevy_reflect::prelude::*;
+use bevy_tasks::{AsyncComputeTaskPool, Task, block_on};
 
 /// A plugin that optimizes the dynamic [`ColliderTree`] to maintain good query performance.
 pub(super) struct ColliderTreeOptimizationPlugin;

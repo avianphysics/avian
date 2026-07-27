@@ -1,13 +1,11 @@
-use bevy::{
-    ecs::{
-        entity::{Entity, EntityNotSpawnedError},
-        system::{Query, SystemParam, lifetimeless::Write},
-        world::Mut,
-    },
-    transform::{
-        components::GlobalTransform,
-        helper::{ComputeGlobalTransformError, TransformHelper},
-    },
+use bevy_ecs::{
+    entity::{Entity, EntityNotSpawnedError},
+    system::{Query, SystemParam, lifetimeless::Write},
+    world::Mut,
+};
+use bevy_transform::{
+    components::GlobalTransform,
+    helper::{ComputeGlobalTransformError, TransformHelper},
 };
 use thiserror::Error;
 
@@ -26,7 +24,7 @@ use crate::{
 /// so it is recommended to only use this for specific entities that require immediate updates,
 /// such as right after teleporting an entity.
 ///
-/// [`Transform`]: bevy::transform::components::Transform
+/// [`Transform`]: bevy_transform::components::Transform
 #[derive(SystemParam)]
 pub struct PhysicsTransformHelper<'w, 's> {
     /// The [`TransformHelper`] used to compute the global transform.
@@ -38,7 +36,7 @@ pub struct PhysicsTransformHelper<'w, 's> {
 impl PhysicsTransformHelper<'_, '_> {
     /// Computes the [`GlobalTransform`] of the given entity from its [`Transform`] and ancestors.
     ///
-    /// [`Transform`]: bevy::transform::components::Transform
+    /// [`Transform`]: bevy_transform::components::Transform
     pub fn compute_global_transform(
         &self,
         entity: Entity,
@@ -51,7 +49,7 @@ impl PhysicsTransformHelper<'_, '_> {
     ///
     /// Returns a mutable reference to the updated [`Position`] and [`Rotation`] components.
     ///
-    /// [`Transform`]: bevy::transform::components::Transform
+    /// [`Transform`]: bevy_transform::components::Transform
     pub fn update_physics_transform(
         &mut self,
         entity: Entity,
@@ -92,7 +90,7 @@ impl PhysicsTransformHelper<'_, '_> {
 pub enum UpdatePhysicsTransformError {
     /// The entity or one of its ancestors is missing either the [`Transform`], [`Position`], or [`Rotation`] component.
     ///
-    /// [`Transform`]: bevy::transform::components::Transform
+    /// [`Transform`]: bevy_transform::components::Transform
     #[error(
         "The entity {0:?} or one of its ancestors is missing either the `Transform`, `Position`, or `Rotation` component"
     )]

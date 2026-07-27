@@ -14,16 +14,17 @@ use crate::{
     schedule::LastPhysicsTick,
     utils::{MIN_PAR_ITER_ENTITIES, ParallelQueryForEach},
 };
-use bevy::{
-    ecs::{
-        change_detection::Tick,
-        entity_disabling::Disabled,
-        query::QueryFilter,
-        system::{StaticSystemParam, SystemChangeTick},
-    },
-    platform::collections::HashSet,
-    prelude::*,
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_ecs::{
+    change_detection::Tick,
+    entity_disabling::Disabled,
+    query::QueryFilter,
+    system::{StaticSystemParam, SystemChangeTick},
 };
+use bevy_math::prelude::*;
+use bevy_platform::collections::HashSet;
+use bevy_time::prelude::*;
 use obvhs::aabb::Aabb;
 use thread_local::ThreadLocal;
 

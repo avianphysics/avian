@@ -2,13 +2,15 @@ use crate::{
     dynamics::joints::{EntityConstraint, JointSystems},
     prelude::*,
 };
-use bevy::{
-    ecs::{
-        entity::{EntityMapper, MapEntities},
-        reflect::ReflectMapEntities,
-    },
-    prelude::*,
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_ecs::{
+    entity::{EntityMapper, MapEntities},
+    reflect::ReflectMapEntities,
 };
+#[cfg(feature = "debug-plugin")]
+use bevy_gizmos::prelude::Gizmos;
+use bevy_reflect::prelude::*;
 
 /// A fixed [joint](dynamics::joints) prevents any relative movement between two bodies,
 /// effectively locking them together.

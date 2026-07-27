@@ -1,12 +1,10 @@
 use core::hint::unreachable_unchecked;
 
-use bevy::{
-    ecs::{
-        component::Component,
-        entity::{ComponentCloneCtx, SourceComponent},
-    },
-    reflect::Reflect,
+use bevy_ecs::{
+    component::Component,
+    entity::{ComponentCloneCtx, SourceComponent},
 };
+use bevy_reflect::Reflect;
 
 use crate::prelude::RigidBody;
 

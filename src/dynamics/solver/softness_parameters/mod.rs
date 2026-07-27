@@ -6,9 +6,9 @@
 //!
 #![doc = include_str!("README.md")]
 
-use bevy::reflect::Reflect;
+use bevy_reflect::Reflect;
 #[cfg(feature = "serialize")]
-use bevy::reflect::{ReflectDeserialize, ReflectSerialize};
+use bevy_reflect::{ReflectDeserialize, ReflectSerialize};
 
 use core::f32::consts::TAU;
 

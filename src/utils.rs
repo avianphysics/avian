@@ -1,11 +1,11 @@
 //! Miscallaneous utility functions.
 
-use bevy::ecs::{
+use bevy_ecs::{
     query::{IterQueryData, QueryFilter, QueryItem, ROQueryItem, ReadOnlyQueryData},
     system::Query,
 };
 
-pub(crate) use bevy::platform::time::Instant;
+pub(crate) use bevy_platform::time::Instant;
 
 /// A conservative default minimum number of matched entities required before query iteration
 /// switches from serial to parallel. This is used by the [`ParallelQueryForEach`] extension trait
@@ -56,7 +56,7 @@ impl<'w, 's, D: IterQueryData, F: QueryFilter> ParallelQueryForEach<'w, 's, D, F
     {
         #[cfg(feature = "parallel")]
         {
-            let task_pool = bevy::tasks::ComputeTaskPool::get();
+            let task_pool = bevy_tasks::ComputeTaskPool::get();
             if task_pool.thread_num() > 1 && self.count() >= min_parallel_len {
                 self.par_iter().for_each(f);
                 return;
@@ -73,7 +73,7 @@ impl<'w, 's, D: IterQueryData, F: QueryFilter> ParallelQueryForEach<'w, 's, D, F
     {
         #[cfg(feature = "parallel")]
         {
-            let task_pool = bevy::tasks::ComputeTaskPool::get();
+            let task_pool = bevy_tasks::ComputeTaskPool::get();
             if task_pool.thread_num() > 1 && self.count() >= min_parallel_len {
                 self.par_iter_mut().for_each(f);
                 return;
@@ -143,7 +143,7 @@ where
     T: Send + Sync,
     F: Fn(usize, &mut T) + Send + Sync,
 {
-    let task_pool_ = bevy::tasks::ComputeTaskPool::get();
+    let task_pool_ = bevy_tasks::ComputeTaskPool::get();
 
     if task_pool_.thread_num() == 1 || slice.len() < min_len {
         slice.iter_mut().enumerate().for_each(|(index, item)| {
@@ -152,7 +152,7 @@ where
     } else {
         // TODO: Is there a better approach than `par_chunk_map_mut`?
         let chunk_size_ = (slice.len() / task_pool_.thread_num()).max(1);
-        bevy::tasks::ParallelSliceMut::par_chunk_map_mut(
+        bevy_tasks::ParallelSliceMut::par_chunk_map_mut(
             &mut slice,
             task_pool_,
             chunk_size_,

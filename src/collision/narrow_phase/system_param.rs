@@ -10,15 +10,15 @@ use crate::{
     data_structures::{bit_vec::BitVec, pair_key::PairKey},
     prelude::*,
 };
-#[cfg(feature = "3d")]
-use bevy::math::ops::FloatPow;
-use bevy::{
-    ecs::{
-        query::QueryData,
-        system::{SystemParam, SystemParamItem, lifetimeless::Read},
-    },
-    prelude::*,
+use bevy_derive::{Deref, DerefMut};
+use bevy_ecs::prelude::*;
+use bevy_ecs::{
+    query::QueryData,
+    system::{SystemParam, SystemParamItem, lifetimeless::Read},
 };
+#[cfg(feature = "3d")]
+use bevy_math::ops::FloatPow;
+use bevy_math::prelude::*;
 #[cfg(feature = "parallel")]
 use thread_local::ThreadLocal;
 

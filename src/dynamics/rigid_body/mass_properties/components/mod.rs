@@ -1,12 +1,13 @@
 //! Mass property components.
 
 use crate::prelude::*;
-use bevy::{
-    ecs::{lifecycle::HookContext, world::DeferredWorld},
-    prelude::*,
-};
+use bevy_derive::{Deref, DerefMut};
+use bevy_ecs::prelude::*;
+use bevy_ecs::{lifecycle::HookContext, world::DeferredWorld};
 #[cfg(feature = "3d")]
 use bevy_heavy::AngularInertiaTensor;
+use bevy_math::prelude::*;
+use bevy_reflect::prelude::*;
 use derive_more::From;
 #[cfg(feature = "3d")]
 use glam_matrix_extras::{MatConversionError, SymmetricMat3};
@@ -152,7 +153,7 @@ pub enum MassError {
 /// - [`MassPropertiesBundle`] is a bundle containing mass properties.
 /// - [`MassPropertyHelper`] is a [`SystemParam`] with utilities for computing and updating mass properties.
 ///
-/// [`SystemParam`]: bevy::ecs::system::SystemParam
+/// [`SystemParam`]: bevy_ecs::system::SystemParam
 #[derive(Reflect, Clone, Copy, Component, Debug, Default, Deref, DerefMut, PartialEq, From)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
@@ -316,7 +317,7 @@ pub enum AngularInertiaError {
 /// - [`MassPropertiesBundle`] is a bundle containing mass properties.
 /// - [`MassPropertyHelper`] is a [`SystemParam`] with utilities for computing and updating mass properties.
 ///
-/// [`SystemParam`]: bevy::ecs::system::SystemParam
+/// [`SystemParam`]: bevy_ecs::system::SystemParam
 #[cfg(feature = "2d")]
 #[derive(Reflect, Clone, Copy, Component, Debug, Default, Deref, DerefMut, PartialEq, From)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
@@ -512,7 +513,7 @@ impl AngularInertia {
 /// - [`MassPropertiesBundle`] is a bundle containing mass properties.
 /// - [`MassPropertyHelper`] is a [`SystemParam`] with utilities for computing and updating mass properties.
 ///
-/// [`SystemParam`]: bevy::ecs::system::SystemParam
+/// [`SystemParam`]: bevy_ecs::system::SystemParam
 #[cfg(feature = "3d")]
 #[derive(Reflect, Clone, Copy, Component, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
@@ -893,7 +894,7 @@ impl From<AngularInertia> for AngularInertiaTensor {
 /// - [`MassPropertiesBundle`] is a bundle containing mass properties.
 /// - [`MassPropertyHelper`] is a [`SystemParam`] with utilities for computing and updating mass properties.
 ///
-/// [`SystemParam`]: bevy::ecs::system::SystemParam
+/// [`SystemParam`]: bevy_ecs::system::SystemParam
 #[derive(Reflect, Clone, Copy, Component, Debug, Default, Deref, DerefMut, PartialEq, From)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]

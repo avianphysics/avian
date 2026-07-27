@@ -1,11 +1,10 @@
 use crate::prelude::*;
-use bevy::{
-    ecs::system::{
-        SystemParam,
-        lifetimeless::{Read, Write},
-    },
-    prelude::*,
+use bevy_ecs::prelude::*;
+use bevy_ecs::system::{
+    SystemParam,
+    lifetimeless::{Read, Write},
 };
+use bevy_math::prelude::*;
 
 /// A [`SystemParam`] that provides helper methods for computing and updating [mass properties].
 ///

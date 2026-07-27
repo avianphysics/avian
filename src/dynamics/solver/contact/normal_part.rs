@@ -1,7 +1,7 @@
 use crate::{dynamics::solver::softness_parameters::SoftnessCoefficients, prelude::*};
-use bevy::reflect::Reflect;
+use bevy_reflect::Reflect;
 #[cfg(feature = "serialize")]
-use bevy::reflect::{ReflectDeserialize, ReflectSerialize};
+use bevy_reflect::{ReflectDeserialize, ReflectSerialize};
 
 // TODO: Block solver for solving two contact points simultaneously
 // TODO: One-body constraint version

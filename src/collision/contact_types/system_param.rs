@@ -1,5 +1,6 @@
 use crate::data_structures::pair_key::PairKey;
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy_ecs::prelude::*;
+use bevy_ecs::system::SystemParam;
 
 use super::{ContactGraph, ContactPair};
 

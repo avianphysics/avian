@@ -1,9 +1,9 @@
 use crate::prelude::*;
-use bevy::reflect::Reflect;
-#[cfg(feature = "serialize")]
-use bevy::reflect::{ReflectDeserialize, ReflectSerialize};
 #[cfg(feature = "3d")]
 use bevy_math::Vec2;
+use bevy_reflect::Reflect;
+#[cfg(feature = "serialize")]
+use bevy_reflect::{ReflectDeserialize, ReflectSerialize};
 
 #[cfg(feature = "2d")]
 pub type TangentImpulse = f32;

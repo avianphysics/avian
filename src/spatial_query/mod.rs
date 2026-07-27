@@ -168,10 +168,10 @@ pub use shape_caster::*;
 pub use system_param::*;
 
 use crate::prelude::*;
-use bevy::{
-    ecs::{intern::Interned, schedule::ScheduleLabel},
-    prelude::*,
-};
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_ecs::{intern::Interned, schedule::ScheduleLabel};
+use bevy_transform::prelude::*;
 
 /// Handles component-based [spatial queries](spatial_query) like [raycasting](spatial_query#raycasting)
 /// and [shapecasting](spatial_query#shapecasting) with [`RayCaster`] and [`ShapeCaster`].

@@ -70,9 +70,8 @@
 //! | `serialize`            | Enables support for serialization and deserialization using Serde.                                                                                  | No              |
 //! | `validate`             | Enables additional correctness checks and validation at the cost of worse performance.                                                              | No              |
 //!
-//! [`bevy_picking`]: bevy::picking
 //! [physics diagnostics]: diagnostics
-//! [`DiagnosticsStore`]: bevy::diagnostic::DiagnosticsStore
+//! [`DiagnosticsStore`]: bevy_diagnostic::DiagnosticsStore
 //! [SIMD]: https://en.wikipedia.org/wiki/Single_instruction,_multiple_data
 //!
 //! ## Add the Plugins
@@ -233,7 +232,7 @@
 //!
 //! To support both `f32` and `f64` precision, Avian uses type aliases such as [`Real`],
 //! [`RVec2`], and [`RVec3`]. For example, [`RVec2`] is an alias for [`Vec2`] in single-precision
-//! mode and [`DVec2`](bevy::math::DVec2) in double-precision mode.
+//! mode and [`DVec2`](bevy_math::DVec2) in double-precision mode.
 //!
 //! Only world-space coordinates such as body positions, ray cast origins, and world-space
 //! contact points use double-precision numbers. Everything else, including velocities, forces,
@@ -602,11 +601,11 @@ mod utils;
 #[cfg(test)]
 mod tests;
 
-use bevy::{
-    app::PluginGroupBuilder,
-    ecs::{intern::Interned, schedule::ScheduleLabel, system::SystemParamItem},
-    prelude::*,
-};
+use bevy_app::PluginGroupBuilder;
+use bevy_app::prelude::*;
+use bevy_ecs::{intern::Interned, schedule::ScheduleLabel, system::SystemParamItem};
+use bevy_log::prelude::*;
+use bevy_math::prelude::*;
 #[allow(unused_imports)]
 use prelude::*;
 
@@ -643,7 +642,7 @@ use prelude::*;
 ///
 /// | Plugin                            | Description                                                                                                                                                |
 /// | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-/// | [`PhysicsPickingPlugin`]          | Enables a physics picking backend for [`bevy_picking`](bevy::picking) (only with `bevy_picking` feature enabled).                                          |
+/// | [`PhysicsPickingPlugin`]          | Enables a physics picking backend for [`bevy_picking`] (only with `bevy_picking` feature enabled).                                          |
 /// | [`PhysicsDebugPlugin`]            | Renders physics objects and events like [AABBs](ColliderAabb) and contacts for debugging purposes (only with `debug-plugin` feature enabled).              |
 /// | [`PhysicsDiagnosticsPlugin`]      | Writes [physics diagnostics](diagnostics) to the [`DiagnosticsStore`] (only with `bevy_diagnostic` feature enabled).                                       |
 /// | [`PhysicsDiagnosticsUiPlugin`]    | Displays [physics diagnostics](diagnostics) with a debug UI overlay (only with `diagnostic_ui` feature enabled).                                           |
@@ -651,7 +650,8 @@ use prelude::*;
 /// [`ColliderTrees`]: collider_tree::ColliderTrees
 /// [broad phase]: collision::broad_phase
 /// [BVH]: https://en.wikipedia.org/wiki/Bounding_volume_hierarchy
-/// [`DiagnosticsStore`]: bevy::diagnostic::DiagnosticsStore
+/// [`Transform`]: bevy_transform::components::Transform
+/// [`DiagnosticsStore`]: bevy_diagnostic::DiagnosticsStore
 ///
 /// Refer to the documentation of the plugins for more information about their responsibilities and implementations.
 ///

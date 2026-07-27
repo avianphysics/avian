@@ -190,7 +190,7 @@
 //!
 //! # Mass Property Helper
 //!
-//! [`MassPropertyHelper`] is a [`SystemParam`](bevy::ecs::system::SystemParam) that provides convenient helper methods
+//! [`MassPropertyHelper`] is a [`SystemParam`](bevy_ecs::system::SystemParam) that provides convenient helper methods
 //! that can be used to modify or compute mass properties for individual entities and hierarchies at runtime.
 //!
 //! For example, [`MassPropertyHelper::total_mass_properties`] computes the total mass properties of an entity,
@@ -198,10 +198,10 @@
 
 use crate::physics_transform::PhysicsTransformSystems;
 use crate::prelude::*;
-use bevy::{
-    ecs::{intern::Interned, schedule::ScheduleLabel},
-    prelude::*,
-};
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_ecs::{intern::Interned, schedule::ScheduleLabel};
+use bevy_log::prelude::*;
 
 pub mod components;
 use components::RecomputeMassProperties;
@@ -455,6 +455,7 @@ mod tests {
     use approx::assert_relative_eq;
 
     use super::*;
+    use bevy::prelude::*;
 
     fn create_app() -> App {
         let mut app = App::new();

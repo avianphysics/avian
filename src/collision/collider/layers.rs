@@ -1,6 +1,8 @@
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 
-use bevy::prelude::*;
+use bevy_derive::{Deref, DerefMut};
+use bevy_ecs::prelude::*;
+use bevy_reflect::prelude::*;
 
 /// A layer used for determining which entities should interact with each other.
 /// Physics layers are used heavily by [`CollisionLayers`].

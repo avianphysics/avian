@@ -1,5 +1,9 @@
 use crate::prelude::*;
-use bevy::{color::palettes::css::*, prelude::*};
+use bevy_color::palettes::css::*;
+use bevy_color::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_gizmos::prelude::*;
+use bevy_reflect::prelude::*;
 
 /// Gizmos used for debug rendering physics. See [`PhysicsDebugPlugin`]
 ///

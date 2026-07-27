@@ -1,4 +1,4 @@
-//! A physics picking backend for [`bevy_picking`](bevy::picking).
+//! A physics picking backend for [`bevy_picking`].
 //!
 //! Add the [`PhysicsPickingPlugin`] to enable picking for [colliders](Collider).
 //! By default, all colliders are pickable. Picking can be disabled for individual entities
@@ -19,22 +19,24 @@ use crate::{
     diagnostics::{PhysicsDiagnostics, impl_diagnostic_paths},
     prelude::*,
 };
-use bevy::{
-    ecs::entity::hash_set::EntityHashSet,
-    picking::{
-        PickingSystems,
-        backend::{HitData, PointerHits, ray::RayMap},
-    },
-    prelude::*,
+use bevy_app::prelude::*;
+use bevy_camera::prelude::*;
+use bevy_ecs::entity::hash_set::EntityHashSet;
+use bevy_ecs::prelude::*;
+#[cfg(feature = "2d")]
+use bevy_math::prelude::*;
+use bevy_picking::prelude::*;
+use bevy_picking::{
+    PickingSystems,
+    backend::{HitData, PointerHits, ray::RayMap},
 };
+use bevy_reflect::prelude::*;
 
 use core::time::Duration;
 
-use bevy::{
-    diagnostic::DiagnosticPath,
-    prelude::{ReflectResource, Resource},
-    reflect::Reflect,
-};
+use bevy_diagnostic::DiagnosticPath;
+use bevy_ecs::prelude::{ReflectResource, Resource};
+use bevy_reflect::Reflect;
 
 /// Diagnostics for [physics picking](crate::picking).
 #[derive(Resource, Debug, Default, Reflect)]

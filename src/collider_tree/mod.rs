@@ -43,7 +43,8 @@ use update::ColliderTreeUpdatePlugin;
 use core::marker::PhantomData;
 
 use crate::prelude::*;
-use bevy::prelude::*;
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
 
 /// A plugin that manages [collider trees](crate::collider_tree) for a collider type `C`.
 pub struct ColliderTreePlugin<C: AnyCollider>(PhantomData<C>);

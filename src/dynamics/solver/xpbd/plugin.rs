@@ -13,7 +13,10 @@ use crate::{
     },
     prelude::*,
 };
-use bevy::{ecs::component::Mutable, prelude::*};
+use bevy_app::prelude::*;
+use bevy_ecs::component::Mutable;
+use bevy_ecs::prelude::*;
+use bevy_time::prelude::*;
 
 /// A plugin for a joint solver using Extended Position-Based Dynamics (XPBD).
 pub struct XpbdSolverPlugin;

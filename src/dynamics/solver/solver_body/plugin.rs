@@ -1,7 +1,6 @@
-use bevy::{
-    ecs::{entity_disabling::Disabled, query::QueryFilter},
-    prelude::*,
-};
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_ecs::{entity_disabling::Disabled, query::QueryFilter};
 
 use super::{SolverBodies, SolverBody, SolverBodyIndex, SolverBodyInertia};
 use crate::{
@@ -340,7 +339,7 @@ fn writeback_solver_bodies(
     )>,
     mut diagnostics: ResMut<SolverDiagnostics>,
 ) {
-    let start = bevy::platform::time::Instant::now();
+    let start = bevy_platform::time::Instant::now();
 
     query.par_for_each_mut(
         MIN_PAR_ITER_ENTITIES,

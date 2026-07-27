@@ -26,15 +26,16 @@ pub use system_param::{ContactStatusChange, ContactStatusChangeQueue, NarrowPhas
 use core::marker::PhantomData;
 
 use crate::{dynamics::joints::joint_graph::JointGraph, prelude::*};
-use bevy::{
-    ecs::{
-        entity_disabling::Disabled,
-        intern::Interned,
-        schedule::ScheduleLabel,
-        system::{StaticSystemParam, SystemParam, SystemParamItem, SystemState},
-    },
-    prelude::*,
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_ecs::{
+    entity_disabling::Disabled,
+    intern::Interned,
+    schedule::ScheduleLabel,
+    system::{StaticSystemParam, SystemParam, SystemParamItem, SystemState},
 };
+use bevy_reflect::prelude::*;
+use bevy_time::prelude::*;
 
 use super::{CollisionDiagnostics, contact_types::ContactEdgeFlags};
 

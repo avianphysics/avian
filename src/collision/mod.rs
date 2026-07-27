@@ -47,10 +47,10 @@
 //! See the documentation of the event types and the [`collision_events`] module
 //! for more information and usage examples.
 //!
-//! [`Message`]: bevy::ecs::message::Message
-//! [`MessageReader`]: bevy::ecs::message::MessageReader
-//! [`Event`]: bevy::ecs::event::Event
-//! [observer]: bevy::ecs::observer::Observer
+//! [`Message`]: bevy_ecs::message::Message
+//! [`MessageReader`]: bevy_ecs::message::MessageReader
+//! [`Event`]: bevy_ecs::event::Event
+//! [observer]: bevy_ecs::observer::Observer
 //!
 //! # Contact Filtering and Modification
 //!

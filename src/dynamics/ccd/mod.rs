@@ -224,9 +224,17 @@ use crate::{
     math::make_pose,
     utils::{MIN_PAR_ITER_ENTITIES, ParallelQueryForEach},
 };
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
-use bevy::ecs::query::QueryData;
-use bevy::prelude::*;
+use bevy_ecs::query::QueryData;
+#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
+use bevy_math::prelude::*;
+use bevy_reflect::prelude::*;
+#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
+use bevy_time::prelude::*;
+#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
+use bevy_utils::prelude::*;
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 use core::cell::RefCell;
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]

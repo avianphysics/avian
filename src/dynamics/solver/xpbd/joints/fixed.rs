@@ -6,7 +6,8 @@ use crate::{
     },
     prelude::*,
 };
-use bevy::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_reflect::prelude::*;
 
 /// Solver data for the [`FixedJoint`].
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Reflect)]

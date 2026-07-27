@@ -22,14 +22,18 @@ use crate::{
     },
     prelude::*,
 };
-use bevy::{
-    camera::visibility::VisibilitySystems,
-    ecs::{
-        query::Has,
-        system::{StaticSystemParam, SystemParam, SystemParamItem},
-    },
-    prelude::*,
+use bevy_app::prelude::*;
+use bevy_camera::visibility::{Visibility, VisibilitySystems};
+use bevy_color::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_ecs::{
+    query::Has,
+    system::{StaticSystemParam, SystemParam, SystemParamItem},
 };
+use bevy_gizmos::prelude::*;
+use bevy_math::prelude::*;
+use bevy_time::prelude::*;
+use bevy_transform::prelude::*;
 
 /// A plugin that renders physics objects and properties for debugging purposes.
 /// It is not enabled by default and must be added manually.

@@ -1,6 +1,8 @@
 use super::super::MassProperties;
 use crate::prelude::*;
-use bevy::prelude::*;
+use bevy_derive::{Deref, DerefMut};
+use bevy_ecs::prelude::*;
+use bevy_reflect::prelude::*;
 use derive_more::derive::From;
 
 /// The density of a [`Collider`], used for computing [`ColliderMassProperties`].

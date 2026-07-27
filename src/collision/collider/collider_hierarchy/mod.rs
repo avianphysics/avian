@@ -6,14 +6,15 @@ mod plugin;
 pub use plugin::ColliderHierarchyPlugin;
 
 use crate::prelude::*;
-use bevy::{
-    ecs::{
-        lifecycle::HookContext,
-        relationship::{Relationship, RelationshipHookMode, RelationshipSourceCollection},
-        world::DeferredWorld,
-    },
-    prelude::*,
+use bevy_ecs::prelude::*;
+use bevy_ecs::{
+    lifecycle::HookContext,
+    relationship::{Relationship, RelationshipHookMode, RelationshipSourceCollection},
+    world::DeferredWorld,
 };
+use bevy_log::prelude::*;
+use bevy_reflect::prelude::*;
+use bevy_transform::prelude::*;
 
 /// A [`Relationship`] component that attaches a [`Collider`] to a [`RigidBody`].
 ///
@@ -43,7 +44,7 @@ use bevy::{
 /// However, it also possible to explicitly specify which rigid body a collider is attached to
 /// by inserting the [`ColliderOf`] component manually.
 ///
-/// [`Relationship`]: bevy::ecs::relationship::Relationship
+/// [`Relationship`]: bevy_ecs::relationship::Relationship
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq, Reflect)]
 #[component(immutable, on_insert = <ColliderOf as Relationship>::on_insert, on_discard = <ColliderOf as Relationship>::on_discard)]
 #[require(ColliderTransform)]
@@ -203,7 +204,7 @@ impl Relationship for ColliderOf {
 /// You should not modify this component directly to avoid desynchronization.
 /// Instead, modify the [`ColliderOf`] components on the colliders.
 ///
-/// [`Relationship`]: bevy::ecs::relationship::Relationship
+/// [`Relationship`]: bevy_ecs::relationship::Relationship
 #[derive(Component, Clone, Debug, Default, PartialEq, Reflect)]
 #[relationship_target(relationship = ColliderOf, linked_spawn)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]

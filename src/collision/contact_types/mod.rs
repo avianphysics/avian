@@ -9,7 +9,10 @@ pub use feature_id::PackedFeatureId;
 pub use system_param::Collisions;
 
 use crate::{data_structures::graph::EdgeIndex, prelude::*};
-use bevy::prelude::*;
+use bevy_ecs::prelude::*;
+#[cfg(feature = "3d")]
+use bevy_math::prelude::*;
+use bevy_reflect::prelude::*;
 
 /// A stable identifier for a [`ContactEdge`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Reflect)]

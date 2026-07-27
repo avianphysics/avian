@@ -4,10 +4,13 @@
 //! See [`SolverSchedulePlugin`].
 
 use crate::prelude::*;
-use bevy::{
-    ecs::schedule::{LogLevel, ScheduleBuildSettings, ScheduleLabel, SingleThreadedExecutor},
-    prelude::*,
-};
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_ecs::schedule::{LogLevel, ScheduleBuildSettings, ScheduleLabel, SingleThreadedExecutor};
+use bevy_log::prelude::*;
+use bevy_reflect::prelude::*;
+use bevy_time::prelude::*;
+use bevy_utils::prelude::*;
 use dynamics::integrator::IntegrationSystems;
 
 /// Sets up the default scheduling, system set configuration, and time resources for the physics solver.

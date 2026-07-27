@@ -11,7 +11,8 @@ use crate::data_structures::{
     sparse_secondary_map::SparseSecondaryEntityMap,
     stable_graph::StableUnGraph,
 };
-use bevy::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_reflect::prelude::*;
 
 // TODO: Once we have many-to-many relationships, we could potentially represent the joint graph in the ECS.
 

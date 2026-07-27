@@ -1,14 +1,14 @@
 //! Components, traits, and plugins related to collider functionality.
 
 use crate::prelude::*;
-use bevy::{
-    ecs::{
-        component::Mutable,
-        entity::{EntityMapper, MapEntities, hash_set::EntityHashSet},
-        system::{ReadOnlySystemParam, SystemParam, SystemParamItem},
-    },
-    prelude::*,
+use bevy_derive::{Deref, DerefMut};
+use bevy_ecs::prelude::*;
+use bevy_ecs::{
+    component::Mutable,
+    entity::{EntityMapper, MapEntities, hash_set::EntityHashSet},
+    system::{ReadOnlySystemParam, SystemParam, SystemParamItem},
 };
+use bevy_reflect::prelude::*;
 use derive_more::From;
 
 mod backend;

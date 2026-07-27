@@ -3,10 +3,13 @@
 #![allow(clippy::unnecessary_cast)]
 
 use crate::{math::Real, physics_transform::PhysicsTransformConfig, prelude::*};
-use bevy::{
-    ecs::{lifecycle::HookContext, world::DeferredWorld},
-    prelude::*,
-};
+use bevy_derive::{Deref, DerefMut};
+use bevy_ecs::prelude::*;
+use bevy_ecs::{lifecycle::HookContext, world::DeferredWorld};
+use bevy_math::prelude::*;
+use bevy_reflect::prelude::*;
+use bevy_transform::prelude::*;
+use bevy_utils::prelude::*;
 use derive_more::From;
 
 /// The global position of a [rigid body](RigidBody) or a [collider](Collider).

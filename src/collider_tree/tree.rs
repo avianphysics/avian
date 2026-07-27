@@ -1,7 +1,5 @@
-use bevy::{
-    ecs::{entity::Entity, resource::Resource},
-    reflect::prelude::*,
-};
+use bevy_ecs::{entity::Entity, resource::Resource};
+use bevy_reflect::prelude::*;
 use obvhs::{
     aabb::Aabb,
     bvh2::{Bvh2, insertion_removal::SiblingInsertionCandidate, reinsertion::ReinsertionOptimizer},

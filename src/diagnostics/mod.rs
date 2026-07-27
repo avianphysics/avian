@@ -14,7 +14,7 @@
 //!
 //! [`NarrowPhasePlugin`]: crate::collision::narrow_phase::NarrowPhasePlugin
 //! [`SolverPlugin`]: crate::dynamics::solver::SolverPlugin
-//! [`DiagnosticsStore`]: bevy::diagnostic::DiagnosticsStore
+//! [`DiagnosticsStore`]: bevy_diagnostic::DiagnosticsStore
 //! [`PhysicsDiagnosticsUiPlugin`]: crate::diagnostics::ui::PhysicsDiagnosticsUiPlugin
 //!
 //! # Example
@@ -79,20 +79,20 @@ pub(crate) use path_macro::impl_diagnostic_paths;
 pub use total::{PhysicsTotalDiagnostics, PhysicsTotalDiagnosticsPlugin};
 
 use crate::{PhysicsStepSystems, schedule::PhysicsSchedule};
-use bevy::{
-    diagnostic::DiagnosticPath,
-    ecs::component::Mutable,
-    prelude::{App, IntoScheduleConfigs, ResMut, Resource, SystemSet},
-};
+use bevy_app::prelude::App;
 #[cfg(feature = "bevy_diagnostic")]
-use bevy::{
-    diagnostic::{Diagnostic, Diagnostics, RegisterDiagnostic},
-    prelude::{Plugin, Res},
-};
+use bevy_app::prelude::Plugin;
+use bevy_diagnostic::DiagnosticPath;
+#[cfg(feature = "bevy_diagnostic")]
+use bevy_diagnostic::{Diagnostic, Diagnostics, RegisterDiagnostic};
+use bevy_ecs::component::Mutable;
+#[cfg(feature = "bevy_diagnostic")]
+use bevy_ecs::prelude::Res;
+use bevy_ecs::prelude::{IntoScheduleConfigs, ResMut, Resource, SystemSet};
 use core::time::Duration;
 
 /// A plugin that enables writing [physics diagnostics](crate::diagnostics)
-/// to [`bevy::diagnostic::DiagnosticsStore`]. It is not enabled by default
+/// to [`bevy_diagnostic::DiagnosticsStore`]. It is not enabled by default
 /// and must be added manually.
 ///
 /// To add a debug UI for physics diagnostics, enable the `diagnostic_ui` feature, and add the

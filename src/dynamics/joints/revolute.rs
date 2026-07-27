@@ -2,13 +2,17 @@ use crate::{
     dynamics::joints::{EntityConstraint, JointSystems, motor::AngularMotor},
     prelude::*,
 };
-use bevy::{
-    ecs::{
-        entity::{EntityMapper, MapEntities},
-        reflect::ReflectMapEntities,
-    },
-    prelude::*,
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_ecs::{
+    entity::{EntityMapper, MapEntities},
+    reflect::ReflectMapEntities,
 };
+#[cfg(feature = "debug-plugin")]
+use bevy_gizmos::prelude::Gizmos;
+#[cfg(feature = "3d")]
+use bevy_math::prelude::*;
+use bevy_reflect::prelude::*;
 
 #[cfg_attr(
     feature = "2d",

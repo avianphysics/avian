@@ -1,13 +1,18 @@
 use core::iter::once;
 
 use crate::{math::Real, prelude::*};
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy_ecs::prelude::*;
+use bevy_platform::collections::HashMap;
+use bevy_reflect::prelude::*;
+use bevy_utils::prelude::*;
 use itertools::Either;
 
 /// A component that will automatically generate [`Collider`]s on its descendants at runtime.
 /// The type of the generated collider can be specified using [`ColliderConstructor`].
 /// This supports computing the shape dynamically from the mesh, in which case only the descendants
 /// with a [`Mesh`] will have colliders generated.
+///
+/// [`Mesh`]: https://docs.rs/bevy_mesh/latest/bevy_mesh/struct.Mesh.html
 ///
 /// In contrast to [`ColliderConstructor`], this component will *not* generate a collider on its own entity.
 ///
@@ -537,6 +542,7 @@ impl ColliderConstructor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::prelude::*;
     #[cfg(feature = "bevy_scene")]
     use bevy::world_serialization::WorldSerializationPlugin;
     use bevy::{ecs::query::QueryData, mesh::MeshPlugin};

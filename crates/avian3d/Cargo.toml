@@ -25,9 +25,15 @@ default = [
 3d = []
 f64 = []
 
-debug-plugin = ["bevy/bevy_gizmos", "bevy/bevy_render"]
+debug-plugin = ["dep:bevy_gizmos", "dep:bevy_camera", "dep:bevy_color"]
 simd = ["parry3d?/simd-stable", "parry3d-f64?/simd-stable"]
-parallel = ["bevy/multi_threaded", "parry3d?/parallel", "parry3d-f64?/parallel"]
+parallel = [
+    "bevy_ecs/multi_threaded",
+    "bevy_tasks/multi_threaded",
+    "bevy_transform/multi_threaded",
+    "parry3d?/parallel",
+    "parry3d-f64?/parallel",
+]
 enhanced-determinism = [
     "dep:libm",
     "bevy_math/libm",
@@ -43,12 +49,24 @@ parry-f64 = ["f64", "dep:parry3d-f64", "default-collider"]
 # Enables the XPBD constraint solver for joints.
 xpbd_joints = []
 
-collider-from-mesh = ["bevy/bevy_mesh", "bevy/bevy_mikktspace", "3d"]
-bevy_scene = ["bevy/bevy_world_serialization"]
-bevy_picking = ["bevy/bevy_picking"]
+collider-from-mesh = [
+    "dep:bevy_mesh",
+    "dep:bevy_asset",
+    "bevy_mesh/bevy_mikktspace",
+    "bevy_gizmos?/bevy_mesh",
+    "3d",
+]
+bevy_scene = ["dep:bevy_world_serialization", "dep:bevy_asset"]
+bevy_picking = ["dep:bevy_picking", "dep:bevy_camera"]
 serialize = [
     "dep:serde",
-    "bevy/serialize",
+    "bevy_ecs/serialize",
+    "bevy_math/serialize",
+    "bevy_platform/serialize",
+    "bevy_time/serialize",
+    "bevy_transform/serialize",
+    "bevy_color?/serialize",
+    "bevy_world_serialization?/serialize",
     "glam_matrix_extras/serde",
     "bevy_heavy/serialize",
     "bevy_transform_interpolation/serialize",
@@ -62,7 +80,12 @@ serialize = [
 bevy_diagnostic = []
 
 # Enables the `PhysicsDiagnosticsUiPlugin` for visualizing physics diagnostics data with a debug UI.
-diagnostic_ui = ["bevy_diagnostic", "bevy/bevy_ui"]
+diagnostic_ui = [
+    "bevy_diagnostic",
+    "dep:bevy_ui",
+    "dep:bevy_text",
+    "dep:bevy_color",
+]
 
 # Enables additional correctness checks and validation at the cost of worse performance.
 validate = []
@@ -75,11 +98,57 @@ bench = false
 
 [dependencies]
 avian_derive = { path = "../avian_derive", version = "0.2" }
-bevy = { version = "0.19.0", default-features = false, features = [
+bevy_app = { version = "0.19.0", default-features = false, features = [
     "std",
-    "bevy_log",
+    "bevy_reflect",
 ] }
-bevy_math = { version = "0.19.0", features = ["approx"] }
+bevy_derive = { version = "0.19.0", default-features = false }
+bevy_diagnostic = { version = "0.19.0", default-features = false, features = [
+    "std",
+] }
+bevy_ecs = { version = "0.19.0", default-features = false, features = [
+    "std",
+    "bevy_reflect",
+] }
+bevy_log = { version = "0.19.0" }
+bevy_math = { version = "0.19.0", features = [
+    "approx",
+    "bevy_reflect",
+    "nostd-libm",
+] }
+bevy_platform = { version = "0.19.0", default-features = false, features = [
+    "std",
+    "alloc",
+] }
+bevy_reflect = { version = "0.19.0", default-features = false, features = [
+    "std",
+    "smallvec",
+] }
+bevy_tasks = { version = "0.19.0", default-features = false }
+bevy_time = { version = "0.19.0", default-features = false, features = [
+    "std",
+    "bevy_reflect",
+] }
+bevy_transform = { version = "0.19.0", default-features = false, features = [
+    "std",
+    "bevy-support",
+    "bevy_reflect",
+] }
+bevy_utils = { version = "0.19.0", default-features = false }
+
+# Optional Bevy subcrates
+bevy_asset = { version = "0.19.0", optional = true }
+bevy_camera = { version = "0.19.0", optional = true }
+bevy_color = { version = "0.19.0", default-features = false, features = [
+    "alloc",
+    "bevy_reflect",
+], optional = true }
+bevy_gizmos = { version = "0.19.0", default-features = false, optional = true }
+bevy_mesh = { version = "0.19.0", optional = true }
+bevy_picking = { version = "0.19.0", optional = true }
+bevy_text = { version = "0.19.0", optional = true }
+bevy_ui = { version = "0.19.0", optional = true }
+bevy_world_serialization = { version = "0.19.0", optional = true }
 glam_matrix_extras = { version = "0.3", features = ["bevy_reflect"] }
 bevy_heavy = { version = "0.5" }
 bevy_transform_interpolation = { version = "0.5" }

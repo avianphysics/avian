@@ -1,6 +1,7 @@
 //! Clocks used for tracking physics simulation time.
 
-use bevy::prelude::*;
+use bevy_reflect::prelude::*;
+use bevy_time::prelude::*;
 
 /// The clock representing physics time, following the [`Time`] clock used by the schedule that physics runs in.
 ///
@@ -11,6 +12,8 @@ use bevy::prelude::*;
 /// the [`PhysicsSchedule`].
 ///
 /// [`PhysicsSchedule`]: crate::schedule::PhysicsSchedule
+/// [`FixedPostUpdate`]: bevy_app::prelude::FixedPostUpdate
+/// [`Update`]: bevy_app::prelude::Update
 ///
 /// # Usage
 ///

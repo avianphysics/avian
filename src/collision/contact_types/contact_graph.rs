@@ -7,7 +7,8 @@ use crate::{
     },
     dynamics::solver::constraint_graph::ContactManifoldHandle,
 };
-use bevy::{platform::collections::HashSet, prelude::*};
+use bevy_ecs::prelude::*;
+use bevy_platform::collections::HashSet;
 
 use super::{ContactEdge, ContactId};
 

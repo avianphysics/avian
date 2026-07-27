@@ -1,9 +1,11 @@
 use core::time::Duration;
 
-use bevy::{
-    diagnostic::{Diagnostic, DiagnosticPath, Diagnostics, DiagnosticsStore, RegisterDiagnostic},
-    prelude::*,
+use bevy_app::prelude::*;
+use bevy_diagnostic::{
+    Diagnostic, DiagnosticPath, Diagnostics, DiagnosticsStore, RegisterDiagnostic,
 };
+use bevy_ecs::prelude::*;
+use bevy_reflect::prelude::*;
 
 use crate::diagnostics::impl_diagnostic_paths;
 

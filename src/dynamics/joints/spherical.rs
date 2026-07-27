@@ -2,13 +2,16 @@ use crate::{
     dynamics::joints::{EntityConstraint, JointSystems},
     prelude::*,
 };
-use bevy::{
-    ecs::{
-        entity::{EntityMapper, MapEntities},
-        reflect::ReflectMapEntities,
-    },
-    prelude::*,
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_ecs::{
+    entity::{EntityMapper, MapEntities},
+    reflect::ReflectMapEntities,
 };
+#[cfg(feature = "debug-plugin")]
+use bevy_gizmos::prelude::Gizmos;
+use bevy_math::prelude::*;
+use bevy_reflect::prelude::*;
 
 /// A spherical [joint](dynamics::joints) prevents any relative translation between two bodies,
 /// while allowing limited rotation about all axes.

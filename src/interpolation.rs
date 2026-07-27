@@ -2,7 +2,11 @@
 //!
 //! See [`PhysicsInterpolationPlugin`].
 
-use bevy::{ecs::query::QueryData, prelude::*};
+use bevy_app::prelude::*;
+use bevy_derive::{Deref, DerefMut};
+use bevy_ecs::prelude::*;
+use bevy_ecs::query::QueryData;
+use bevy_math::prelude::*;
 use bevy_transform_interpolation::{VelocitySource, prelude::*};
 
 #[expect(deprecated)]
@@ -19,6 +23,8 @@ pub use bevy_transform_interpolation::{
 use crate::prelude::*;
 
 /// A plugin for [`Transform`] interpolation and extrapolation for rigid bodies.
+///
+/// [`Transform`]: bevy_transform::components::Transform
 ///
 /// # Overview
 ///

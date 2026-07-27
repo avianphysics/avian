@@ -1,7 +1,11 @@
 #![allow(clippy::unnecessary_cast)]
 
 use crate::prelude::*;
-use bevy::prelude::*;
+use bevy_derive::{Deref, DerefMut};
+use bevy_ecs::prelude::*;
+#[cfg(feature = "3d")]
+use bevy_math::prelude::*;
+use bevy_reflect::prelude::*;
 use derive_more::From;
 
 use super::{AngularInertia, AngularInertiaError, CenterOfMass, Mass, MassError};
@@ -40,7 +44,7 @@ use super::{AngularInertia, AngularInertiaError, CenterOfMass, Mass, MassError};
 /// - [`ComputedCenterOfMass`] stores the total center of mass of a rigid body, taking into account colliders and descendants.
 /// - [`MassPropertyHelper`] is a [`SystemParam`] with utilities for computing and updating mass properties.
 ///
-/// [`SystemParam`]: bevy::ecs::system::SystemParam
+/// [`SystemParam`]: bevy_ecs::system::SystemParam
 #[derive(Reflect, Clone, Copy, Component, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
@@ -212,7 +216,7 @@ impl From<ComputedMass> for Mass {
 /// - [`ComputedCenterOfMass`] stores the total center of mass of a rigid body, taking into account colliders and descendants.
 /// - [`MassPropertyHelper`] is a [`SystemParam`] with utilities for computing and updating mass properties.
 ///
-/// [`SystemParam`]: bevy::ecs::system::SystemParam
+/// [`SystemParam`]: bevy_ecs::system::SystemParam
 #[cfg(feature = "2d")]
 #[derive(Reflect, Clone, Copy, Component, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
@@ -418,7 +422,7 @@ impl From<ComputedAngularInertia> for AngularInertia {
 /// - [`ComputedCenterOfMass`] stores the total center of mass of a rigid body, taking into account colliders and descendants.
 /// - [`MassPropertyHelper`] is a [`SystemParam`] with utilities for computing and updating mass properties.
 ///
-/// [`SystemParam`]: bevy::ecs::system::SystemParam
+/// [`SystemParam`]: bevy_ecs::system::SystemParam
 #[cfg(feature = "3d")]
 #[derive(Reflect, Clone, Copy, Component, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
@@ -757,7 +761,7 @@ impl core::ops::Mul<Vector> for ComputedAngularInertia {
 /// - [`ComputedAngularInertia`] stores the total angular inertia of a rigid body, taking into account colliders and descendants.
 /// - [`MassPropertyHelper`] is a [`SystemParam`] with utilities for computing and updating mass properties.
 ///
-/// [`SystemParam`]: bevy::ecs::system::SystemParam
+/// [`SystemParam`]: bevy_ecs::system::SystemParam
 #[derive(Reflect, Clone, Copy, Component, Debug, Default, Deref, DerefMut, PartialEq, From)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]

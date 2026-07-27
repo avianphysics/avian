@@ -1,5 +1,5 @@
 use crate::{dynamics::integrator::VelocityIntegrationData, prelude::*};
-use bevy::ecs::{
+use bevy_ecs::{
     query::{Has, QueryData},
     system::lifetimeless::{Read, Write},
 };
@@ -14,7 +14,7 @@ use super::AccumulatedLocalAcceleration;
 ///
 /// # Usage
 ///
-/// To use [`Forces`], add it to a [`Query`](bevy::prelude::Query) (without `&` or `&mut`),
+/// To use [`Forces`], add it to a [`Query`](bevy_ecs::prelude::Query) (without `&` or `&mut`),
 /// and use the associated methods to apply forces, impulses, and accelerations to the rigid bodies.
 ///
 /// ```
@@ -335,7 +335,7 @@ pub trait WriteRigidBodyForces: ReadRigidBodyForces + WriteRigidBodyForcesIntern
     /// In case this is causing problems, consider using the [`PhysicsTransformHelper`]
     /// to update the global physics transform after modifying [`Transform`].
     ///
-    /// [`Transform`]: bevy::transform::components::Transform
+    /// [`Transform`]: bevy_transform::components::Transform
     #[inline]
     fn apply_force_at_point(&mut self, force: Vector, world_point: RVector) {
         // Note: This does not consider the rotation of the body during substeps,
@@ -428,7 +428,7 @@ pub trait WriteRigidBodyForces: ReadRigidBodyForces + WriteRigidBodyForcesIntern
     /// In case this is causing problems, consider using the [`PhysicsTransformHelper`]
     /// to update the global physics transform after modifying [`Transform`].
     ///
-    /// [`Transform`]: bevy::transform::components::Transform
+    /// [`Transform`]: bevy_transform::components::Transform
     #[inline]
     fn apply_linear_impulse_at_point(&mut self, impulse: Vector, world_point: RVector) {
         self.apply_linear_impulse(impulse);
@@ -522,7 +522,7 @@ pub trait WriteRigidBodyForces: ReadRigidBodyForces + WriteRigidBodyForcesIntern
     /// In case this is causing problems, consider using the [`PhysicsTransformHelper`]
     /// to update the global physics transform after modifying [`Transform`].
     ///
-    /// [`Transform`]: bevy::transform::components::Transform
+    /// [`Transform`]: bevy_transform::components::Transform
     #[inline]
     fn apply_linear_acceleration_at_point(&mut self, acceleration: Vector, world_point: RVector) {
         self.apply_linear_acceleration(acceleration);

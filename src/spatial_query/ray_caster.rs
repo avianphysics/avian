@@ -1,12 +1,13 @@
 use crate::prelude::*;
-use bevy::{
-    ecs::{
-        entity::{EntityMapper, MapEntities},
-        lifecycle::HookContext,
-        world::DeferredWorld,
-    },
-    prelude::*,
+use bevy_derive::{Deref, DerefMut};
+use bevy_ecs::prelude::*;
+use bevy_ecs::{
+    entity::{EntityMapper, MapEntities},
+    lifecycle::HookContext,
+    world::DeferredWorld,
 };
+use bevy_reflect::prelude::*;
+use bevy_utils::prelude::*;
 
 /// A component used for [raycasting](spatial_query#raycasting).
 ///

@@ -1,10 +1,8 @@
 #![allow(missing_docs)]
 
 use crate::prelude::*;
-use bevy::{
-    ecs::query::QueryData,
-    prelude::{Entity, Has, Ref},
-};
+use bevy_ecs::prelude::{Entity, Has, Ref};
+use bevy_ecs::query::QueryData;
 
 /// A `WorldQuery` to make querying and modifying rigid bodies more convenient.
 #[derive(QueryData)]

@@ -8,10 +8,13 @@ use crate::{
     prelude::*,
     utils::{MIN_PAR_ITER_ENTITIES, ParallelQueryForEach, par_for_each},
 };
-use bevy::{
-    ecs::{intern::Interned, query::QueryData, schedule::ScheduleLabel},
-    prelude::*,
-};
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_ecs::{intern::Interned, query::QueryData, schedule::ScheduleLabel};
+use bevy_math::prelude::*;
+use bevy_reflect::prelude::*;
+use bevy_time::prelude::*;
+use bevy_utils::prelude::*;
 use dynamics::solver::SolverDiagnostics;
 
 use super::solver::solver_body::{SolverBodies, SolverBody, SolverBodyIndex};
