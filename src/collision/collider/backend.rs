@@ -94,8 +94,9 @@ impl<C: ScalableCollider> Default for ColliderBackendPlugin<C> {
 impl<C: ScalableCollider> Plugin for ColliderBackendPlugin<C> {
     fn build(&self, app: &mut App) {
         // Register required components for the collider type.
-        let _ = app.try_register_required_components_with::<C, Position>(|| Position::PLACEHOLDER);
-        let _ = app.try_register_required_components_with::<C, Rotation>(|| Rotation::PLACEHOLDER);
+        let _ = app.try_register_required_components_with::<C, PhysicsTransform>(|| {
+            PhysicsTransform::PLACEHOLDER
+        });
         let _ = app.try_register_required_components::<C, ColliderMarker>();
         let _ = app.try_register_required_components::<C, ColliderAabb>();
         let _ = app.try_register_required_components::<C, EnlargedAabb>();

@@ -80,7 +80,7 @@ pub struct ShapeCaster {
     #[reflect(ignore)]
     pub shape: Collider,
 
-    /// The local origin of the shape relative to the [`Position`] and [`Rotation`]
+    /// The local origin of the shape relative to the [`PhysicsTransform`]
     /// of the shape caster entity or its parent.
     ///
     /// To get the global origin, use the `global_origin` method.
@@ -89,7 +89,7 @@ pub struct ShapeCaster {
     /// The global origin of the shape.
     global_origin: RVector,
 
-    /// The local rotation of the shape being cast relative to the [`Rotation`]
+    /// The local rotation of the shape being cast relative to the [`PhysicsTransform`]
     /// of the shape caster entity or its parent. Expressed in radians.
     ///
     /// To get the global shape rotation, use the `global_shape_rotation` method.
@@ -98,7 +98,7 @@ pub struct ShapeCaster {
     /// The global rotation of the shape.
     global_shape_rotation: Rot,
 
-    /// The local direction of the shapecast relative to the [`Rotation`] of the shape caster entity or its parent.
+    /// The local direction of the shapecast relative to the [`PhysicsTransform`] of the shape caster entity or its parent.
     ///
     /// To get the global direction, use the `global_direction` method.
     pub direction: Dir,

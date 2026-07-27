@@ -11,12 +11,9 @@ use bevy::{
 };
 use thiserror::Error;
 
-use crate::{
-    math::ToRealPrecision,
-    prelude::{Position, Rotation},
-};
+use crate::prelude::PhysicsTransform;
 
-/// A system parameter for computing up-to-date [`Position`] and [`Rotation`] components
+/// A system parameter for computing up-to-date [`PhysicsTransform`] components
 /// of entities based on their [`Transform`]s.
 ///
 /// This can be useful to ensure that physics transforms are immediately updated after changes
@@ -31,8 +28,8 @@ use crate::{
 pub struct PhysicsTransformHelper<'w, 's> {
     /// The [`TransformHelper`] used to compute the global transform.
     pub transform_helper: TransformHelper<'w, 's>,
-    /// A query for the [`Position`] and [`Rotation`] components.
-    pub query: Query<'w, 's, (Write<Position>, Write<Rotation>)>,
+    /// A query for the [`PhysicsTransform`] component.
+    pub query: Query<'w, 's, Write<PhysicsTransform>>,
 }
 
 impl PhysicsTransformHelper<'_, '_> {
@@ -46,16 +43,16 @@ impl PhysicsTransformHelper<'_, '_> {
         self.transform_helper.compute_global_transform(entity)
     }
 
-    /// Updates the [`Position`] and [`Rotation`] components of the given entity based on its
+    /// Updates the [`PhysicsTransform`] component of the given entity based on its
     /// [`Transform`] and ancestors.
     ///
-    /// Returns a mutable reference to the updated [`Position`] and [`Rotation`] components.
+    /// Returns a mutable reference to the updated [`PhysicsTransform`] component.
     ///
     /// [`Transform`]: bevy::transform::components::Transform
     pub fn update_physics_transform(
         &mut self,
         entity: Entity,
-    ) -> Result<(Mut<'_, Position>, Mut<'_, Rotation>), UpdatePhysicsTransformError> {
+    ) -> Result<Mut<'_, PhysicsTransform>, UpdatePhysicsTransformError> {
         use ComputeGlobalTransformError::*;
 
         // Compute the global transform.
@@ -68,33 +65,25 @@ impl PhysicsTransformHelper<'_, '_> {
                 MalformedHierarchy(e) => UpdatePhysicsTransformError::MalformedHierarchy(e),
             })?;
 
-        // Update the physics transform components.
-        let Ok((mut position, mut rotation)) = self.query.get_mut(entity) else {
+        // Update the physics transform.
+        let Ok(mut physics_transform) = self.query.get_mut(entity) else {
             return Err(UpdatePhysicsTransformError::MissingTransform(entity));
         };
-        #[cfg(feature = "2d")]
-        {
-            position.0 = global_transform.translation().truncate().real();
-            *rotation = Rotation::from(global_transform.rotation());
-        }
-        #[cfg(feature = "3d")]
-        {
-            position.0 = global_transform.translation().real();
-            rotation.0 = global_transform.rotation();
-        }
+        *physics_transform = PhysicsTransform::from(&global_transform);
 
-        Ok((position, rotation))
+        Ok(physics_transform)
     }
 }
 
 /// Error returned by [`PhysicsTransformHelper::update_physics_transform`].
 #[derive(Debug, Error)]
 pub enum UpdatePhysicsTransformError {
-    /// The entity or one of its ancestors is missing either the [`Transform`], [`Position`], or [`Rotation`] component.
+    /// The entity or one of its ancestors is missing either the [`Transform`]
+    /// or [`PhysicsTransform`] component.
     ///
     /// [`Transform`]: bevy::transform::components::Transform
     #[error(
-        "The entity {0:?} or one of its ancestors is missing either the `Transform`, `Position`, or `Rotation` component"
+        "The entity {0:?} or one of its ancestors is missing either the `Transform` or `PhysicsTransform` component"
     )]
     MissingTransform(Entity),
     /// The entity does not exist.

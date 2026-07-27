@@ -546,8 +546,7 @@ impl SpeculativeCcd {
 struct CcdBodyQuery {
     entity: Entity,
     index: &'static SolverBodyIndex,
-    position: &'static Position,
-    rotation: &'static Rotation,
+    transform: &'static PhysicsTransform,
     com: &'static ComputedCenterOfMass,
     colliders: &'static RigidBodyColliders,
     size_metrics: &'static BodySizeMetrics,
@@ -589,7 +588,7 @@ struct CcdImpact {
 /// at the first impact, leaving the next frame's collision detection to resolve the contact.
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 fn solve_continuous(
-    colliders: Query<(&Collider, &Position, &Rotation)>,
+    colliders: Query<(&Collider, &PhysicsTransform)>,
     ccd_query: Query<CcdBodyQuery>,
     mut bodies: ResMut<SolverBodies>,
     trees: Res<ColliderTrees>,
@@ -695,7 +694,7 @@ fn solve_continuous(
         };
 
         let mode1 = ccd.mode;
-        let body_com_world = fast.position.0 + (fast.rotation * fast.com.0).real();
+        let body_com_world = *fast.transform * fast.com.0;
 
         // Determine which trees to sweep against based on the body's filter.
         let trees_to_query: [Option<&ColliderTree>; 4] = [
@@ -722,22 +721,27 @@ fn solve_continuous(
 
         // Sweep each collider attached to the body.
         for collider_entity in fast.colliders {
-            let Ok((collider1, &collider_pos1, &collider_rot1)) = colliders.get(collider_entity)
-            else {
+            let Ok((collider1, &collider_transform1)) = colliders.get(collider_entity) else {
                 continue;
             };
 
-            let motion1 =
-                collider_sweep_motion(collider_pos1.0, collider_rot1, body_com_world, body, inv_dt);
+            let motion1 = collider_sweep_motion(
+                collider_transform1.translation,
+                collider_transform1.rotation,
+                body_com_world,
+                body,
+                inv_dt,
+            );
 
             // Compute the collider's end-of-frame pose to build the swept AABB.
-            let collider_rot2 = (body.delta_rotation * Rot::from(collider_rot1)).fast_renormalize();
+            let collider_rot2 =
+                (body.delta_rotation * collider_transform1.rotation).fast_renormalize();
             let collider_pos2 = body_com_world
                 + body.delta_position.real()
-                + body.delta_rotation.real() * (collider_pos1.0 - body_com_world);
+                + body.delta_rotation.real() * (collider_transform1.translation - body_com_world);
             let swept_aabb = collider1.swept_aabb(
-                collider_pos1.0,
-                collider_rot1,
+                collider_transform1.translation,
+                collider_transform1.rotation,
                 collider_pos2,
                 collider_rot2,
                 0.0,
@@ -780,8 +784,7 @@ fn solve_continuous(
                     }
 
                     // Fetch the target collider and its start-of-frame pose.
-                    let Ok((collider2, &target_pos, &target_rot)) = colliders.get(collider_entity2)
-                    else {
+                    let Ok((collider2, &target_transform)) = colliders.get(collider_entity2) else {
                         return true;
                     };
 
@@ -791,12 +794,12 @@ fn solve_continuous(
                         Some(body2_entity) => match ccd_query.get(body2_entity) {
                             Ok(body2) => {
                                 if let Some(solver_body2) = bodies.get(*body2.index) {
-                                    let target_com_world =
-                                        body2.position.0 + (body2.rotation * body2.com.0).real();
+                                    let target_com_world = body2.transform.translation
+                                        + (body2.transform.rotation * body2.com.0).real();
                                     (
                                         collider_sweep_motion(
-                                            target_pos.0,
-                                            target_rot,
+                                            target_transform.translation,
+                                            target_transform.rotation,
                                             target_com_world,
                                             solver_body2,
                                             inv_dt,
@@ -804,12 +807,27 @@ fn solve_continuous(
                                         body2.ccd.map_or(SweepMode::NonLinear, |ccd| ccd.mode),
                                     )
                                 } else {
-                                    (static_motion(target_pos.0, target_rot), SweepMode::Linear)
+                                    (
+                                        static_motion(
+                                            target_transform.translation,
+                                            target_transform.rotation,
+                                        ),
+                                        SweepMode::Linear,
+                                    )
                                 }
                             }
-                            Err(_) => (static_motion(target_pos.0, target_rot), SweepMode::Linear),
+                            Err(_) => (
+                                static_motion(
+                                    target_transform.translation,
+                                    target_transform.rotation,
+                                ),
+                                SweepMode::Linear,
+                            ),
                         },
-                        None => (static_motion(target_pos.0, target_rot), SweepMode::Linear),
+                        None => (
+                            static_motion(target_transform.translation, target_transform.rotation),
+                            SweepMode::Linear,
+                        ),
                     };
 
                     // Use a non-linear sweep unless both bodies opt into linear sweeps.

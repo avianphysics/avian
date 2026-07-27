@@ -5,8 +5,8 @@ use bevy::{
 
 use super::{SolverBodies, SolverBody, SolverBodyIndex, SolverBodyInertia};
 use crate::{
-    AngularVelocity, LinearVelocity, PhysicsSchedule, Position, RigidBody, RigidBodyActiveFilter,
-    RigidBodyDisabled, Rot, Rotation, Sleeping, SolverSystems, Vector,
+    AngularVelocity, LinearVelocity, PhysicsSchedule, PhysicsTransform, RigidBody,
+    RigidBodyActiveFilter, RigidBodyDisabled, Rot, Sleeping, SolverSystems, Vector,
     dynamics::{
         integrator::CustomPositionIntegration,
         solver::{SolverDiagnostics, solver_body::SolverBodyFlags},
@@ -240,7 +240,7 @@ fn prepare_solver_bodies(
         &SolverBodyIndex,
         &LinearVelocity,
         &AngularVelocity,
-        &Rotation,
+        &PhysicsTransform,
         &ComputedMass,
         &ComputedAngularInertia,
         Option<&LockedAxes>,
@@ -258,7 +258,7 @@ fn prepare_solver_bodies(
             index,
             linear_velocity,
             angular_velocity,
-            rotation,
+            physics_transform,
             mass,
             angular_inertia,
             locked_axes,
@@ -281,7 +281,9 @@ fn prepare_solver_bodies(
                 #[cfg(feature = "2d")]
                 angular_inertia.inverse(),
                 #[cfg(feature = "3d")]
-                angular_inertia.rotated(rotation.0).inverse(),
+                angular_inertia
+                    .rotated(physics_transform.rotation)
+                    .inverse(),
                 locked_axes,
                 dominance.map_or(0, |dominance| dominance.0),
                 rb.is_dynamic(),
@@ -332,8 +334,7 @@ fn writeback_solver_bodies(
     solver_bodies: Res<SolverBodies>,
     mut query: Query<(
         &SolverBodyIndex,
-        &mut Position,
-        &mut Rotation,
+        &mut PhysicsTransform,
         &ComputedCenterOfMass,
         &mut LinearVelocity,
         &mut AngularVelocity,
@@ -344,19 +345,19 @@ fn writeback_solver_bodies(
 
     query.par_for_each_mut(
         MIN_PAR_ITER_ENTITIES,
-        |(index, mut pos, mut rot, com, mut lin_vel, mut ang_vel)| {
+        |(index, mut physics_transform, com, mut lin_vel, mut ang_vel)| {
             let Some(solver_body) = solver_bodies.get(*index) else {
                 return;
             };
 
             // Write back the position and rotation deltas,
             // rotating the body around its center of mass.
-            let old_world_com = *rot * com.0;
-            *rot = (solver_body.delta_rotation * Rot::from(*rot))
-                .fast_renormalize()
-                .into();
-            let new_world_com = *rot * com.0;
-            pos.0 += (solver_body.delta_position + (old_world_com - new_world_com)).real();
+            let old_world_com = physics_transform.rotation * com.0;
+            physics_transform.rotation =
+                (solver_body.delta_rotation * physics_transform.rotation).fast_renormalize();
+            let new_world_com = physics_transform.rotation * com.0;
+            physics_transform.translation +=
+                (solver_body.delta_position + (old_world_com - new_world_com)).real();
 
             // Write back velocities.
             lin_vel.0 = solver_body.linear_velocity;
@@ -370,17 +371,18 @@ fn writeback_solver_bodies(
 #[cfg(feature = "3d")]
 pub(crate) fn update_solver_body_angular_inertia(
     mut solver_bodies: ResMut<SolverBodies>,
-    mut query: Query<(&SolverBodyIndex, &ComputedAngularInertia, &Rotation)>,
+    mut query: Query<(&SolverBodyIndex, &ComputedAngularInertia, &PhysicsTransform)>,
 ) {
     let access = solver_bodies.access();
 
     query.par_for_each_mut(
         MIN_PAR_ITER_ENTITIES,
-        |(index, angular_inertia, rotation)| {
+        |(index, angular_inertia, physics_transform)| {
             // SAFETY: Each entity has a unique, valid solver body index, so the writes below
             //         target disjoint inertias.
             let inertia = unsafe { access.inertia_unchecked_mut(*index) };
-            inertia.update_effective_inv_angular_inertia(angular_inertia, rotation.0);
+            inertia
+                .update_effective_inv_angular_inertia(angular_inertia, physics_transform.rotation);
         },
     );
 }

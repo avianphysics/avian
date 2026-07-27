@@ -10,7 +10,7 @@
 //! - W/S: Adjust right motor target position
 //! - Space: Toggle motors on/off
 
-use avian2d::{math::*, prelude::*};
+use avian2d::prelude::*;
 use bevy::prelude::*;
 use examples_common_2d::ExampleCommonPlugin;
 
@@ -155,7 +155,6 @@ fn setup(mut commands: Commands) {
             piston_base_sprite,
             Transform::from_xyz(200.0, 0.0, 0.0),
             RigidBody::Static,
-            Position(RVec2::new(200.0, 0.0)),
         ))
         .id();
 
@@ -168,7 +167,6 @@ fn setup(mut commands: Commands) {
             Mass(1.0),
             AngularInertia(1.0),
             SleepingDisabled, // Prevent sleeping so motor can always control it
-            Position(RVec2::new(200.0, 0.0)),
         ))
         .id();
 

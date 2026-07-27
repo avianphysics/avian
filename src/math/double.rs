@@ -1,5 +1,5 @@
 use super::ToRealPrecision;
-use crate::{math::DRot2, physics_transform::Rotation};
+use crate::math::DRot2;
 use bevy_math::*;
 use glam_matrix_extras::*;
 
@@ -100,21 +100,5 @@ impl ToRealPrecision for DRot2 {
     type Adjusted = DRot2;
     fn real(&self) -> Self::Adjusted {
         *self
-    }
-}
-
-#[cfg(feature = "2d")]
-impl ToRealPrecision for Rotation {
-    type Adjusted = DRot2;
-    fn real(&self) -> Self::Adjusted {
-        DRot2::from_sin_cos(self.sin as f64, self.cos as f64)
-    }
-}
-
-#[cfg(feature = "3d")]
-impl ToRealPrecision for Rotation {
-    type Adjusted = DQuat;
-    fn real(&self) -> Self::Adjusted {
-        self.as_dquat()
     }
 }

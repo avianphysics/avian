@@ -12,8 +12,7 @@ use bevy::{
 pub struct RigidBodyQuery {
     pub entity: Entity,
     pub rb: Ref<'static, RigidBody>,
-    pub position: &'static mut Position,
-    pub rotation: &'static mut Rotation,
+    pub transform: &'static mut PhysicsTransform,
     pub linear_velocity: &'static mut LinearVelocity,
     pub angular_velocity: &'static mut AngularVelocity,
     pub mass: &'static mut ComputedMass,
@@ -73,7 +72,7 @@ impl RigidBodyQueryItem<'_, '_> {
         #[cfg(feature = "2d")]
         let mut angular_inertia = *self.angular_inertia;
         #[cfg(feature = "3d")]
-        let mut angular_inertia = self.angular_inertia.rotated(self.rotation.0);
+        let mut angular_inertia = self.angular_inertia.rotated(self.transform.rotation);
 
         if let Some(locked_axes) = self.locked_axes {
             angular_inertia = locked_axes.apply_to_angular_inertia(angular_inertia);
@@ -150,7 +149,7 @@ impl RigidBodyQueryReadOnlyItem<'_, '_> {
         #[cfg(feature = "2d")]
         let mut angular_inertia = *self.angular_inertia;
         #[cfg(feature = "3d")]
-        let mut angular_inertia = self.angular_inertia.rotated(self.rotation.0);
+        let mut angular_inertia = self.angular_inertia.rotated(self.transform.rotation);
 
         if let Some(locked_axes) = self.locked_axes {
             angular_inertia = locked_axes.apply_to_angular_inertia(angular_inertia);

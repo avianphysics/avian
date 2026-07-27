@@ -149,7 +149,7 @@ pub struct PhysicsSchedule;
 ///    physics transforms or mass properties.
 /// 3. `StepSimulation`: Responsible for advancing the simulation by running the steps in [`PhysicsStepSystems`].
 /// 4. `Writeback`: Responsible for writing back the results of the physics simulation to other data,
-///    such as updating [`Transform`] based on the new [`Position`] and [`Rotation`].
+///    such as updating [`Transform`] based on the new [`PhysicsTransform`].
 /// 5. `Last`: Runs right after all of Avian's physics systems. Empty by default.
 ///
 /// # See Also
@@ -169,7 +169,7 @@ pub enum PhysicsSystems {
     /// Systems in this set are run in the [`PhysicsSchedule`].
     StepSimulation,
     /// Responsible for writing back the results of the physics simulation to other data,
-    /// such as updating [`Transform`] based on the new [`Position`] and [`Rotation`].
+    /// such as updating [`Transform`] based on the new [`PhysicsTransform`].
     Writeback,
     /// Runs right after all of Avian's physics systems. Empty by default.
     Last,
@@ -289,7 +289,7 @@ fn update_last_physics_tick(
 /// reports the last location they were written to.
 #[cfg(debug_assertions)]
 fn assert_components_finite(
-    pos_query: Query<(Entity, Ref<Position>)>,
+    pos_query: Query<(Entity, Ref<PhysicsTransform>)>,
     lin_vel_query: Query<(Entity, Ref<LinearVelocity>)>,
     ang_vel_query: Query<(Entity, Ref<AngularVelocity>)>,
 ) {
@@ -304,8 +304,8 @@ fn assert_components_finite(
             );
         };
     }
-    for (entity, position) in pos_query {
-        assert_finite!(entity, position, Position);
+    for (entity, physics_transform) in pos_query {
+        assert_finite!(entity, physics_transform, PhysicsTransform);
     }
     for (entity, velocity) in lin_vel_query {
         assert_finite!(entity, velocity, LinearVelocity);

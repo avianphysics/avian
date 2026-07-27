@@ -386,11 +386,13 @@ mod tests {
         let a = Collider::cuboid(1.0, 2.0, 3.0);
         let b = Collider::sphere(0.4);
         let collider = Collider::compound(vec![
-            (RVector::new(1.0, 2.0, 3.0), Quat::from_rotation_z(0.2), a),
             (
-                RVector::new(-12.0, 4.0, -0.01),
-                Quat::from_rotation_x(0.1),
+                a,
+                Isometry3d::new(Vec3::new(1.0, 2.0, 3.0), Quat::from_rotation_z(0.2)),
+            ),
+            (
                 b,
+                Isometry3d::new(Vec3::new(-12.0, 4.0, -0.01), Quat::from_rotation_x(0.1)),
             ),
         ]);
         let trimesh = collider

@@ -676,10 +676,16 @@ pub(crate) trait Rot2Ext {
     /// distance between the start and end points of the rotation on a unit circle.
     fn chord_length(self) -> f32;
 
-    /// Adds the given counterclockiwise angle in radians to the [`Rotation`].
+    /// Adds the given counterclockiwise angle in radians to the rotation.
     /// Uses small-angle approximation.
     #[must_use]
     fn add_angle_fast(&self, radians: f32) -> Self;
+
+    /// Converts the rotation into a [`Quat`] representing a rotation about the Z axis.
+    fn to_quat(self) -> Quat;
+
+    /// Creates a rotation from the Z axis rotation of the given [`Quat`].
+    fn from_quat(quat: Quat) -> Self;
 }
 
 #[cfg(feature = "2d")]
@@ -707,6 +713,18 @@ impl Rot2Ext for Rot2 {
         };
         Rot2::from_sin_cos(sin * magnitude_recip, cos * magnitude_recip)
     }
+
+    #[inline]
+    fn to_quat(self) -> Quat {
+        let z = self.sin.signum() * ((1.0 - self.cos) / 2.0).abs().sqrt();
+        let w = ((1.0 + self.cos) / 2.0).abs().sqrt();
+        Quat::from_xyzw(0.0, 0.0, z, w)
+    }
+
+    #[inline]
+    fn from_quat(quat: Quat) -> Self {
+        Rot2::radians(quat.to_euler(EulerRot::XYZ).2)
+    }
 }
 
 #[cfg(feature = "3d")]
@@ -724,6 +742,14 @@ pub(crate) trait QuatExt {
     /// Useful for preventing numerical error accumulation.
     #[must_use]
     fn fast_renormalize(self) -> Self;
+
+    /// Converts the rotation into a [`Quat`]. This just returns `self` in 3D,
+    /// but exists to mirror the 2D `Rot2Ext` API.
+    fn to_quat(self) -> Quat;
+
+    /// Creates a rotation from the given [`Quat`]. This just returns `quat` in 3D,
+    /// but exists to mirror the 2D `Rot2Ext` API.
+    fn from_quat(quat: Quat) -> Self;
 }
 
 #[cfg(feature = "3d")]
@@ -740,6 +766,16 @@ impl QuatExt for Quat {
         let length_squared = self.length_squared();
         let approx_inv_length = 0.5 * (3.0 - length_squared);
         self * approx_inv_length
+    }
+
+    #[inline]
+    fn to_quat(self) -> Quat {
+        self
+    }
+
+    #[inline]
+    fn from_quat(quat: Quat) -> Self {
+        quat
     }
 }
 
@@ -762,13 +798,13 @@ use crate::prelude::*;
     any(feature = "parry-f32", feature = "parry-f64")
 ))]
 pub(crate) fn make_pose(
-    position: impl Into<Position>,
+    position: impl Into<RVector>,
     rotation: impl Into<Rot>,
 ) -> parry::math::Pose2 {
-    let position: Position = position.into();
+    let position: RVector = position.into();
     let rotation: Rot = rotation.into();
     parry::math::Pose2::from_parts(
-        position.0,
+        position,
         parry::math::Rot2::from_cos_sin_unchecked(rotation.cos.real(), rotation.sin.real()),
     )
 }
@@ -779,12 +815,12 @@ pub(crate) fn make_pose(
     any(feature = "parry-f32", feature = "parry-f64")
 ))]
 pub(crate) fn make_pose(
-    position: impl Into<Position>,
+    position: impl Into<RVector>,
     rotation: impl Into<Rot>,
 ) -> parry::math::Pose3 {
-    let position: Position = position.into();
+    let position: RVector = position.into();
     let rotation: Rot = rotation.into();
-    parry::math::Pose3::from_parts(position.0, rotation.real())
+    parry::math::Pose3::from_parts(position, rotation.real())
 }
 
 /// Computes the rotation matrix of the orthonormal basis computed from the given axis.

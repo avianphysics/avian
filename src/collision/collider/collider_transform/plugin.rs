@@ -12,7 +12,7 @@ use bevy::{
 /// A plugin for propagating and updating transforms for colliders.
 ///
 /// - Propagates [`Transform`] to [`GlobalTransform`] and [`ColliderTransform`].
-/// - Updates [`Position`] and [`Rotation`] for colliders.
+/// - Updates [`PhysicsTransform`] for colliders.
 ///
 /// This plugin requires that colliders have the [`ColliderMarker`] component,
 /// which is added automatically for colliders if the [`ColliderBackendPlugin`] is enabled.
@@ -67,29 +67,25 @@ impl Plugin for ColliderTransformPlugin {
 #[allow(clippy::type_complexity)]
 pub(crate) fn update_child_collider_position(
     mut collider_query: Query<
-        (
-            &ColliderTransform,
-            &mut Position,
-            &mut Rotation,
-            &ColliderOf,
-        ),
+        (&ColliderTransform, &mut PhysicsTransform, &ColliderOf),
         Without<RigidBody>,
     >,
-    rb_query: Query<(&Position, &Rotation), (With<RigidBody>, With<Children>)>,
+    rb_query: Query<&PhysicsTransform, (With<RigidBody>, With<Children>)>,
 ) {
-    for (collider_transform, mut position, mut rotation, collider_of) in &mut collider_query {
-        let Ok((rb_pos, rb_rot)) = rb_query.get(collider_of.body) else {
+    for (collider_transform, mut transform, collider_of) in &mut collider_query {
+        let Ok(rb_transform) = rb_query.get(collider_of.body) else {
             continue;
         };
 
-        position.0 = rb_pos.0 + (rb_rot * collider_transform.translation).real();
+        transform.translation = rb_transform.translation
+            + (rb_transform.rotation * collider_transform.translation).real();
         #[cfg(feature = "2d")]
         {
-            *rotation = (Rot2::from(*rb_rot) * collider_transform.rotation).into();
+            transform.rotation = rb_transform.rotation * collider_transform.rotation;
         }
         #[cfg(feature = "3d")]
         {
-            *rotation = (rb_rot.0 * collider_transform.rotation).normalize().into();
+            transform.rotation = (rb_transform.rotation * collider_transform.rotation).normalize();
         }
     }
 }

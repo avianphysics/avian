@@ -158,8 +158,8 @@ fn debug_render_axes(
 ) {
     let config = store.config::<PhysicsGizmos>().1;
     for (transform, local_com, sleeping, render_config) in &bodies {
-        let pos = Position::from(transform);
-        let rot = Rotation::from(transform);
+        let physics_transform = PhysicsTransform::from(transform);
+        let (pos, rot) = (physics_transform.translation, physics_transform.rotation);
 
         // If the body is sleeping, the colors will be multiplied by the sleeping color multiplier
         if let Some(mut lengths) = render_config.map_or(config.axis_lengths, |c| c.axis_lengths) {
@@ -179,7 +179,7 @@ fn debug_render_axes(
                 Color::hsla(120.0 * mul[0], 1.0 * mul[1], 0.4 * mul[2], 1.0 * mul[3]),
                 Color::hsla(220.0 * mul[0], 1.0 * mul[1], 0.6 * mul[2], 1.0 * mul[3]),
             ];
-            let global_com = pos.0 + (rot * local_com.0).real();
+            let global_com = pos + (rot * local_com.0).real();
 
             let x = (rot * (Vector::X * lengths.x)).real();
             gizmos.draw_line(global_com - x, global_com + x, x_color);
@@ -299,8 +299,8 @@ fn debug_render_colliders(
 ) {
     let config = store.config::<PhysicsGizmos>().1;
     for (entity, collider, transform, collider_rb, render_config) in &mut colliders {
-        let position = Position::from(transform);
-        let rotation = Rotation::from(transform);
+        let physics_transform = PhysicsTransform::from(transform);
+        let (position, rotation) = (physics_transform.translation, physics_transform.rotation);
         if let Some(mut color) = render_config.map_or(config.collider_color, |c| c.collider_color) {
             let collider_rb = collider_rb.map_or(entity, |c| c.body);
 
@@ -333,7 +333,7 @@ fn debug_render_colliders(
                 }
             }
 
-            gizmos.draw_collider(collider, position.0, rotation, color);
+            gizmos.draw_collider(collider, position, rotation, color);
         }
     }
 }
@@ -405,8 +405,7 @@ pub trait DebugRenderConstraint<const N: usize>: EntityConstraint<N> {
     /// Renders the debug information for the constraint.
     fn debug_render(
         &self,
-        positions: [RVector; N],
-        rotations: [Rotation; N],
+        transforms: [PhysicsTransform; N],
         context: &mut SystemParamItem<Self::Context>,
         gizmos: &mut Gizmos<PhysicsGizmos>,
         config: &PhysicsGizmos,
@@ -424,20 +423,14 @@ pub fn debug_render_constraint<T: Component + DebugRenderConstraint<N>, const N:
     let config = store.config::<PhysicsGizmos>().1;
     for constraint in &constraints {
         if let Ok(bodies) = bodies.get_many(constraint.entities()) {
-            let positions: [RVector; N] = bodies
+            let transforms: [PhysicsTransform; N] = bodies
                 .iter()
-                .map(|transform| Position::from(**transform).0)
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap();
-            let rotations: [Rotation; N] = bodies
-                .iter()
-                .map(|transform| Rotation::from(**transform))
+                .map(|transform| PhysicsTransform::from(&**transform))
                 .collect::<Vec<_>>()
                 .try_into()
                 .unwrap();
 
-            constraint.debug_render(positions, rotations, &mut context, &mut gizmos, config);
+            constraint.debug_render(transforms, &mut context, &mut gizmos, config);
         }
     }
 }

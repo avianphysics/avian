@@ -100,8 +100,10 @@ impl XpbdConstraint<2> for CenterDistanceConstraint {
 
         // Prepare the base center difference.
         // The solver will compute the updated version based on the position deltas of the bodies.
-        solver_data.center_difference = (body2.position.0 - body1.position.0).f32()
-            + (body2.rotation * body2.center_of_mass.0 - body1.rotation * body1.center_of_mass.0);
+        solver_data.center_difference = (body2.transform.translation - body1.transform.translation)
+            .f32()
+            + (body2.transform.rotation * body2.center_of_mass.0
+                - body1.transform.rotation * body1.center_of_mass.0);
     }
 
     // This method is called by the solver to actually solve the constraint.

@@ -259,7 +259,7 @@
 //! - [Why is performance so bad?](#why-is-performance-so-bad)
 //! - [Why does movement look choppy?](#why-does-movement-look-choppy)
 //! - [Is there a character controller?](#is-there-a-character-controller)
-//! - [Why are there separate `Position` and `Rotation` components?](#why-are-there-separate-position-and-rotation-components)
+//! - [Why is there a separate `PhysicsTransform` component?](#why-is-there-a-separate-physicstransform-component)
 //! - [Can the engine be used on servers?](#can-the-engine-be-used-on-servers)
 //! - [Something else?](#something-else)
 //!
@@ -427,23 +427,22 @@
 [`kinematic_character_3d`]: https://github.com/avianphysics/avian/tree/main/crates/avian3d/examples/kinematic_character_3d"
 )]
 //!
-//! ## Why are there separate `Position` and `Rotation` components?
+//! ## Why is there a separate `PhysicsTransform` component?
 //!
 //! While `Transform` can be used for the vast majority of things, Avian internally
-//! uses separate [`Position`] and [`Rotation`] components. These are automatically
-//! kept in sync by the [`PhysicsTransformPlugin`].
+//! uses a separate [`PhysicsTransform`] component. It is automatically
+//! kept in sync with `Transform` by the [`PhysicsTransformPlugin`].
 //!
-//! There are several reasons why the separate components are currently used.
+//! There are several reasons why a separate component is currently used.
 //!
-//! - Position and rotation should be global from the physics engine's point of view.
+//! - The physics transform should be global from the physics engine's point of view.
 //! - Transform scale and shearing can cause issues and rounding errors in physics.
 //! - Transform hierarchies can be problematic.
 //! - There is no `f64` version of `Transform`.
 //! - There is no 2D version of `Transform` (yet), and having a 2D version can optimize several computations.
-//! - When position and rotation are separate, we can technically have more systems running in parallel.
 //! - Only rigid bodies have rotation, particles typically don't (although we don't make a distinction yet).
 //!
-//! In external projects however, using [`Position`] and [`Rotation`] is only necessary when you
+//! In external projects however, using [`PhysicsTransform`] is only necessary when you
 //! need to manage positions within [`PhysicsSystems::StepSimulation`]. Elsewhere, you should be able to use `Transform`.
 //!
 //! There is also a possibility that we will revisit this if/when Bevy has a `Transform2d` component.
@@ -576,7 +575,7 @@ pub mod prelude {
         collision::prelude::*,
         dynamics::{self, prelude::*},
         interpolation::*,
-        physics_transform::{PhysicsTransformHelper, PhysicsTransformPlugin, Position, Rotation},
+        physics_transform::{PhysicsTransform, PhysicsTransformHelper, PhysicsTransformPlugin},
         schedule::{
             Physics, PhysicsSchedule, PhysicsSchedulePlugin, PhysicsSet, PhysicsStepSet,
             PhysicsStepSystems, PhysicsSystems, PhysicsTime, Substeps,

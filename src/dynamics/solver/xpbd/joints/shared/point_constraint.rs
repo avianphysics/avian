@@ -42,11 +42,13 @@ impl PointConstraintShared {
         local_anchor2: Vector,
     ) {
         let [body1, body2] = bodies;
+        let (translation1, rotation1) = (body1.transform.translation, body1.transform.rotation);
+        let (translation2, rotation2) = (body2.transform.translation, body2.transform.rotation);
 
-        self.world_r1 = body1.rotation * (local_anchor1 - body1.center_of_mass.0);
-        self.world_r2 = body2.rotation * (local_anchor2 - body2.center_of_mass.0);
-        self.center_difference = (body2.position.0 - body1.position.0).f32()
-            + (body2.rotation * body2.center_of_mass.0 - body1.rotation * body1.center_of_mass.0);
+        self.world_r1 = rotation1 * (local_anchor1 - body1.center_of_mass.0);
+        self.world_r2 = rotation2 * (local_anchor2 - body2.center_of_mass.0);
+        self.center_difference = (translation2 - translation1).f32()
+            + (rotation2 * body2.center_of_mass.0 - rotation1 * body1.center_of_mass.0);
     }
 
     /// Solves the constraint for the given bodies.

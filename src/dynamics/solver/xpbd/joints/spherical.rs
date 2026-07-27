@@ -64,16 +64,19 @@ impl XpbdConstraint<2> for SphericalJoint {
             return;
         };
 
+        let (translation1, rotation1) = (body1.transform.translation, body1.transform.rotation);
+        let (translation2, rotation2) = (body2.transform.translation, body2.transform.rotation);
+
         // Compute the rotation matrices since we're performing so many rotations.
-        let rot1_mat = Mat3::from_quat(body1.rotation.0);
-        let rot2_mat = Mat3::from_quat(body2.rotation.0);
+        let rot1_mat = Mat3::from_quat(rotation1);
+        let rot2_mat = Mat3::from_quat(rotation2);
 
         // Prepare the point-to-point constraint.
         let point_constraint = &mut solver_data.point_constraint;
         point_constraint.world_r1 = rot1_mat * (local_anchor1 - body1.center_of_mass.0);
         point_constraint.world_r2 = rot2_mat * (local_anchor2 - body2.center_of_mass.0);
-        point_constraint.center_difference = (body2.position.0 - body1.position.0).f32()
-            + (body2.rotation * body2.center_of_mass.0 - body1.rotation * body1.center_of_mass.0);
+        point_constraint.center_difference = (translation2 - translation1).f32()
+            + (rotation2 * body2.center_of_mass.0 - rotation1 * body1.center_of_mass.0);
 
         // Prepare the base swing and twist axes.
         let swing_axis = self.twist_axis.any_orthonormal_vector();

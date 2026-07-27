@@ -479,7 +479,7 @@ pub enum ColliderConstructor {
         fill_mode: FillMode,
     },
     /// Constructs a collider with [`Collider::compound`].
-    Compound(Vec<(Position, Rotation, ColliderConstructor)>),
+    Compound(Vec<(ColliderConstructor, Isometry)>),
 }
 
 impl ColliderConstructor {
@@ -497,38 +497,25 @@ impl ColliderConstructor {
         )
     }
 
-    /// Construct a [`ColliderConstructor::Compound`] from arbitrary [`Position`] and [`Rotation`] representations.
-    pub fn compound<P, R>(shapes: Vec<(P, R, ColliderConstructor)>) -> Self
-    where
-        P: Into<Position>,
-        R: Into<Rotation>,
-    {
-        Self::Compound(
-            shapes
-                .into_iter()
-                .map(|(pos, rot, constructor)| (pos.into(), rot.into(), constructor))
-                .collect(),
-        )
+    /// Construct a [`ColliderConstructor::Compound`] from arbitrary [`PhysicsTransform`] representations.
+    pub fn compound(shapes: Vec<(ColliderConstructor, Isometry)>) -> Self {
+        Self::Compound(shapes)
     }
 
     pub(crate) fn flatten_compound_constructors(
-        constructors: Vec<(Position, Rotation, ColliderConstructor)>,
-    ) -> Vec<(Position, Rotation, ColliderConstructor)> {
+        constructors: impl IntoIterator<Item = (ColliderConstructor, Isometry)>,
+    ) -> Vec<(ColliderConstructor, Isometry)> {
         constructors
             .into_iter()
-            .flat_map(|(pos, rot, constructor)| match constructor {
+            .flat_map(|(constructor, transform)| match constructor {
                 ColliderConstructor::Compound(nested) => {
                     Either::Left(Self::flatten_compound_constructors(nested).into_iter().map(
-                        move |(nested_pos, nested_rot, nested_constructor)| {
-                            (
-                                Position(pos.0 + rot.real() * nested_pos.0),
-                                rot * nested_rot,
-                                nested_constructor,
-                            )
+                        move |(nested_constructor, nested_transform)| {
+                            (nested_constructor, transform * nested_transform)
                         },
                     ))
                 }
-                other => Either::Right(once((pos, rot, other))),
+                other => Either::Right(once((other, transform))),
             })
             .collect()
     }
