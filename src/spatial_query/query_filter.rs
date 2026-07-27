@@ -1,4 +1,7 @@
-use bevy::{ecs::entity::hash_set::EntityHashSet, prelude::*};
+use bevy_ecs::entity::hash_set::EntityHashSet;
+use bevy_ecs::prelude::*;
+use bevy_reflect::prelude::*;
+use bevy_utils::prelude::*;
 
 use crate::prelude::*;
 

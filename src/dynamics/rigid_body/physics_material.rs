@@ -1,4 +1,7 @@
-use bevy::prelude::*;
+use bevy_derive::{Deref, DerefMut};
+use bevy_ecs::prelude::*;
+use bevy_reflect::prelude::*;
+use bevy_utils::prelude::*;
 
 /// Determines how coefficients are combined for [`Restitution`] and [`Friction`].
 /// The default is `Average`.

@@ -99,7 +99,8 @@
 //! }
 //! ```
 
-use bevy::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_reflect::prelude::*;
 
 /// A [collision event](self) that is triggered when two colliders start touching.
 ///

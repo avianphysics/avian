@@ -3,9 +3,9 @@ use core::f64::consts::TAU;
 use crate::ops;
 use bevy_math::{DMat2, DVec2, prelude::*};
 
-use bevy::reflect::prelude::*;
+use bevy_reflect::prelude::*;
 #[cfg(feature = "serialize")]
-use bevy::reflect::{ReflectDeserialize, ReflectSerialize};
+use bevy_reflect::{ReflectDeserialize, ReflectSerialize};
 
 /// A double-precision version of [`Rot2`].
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]

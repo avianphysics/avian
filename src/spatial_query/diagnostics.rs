@@ -1,10 +1,8 @@
 use core::time::Duration;
 
-use bevy::{
-    diagnostic::DiagnosticPath,
-    prelude::{ReflectResource, Resource},
-    reflect::Reflect,
-};
+use bevy_diagnostic::DiagnosticPath;
+use bevy_ecs::prelude::{ReflectResource, Resource};
+use bevy_reflect::Reflect;
 
 use crate::diagnostics::{PhysicsDiagnostics, impl_diagnostic_paths};
 

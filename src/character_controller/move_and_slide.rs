@@ -5,7 +5,9 @@
 pub use super::velocity_project::*;
 
 use crate::{collision::collider::contact_query::contact_manifolds, prelude::*};
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy_ecs::prelude::*;
+use bevy_ecs::system::SystemParam;
+use bevy_reflect::prelude::*;
 use core::time::Duration;
 
 /// Needed to improve stability when `n.dot(dir)` happens to be very close to zero.
@@ -257,6 +259,8 @@ pub struct MoveAndSlideOutput {
     /// The final position of the character after move and slide.
     ///
     /// Set your [`Transform::translation`] to this value.
+    ///
+    /// [`Transform::translation`]: bevy_transform::components::Transform
     pub position: RVector,
 
     /// The final velocity of the character after move and slide.

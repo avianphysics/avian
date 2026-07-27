@@ -3,7 +3,9 @@
 //! See the [`CollisionHooks`] trait for more information.
 
 use crate::prelude::*;
-use bevy::{ecs::system::ReadOnlySystemParam, prelude::*};
+use bevy_ecs::prelude::*;
+use bevy_ecs::system::ReadOnlySystemParam;
+use bevy_reflect::prelude::*;
 
 /// A trait for user-defined hooks that can filter and modify contacts.
 ///
@@ -105,7 +107,7 @@ use bevy::{ecs::system::ReadOnlySystemParam, prelude::*};
 /// This is equivalent to manually replacing the default [`BvhBroadPhasePlugin`] and [`NarrowPhasePlugin`]
 /// with instances that have the desired hooks provided using generics.
 ///
-/// [`SystemParam`]: bevy::ecs::system::SystemParam
+/// [`SystemParam`]: bevy_ecs::system::SystemParam
 ///
 /// # Activating Hooks
 ///

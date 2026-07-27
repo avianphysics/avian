@@ -1,6 +1,6 @@
 //! A unique key for a pair of identifiers.
 
-use bevy::prelude::*;
+use bevy_derive::{Deref, DerefMut};
 
 /// A unique key for a pair of identifiers.
 ///

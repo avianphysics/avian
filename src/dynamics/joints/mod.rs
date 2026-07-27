@@ -234,10 +234,11 @@ pub use revolute::RevoluteJoint;
 pub use spherical::SphericalJoint;
 
 use crate::{dynamics::joints::joint_graph::JointGraph, prelude::*};
-use bevy::{
-    ecs::{entity::MapEntities, lifecycle::HookContext, world::DeferredWorld},
-    prelude::*,
-};
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_ecs::{entity::MapEntities, lifecycle::HookContext, world::DeferredWorld};
+use bevy_math::prelude::*;
+use bevy_reflect::prelude::*;
 
 #[cfg(feature = "3d")]
 use core::f32::consts::{PI, TAU};

@@ -1,5 +1,7 @@
 use crate::{collider_tree::ColliderTrees, collision::collider::contact_query, prelude::*};
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy_ecs::prelude::*;
+use bevy_ecs::system::SystemParam;
+use bevy_reflect::prelude::*;
 use parry::query::ShapeCastOptions;
 
 /// A system parameter for performing [spatial queries](spatial_query).

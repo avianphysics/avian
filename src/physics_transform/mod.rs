@@ -18,12 +18,17 @@ use crate::{
     schedule::{LastPhysicsTick, is_changed_after_tick},
 };
 use approx::AbsDiffEq;
-use bevy::{
-    ecs::{
-        change_detection::Tick, intern::Interned, schedule::ScheduleLabel, system::SystemChangeTick,
-    },
-    prelude::*,
-    transform::systems::{mark_dirty_trees, propagate_parent_transforms, sync_simple_transforms},
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_ecs::{
+    change_detection::Tick, intern::Interned, schedule::ScheduleLabel, system::SystemChangeTick,
+};
+#[cfg(feature = "2d")]
+use bevy_math::prelude::*;
+use bevy_reflect::prelude::*;
+use bevy_transform::prelude::*;
+use bevy_transform::systems::{
+    mark_dirty_trees, propagate_parent_transforms, sync_simple_transforms,
 };
 
 /// Manages physics transforms and synchronizes them with [`Transform`].

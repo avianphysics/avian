@@ -11,13 +11,24 @@ use crate::{
     physics_transform::{PhysicsTransformConfig, PhysicsTransformSystems, init_physics_transform},
     prelude::*,
 };
+use bevy_app::prelude::*;
+#[cfg(feature = "collider-from-mesh")]
+use bevy_asset::prelude::Assets;
+use bevy_ecs::prelude::*;
+use bevy_ecs::{intern::Interned, schedule::ScheduleLabel};
+#[cfg(feature = "default-collider")]
+use bevy_log::prelude::*;
+#[cfg(feature = "2d")]
+use bevy_math::prelude::*;
+#[cfg(feature = "collider-from-mesh")]
+use bevy_mesh::prelude::{Mesh, Mesh3d};
+use bevy_reflect::prelude::*;
+use bevy_transform::prelude::*;
+#[cfg(feature = "default-collider")]
+use bevy_utils::prelude::*;
 #[cfg(all(feature = "bevy_scene", feature = "default-collider"))]
-use bevy::world_serialization::{
+use bevy_world_serialization::{
     WorldAssetRoot, WorldInstance as SceneInstance, WorldInstanceSpawner,
-};
-use bevy::{
-    ecs::{intern::Interned, schedule::ScheduleLabel},
-    prelude::*,
 };
 use mass_properties::{MassPropertySystems, components::RecomputeMassProperties};
 

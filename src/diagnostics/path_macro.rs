@@ -20,8 +20,8 @@
 /// pub struct SolverDiagnostics;
 ///
 /// impl SolverDiagnostics {
-///     pub const PREPARE_CONSTRAINTS: &'static bevy::diagnostic::DiagnosticPath = &bevy::diagnostic::DiagnosticPath::const_new("avian/solver/prepare_constraints");
-///     pub const INTEGRATE_VELOCITIES: &'static bevy::diagnostic::DiagnosticPath = &bevy::diagnostic::DiagnosticPath::const_new("avian/solver/integrate_velocities");
+///     pub const PREPARE_CONSTRAINTS: &'static bevy_diagnostic::DiagnosticPath = &bevy_diagnostic::DiagnosticPath::const_new("avian/solver/prepare_constraints");
+///     pub const INTEGRATE_VELOCITIES: &'static bevy_diagnostic::DiagnosticPath = &bevy_diagnostic::DiagnosticPath::const_new("avian/solver/integrate_velocities");
 ///     // ...
 /// }
 /// ```
@@ -30,7 +30,7 @@ macro_rules! impl_diagnostic_paths {
         #[allow(missing_docs)]
         impl $name {
             $(
-                pub const $path: &'static bevy::diagnostic::DiagnosticPath = &bevy::diagnostic::DiagnosticPath::const_new($path_str);
+                pub const $path: &'static bevy_diagnostic::DiagnosticPath = &bevy_diagnostic::DiagnosticPath::const_new($path_str);
             )*
         }
     };

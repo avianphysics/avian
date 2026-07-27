@@ -10,12 +10,12 @@
 //! [`slotmap::SparseSecondaryMap`]: https://docs.rs/slotmap/1.0.7/slotmap/struct.SparseSecondaryMap.html
 
 use alloc::collections::TryReserveError;
-use bevy::platform::hash::RandomState;
+use bevy_platform::hash::RandomState;
 use core::mem::MaybeUninit;
 use std::collections::hash_map::{self, HashMap};
 use std::hash;
 
-use bevy::ecs::entity::{Entity, EntityGeneration};
+use bevy_ecs::entity::{Entity, EntityGeneration};
 
 #[derive(Debug, Clone)]
 struct Slot<T> {

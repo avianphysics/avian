@@ -5,7 +5,7 @@ use crate::{
     },
     prelude::*,
 };
-use bevy::prelude::*;
+use bevy_reflect::prelude::*;
 
 /// Constraint data required by the XPBD constraint solver for a point constraint.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Reflect)]

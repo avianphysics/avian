@@ -2,7 +2,12 @@
 
 use core::num::NonZeroU32;
 
-use bevy::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_log::prelude::*;
+#[cfg(feature = "collider-from-mesh")]
+use bevy_mesh::prelude::Mesh;
+use bevy_reflect::prelude::*;
+use bevy_utils::prelude::*;
 use parry::shape::{SharedShape, TypedShape};
 use thiserror::Error;
 
@@ -337,8 +342,8 @@ impl Collider {
 #[cfg(feature = "collider-from-mesh")]
 impl From<Trimesh> for Mesh {
     fn from(trimesh: Trimesh) -> Self {
-        use bevy::asset::RenderAssetUsages;
-        use bevy::mesh::{Indices, PrimitiveTopology, VertexAttributeValues, prelude::*};
+        use bevy_asset::RenderAssetUsages;
+        use bevy_mesh::{Indices, PrimitiveTopology, VertexAttributeValues, prelude::*};
 
         let mut mesh = Mesh::new(
             PrimitiveTopology::TriangleList,
@@ -372,6 +377,7 @@ mod tests {
     use bevy_math::DVec3;
 
     use super::*;
+    use bevy::prelude::*;
 
     #[test]
     fn rasterizes_cuboid() {

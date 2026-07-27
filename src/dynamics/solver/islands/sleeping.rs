@@ -2,29 +2,27 @@
 //!
 //! See [`IslandSleepingPlugin`].
 
-use bevy::{
-    app::{App, Plugin},
-    ecs::{
-        entity::Entity,
-        entity_disabling::Disabled,
-        error::Result,
-        lifecycle::{Discard, HookContext, Insert},
-        observer::On,
-        query::{Changed, Has, Or, With, Without},
-        resource::Resource,
-        schedule::{
-            IntoScheduleConfigs,
-            common_conditions::{resource_changed, resource_exists},
-        },
-        system::{
-            Command, Commands, Local, ParamSet, Query, Res, ResMut, SystemChangeTick, SystemState,
-            lifetimeless::{SQuery, SResMut},
-        },
-        world::{DeferredWorld, Mut, Ref, World},
+use bevy_app::{App, Plugin};
+use bevy_derive::{Deref, DerefMut};
+use bevy_ecs::{
+    entity::Entity,
+    entity_disabling::Disabled,
+    error::Result,
+    lifecycle::{Discard, HookContext, Insert},
+    observer::On,
+    query::{Changed, Has, Or, With, Without},
+    resource::Resource,
+    schedule::{
+        IntoScheduleConfigs,
+        common_conditions::{resource_changed, resource_exists},
     },
-    prelude::{Deref, DerefMut},
-    time::Time,
+    system::{
+        Command, Commands, Local, ParamSet, Query, Res, ResMut, SystemChangeTick, SystemState,
+        lifetimeless::{SQuery, SResMut},
+    },
+    world::{DeferredWorld, Mut, Ref, World},
 };
+use bevy_time::Time;
 
 use crate::{
     data_structures::bit_vec::BitVec,

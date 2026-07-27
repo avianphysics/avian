@@ -23,10 +23,10 @@ use crate::{
     physics_transform::init_physics_transform,
     prelude::{forces::AccumulatedLocalAcceleration, *},
 };
-use bevy::{
-    ecs::{lifecycle::HookContext, world::DeferredWorld},
-    prelude::*,
-};
+use bevy_derive::{Deref, DerefMut};
+use bevy_ecs::prelude::*;
+use bevy_ecs::{lifecycle::HookContext, world::DeferredWorld};
+use bevy_reflect::prelude::*;
 use derive_more::From;
 
 /// A non-deformable body used for the simulation of most physics objects.

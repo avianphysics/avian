@@ -10,11 +10,10 @@ use crate::{
     dynamics::joints::joint_graph::JointGraph,
     prelude::*,
 };
-use bevy::{
-    ecs::system::{StaticSystemParam, SystemParamItem},
-    prelude::*,
-    tasks::{ComputeTaskPool, ParallelSlice},
-};
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_ecs::system::{StaticSystemParam, SystemParamItem};
+use bevy_tasks::{ComputeTaskPool, ParallelSlice};
 use obvhs::aabb::Aabb;
 
 /// A [broad phase](crate::collision::broad_phase) plugin that uses a [Bounding Volume Hierarchy (BVH)][BVH]

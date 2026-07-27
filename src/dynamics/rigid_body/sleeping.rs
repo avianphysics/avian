@@ -2,7 +2,8 @@
 //!
 //! See the [`Sleeping`] documentation for more information.
 
-use bevy::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_reflect::prelude::*;
 
 /// A marker component indicating that a [`RigidBody`] is sleeping and not simulated until woken up again.
 ///
@@ -32,6 +33,7 @@ use bevy::prelude::*;
 ///
 /// Sleeping can be disabled for an entity by adding the [`SleepingDisabled`] component.
 ///
+/// [`Transform`]: bevy_transform::prelude::Transform
 /// [`RigidBody`]: super::RigidBody
 /// [`LinearVelocity`]: super::LinearVelocity
 /// [`AngularVelocity`]: super::AngularVelocity

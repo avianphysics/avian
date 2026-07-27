@@ -1,7 +1,11 @@
 #![allow(clippy::unnecessary_cast)]
 
 use crate::prelude::*;
-use bevy::prelude::*;
+use bevy_color::prelude::*;
+use bevy_gizmos::prelude::*;
+use bevy_math::prelude::*;
+#[cfg(feature = "3d")]
+use bevy_transform::prelude::*;
 #[cfg(all(
     feature = "default-collider",
     any(feature = "parry-f32", feature = "parry-f64")

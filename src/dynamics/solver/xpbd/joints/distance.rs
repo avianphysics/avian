@@ -5,7 +5,8 @@ use crate::{
     },
     prelude::*,
 };
-use bevy::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_reflect::prelude::*;
 
 /// Constraint data required by the XPBD constraint solver for a [`DistanceJoint`].
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Reflect)]

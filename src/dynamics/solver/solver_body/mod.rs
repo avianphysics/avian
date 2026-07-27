@@ -15,7 +15,11 @@ pub use plugin::SolverBodyPlugin;
 
 use core::marker::PhantomData;
 
-use bevy::prelude::*;
+use bevy_derive::Deref;
+use bevy_ecs::prelude::*;
+#[cfg(feature = "3d")]
+use bevy_math::prelude::*;
+use bevy_reflect::prelude::*;
 
 use super::Rot;
 #[cfg(feature = "3d")]

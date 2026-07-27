@@ -159,7 +159,8 @@ pub use bvh_broad_phase::BvhBroadPhasePlugin;
 use crate::{
     collision::CollisionDiagnostics, dynamics::joints::joint_graph::JointGraph, prelude::*,
 };
-use bevy::prelude::*;
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
 
 /// The core [broad phase](crate::collision::broad_phase) plugin that sets up the
 /// resources, system sets, and diagnostics required for broad phase collision detection.

@@ -12,16 +12,19 @@ use core::time::Duration;
 #[allow(unused_imports)]
 use crate::prelude::*;
 
-use bevy::{
-    ecs::{
-        change_detection::Tick,
-        intern::Interned,
-        schedule::{LogLevel, ScheduleBuildSettings, ScheduleLabel, SingleThreadedExecutor},
-        system::SystemChangeTick,
-    },
-    prelude::*,
-    transform::TransformSystems,
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_ecs::{
+    change_detection::Tick,
+    intern::Interned,
+    schedule::{LogLevel, ScheduleBuildSettings, ScheduleLabel, SingleThreadedExecutor},
+    system::SystemChangeTick,
 };
+use bevy_log::prelude::*;
+use bevy_reflect::prelude::*;
+use bevy_time::prelude::*;
+use bevy_transform::TransformSystems;
+use bevy_utils::prelude::*;
 
 /// Sets up the default scheduling, system set configuration, and time resources for physics.
 ///
@@ -152,6 +155,8 @@ pub struct PhysicsSchedule;
 ///    such as updating [`Transform`] based on the new [`Position`] and [`Rotation`].
 /// 5. `Last`: Runs right after all of Avian's physics systems. Empty by default.
 ///
+/// [`Transform`]: bevy_transform::components::Transform
+///
 /// # See Also
 ///
 /// - [`PhysicsSchedule`]: Responsible for advancing the simulation in [`PhysicsSystems::StepSimulation`].
@@ -170,6 +175,8 @@ pub enum PhysicsSystems {
     StepSimulation,
     /// Responsible for writing back the results of the physics simulation to other data,
     /// such as updating [`Transform`] based on the new [`Position`] and [`Rotation`].
+    ///
+    /// [`Transform`]: bevy_transform::components::Transform
     Writeback,
     /// Runs right after all of Avian's physics systems. Empty by default.
     Last,

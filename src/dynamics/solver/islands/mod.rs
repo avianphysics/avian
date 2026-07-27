@@ -45,15 +45,16 @@
 mod sleeping;
 pub use sleeping::{IslandSleepingPlugin, SleepBody, SleepIslands, WakeBody, WakeIslands};
 
-use bevy::{
-    ecs::{
-        entity::{ComponentCloneCtx, SourceComponent},
-        entity_disabling::Disabled,
-        lifecycle::HookContext,
-        world::DeferredWorld,
-    },
-    prelude::*,
+use bevy_app::prelude::*;
+use bevy_derive::{Deref, DerefMut};
+use bevy_ecs::prelude::*;
+use bevy_ecs::{
+    entity::{ComponentCloneCtx, SourceComponent},
+    entity_disabling::Disabled,
+    lifecycle::HookContext,
+    world::DeferredWorld,
 };
+use bevy_reflect::prelude::*;
 
 use crate::{
     collision::contact_types::ContactId,
@@ -1454,7 +1455,7 @@ impl BodyIslandNode {
         if !island_removed {
             // Validate the island.
             world.commands().queue(move |world: &mut World| {
-                use bevy::ecs::system::RunSystemOnce;
+                use bevy_ecs::system::RunSystemOnce;
                 // TODO: This is probably quite inefficient.
                 let _ = world.run_system_once(
                     move |bodies: Query<

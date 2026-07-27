@@ -11,9 +11,10 @@ use core::cmp::Ordering;
 use crate::{
     collision::contact_types::ContactId, dynamics::solver::ContactSoftnessCoefficients, prelude::*,
 };
+use bevy_reflect::Reflect;
 #[cfg(feature = "serialize")]
-use bevy::reflect::{ReflectDeserialize, ReflectSerialize};
-use bevy::{reflect::Reflect, utils::default};
+use bevy_reflect::{ReflectDeserialize, ReflectSerialize};
+use bevy_utils::default;
 
 use super::solver_body::{SolverBody, SolverBodyIndex, SolverBodyInertia};
 

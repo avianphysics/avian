@@ -2,7 +2,9 @@
 
 use core::marker::PhantomData;
 
-use bevy::prelude::*;
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_reflect::prelude::*;
 
 /// A plugin that marks the ancestors of entities that have the given component `C`
 /// with the [`AncestorMarker`] component.

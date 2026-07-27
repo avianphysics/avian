@@ -1,4 +1,8 @@
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy_app::prelude::*;
+use bevy_asset::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_mesh::prelude::*;
+use bevy_platform::collections::HashMap;
 
 use super::{Collider, ColliderConstructor};
 

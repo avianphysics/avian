@@ -5,7 +5,11 @@ mod plugin;
 pub use plugin::ColliderTransformPlugin;
 
 use crate::prelude::*;
-use bevy::prelude::*;
+use bevy_ecs::prelude::*;
+#[cfg(feature = "2d")]
+use bevy_math::prelude::*;
+use bevy_reflect::prelude::*;
+use bevy_transform::prelude::*;
 
 /// The transform of a collider relative to the rigid body it's attached to.
 /// This is in the local space of the body, not the collider itself.

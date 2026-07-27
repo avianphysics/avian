@@ -4,10 +4,13 @@ use crate::{
     prelude::*,
     utils::{MIN_PAR_ITER_ENTITIES, ParallelQueryForEach},
 };
-use bevy::{
-    ecs::{intern::Interned, schedule::ScheduleLabel},
-    prelude::*,
-};
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_ecs::{intern::Interned, schedule::ScheduleLabel};
+#[cfg(feature = "2d")]
+use bevy_math::prelude::*;
+use bevy_transform::prelude::*;
+use bevy_utils::prelude::*;
 
 /// A plugin for propagating and updating transforms for colliders.
 ///

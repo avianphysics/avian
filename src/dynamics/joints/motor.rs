@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy_reflect::prelude::*;
 
 /// Determines how the joint motor force/torque is computed.
 ///

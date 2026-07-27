@@ -10,13 +10,15 @@ use crate::{
         JointDisabled, PhysicsSchedule, PhysicsStepSystems, RigidBodyColliders,
     },
 };
-use bevy::{
-    ecs::{
-        component::ComponentId, entity_disabling::Disabled, lifecycle::HookContext,
-        query::QueryFilter, world::DeferredWorld,
-    },
-    prelude::*,
+use bevy_app::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_ecs::{
+    component::ComponentId, entity_disabling::Disabled, lifecycle::HookContext, query::QueryFilter,
+    world::DeferredWorld,
 };
+#[cfg(feature = "validate")]
+use bevy_log::prelude::*;
+use bevy_reflect::prelude::*;
 
 /// A plugin that manages the [`JointGraph`] for a specific [joint] type.
 ///

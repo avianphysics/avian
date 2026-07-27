@@ -15,7 +15,9 @@
 //! and point projection, see [spatial queries](spatial_query).
 
 use crate::{collision::contact_types::SingleContact, prelude::*};
-use bevy::prelude::*;
+use bevy_ecs::prelude::*;
+use bevy_reflect::prelude::*;
+use bevy_utils::prelude::*;
 use parry::query::{PersistentQueryDispatcher, ShapeCastOptions, Unsupported};
 
 /// An error indicating that a [contact query](self) is not supported for one of the [`Collider`] shapes.

@@ -18,12 +18,10 @@
 //! [Box2D - SIMD Matters]: https://box2d.org/posts/2024/08/simd-matters/
 //! [Erin Catto]: https://github.com/erincatto
 
+use bevy_ecs::{entity::Entity, resource::Resource};
+use bevy_reflect::Reflect;
 #[cfg(feature = "serialize")]
-use bevy::reflect::{ReflectDeserialize, ReflectSerialize};
-use bevy::{
-    ecs::{entity::Entity, resource::Resource},
-    reflect::Reflect,
-};
+use bevy_reflect::{ReflectDeserialize, ReflectSerialize};
 
 use smallvec::SmallVec;
 

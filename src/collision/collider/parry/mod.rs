@@ -12,9 +12,12 @@ pub use primitives2d::{EllipseColliderShape, RegularPolygonColliderShape};
 
 use super::EnlargedAabb;
 use crate::{make_pose, math::Real, prelude::*};
+use bevy_ecs::prelude::*;
+use bevy_log as log;
+use bevy_math::prelude::*;
 #[cfg(feature = "collider-from-mesh")]
-use bevy::mesh::{Indices, VertexAttributeValues};
-use bevy::{log, prelude::*};
+use bevy_mesh::{Indices, VertexAttributeValues, prelude::Mesh};
+use bevy_reflect::prelude::*;
 use contact_query::UnsupportedShape;
 use itertools::Either;
 use parry::{

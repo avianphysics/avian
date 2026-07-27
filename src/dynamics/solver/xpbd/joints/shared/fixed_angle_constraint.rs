@@ -5,7 +5,9 @@ use crate::{
     },
     prelude::*,
 };
-use bevy::prelude::*;
+#[cfg(feature = "3d")]
+use bevy_math::prelude::*;
+use bevy_reflect::prelude::*;
 
 /// Constraint data required by the XPBD constraint solver for a fixed angle constraint.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Reflect)]

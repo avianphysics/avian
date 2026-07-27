@@ -1,4 +1,7 @@
-use bevy::{diagnostic::DiagnosticPath, prelude::*};
+use bevy_app::prelude::*;
+use bevy_diagnostic::DiagnosticPath;
+use bevy_ecs::prelude::*;
+use bevy_reflect::prelude::*;
 
 use crate::{ColliderMarker, PhysicsSchedule, PhysicsStepSystems, RigidBody, dynamics::joints::*};
 
