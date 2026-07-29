@@ -255,7 +255,7 @@ fn update_ray_caster_positions(
         if let Some(global_position) = global_position {
             ray.set_global_origin(
                 global_position
-                    + physics_transform.map_or(origin, |physics| physics.rotation * origin),
+                    + physics_transform.map_or(origin, |physics| physics.rotation.real() * origin),
             );
         } else if parent.is_none() {
             ray.set_global_origin(origin);
@@ -282,7 +282,7 @@ fn update_ray_caster_positions(
                 && let Some(position) = parent_position
             {
                 let rotation = global_rotation.unwrap_or(parent_rotation.unwrap_or_default());
-                ray.set_global_origin(position + rotation * origin);
+                ray.set_global_origin(position + rotation.real() * origin);
             }
             if global_rotation.is_none()
                 && let Some(rotation) = parent_rotation
@@ -322,7 +322,7 @@ fn update_shape_caster_positions(
         if let Some(global_position) = global_position {
             shape_caster.set_global_origin(
                 global_position
-                    + physics_transform.map_or(origin, |physics| physics.rotation * origin),
+                    + physics_transform.map_or(origin, |physics| physics.rotation.real() * origin),
             );
         } else if parent.is_none() {
             shape_caster.set_global_origin(origin);
@@ -365,7 +365,7 @@ fn update_shape_caster_positions(
                 && let Some(position) = parent_position
             {
                 let rotation = global_rotation.unwrap_or(parent_rotation.unwrap_or_default());
-                shape_caster.set_global_origin(position + rotation * origin);
+                shape_caster.set_global_origin(position + rotation.real() * origin);
             }
             if global_rotation.is_none()
                 && let Some(rotation) = parent_rotation

@@ -793,7 +793,7 @@ impl SpatialQuery<'_, '_> {
                     let toi = hit.time_of_impact.f32();
                     callback(ShapeHitData {
                         entity: proxy.collider,
-                        point1: transform.translation + transform.rotation * hit.witness1,
+                        point1: transform * hit.witness1,
                         point2: pose2 * hit.witness2 + (direction * toi).real(),
                         normal1: (pose1.rotation * hit.normal1).f32(),
                         normal2: (pose2.rotation * hit.normal2).f32(),

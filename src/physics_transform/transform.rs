@@ -129,7 +129,7 @@ impl PhysicsTransform {
     pub fn inverse(&self) -> Self {
         let inv_rotation = self.rotation.inverse();
         Self {
-            translation: inv_rotation * -self.translation,
+            translation: inv_rotation.real() * -self.translation,
             rotation: inv_rotation,
         }
     }
@@ -142,7 +142,7 @@ impl PhysicsTransform {
     pub fn inverse_mul(&self, other: &Self) -> Self {
         let inv_rotation = self.rotation.inverse();
         Self {
-            translation: inv_rotation * (other.translation - self.translation),
+            translation: inv_rotation.real() * (other.translation - self.translation),
             rotation: inv_rotation * other.rotation,
         }
     }
@@ -150,7 +150,7 @@ impl PhysicsTransform {
     /// Transforms a point by rotating and then translating it by `self`.
     #[inline]
     pub fn transform_point(&self, point: RVector) -> RVector {
-        self.rotation * point + self.translation
+        self.rotation.real() * point + self.translation
     }
 
     /// Transforms a point by rotating and then translating it by the inverse of `self`,
@@ -161,7 +161,7 @@ impl PhysicsTransform {
     #[inline]
     pub fn inverse_transform_point(&self, point: RVector) -> RVector {
         let inv_rotation = self.rotation.inverse();
-        inv_rotation * (point - self.translation)
+        inv_rotation.real() * (point - self.translation)
     }
 }
 
@@ -255,7 +255,43 @@ impl Mul for PhysicsTransform {
     #[inline]
     fn mul(self, rhs: Self) -> Self::Output {
         Self {
-            translation: self.rotation * rhs.translation + self.translation,
+            translation: self.rotation.real() * rhs.translation + self.translation,
+            rotation: self.rotation * rhs.rotation,
+        }
+    }
+}
+
+impl Mul<&Self> for PhysicsTransform {
+    type Output = Self;
+
+    #[inline]
+    fn mul(self, rhs: &Self) -> Self::Output {
+        Self {
+            translation: self.rotation.real() * rhs.translation + self.translation,
+            rotation: self.rotation * rhs.rotation,
+        }
+    }
+}
+
+impl Mul<PhysicsTransform> for &PhysicsTransform {
+    type Output = PhysicsTransform;
+
+    #[inline]
+    fn mul(self, rhs: PhysicsTransform) -> Self::Output {
+        PhysicsTransform {
+            translation: self.rotation.real() * rhs.translation + self.translation,
+            rotation: self.rotation * rhs.rotation,
+        }
+    }
+}
+
+impl Mul<&PhysicsTransform> for &PhysicsTransform {
+    type Output = PhysicsTransform;
+
+    #[inline]
+    fn mul(self, rhs: &PhysicsTransform) -> Self::Output {
+        PhysicsTransform {
+            translation: self.rotation.real() * rhs.translation + self.translation,
             rotation: self.rotation * rhs.rotation,
         }
     }
@@ -287,6 +323,44 @@ impl Mul<Vector> for PhysicsTransform {
     }
 }
 
+impl Mul<RVector> for &PhysicsTransform {
+    type Output = RVector;
+
+    #[inline]
+    fn mul(self, rhs: RVector) -> Self::Output {
+        self.transform_point(rhs)
+    }
+}
+
+#[cfg(feature = "f64")]
+impl Mul<Vector> for &PhysicsTransform {
+    type Output = RVector;
+
+    #[inline]
+    fn mul(self, rhs: Vector) -> Self::Output {
+        self.translation + (self.rotation * rhs).real()
+    }
+}
+
+impl Mul<RVector> for &mut PhysicsTransform {
+    type Output = RVector;
+
+    #[inline]
+    fn mul(self, rhs: RVector) -> Self::Output {
+        self.transform_point(rhs)
+    }
+}
+
+#[cfg(feature = "f64")]
+impl Mul<Vector> for &mut PhysicsTransform {
+    type Output = RVector;
+
+    #[inline]
+    fn mul(self, rhs: Vector) -> Self::Output {
+        self.translation + (self.rotation * rhs).real()
+    }
+}
+
 impl Mul<Dir> for PhysicsTransform {
     type Output = Dir;
 
@@ -300,7 +374,7 @@ impl Ease for PhysicsTransform {
     fn interpolating_curve_unbounded(start: Self, end: Self) -> impl Curve<Self> {
         FunctionCurve::new(Interval::UNIT, move |t| PhysicsTransform {
             translation: RVector::lerp(start.translation, end.translation, t as Real),
-            rotation: Rot::slerp(start.rotation, end.rotation, t as Real),
+            rotation: Rot::slerp(start.rotation, end.rotation, t),
         })
     }
 }
