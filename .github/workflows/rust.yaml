@@ -92,6 +92,10 @@ jobs:
                 os: ${{ fromJSON((github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'Cross-Platform')) && '["windows-latest","macos-latest","ubuntu-latest"]' || '["ubuntu-latest"]') }}
         env:
             RUSTFLAGS: --deny warnings -C debuginfo=line-tables-only -Zthreads=0
+            # Keep the old cargo build-dir layout on nightly until cargo-nextest
+            # supports layout v2 (rust-lang/cargo#17258); without this, test
+            # binaries fail to load libbevy_dylib.so during test listing.
+            __CARGO_TEMPORARY_BUILD_DIR_NEW_LAYOUT_OPT_OUT: "1"
         runs-on: ${{ matrix.os }}
         timeout-minutes: 60
         steps:
