@@ -384,6 +384,22 @@ pub struct ContactManifold {
     /// such as conveyor belts.
     #[cfg(feature = "3d")]
     pub tangent_velocity: Vector,
+    /// An optional pivot for the contact anchors on the first shape, relative to the
+    /// body's center of mass. When tracking contact separation during substeps, only
+    /// the part of each anchor from the center of mass to the pivot follows the body's
+    /// rotation; the part from the pivot to the contact point does not.
+    ///
+    /// This is used for shapes that are rotationally symmetric about their center,
+    /// such as circles and spheres, with the pivot at the shape's center. Their contact
+    /// point does not follow the shape's own rotation, and treating the full anchor as
+    /// a material point makes fast-spinning rolling bodies sink into the ground.
+    ///
+    /// Defaults to `None`, meaning that the full anchors follow the body's rotation.
+    pub anchor_pivot1: Option<Vector>,
+    /// Same as [`anchor_pivot1`](Self::anchor_pivot1), but for the second shape.
+    ///
+    /// Defaults to `None`.
+    pub anchor_pivot2: Option<Vector>,
 }
 
 impl ContactManifold {
@@ -405,6 +421,8 @@ impl ContactManifold {
             tangent_speed: 0.0,
             #[cfg(feature = "3d")]
             tangent_velocity: Vector::ZERO,
+            anchor_pivot1: None,
+            anchor_pivot2: None,
         }
     }
 

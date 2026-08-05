@@ -825,6 +825,17 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
 
                     let normal = manifold.normal;
 
+                    // The anchors are transformed to be relative to the centers of mass
+                    // of the bodies below. The anchor pivots get the same treatment,
+                    // as the offset from the center of mass to the shape follows
+                    // the body's rotation.
+                    if let Some(pivot) = &mut manifold.anchor_pivot1 {
+                        *pivot += collider_offset1 - world_com1;
+                    }
+                    if let Some(pivot) = &mut manifold.anchor_pivot2 {
+                        *pivot += collider_offset2 - world_com2;
+                    }
+
                     // Transform and prune contact points.
                     manifold.retain_points_mut(|point| {
                         // Transform contact points to be relative to the centers of mass of the bodies.

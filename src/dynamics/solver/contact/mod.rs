@@ -99,6 +99,10 @@ pub struct ContactConstraint {
     pub contact_id: ContactId,
     /// The index of the contact manifold in the [`ContactPair`].
     pub manifold_index: usize,
+    /// See [`ContactManifold::anchor_pivot1`].
+    pub anchor_pivot1: Option<Vector>,
+    /// See [`ContactManifold::anchor_pivot2`].
+    pub anchor_pivot2: Option<Vector>,
 }
 
 impl ContactConstraint {
@@ -207,6 +211,8 @@ impl ContactConstraint {
             points,
             contact_id,
             manifold_index,
+            anchor_pivot1: manifold.anchor_pivot1,
+            anchor_pivot2: manifold.anchor_pivot2,
         }
     }
 
@@ -273,8 +279,17 @@ impl ContactConstraint {
 
         // Normal impulses
         for point in self.points.iter_mut() {
-            let r1 = body1.delta_rotation * point.anchor1;
-            let r2 = body2.delta_rotation * point.anchor2;
+            // If an anchor pivot is set, only the part of the anchor from the center
+            // of mass to the pivot follows the body's rotation.
+            // See `ContactManifold::anchor_pivot1`.
+            let r1 = match self.anchor_pivot1 {
+                None => body1.delta_rotation * point.anchor1,
+                Some(pivot) => body1.delta_rotation * pivot + (point.anchor1 - pivot),
+            };
+            let r2 = match self.anchor_pivot2 {
+                None => body2.delta_rotation * point.anchor2,
+                Some(pivot) => body2.delta_rotation * pivot + (point.anchor2 - pivot),
+            };
 
             // Compute current separation.
             let delta_separation = delta_translation + (r2 - r1);
