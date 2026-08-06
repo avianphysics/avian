@@ -104,7 +104,7 @@ pub mod prelude {
     };
     pub use super::contact_types::{
         Collisions, ContactEdge, ContactGraph, ContactManifold, ContactPair, ContactPairFlags,
-        ContactPoint,
+        ContactPoint, PackedFeatureId,
     };
     pub use super::hooks::{ActiveCollisionHooks, CollisionHooks};
     #[expect(deprecated)]

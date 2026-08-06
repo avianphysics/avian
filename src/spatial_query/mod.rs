@@ -22,6 +22,8 @@
 //!
 //! For each hit during raycasting, the hit entity, a distance, and a normal will be stored in [`RayHitData`].
 //! The distance is the distance from the ray origin to the point of intersection, indicating how far the ray travelled.
+//! With the `ray-hit-feature-id` feature enabled, the [`PackedFeatureId`](crate::prelude::PackedFeatureId)
+//! of the hit (e.g. the triangle index of a triangle mesh collider) is stored as well.
 //!
 //! There are two ways to perform raycasts.
 //!

@@ -40,6 +40,10 @@ default-collider = []
 parry-f32 = ["dep:parry3d", "default-collider"]
 parry-f64 = ["f64", "dep:parry3d-f64", "default-collider"]
 
+# Adds the hit feature ID (e.g. the triangle index of trimesh colliders)
+# to `RayHitData` in raycasting.
+ray-hit-feature-id = []
+
 # Enables the XPBD constraint solver for joints.
 xpbd_joints = []
 

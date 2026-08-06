@@ -678,13 +678,77 @@ impl Collider {
         max_distance: f32,
         solid: bool,
     ) -> Option<(f32, Vector)> {
-        let hit = self.shape_scaled().cast_ray_and_get_normal(
+        let hit = self.ray_intersection(
+            translation,
+            rotation,
+            ray_origin,
+            ray_direction,
+            max_distance,
+            solid,
+        );
+        hit.map(|hit| (hit.time_of_impact.f32(), hit.normal.f32()))
+    }
+
+    /// Computes the distance, normal, and [feature ID](PackedFeatureId) between the given ray
+    /// and `self` transformed by `translation` and `rotation`.
+    ///
+    /// The returned tuple is in the format `(distance, normal, feature)`.
+    /// For triangle meshes, the feature typically identifies the hit face (triangle index).
+    ///
+    /// Note that for triangle meshes, a hit on the back face of triangle `i` is reported
+    /// as `face(i + triangle_count)` rather than `face(i)`, following parry's convention.
+    ///
+    /// # Arguments
+    ///
+    /// - `ray_origin`: Where the ray is cast from.
+    /// - `ray_direction`: What direction the ray is cast in.
+    /// - `max_distance`: The maximum distance the ray can travel.
+    /// - `solid`: If true and the ray origin is inside of a collider, the hit point will be the ray origin itself.
+    ///   Otherwise, the collider will be treated as hollow, and the hit point will be at the collider's boundary.
+    #[cfg(feature = "ray-hit-feature-id")]
+    pub fn cast_ray_with_feature(
+        &self,
+        translation: RVector,
+        rotation: impl Into<Rot>,
+        ray_origin: RVector,
+        ray_direction: Vector,
+        max_distance: f32,
+        solid: bool,
+    ) -> Option<(f32, Vector, PackedFeatureId)> {
+        let hit = self.ray_intersection(
+            translation,
+            rotation,
+            ray_origin,
+            ray_direction,
+            max_distance,
+            solid,
+        );
+        hit.map(|hit| {
+            (
+                hit.time_of_impact.f32(),
+                hit.normal.f32(),
+                PackedFeatureId::from(parry::shape::PackedFeatureId::from(hit.feature)),
+            )
+        })
+    }
+
+    /// Casts a ray against `self` transformed by `translation` and `rotation`,
+    /// returning the full parry intersection data.
+    fn ray_intersection(
+        &self,
+        translation: RVector,
+        rotation: impl Into<Rot>,
+        ray_origin: RVector,
+        ray_direction: Vector,
+        max_distance: f32,
+        solid: bool,
+    ) -> Option<parry::query::RayIntersection> {
+        self.shape_scaled().cast_ray_and_get_normal(
             &make_pose(translation, rotation),
             &parry::query::Ray::new(ray_origin, ray_direction.real()),
             max_distance.real(),
             solid,
-        );
-        hit.map(|hit| (hit.time_of_impact.f32(), hit.normal.f32()))
+        )
     }
 
     /// Tests whether the given ray intersects `self` transformed by `translation` and `rotation`.

@@ -213,3 +213,52 @@ fn no_ambiguity_errors() {
     .finish();
     app.update();
 }
+
+#[test]
+#[cfg(all(
+    feature = "3d",
+    feature = "default-collider",
+    any(feature = "parry-f32", feature = "parry-f64"),
+    feature = "ray-hit-feature-id"
+))]
+fn raycast_returns_trimesh_face_index() {
+    use bevy::ecs::system::RunSystemOnce;
+
+    let mut app = create_app();
+
+    app.add_systems(Startup, |mut commands: Commands| {
+        // A quad made of two triangles lying on the XZ plane, wound so that
+        // the front faces point up (+Y).
+        commands.spawn((
+            RigidBody::Static,
+            Collider::trimesh(
+                vec![
+                    RVector::new(0.0, 0.0, 0.0),
+                    RVector::new(1.0, 0.0, 0.0),
+                    RVector::new(1.0, 0.0, 1.0),
+                    RVector::new(0.0, 0.0, 1.0),
+                ],
+                vec![[0, 2, 1], [0, 3, 2]],
+            ),
+        ));
+    });
+
+    tick_app(&mut app, 1.0 / 60.0);
+
+    // The point (0.25, 1, 0.75) lies above the second triangle ([0, 2, 3]).
+    let hit = app
+        .world_mut()
+        .run_system_once(|spatial_query: SpatialQuery| {
+            spatial_query.cast_ray(
+                RVector::new(0.25, 1.0, 0.75),
+                Dir::NEG_Y,
+                10.0,
+                true,
+                &SpatialQueryFilter::default(),
+            )
+        })
+        .expect("raycast system should run")
+        .expect("ray should hit the trimesh");
+
+    assert_eq!(hit.feature, PackedFeatureId::face(1));
+}

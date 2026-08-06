@@ -401,6 +401,17 @@ pub struct RayHitData {
 
     /// The normal at the point of intersection, expressed in world space.
     pub normal: Vector,
+
+    /// The [feature ID](PackedFeatureId) of the part of the collider that was hit by the ray.
+    ///
+    /// For triangle mesh colliders, this is typically a face identifying the index of the
+    /// hit triangle. For shapes that do not identify features, this may be
+    /// [`PackedFeatureId::UNKNOWN`].
+    ///
+    /// Note that for triangle meshes, a hit on the back face of triangle `i` is reported
+    /// as `face(i + triangle_count)` rather than `face(i)`, following parry's convention.
+    #[cfg(feature = "ray-hit-feature-id")]
+    pub feature: PackedFeatureId,
 }
 
 impl MapEntities for RayHitData {

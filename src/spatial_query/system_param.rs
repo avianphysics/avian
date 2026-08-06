@@ -197,7 +197,20 @@ impl SpatialQuery<'_, '_> {
                     return f32::MAX;
                 };
 
+                #[cfg(not(feature = "ray-hit-feature-id"))]
                 let Some((distance, normal)) = collider.cast_ray(
+                    position.0,
+                    *rotation,
+                    origin,
+                    *direction,
+                    max_distance,
+                    solid,
+                ) else {
+                    return f32::MAX;
+                };
+
+                #[cfg(feature = "ray-hit-feature-id")]
+                let Some((distance, normal, feature)) = collider.cast_ray_with_feature(
                     position.0,
                     *rotation,
                     origin,
@@ -214,6 +227,8 @@ impl SpatialQuery<'_, '_> {
                         entity: proxy.collider,
                         normal,
                         distance,
+                        #[cfg(feature = "ray-hit-feature-id")]
+                        feature,
                     });
                 }
 
@@ -374,7 +389,20 @@ impl SpatialQuery<'_, '_> {
                     return true;
                 };
 
+                #[cfg(not(feature = "ray-hit-feature-id"))]
                 let Some((distance, normal)) = collider.cast_ray(
+                    position.0,
+                    *rotation,
+                    origin,
+                    *direction,
+                    max_distance,
+                    solid,
+                ) else {
+                    return true;
+                };
+
+                #[cfg(feature = "ray-hit-feature-id")]
+                let Some((distance, normal, feature)) = collider.cast_ray_with_feature(
                     position.0,
                     *rotation,
                     origin,
@@ -389,6 +417,8 @@ impl SpatialQuery<'_, '_> {
                     entity: proxy.collider,
                     normal,
                     distance,
+                    #[cfg(feature = "ray-hit-feature-id")]
+                    feature,
                 })
             });
         });
