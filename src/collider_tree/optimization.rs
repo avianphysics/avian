@@ -1,30 +1,37 @@
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "unknown")))]
+use crate::data_structures::stable_vec::StableVec;
 use crate::{
     collider_tree::{
         ColliderTree, ColliderTreeDiagnostics, ColliderTreeSystems, ColliderTreeType, ColliderTrees,
     },
-    data_structures::stable_vec::StableVec,
     prelude::*,
 };
-use bevy::{
-    ecs::world::CommandQueue,
-    prelude::*,
-    tasks::{AsyncComputeTaskPool, Task, block_on},
-};
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "unknown")))]
+use alloc::sync::Arc;
+use bevy::prelude::*;
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "unknown")))]
+use bevy::tasks::{ComputeTaskPool, Task, block_on};
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "unknown")))]
+use core::sync::atomic::{AtomicBool, Ordering};
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "unknown")))]
+use std::sync::Mutex;
 
 /// A plugin that optimizes the dynamic [`ColliderTree`] to maintain good query performance.
 pub(super) struct ColliderTreeOptimizationPlugin;
 
 impl Plugin for ColliderTreeOptimizationPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<ColliderTreeOptimization>()
-            .init_resource::<OptimizationTasks>();
+        app.init_resource::<ColliderTreeOptimization>();
+
+        #[cfg(all(not(target_arch = "wasm32"), not(target_os = "unknown")))]
+        app.init_resource::<OptimizationTasks>();
 
         app.add_systems(
             PhysicsSchedule,
             (
                 optimize_trees.in_set(ColliderTreeSystems::BeginOptimize),
                 #[cfg(all(not(target_arch = "wasm32"), not(target_os = "unknown")))]
-                block_on_optimize_trees.in_set(ColliderTreeSystems::EndOptimize),
+                finish_optimize_trees.in_set(ColliderTreeSystems::EndOptimize),
             ),
         );
     }
@@ -57,10 +64,13 @@ pub struct ColliderTreeOptimization {
     pub optimize_in_place: bool,
 
     /// If `true`, tree optimization will be performed in parallel
-    /// with the narrow phase and solver using async tasks.
+    /// with the narrow phase and solver using the [`ComputeTaskPool`].
+    ///
+    /// This typically hides most of the optimization overhead
+    /// for scenes where the narrow phase and solver are the bottleneck.
     ///
     /// **Default**: `true` (on supported platforms)
-    pub use_async_tasks: bool,
+    pub use_compute_task: bool,
 }
 
 impl Default for ColliderTreeOptimization {
@@ -69,9 +79,9 @@ impl Default for ColliderTreeOptimization {
             optimization_mode: TreeOptimizationMode::default(),
             optimize_in_place: false,
             #[cfg(any(target_arch = "wasm32", target_os = "unknown"))]
-            use_async_tasks: false,
+            use_compute_task: false,
             #[cfg(all(not(target_arch = "wasm32"), not(target_os = "unknown")))]
-            use_async_tasks: true,
+            use_compute_task: true,
         }
     }
 }
@@ -157,30 +167,71 @@ impl TreeOptimizationMode {
     }
 }
 
-/// A resource tracking ongoing optimization tasks for [`ColliderTree`]s.
-#[derive(Resource, Default, Deref, DerefMut)]
-struct OptimizationTasks(Vec<Task<CommandQueue>>);
+/// An optimization job for a single [`ColliderTree`],
+/// claimable by whichever thread reaches it first.
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "unknown")))]
+struct OptimizationJob {
+    /// The tree being optimized.
+    tree: Mutex<ColliderTree>,
+    /// The type of the tree being optimized.
+    tree_type: ColliderTreeType,
+    /// The resolved optimization strategy.
+    mode: TreeOptimizationMode,
+    /// Whether the optimization has been claimed by a thread.
+    claimed: AtomicBool,
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "unknown")))]
+impl OptimizationJob {
+    /// Performs the optimization if it has not been claimed by another thread yet.
+    ///
+    /// Returns `true` if this call performed the optimization.
+    fn try_run(&self) -> bool {
+        if self.claimed.swap(true, Ordering::AcqRel) {
+            // Another thread already claimed this job.
+            return false;
+        }
+
+        // We have exclusive access to the tree.
+        let mut tree = self.tree.lock().unwrap_or_else(|err| err.into_inner());
+        optimize_tree_in_place(&mut tree, self.mode);
+
+        true
+    }
+}
+
+/// A resource tracking the ongoing optimization of [`ColliderTree`]s.
+///
+/// All trees are optimized by a single task, one after another,
+/// to leave as many threads as possible for the narrow phase and solver.
+/// The jobs are still claimed individually, so [`finish_optimize_trees`]
+/// can pick up the ones the task has not reached yet and run them alongside it.
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "unknown")))]
+#[derive(Resource, Default)]
+struct OptimizationTasks {
+    jobs: Vec<Arc<OptimizationJob>>,
+    task: Option<Task<()>>,
+}
 
 /// Begins optimizing the dynamic and kinematic [`ColliderTree`]s to maintain good query performance.
 ///
-/// If [`ColliderTreeOptimization::use_async_tasks`] is enabled, this spawns an async task
-/// that runs concurrently with the simulation step. Otherwise, the optimization is performed
+/// If [`ColliderTreeOptimization::use_compute_task`] is enabled, this spawns a task that
+/// runs concurrently with the simulation step. Otherwise, the optimization is performed
 /// in-place on the main thread.
 fn optimize_trees(
     mut collider_trees: ResMut<ColliderTrees>,
+    #[cfg(all(not(target_arch = "wasm32"), not(target_os = "unknown")))]
     mut optimization_tasks: ResMut<OptimizationTasks>,
     optimization_settings: Res<ColliderTreeOptimization>,
     mut diagnostics: ResMut<ColliderTreeDiagnostics>,
 ) {
     let start = crate::utils::Instant::now();
 
-    let task_pool = AsyncComputeTaskPool::get();
-
     // We cannot block on wasm.
     #[cfg(any(target_arch = "wasm32", target_os = "unknown"))]
-    let use_async_tasks = false;
+    let use_compute_task = false;
     #[cfg(all(not(target_arch = "wasm32"), not(target_os = "unknown")))]
-    let use_async_tasks = optimization_settings.use_async_tasks;
+    let use_compute_task = optimization_settings.use_compute_task;
 
     // Spawn optimization tasks for each tree.
     for tree_type in ColliderTreeType::ALL {
@@ -195,9 +246,9 @@ fn optimize_trees(
         }
 
         #[cfg(all(not(target_arch = "wasm32"), not(target_os = "unknown")))]
-        if use_async_tasks {
+        if use_compute_task {
             // Take or clone the BVH for the optimization task.
-            // TODO: For small changes to large trees, the cost of cloning can exceed the cost of the async task.
+            // TODO: For small changes to large trees, the cost of cloning can exceed the cost of the task.
             //       We could have a threshold for cloning vs in-place optimization based on tree size and moved ratio.
             let bvh = if optimization_settings.optimize_in_place {
                 core::mem::take(&mut tree.bvh)
@@ -215,17 +266,30 @@ fn optimize_trees(
                 workspace: core::mem::take(&mut tree.workspace),
             };
 
-            let task = spawn_optimization_task(task_pool, new_tree, tree_type, move |tree| {
-                optimize_tree_in_place(tree, optimization_strategy);
-            });
-
-            optimization_tasks.push(task);
+            optimization_tasks.jobs.push(Arc::new(OptimizationJob {
+                tree: Mutex::new(new_tree),
+                tree_type,
+                mode: optimization_strategy,
+                claimed: AtomicBool::new(false),
+            }));
         }
 
-        if !use_async_tasks {
+        if !use_compute_task {
             // Optimize in place on the main thread.
             optimize_tree_in_place(tree, optimization_strategy);
         }
+    }
+
+    // Spawn a single task that claims and performs each optimization job in order.
+    // This leaves as many threads as possible for the narrow phase and solver.
+    #[cfg(all(not(target_arch = "wasm32"), not(target_os = "unknown")))]
+    if !optimization_tasks.jobs.is_empty() {
+        let jobs = optimization_tasks.jobs.clone();
+        optimization_tasks.task = Some(ComputeTaskPool::get().spawn(async move {
+            for job in &jobs {
+                job.try_run();
+            }
+        }));
     }
 
     diagnostics.optimize += start.elapsed();
@@ -259,45 +323,43 @@ fn optimize_tree_in_place(tree: &mut ColliderTree, optimization_strategy: TreeOp
     }
 }
 
-/// Spawns and returns an async task to optimize the given collider tree
-/// using the provided optimization function.
+/// Completes the [`ColliderTree`] optimization jobs started in [`optimize_trees`].
 #[cfg(all(not(target_arch = "wasm32"), not(target_os = "unknown")))]
-fn spawn_optimization_task(
-    task_pool: &AsyncComputeTaskPool,
-    mut tree: ColliderTree,
-    tree_type: ColliderTreeType,
-    optimize: impl FnOnce(&mut ColliderTree) + Send + 'static,
-) -> Task<CommandQueue> {
-    task_pool.spawn(async move {
-        optimize(&mut tree);
-
-        let mut command_queue = CommandQueue::default();
-        command_queue.push(move |world: &mut World| {
-            let mut collider_trees = world
-                .get_resource_mut::<ColliderTrees>()
-                .expect("ColliderTrees resource missing");
-            let collider_tree = collider_trees.tree_for_type_mut(tree_type);
-            collider_tree.bvh = tree.bvh;
-            collider_tree.workspace = tree.workspace;
-        });
-        command_queue
-    })
-}
-
-/// Completes the [`ColliderTree`] optimization tasks started in [`optimize_trees`].
-#[cfg(all(not(target_arch = "wasm32"), not(target_os = "unknown")))]
-fn block_on_optimize_trees(
-    mut commands: Commands,
-    mut optimization: ResMut<OptimizationTasks>,
+fn finish_optimize_trees(
+    mut collider_trees: ResMut<ColliderTrees>,
+    mut optimization_tasks: ResMut<OptimizationTasks>,
     mut diagnostics: ResMut<ColliderTreeDiagnostics>,
 ) {
     let start = crate::utils::Instant::now();
 
-    // Complete all ongoing optimization tasks.
-    optimization.drain(..).for_each(|task| {
-        let mut command_queue = block_on(task);
-        commands.append(&mut command_queue);
-    });
+    let Some(task) = optimization_tasks.task.take() else {
+        return;
+    };
+    let jobs = core::mem::take(&mut optimization_tasks.jobs);
+
+    // Claim every job the task has not reached yet and perform it on the main thread.
+    let mut claimed_all = true;
+    for job in &jobs {
+        if !job.try_run() {
+            claimed_all = false;
+        }
+    }
+
+    if claimed_all {
+        // The task has nothing left to do.
+        drop(task);
+    } else {
+        // The task is still working on some job. Block until it's done.
+        block_on(task);
+    }
+
+    // Every job has been completed by either the main thread or the task.
+    for job in jobs {
+        let mut tree = job.tree.lock().unwrap_or_else(|err| err.into_inner());
+        let collider_tree = collider_trees.tree_for_type_mut(job.tree_type);
+        collider_tree.bvh = core::mem::take(&mut tree.bvh);
+        collider_tree.workspace = core::mem::take(&mut tree.workspace);
+    }
 
     diagnostics.optimize += start.elapsed();
 }
