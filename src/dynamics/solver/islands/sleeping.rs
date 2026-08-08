@@ -270,16 +270,20 @@ fn sleep_islands(
     }
 
     // Sleep islands.
-    let sleep_buffer = sleep_buffer.clone();
-    commands.queue(|world: &mut World| {
-        SleepIslands(sleep_buffer).apply(world);
-    });
+    if !sleep_buffer.is_empty() {
+        let sleep_buffer = sleep_buffer.clone();
+        commands.queue(|world: &mut World| {
+            SleepIslands(sleep_buffer).apply(world);
+        });
+    }
 
     // Wake islands.
-    let wake_buffer = wake_buffer.clone();
-    commands.queue(|world: &mut World| {
-        WakeIslands(wake_buffer).apply(world);
-    });
+    if !wake_buffer.is_empty() {
+        let wake_buffer = wake_buffer.clone();
+        commands.queue(|world: &mut World| {
+            WakeIslands(wake_buffer).apply(world);
+        });
+    }
 
     // Reset the awake island bit vector.
     awake_island_bit_vec.set_bit_count_and_clear(islands.len());
@@ -370,6 +374,9 @@ pub struct SleepIslands(pub Vec<IslandId>);
 impl Command for SleepIslands {
     type Out = ();
     fn apply(self, world: &mut World) {
+        if self.0.is_empty() {
+            return;
+        }
         world.try_resource_scope(|world, mut state: Mut<CachedIslandSleepingSystemState>| {
             let (bodies, mut islands, mut contact_graph, mut constraint_graph) =
                 state.0.get_mut(world).unwrap();
@@ -486,6 +493,9 @@ pub struct WakeIslands(pub Vec<IslandId>);
 impl Command for WakeIslands {
     type Out = ();
     fn apply(self, world: &mut World) {
+        if self.0.is_empty() {
+            return;
+        }
         world.try_resource_scope(|world, mut state: Mut<CachedIslandWakingSystemState>| {
             let (mut bodies, mut islands, mut contact_graph, mut constraint_graph) =
                 state.0.get_mut(world).unwrap();
