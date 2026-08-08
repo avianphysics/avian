@@ -94,14 +94,16 @@ fn update_body_size_metrics<C: AnyCollider>(
 ) {
     let context = context.into_inner();
 
-    for (mut size_metrics, rb_colliders, com) in bodies.iter_mut() {
+    bodies.par_for_each_mut(
+        MIN_PAR_ITER_ENTITIES,
+        |(mut size_metrics, rb_colliders, com)| {
         if !com.is_changed()
             && !rb_colliders
                 .iter()
                 .any(|collider_entity| changed_colliders.contains(collider_entity))
         {
             // Neither the center of mass nor any of the colliders have changed.
-            continue;
+                return;
         }
 
         let mut ccd_thickness: f32 = f32::INFINITY;
@@ -117,11 +119,13 @@ fn update_body_size_metrics<C: AnyCollider>(
             // Compute the sweep radius
             let ctx = ColliderContext::new(entity, &context);
             let point = com.0 - collider_transform.translation;
-            let distance_to_com = collider.max_distance_to_point_with_context(point.real(), ctx);
+                let distance_to_com =
+                    collider.max_distance_to_point_with_context(point.real(), ctx);
             sweep_radius = sweep_radius.max(distance_to_com);
         }
 
         size_metrics.ccd_thickness = ccd_thickness;
         size_metrics.sweep_radius = sweep_radius;
-    }
+        },
+    );
 }
