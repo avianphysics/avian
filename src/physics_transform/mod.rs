@@ -187,7 +187,7 @@ pub type PhysicsTransformSet = PhysicsTransformSystems;
 /// To account for hierarchies, transform propagation should be run before this system.
 #[allow(clippy::type_complexity)]
 pub fn transform_to_position(
-    mut query: Query<(&GlobalTransform, &mut Position, &mut Rotation)>,
+    mut query: Query<(Ref<GlobalTransform>, &mut Position, &mut Rotation)>,
     length_unit: Res<PhysicsLengthUnit>,
     last_physics_tick: Res<LastPhysicsTick>,
     system_tick: SystemChangeTick,
@@ -209,6 +209,12 @@ pub fn transform_to_position(
     query.par_for_each_mut(
         MIN_PAR_ITER_ENTITIES,
         |(global_transform, mut position, mut rotation)| {
+            let transform_changed = global_transform.is_added()
+                || is_changed_after_tick(global_transform, last_physics_tick, this_run);
+            if !transform_changed {
+                return;
+            }
+
             let affine = global_transform.affine();
 
             let position_changed = !position.is_added()
