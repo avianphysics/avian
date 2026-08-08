@@ -246,12 +246,17 @@ fn apply_local_acceleration(
     diagnostics.integrate_velocities += start.elapsed();
 }
 
-fn clear_accumulated_local_acceleration(mut query: Query<&mut AccumulatedLocalAcceleration>) {
-    query.iter_mut().for_each(|mut acceleration| {
+fn clear_accumulated_local_acceleration(
+    mut query: Query<&mut AccumulatedLocalAcceleration, Changed<AccumulatedLocalAcceleration>>,
+) {
+    for mut acceleration in &mut query {
+        // Change detection is bypassed here so that clearing does not mark the component
+        // as changed, which would cause the system to run again the next step.
+        let acceleration = acceleration.bypass_change_detection();
         acceleration.linear = Vector::ZERO;
         #[cfg(feature = "3d")]
         {
             acceleration.angular = AngularVector::ZERO;
         }
-    });
+    }
 }
