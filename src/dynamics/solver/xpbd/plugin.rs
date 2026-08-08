@@ -20,6 +20,8 @@ pub struct XpbdSolverPlugin;
 
 impl Plugin for XpbdSolverPlugin {
     fn build(&self, app: &mut App) {
+        app.register_type::<XpbdVelocityProjection>();
+
         app.register_required_components::<FixedJoint, FixedJointSolverData>();
         app.register_required_components::<RevoluteJoint, RevoluteJointSolverData>();
         #[cfg(feature = "3d")]
@@ -74,26 +76,7 @@ impl Plugin for XpbdSolverPlugin {
         app.add_systems(
             SubstepSchedule,
             (
-                |solver_bodies: Res<SolverBodies>,
-                 mut query: Query<
-                    (
-                        &SolverBodyIndex,
-                        &mut PreSolveDeltaPosition,
-                        &mut PreSolveDeltaRotation,
-                    ),
-                    Without<RigidBodyDisabled>,
-                >| {
-                    for (index, mut pre_solve_delta_position, mut pre_solve_delta_rotation) in
-                        &mut query
-                    {
-                        let Some(body) = solver_bodies.get(*index) else {
-                            continue;
-                        };
-                        // Store the previous delta translation and rotation for XPBD velocity updates.
-                        pre_solve_delta_position.0 = body.delta_position;
-                        pre_solve_delta_rotation.0 = body.delta_rotation;
-                    }
-                },
+                store_pre_solve_deltas,
                 solve_xpbd_joint::<FixedJoint>,
                 solve_xpbd_joint::<RevoluteJoint>,
                 #[cfg(feature = "3d")]
@@ -140,6 +123,22 @@ pub enum XpbdSolverSystems {
     /// Performs velocity updates after XPBD constraint solving.
     VelocityProjection,
 }
+
+/// A marker component for [rigid bodies](RigidBody) whose velocities should be projected
+/// from the position corrections applied by XPBD constraints.
+///
+/// The XPBD solver only stores pre-solve deltas and projects velocities for bodies with this
+/// component, so bodies that no XPBD constraint touches are skipped entirely.
+///
+/// This is inserted and removed automatically for the bodies of joints in the [`JointGraph`].
+/// If you implement a [custom XPBD constraint](crate::dynamics::solver::xpbd#custom-constraints)
+/// that is not registered in the joint graph, insert this component on the participating bodies
+/// yourself, or the constraint will have no effect on their velocities.
+///
+/// [`JointGraph`]: crate::dynamics::joints::joint_graph::JointGraph
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq, Reflect)]
+#[reflect(Component, Debug, Default, PartialEq)]
+pub struct XpbdVelocityProjection;
 
 /// Iterates through the XPBD joints of a given type and solves them.
 pub fn prepare_xpbd_joint<
@@ -296,10 +295,34 @@ pub fn warm_start_xpbd_motors<
     }
 }
 
+/// Stores the delta position and rotation of each body before XPBD constraints are solved.
+fn store_pre_solve_deltas(
+    solver_bodies: Res<SolverBodies>,
+    mut query: Query<
+        (
+            &SolverBodyIndex,
+            &mut PreSolveDeltaPosition,
+            &mut PreSolveDeltaRotation,
+        ),
+        (With<XpbdVelocityProjection>, Without<RigidBodyDisabled>),
+    >,
+) {
+    for (index, mut pre_solve_delta_position, mut pre_solve_delta_rotation) in &mut query {
+        let Some(body) = solver_bodies.get(*index) else {
+            continue;
+        };
+        pre_solve_delta_position.0 = body.delta_position;
+        pre_solve_delta_rotation.0 = body.delta_rotation;
+    }
+}
+
 /// Updates the linear velocity of all dynamic bodies based on the change in position from the XPBD solver.
 fn project_linear_velocity(
     mut solver_bodies: ResMut<SolverBodies>,
-    bodies: Query<(&SolverBodyIndex, &PreSolveDeltaPosition), RigidBodyActiveFilter>,
+    bodies: Query<
+        (&SolverBodyIndex, &PreSolveDeltaPosition),
+        (With<XpbdVelocityProjection>, RigidBodyActiveFilter),
+    >,
     time: Res<Time>,
 ) {
     let delta_secs = time.delta_secs();
@@ -319,7 +342,10 @@ fn project_linear_velocity(
 #[cfg(feature = "2d")]
 fn project_angular_velocity(
     mut solver_bodies: ResMut<SolverBodies>,
-    bodies: Query<(&SolverBodyIndex, &PreSolveDeltaRotation), RigidBodyActiveFilter>,
+    bodies: Query<
+        (&SolverBodyIndex, &PreSolveDeltaRotation),
+        (With<XpbdVelocityProjection>, RigidBodyActiveFilter),
+    >,
     time: Res<Time>,
 ) {
     let delta_secs = time.delta_secs();
@@ -338,7 +364,10 @@ fn project_angular_velocity(
 #[cfg(feature = "3d")]
 fn project_angular_velocity(
     mut solver_bodies: ResMut<SolverBodies>,
-    bodies: Query<(&SolverBodyIndex, &PreSolveDeltaRotation), RigidBodyActiveFilter>,
+    bodies: Query<
+        (&SolverBodyIndex, &PreSolveDeltaRotation),
+        (With<XpbdVelocityProjection>, RigidBodyActiveFilter),
+    >,
     time: Res<Time>,
 ) {
     let delta_secs = time.delta_secs();

@@ -173,6 +173,12 @@
 //! of [`JointGraphPlugin`](crate::dynamics::joints::joint_graph::JointGraphPlugin) for the constraint type.
 //! This is required for sleeping and the `JointCollisionDisabled` component to work.
 //!
+//! The [`JointGraphPlugin`](crate::dynamics::joints::joint_graph::JointGraphPlugin) also inserts
+//! [`XpbdVelocityProjection`] on the bodies it connects. Only bodies with that component have their
+//! velocities updated from the position corrections applied by XPBD constraints, so if your constraint
+//! is *not* registered in the joint graph, insert [`XpbdVelocityProjection`] on the participating
+//! bodies yourself.
+//!
 //! You can find a working example of a custom constraint
 //! [here](https://github.com/avianphysics/avian/blob/main/crates/avian3d/examples/custom_constraint.rs).
 //!
@@ -289,8 +295,8 @@
 
 mod plugin;
 pub use plugin::{
-    XpbdSolverPlugin, XpbdSolverSystems, prepare_xpbd_joint, solve_xpbd_joint,
-    warm_start_xpbd_motors,
+    XpbdSolverPlugin, XpbdSolverSystems, XpbdVelocityProjection, prepare_xpbd_joint,
+    solve_xpbd_joint, warm_start_xpbd_motors,
 };
 
 pub mod joints;
