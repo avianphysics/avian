@@ -812,27 +812,13 @@ fn update_solver_body_aabbs<C: AnyCollider>(
     // Update the AABBs of moved proxies in the dynamic and kinematic trees.
     let aabb_query = colliders.p1();
     for &tree_type in &[ColliderTreeType::Dynamic, ColliderTreeType::Kinematic] {
-        let tree = trees.tree_for_type_mut(tree_type);
-        let bit_vec = enlarged_proxies.bit_vec_for_type_mut(tree_type);
-
-        tree.bvh.init_primitives_to_nodes_if_uninit();
-        bit_vec.combine_thread_local();
-
-        update_tree(
+        update_tree_for_moved_proxies(
             tree_type,
-            tree,
-            &bit_vec.global,
+            trees.tree_for_type_mut(tree_type),
+            enlarged_proxies.bit_vec_for_type_mut(tree_type),
             &aabb_query,
             &mut moved_proxies,
-            |tree, proxy_id, enlarged_aabb| {
-                tree.set_proxy_aabb(proxy_id, enlarged_aabb);
-            },
         );
-
-        // Refit the BVH after enlarging proxies.
-        // TODO: For a smaller number of moved proxies, it can be faster
-        //       to only refit upwards from the moved leaves.
-        tree.refit_all();
     }
 
     // Update the last update tick.
@@ -970,49 +956,71 @@ pub fn update_moved_collider_aabbs<C: AnyCollider>(
     // Reinsert moved proxies in each tree.
     let aabb_query = colliders.p1();
     for tree_type in ColliderTreeType::ALL {
-        let tree = trees.tree_for_type_mut(tree_type);
-        let bit_vec = enlarged_proxies.bit_vec_for_type_mut(tree_type);
-
-        tree.bvh.init_primitives_to_nodes_if_uninit();
-        bit_vec.combine_thread_local();
-
-        let moved_count = bit_vec.global.count_ones();
-        let moved_ratio = if tree.proxies.is_empty() {
-            0.0
-        } else {
-            moved_count as f32 / tree.proxies.len() as f32
-        };
-
-        // For a small number of moved proxies, it's more efficient to refit up from just those leaves.
-        // Otherwise, it's better to refit the entire tree once after updating all moved proxies.
-        // TODO: Tune the threshold ratio.
-        if moved_ratio < 0.1 {
-            update_tree(
-                tree_type,
-                tree,
-                &bit_vec.global,
-                &aabb_query,
-                &mut moved_proxies,
-                |tree, proxy_id, enlarged_aabb| {
-                    tree.resize_proxy_aabb(proxy_id, enlarged_aabb);
-                },
-            );
-        } else {
-            update_tree(
-                tree_type,
-                tree,
-                &bit_vec.global,
-                &aabb_query,
-                &mut moved_proxies,
-                |tree, proxy_id, enlarged_aabb| {
-                    tree.set_proxy_aabb(proxy_id, enlarged_aabb);
-                },
-            );
-            tree.refit_all();
-        }
+        update_tree_for_moved_proxies(
+            tree_type,
+            trees.tree_for_type_mut(tree_type),
+            enlarged_proxies.bit_vec_for_type_mut(tree_type),
+            &aabb_query,
+            &mut moved_proxies,
+        );
     }
 
     diagnostics.update += start.elapsed();
+}
+
+/// Applies the [`EnlargedAabb`]s of the proxies flagged in `bit_vec` to the tree,
+/// and refits the BVH to account for the changes.
+fn update_tree_for_moved_proxies(
+    tree_type: ColliderTreeType,
+    tree: &mut ColliderTree,
+    bit_vec: &mut EnlargedProxiesBitVec,
+    aabb_query: &Query<&EnlargedAabb, Without<ColliderDisabled>>,
+    moved_proxies: &mut MovedProxies,
+) {
+    tree.bvh.init_primitives_to_nodes_if_uninit();
+    bit_vec.combine_thread_local();
+
+    let moved_count = bit_vec.global.count_ones();
+    if moved_count == 0 {
+        return;
+    }
+    let moved_ratio = moved_count as f32 / tree.proxies.len().max(1) as f32;
+
+    // For a small number of moved proxies, it's more efficient to refit up from just those leaves.
+    // Otherwise, it's better to refit the entire tree once after updating all moved proxies.
+    //
+    // The crossover depends on whether the BVH nodes are currently ordered with children after parents.
+    // If they are, `refit_all` is significantly cheaper. This is the case after full rebuilds.
+    let full_refit_threshold = if tree.bvh.children_are_ordered_after_parents {
+        0.06
+    } else {
+        0.3
+    };
+
+    if moved_ratio < full_refit_threshold {
+        update_tree(
+            tree_type,
+            tree,
+            &bit_vec.global,
+            aabb_query,
+            moved_proxies,
+            |tree, proxy_id, enlarged_aabb| {
+                tree.resize_proxy_aabb(proxy_id, enlarged_aabb);
+            },
+        );
+    } else {
+        update_tree(
+            tree_type,
+            tree,
+            &bit_vec.global,
+            aabb_query,
+            moved_proxies,
+            |tree, proxy_id, enlarged_aabb| {
+                tree.set_proxy_aabb(proxy_id, enlarged_aabb);
+            },
+        );
+        tree.refit_all();
+    }
 }
 
 /// Updates the collider tree for the moved proxies indicated in the given bit vector.
