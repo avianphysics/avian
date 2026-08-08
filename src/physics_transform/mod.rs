@@ -16,12 +16,14 @@ mod tests;
 use crate::{
     prelude::*,
     schedule::{LastPhysicsTick, is_changed_after_tick},
+    utils::{MIN_PAR_ITER_ENTITIES, ParallelQueryForEach},
 };
 use approx::AbsDiffEq;
 use bevy::{
     ecs::{
         change_detection::Tick, intern::Interned, schedule::ScheduleLabel, system::SystemChangeTick,
     },
+    math::Affine3A,
     prelude::*,
     transform::systems::{mark_dirty_trees, propagate_parent_transforms, sync_simple_transforms},
 };
@@ -201,38 +203,97 @@ pub fn transform_to_position(
 
     // If the `GlobalTransform` translation and `Position` differ by less than 0.01 mm, we ignore the change.
     let distance_tolerance = length_unit.real() * 1e-5;
-    // If the `GlobalTransform` rotation and `Rotation` differ by less than 0.1 degrees, we ignore the change.
-    let rotation_tolerance = 0.1f32.to_radians();
 
-    for (global_transform, mut position, mut rotation) in &mut query {
-        let global_transform = global_transform.compute_transform();
-        #[cfg(feature = "2d")]
-        let transform_translation = global_transform.translation.truncate().real();
-        #[cfg(feature = "3d")]
-        let transform_translation = global_transform.translation.real();
-        let transform_rotation = Rotation::from(global_transform.rotation);
+    let last_physics_tick = last_physics_tick.0;
 
-        let position_changed = !position.is_added()
-            && is_changed_after_tick(
-                Ref::from(position.reborrow()),
-                last_physics_tick.0,
-                this_run,
-            );
-        if !position_changed && position.abs_diff_ne(&transform_translation, distance_tolerance) {
-            position.0 = transform_translation;
+    query.par_for_each_mut(
+        MIN_PAR_ITER_ENTITIES,
+        |(global_transform, mut position, mut rotation)| {
+            let affine = global_transform.affine();
+
+            let position_changed = !position.is_added()
+                && is_changed_after_tick(
+                    Ref::from(position.reborrow()),
+                    last_physics_tick,
+                    this_run,
+                );
+            if !position_changed {
+                #[cfg(feature = "2d")]
+                let transform_translation = affine.translation.truncate().real();
+                #[cfg(feature = "3d")]
+                let transform_translation = Vec3::from(affine.translation).real();
+
+                if position.abs_diff_ne(&transform_translation, distance_tolerance) {
+                    position.0 = transform_translation;
+                }
+            }
+
+            let rotation_changed = !rotation.is_added()
+                && is_changed_after_tick(
+                    Ref::from(rotation.reborrow()),
+                    last_physics_tick,
+                    this_run,
+                );
+            if !rotation_changed {
+                let transform_rotation = rotation_from_affine(&affine);
+                // The rotations differ by more than the tolerance if the cosine of the angle
+                // between them is smaller than the cosine of the tolerance angle.
+                if cos_angle_between(*rotation, transform_rotation) < ROTATION_COS_TOLERANCE {
+                    *rotation = transform_rotation;
+                }
+            }
+        },
+    );
+}
+
+/// The cosine of the angle below which a difference between the `GlobalTransform` rotation
+/// and [`Rotation`] is ignored. This corresponds to an angle of 0.1 degrees.
+const ROTATION_COS_TOLERANCE: f32 = 0.999_998_5;
+
+/// Returns the cosine of the angle between two rotations.
+///
+/// This is a cheaper alternative to `Rotation::angle_between`,
+/// as it avoids inverse trigonometric functions.
+#[inline]
+fn cos_angle_between(a: Rotation, b: Rotation) -> f32 {
+    #[cfg(feature = "2d")]
+    {
+        a.cos * b.cos + a.sin * b.sin
+    }
+    #[cfg(feature = "3d")]
+    {
+        // The angle between two unit quaternions is `2 * acos(|dot|)`,
+        // and `cos(2 * acos(x)) == 2 * x^2 - 1`.
+        let dot = a.dot(b.0);
+        2.0 * dot * dot - 1.0
+    }
+}
+
+/// Extracts the [`Rotation`] from the affine transform of a `GlobalTransform`.
+///
+/// This is equivalent to `Rotation::from(global_transform.compute_transform().rotation)`,
+/// but avoids the full scale-rotation-translation decomposition, which is comparatively expensive.
+#[inline]
+fn rotation_from_affine(affine: &Affine3A) -> Rotation {
+    let mat = affine.matrix3;
+
+    let det_sign = mat.determinant().signum();
+
+    #[cfg(feature = "2d")]
+    {
+        let x_axis = Vec2::new(mat.x_axis.x, mat.x_axis.y) * det_sign;
+        let x_axis = x_axis.normalize_or(Vec2::X);
+        Rotation {
+            cos: x_axis.x,
+            sin: x_axis.y,
         }
-
-        let rotation_changed = !rotation.is_added()
-            && is_changed_after_tick(
-                Ref::from(rotation.reborrow()),
-                last_physics_tick.0,
-                this_run,
-            );
-        if !rotation_changed
-            && rotation.angle_between(transform_rotation).abs() > rotation_tolerance
-        {
-            *rotation = transform_rotation;
-        }
+    }
+    #[cfg(feature = "3d")]
+    {
+        let x_axis = (mat.x_axis * det_sign).normalize_or(Vec3A::X);
+        let y_axis = mat.y_axis.normalize_or(Vec3A::Y);
+        let z_axis = mat.z_axis.normalize_or(Vec3A::Z);
+        Rotation(Quat::from_mat3a(&Mat3A::from_cols(x_axis, y_axis, z_axis)))
     }
 }
 
