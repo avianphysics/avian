@@ -4,13 +4,12 @@ use bevy::{
 };
 use obvhs::{
     aabb::Aabb,
-    bvh2::{Bvh2, insertion_removal::SiblingInsertionCandidate, reinsertion::ReinsertionOptimizer},
-    faststack::HeapStack,
+    bvh2::{Bvh2, reinsertion::ReinsertionOptimizer},
     ploc::{PlocBuilder, PlocSearchDistance, SortPrecision, rebuild::compute_rebuild_path_flags},
 };
 
 use crate::{
-    collider_tree::ProxyId,
+    collider_tree::{Bvh2Ext, ProxyId},
     data_structures::stable_vec::StableVec,
     prelude::{ActiveCollisionHooks, CollisionLayers},
 };
@@ -30,9 +29,81 @@ pub struct ColliderTree {
     ///
     /// This is used during tree optimization to determine
     /// which proxies need to be reinserted or rebuilt.
-    pub moved_proxies: Vec<ProxyId>,
+    pub moved_proxies: MovedProxyList,
     /// A workspace for reusing allocations across tree operations.
     pub workspace: ColliderTreeWorkspace,
+}
+
+/// A set of [`ProxyId`]s that have moved since the last update, in insertion order.
+///
+/// Supports constant-time insertion, removal, and membership tests by keeping
+/// a sparse index from [`ProxyId`] to the position of the ID in the dense list.
+#[derive(Clone, Default, Debug)]
+pub struct MovedProxyList {
+    /// The moved proxy IDs, in insertion order.
+    proxies: Vec<ProxyId>,
+    /// Maps a [`ProxyId`] to its index in `proxies`, or [`PROXY_NOT_PRESENT`] if it is not in the list.
+    indices: Vec<u32>,
+}
+
+/// The sentinel stored in [`MovedProxyList::indices`] for proxies that are not in the list.
+const PROXY_NOT_PRESENT: u32 = u32::MAX;
+
+impl MovedProxyList {
+    /// Adds a proxy to the list if it is not already present.
+    ///
+    /// Returns `true` if the proxy was added.
+    #[inline]
+    pub fn push(&mut self, proxy_id: ProxyId) -> bool {
+        if self.indices.len() <= proxy_id.index() {
+            self.indices.resize(proxy_id.index() + 1, PROXY_NOT_PRESENT);
+        } else if self.indices[proxy_id.index()] != PROXY_NOT_PRESENT {
+            return false;
+        }
+
+        self.indices[proxy_id.index()] = self.proxies.len() as u32;
+        self.proxies.push(proxy_id);
+
+        true
+    }
+
+    /// Removes a proxy from the list. This may change the order of the remaining proxies.
+    ///
+    /// If the proxy is not present, nothing happens.
+    #[inline]
+    pub fn remove(&mut self, proxy_id: ProxyId) {
+        let Some(index) = self.indices.get_mut(proxy_id.index()) else {
+            return;
+        };
+        if *index == PROXY_NOT_PRESENT {
+            return;
+        }
+
+        let index = core::mem::replace(index, PROXY_NOT_PRESENT) as usize;
+        self.proxies.swap_remove(index);
+
+        // The proxy that was swapped into the removed slot needs its index updated.
+        if let Some(&swapped) = self.proxies.get(index) {
+            self.indices[swapped.index()] = index as u32;
+        }
+    }
+
+    /// Removes all proxies from the list.
+    #[inline]
+    pub fn clear(&mut self) {
+        for proxy_id in self.proxies.drain(..) {
+            self.indices[proxy_id.index()] = PROXY_NOT_PRESENT;
+        }
+    }
+}
+
+impl core::ops::Deref for MovedProxyList {
+    type Target = [ProxyId];
+
+    #[inline]
+    fn deref(&self) -> &[ProxyId] {
+        &self.proxies
+    }
 }
 
 /// A proxy representing a collider in the [`ColliderTree`].
@@ -125,14 +196,12 @@ impl ColliderTreeProxy {
 /// This stores temporary data structures and working memory used when modifying the tree.
 /// It is recommended to reuse a single instance of this struct for all operations on a tree
 /// to avoid unnecessary allocations.
-#[derive(Resource)]
+#[derive(Resource, Default)]
 pub struct ColliderTreeWorkspace {
     /// Builds the tree using PLOC (*Parallel, Locally Ordered Clustering*).
     pub ploc_builder: PlocBuilder,
     /// Restructures the BVH, optimizing node locations within the BVH hierarchy per SAH cost.
     pub reinsertion_optimizer: ReinsertionOptimizer,
-    /// A stack for tracking insertion candidates during proxy insertions.
-    pub insertion_stack: HeapStack<SiblingInsertionCandidate>,
     /// Temporary flagged nodes for partial rebuilds.
     pub temp_flags: Vec<bool>,
 }
@@ -142,18 +211,6 @@ impl Clone for ColliderTreeWorkspace {
         Self {
             ploc_builder: self.ploc_builder.clone(),
             reinsertion_optimizer: ReinsertionOptimizer::default(),
-            insertion_stack: self.insertion_stack.clone(),
-            temp_flags: Vec::new(),
-        }
-    }
-}
-
-impl Default for ColliderTreeWorkspace {
-    fn default() -> Self {
-        Self {
-            ploc_builder: PlocBuilder::default(),
-            reinsertion_optimizer: ReinsertionOptimizer::default(),
-            insertion_stack: HeapStack::new_with_capacity(2000),
             temp_flags: Vec::new(),
         }
     }
@@ -166,8 +223,7 @@ impl ColliderTree {
         let id = self.proxies.push(proxy) as u32;
 
         // Insert the proxy into the BVH.
-        self.bvh
-            .insert_primitive(aabb, id, &mut self.workspace.insertion_stack);
+        self.bvh.insert_primitive_greedy(aabb, id);
 
         // Add to moved proxies.
         self.moved_proxies.push(ProxyId::new(id));
@@ -185,12 +241,7 @@ impl ColliderTree {
             self.bvh.remove_primitive(proxy_id.id());
 
             // Remove from moved proxies.
-            for i in 0..self.moved_proxies.len() {
-                if self.moved_proxies[i] == proxy_id {
-                    self.moved_proxies.swap_remove(i);
-                    break;
-                }
-            }
+            self.moved_proxies.remove(proxy_id);
 
             Some(proxy)
         } else {

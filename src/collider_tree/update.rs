@@ -21,7 +21,7 @@ use bevy::{
         query::QueryFilter,
         system::{StaticSystemParam, SystemChangeTick},
     },
-    platform::collections::HashSet,
+    platform::collections::HashMap,
     prelude::*,
 };
 use obvhs::aabb::Aabb;
@@ -420,6 +420,7 @@ fn add_to_tree_on<E: EntityEvent, B: Bundle, F: QueryFilter>(
             Has<Sensor>,
             Has<CollisionEventsEnabled>,
             Option<&ActiveCollisionHooks>,
+            Has<RigidBody>,
         ),
         F,
     >,
@@ -436,10 +437,18 @@ fn add_to_tree_on<E: EntityEvent, B: Bundle, F: QueryFilter>(
         is_sensor,
         has_contact_events,
         active_hooks,
+        is_body,
     )) = collider_query.get_mut(entity)
     else {
         return;
     };
+
+    // If the collider is on the same entity as a rigid body but does not have `ColliderOf` yet,
+    // it is about to be inserted by the `ColliderHierarchyPlugin`. Adding it to the standalone tree
+    // here would just be undone, so we wait for the `ColliderOf` insertion instead.
+    if is_body && collider_of.is_none() && *proxy_key == ColliderTreeProxyKey::PLACEHOLDER {
+        return;
+    }
 
     let (tree_type, is_body_disabled) =
         if let Some(Ok((rb, disabled))) = collider_of.map(|c| body_query.get(c.body)) {
@@ -464,6 +473,18 @@ fn add_to_tree_on<E: EntityEvent, B: Bundle, F: QueryFilter>(
     if *proxy_key != ColliderTreeProxyKey::PLACEHOLDER {
         let old_tree_type = proxy_key.tree_type();
         let old_tree = trees.tree_for_type_mut(old_tree_type);
+
+        // If the collider is already in the right tree, update the existing proxy in place.
+        if old_tree_type == tree_type
+            && let Some(old_proxy) = old_tree.get_proxy_mut(proxy_key.id())
+        {
+            *old_proxy = proxy;
+            old_tree.resize_proxy_aabb(proxy_key.id(), Aabb::from(enlarged_aabb.get()));
+            moved_proxies.insert(*proxy_key);
+            old_tree.moved_proxies.push(proxy_key.id());
+            return;
+        }
+
         old_tree.remove_proxy(proxy_key.id());
         moved_proxies.remove(&proxy_key);
     }
@@ -520,8 +541,8 @@ struct LastDynamicKinematicAabbUpdate(Tick);
 pub struct MovedProxies {
     /// A vector of moved proxy keys.
     proxies: Vec<ColliderTreeProxyKey>,
-    /// A set of moved proxy keys for quick lookup.
-    set: HashSet<ColliderTreeProxyKey>,
+    /// Maps a moved proxy key to its index in `proxies`.
+    indices: HashMap<ColliderTreeProxyKey, u32>,
 }
 
 impl MovedProxies {
@@ -536,7 +557,7 @@ impl MovedProxies {
     /// Returns `true` if the proxy with the given key has moved.
     #[inline]
     pub fn contains(&self, proxy_key: ColliderTreeProxyKey) -> bool {
-        self.set.contains(&proxy_key)
+        self.indices.contains_key(&proxy_key)
     }
 
     /// Inserts a moved proxy key.
@@ -544,7 +565,8 @@ impl MovedProxies {
     /// Returns `true` if the proxy key was not already present.
     #[inline]
     pub fn insert(&mut self, proxy_key: ColliderTreeProxyKey) -> bool {
-        if self.set.insert(proxy_key) {
+        let index = self.proxies.len() as u32;
+        if self.indices.try_insert(proxy_key, index).is_ok() {
             self.proxies.push(proxy_key);
             true
         } else {
@@ -552,16 +574,21 @@ impl MovedProxies {
         }
     }
 
-    /// Removes a moved proxy key. This uses a linear search,
-    /// and may change the order of the remaining keys.
+    /// Removes a moved proxy key. This may change the order of the remaining keys.
     ///
     /// If the proxy key is not present, nothing happens.
     #[inline]
     pub fn remove(&mut self, proxy_key: &ColliderTreeProxyKey) {
-        if self.set.remove(proxy_key)
-            && let Some(pos) = self.proxies.iter().position(|k| k == proxy_key)
-        {
-            self.proxies.swap_remove(pos);
+        let Some(index) = self.indices.remove(proxy_key) else {
+            return;
+        };
+
+        let index = index as usize;
+        self.proxies.swap_remove(index);
+
+        // The key that was swapped into the removed slot needs its index updated.
+        if let Some(swapped) = self.proxies.get(index) {
+            self.indices.insert(*swapped, index as u32);
         }
     }
 
@@ -569,7 +596,7 @@ impl MovedProxies {
     #[inline]
     pub fn clear(&mut self) {
         self.proxies.clear();
-        self.set.clear();
+        self.indices.clear();
     }
 }
 

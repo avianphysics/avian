@@ -71,6 +71,122 @@ impl SweepHit {
     }
 }
 
+/// Finds the sibling with the cheapest SAH cost for `aabb` using a greedy top-down descent.
+fn find_sibling_greedy(bvh: &Bvh2, aabb: &Aabb) -> usize {
+    // This is based on `b2FindBestSibling` in Box2D by Erin Catto.
+
+    let center = aabb.center();
+    let area = aabb.half_area();
+
+    let root = &bvh.nodes[0];
+
+    // Area of current node
+    let mut area_base = root.aabb().half_area();
+
+    // Area of inflated node
+    let mut direct_cost = root.aabb().union(aabb).half_area();
+
+    // Area that pairing with the current node would add to all of its ancestors
+    let mut inherited_cost = 0.0;
+
+    let mut best_sibling = 0;
+    let mut best_cost = direct_cost;
+
+    let mut node_id = 0;
+
+    // Descend the tree from the root, following a single greedy path.
+    while !bvh.nodes[node_id].is_leaf() {
+        let left_id = bvh.nodes[node_id].first_index as usize;
+        let right_id = left_id + 1;
+
+        // Cost of creating a new parent for `aabb` and this node
+        let cost = direct_cost + inherited_cost;
+        if cost < best_cost {
+            best_sibling = node_id;
+            best_cost = cost;
+        }
+
+        // The children see the cost this node would inherit as well.
+        inherited_cost += direct_cost - area_base;
+
+        // Evaluate each child.
+        let mut evaluate = |child_id: usize| {
+            let child = &bvh.nodes[child_id];
+            let child_area = child.aabb().half_area();
+            let child_direct_cost = child.aabb().union(aabb).half_area();
+
+            if child.is_leaf() {
+                // Cost of creating a new parent for `aabb` and this child
+                let cost = child_direct_cost + inherited_cost;
+                if cost < best_cost {
+                    best_sibling = child_id;
+                    best_cost = cost;
+                }
+                (f32::MAX, child_area, child_direct_cost)
+            } else {
+                // The child is an internal node.
+                // Compute a lower bound on the cost of inserting anywhere in its subtree.
+                let lower_cost = inherited_cost + child_direct_cost + (area - child_area).min(0.0);
+                (lower_cost, child_area, child_direct_cost)
+            }
+        };
+
+        let (mut left_lower_cost, left_area, left_direct_cost) = evaluate(left_id);
+        let (mut right_lower_cost, right_area, right_direct_cost) = evaluate(right_id);
+
+        let left_is_leaf = bvh.nodes[left_id].is_leaf();
+        let right_is_leaf = bvh.nodes[right_id].is_leaf();
+
+        if left_is_leaf && right_is_leaf {
+            break;
+        }
+
+        // Neither subtree can beat the best sibling found so far.
+        if best_cost <= left_lower_cost && best_cost <= right_lower_cost {
+            break;
+        }
+
+        if left_lower_cost == right_lower_cost && !left_is_leaf {
+            // The bounds give no clear choice, which happens when both children
+            // fully contain `aabb`. Fall back to the child whose center is closest.
+            left_lower_cost = (bvh.nodes[left_id].aabb().center() - center).length_squared();
+            right_lower_cost = (bvh.nodes[right_id].aabb().center() - center).length_squared();
+        }
+
+        // Descend into the more promising child.
+        if left_lower_cost < right_lower_cost && !left_is_leaf {
+            node_id = left_id;
+            area_base = left_area;
+            direct_cost = left_direct_cost;
+        } else {
+            node_id = right_id;
+            area_base = right_area;
+            direct_cost = right_direct_cost;
+        }
+    }
+
+    best_sibling
+}
+
+/// Points the primitives of `node` at `node_id` as their new location in `Bvh2::nodes`.
+#[inline]
+fn update_primitives_to_nodes_for_node(
+    node: &Bvh2Node,
+    node_id: usize,
+    primitive_indices: &[u32],
+    primitives_to_nodes: &mut [u32],
+) {
+    // Copied from OBVHS
+    if !primitives_to_nodes.is_empty() {
+        let start = node.first_index;
+        let end = start + node.prim_count;
+        for node_prim_id in start..end {
+            let direct_prim_id = primitive_indices[node_prim_id as usize];
+            primitives_to_nodes[direct_prim_id as usize] = node_id as u32;
+        }
+    }
+}
+
 /// Extension trait for [`obvhs::bvh2::Bvh2`] to add additional traversal methods.
 pub trait Bvh2Ext {
     /// Traverse the BVH by sweeping an AABB along a velocity vector. Returns the closest intersected primitive.
@@ -189,9 +305,84 @@ pub trait Bvh2Ext {
         closest_leaf: &mut Option<(u32, f32)>,
         visit_fn: F,
     );
+
+    /// Inserts a primitive into the BVH, picking the sibling to pair it with using
+    /// a greedy top-down descent from the root.
+    ///
+    /// This is cheaper than [`Bvh2::insert_primitive`], but can leave the resulting tree
+    /// with slightly lower quality.
+    ///
+    /// Returns the index of the node the primitive was inserted into.
+    fn insert_primitive_greedy(&mut self, aabb: Aabb, primitive_id: u32) -> usize;
 }
 
 impl Bvh2Ext for Bvh2 {
+    fn insert_primitive_greedy(&mut self, aabb: Aabb, primitive_id: u32) -> usize {
+        self.init_primitives_to_nodes_if_uninit();
+        self.init_parents_if_uninit();
+
+        if self.primitives_to_nodes.len() <= primitive_id as usize {
+            self.primitives_to_nodes
+                .resize(primitive_id as usize + 1, INVALID_ID);
+        }
+
+        // Claim a slot in `primitive_indices` for the new primitive.
+        let first_index = if let Some(free_slot) = self.primitive_indices_freelist.pop() {
+            self.primitive_indices[free_slot as usize] = primitive_id;
+            free_slot
+        } else {
+            self.primitive_indices.push(primitive_id);
+            self.primitive_indices.len() as u32 - 1
+        };
+
+        let new_node = Bvh2Node::new(aabb, 1, first_index);
+
+        // If the BVH is empty, the new node becomes the root.
+        if self.nodes.is_empty() {
+            self.nodes.push(new_node);
+            self.parents.clear();
+            self.parents.push(0);
+            self.primitives_to_nodes[primitive_id as usize] = 0;
+            return 0;
+        }
+
+        // Find the sibling to pair the new node with.
+        let sibling_id = find_sibling_greedy(self, &aabb);
+        let sibling = self.nodes[sibling_id];
+
+        // To avoid gaps or rearranging the BVH, the new parent takes the sibling's slot,
+        // and the sibling and the new node are appended to the end of the node list.
+        let new_sibling_id = self.nodes.len() as u32;
+        self.nodes[sibling_id] = Bvh2Node::new(aabb.union(sibling.aabb()), 0, new_sibling_id);
+
+        if sibling.is_leaf() {
+            // Tell the sibling's primitives where their node went.
+            update_primitives_to_nodes_for_node(
+                &sibling,
+                new_sibling_id as usize,
+                &self.primitive_indices,
+                &mut self.primitives_to_nodes,
+            );
+        } else {
+            // Tell the sibling's children where their parent went.
+            self.parents[sibling.first_index as usize] = new_sibling_id;
+            self.parents[sibling.first_index as usize + 1] = new_sibling_id;
+        }
+
+        self.nodes.push(sibling);
+        let new_node_id = self.nodes.len();
+        self.nodes.push(new_node);
+        self.parents.push(sibling_id as u32);
+        self.parents.push(sibling_id as u32);
+
+        self.primitives_to_nodes[primitive_id as usize] = new_node_id as u32;
+
+        // Work up the tree updating the AABBs, since we just added a node.
+        self.refit_from_fast(sibling_id);
+
+        new_node_id
+    }
+
     #[inline(always)]
     fn sweep_traverse<F: FnMut(&Sweep, usize) -> f32>(
         &self,
