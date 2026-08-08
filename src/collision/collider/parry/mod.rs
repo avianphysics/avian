@@ -709,27 +709,32 @@ impl Collider {
         )
     }
 
-    /// Creates a collider with a compound shape defined by a given vector of colliders with a position and a rotation.
+    /// Creates a collider with a compound shape defined by a given vector of colliders
+    /// with their respective local transforms.
     ///
     /// Especially for dynamic rigid bodies, compound shape colliders should be preferred over triangle meshes and polylines,
     /// because convex shapes typically provide more reliable results.
     ///
     /// If you want to create a compound shape from a 3D triangle mesh or 2D polyline, consider using the
     /// [`Collider::convex_decomposition`] method.
-    pub fn compound(
-        shapes: Vec<(
-            impl Into<Position>,
-            impl Into<Rotation>,
-            impl Into<Collider>,
-        )>,
-    ) -> Self {
+    pub fn compound(shapes: impl IntoIterator<Item = (Collider, Isometry)>) -> Self {
         let shapes = shapes
             .into_iter()
-            .map(|(p, r, c)| {
-                (
-                    make_pose(p.into(), r.into()),
-                    c.into().shape_scaled().clone(),
-                )
+            .map(|(c, iso)| {
+                #[cfg(feature = "2d")]
+                {
+                    (
+                        make_pose(iso.translation.real(), iso.rotation),
+                        c.shape_scaled().clone(),
+                    )
+                }
+                #[cfg(feature = "3d")]
+                {
+                    (
+                        make_pose(Vector::from(iso.translation).real(), iso.rotation),
+                        c.shape_scaled().clone(),
+                    )
+                }
             })
             .collect::<Vec<_>>();
         SharedShape::compound(shapes).into()
@@ -1503,13 +1508,13 @@ impl Collider {
                 let shapes: Vec<_> =
                     ColliderConstructor::flatten_compound_constructors(compound_constructors)
                         .into_iter()
-                        .filter_map(|(position, rotation, collider_constructor)| {
+                        .filter_map(|(collider_constructor, transform)| {
                             Self::try_from_constructor(
                                 collider_constructor,
                                 #[cfg(feature = "collider-from-mesh")]
                                 mesh,
                             )
-                            .map(|collider| (position, rotation, collider))
+                            .map(|collider| (collider, transform))
                         })
                         .collect();
 
@@ -1769,29 +1774,24 @@ mod tests {
     fn test_flatten_compound_constructors() {
         let input = vec![
             (
-                Position(RVector::new(10.0, 0.0, 0.0)),
-                Rotation::default(),
                 ColliderConstructor::Sphere { radius: 1.0 },
+                Isometry3d::from_xyz(10.0, 0.0, 0.0),
             ),
             (
-                Position(RVector::new(5.0, 0.0, 0.0)),
-                Rotation::from(Quat::from_rotation_z(PI / 2.0)),
                 ColliderConstructor::Compound(vec![
                     (
-                        Position(RVector::new(2.0, 0.0, 0.0)),
-                        Rotation::from(Quat::from_rotation_y(PI)),
                         ColliderConstructor::Compound(vec![(
-                            Position(RVector::new(1.0, 0.0, 0.0)),
-                            Rotation::default(),
                             ColliderConstructor::Sphere { radius: 0.5 },
+                            Isometry3d::from_xyz(1.0, 0.0, 0.0),
                         )]),
+                        Isometry3d::new(Vec3::new(2.0, 0.0, 0.0), Quat::from_rotation_y(PI)),
                     ),
                     (
-                        Position(RVector::new(0.0, 3.0, 0.0)),
-                        Rotation::default(),
                         ColliderConstructor::Sphere { radius: 0.25 },
+                        Isometry3d::from_xyz(0.0, 3.0, 0.0),
                     ),
                 ]),
+                Isometry3d::new(Vec3::new(5.0, 0.0, 0.0), Quat::from_rotation_z(PI / 2.0)),
             ),
         ];
 
@@ -1804,18 +1804,18 @@ mod tests {
 
         // Top level colliders should remain unchanged
         assert_eq!(
-            unchanged_simple_sphere.0,
-            Position(RVector::new(10.0, 0.0, 0.0))
+            unchanged_simple_sphere.1.translation,
+            Vec3A::new(10.0, 0.0, 0.0)
         );
-        assert_eq!(unchanged_simple_sphere.1, Rotation::default());
+        assert_eq!(unchanged_simple_sphere.1.rotation, Quat::IDENTITY);
 
         // Grandchild local position: (1, 0, 0)
         // 1. Apply parent's 180 Y rotation -> (-1, 0, 0)
         // 2. Add parent's position (2, 0, 0) -> (1, 0, 0)
         // 3. Apply grandparent's 90 Z rotation -> (0, 1, 0)
         // 4. Add grandparent's position (5, 0, 0) -> (5, 1, 0)
-        let expected_grandchild_world_pos = RVector::new(5.0, 1.0, 0.0);
-        let actual_grandchild_world_pos = flattened_grandchild.0.0;
+        let expected_grandchild_world_pos = Vec3A::new(5.0, 1.0, 0.0);
+        let actual_grandchild_world_pos = flattened_grandchild.1.translation;
 
         assert_relative_eq!(
             actual_grandchild_world_pos.x,
@@ -1836,8 +1836,8 @@ mod tests {
         // Sibling local position: (0, 3, 0)
         // 1. Apply parent's 90 Z rotation -> (-3, 0, 0)
         // 2. Add parent's position (5, 0, 0) -> (2, 0, 0)
-        let expected_sibling_world_pos = RVector::new(2.0, 0.0, 0.0);
-        let actual_sibling_world_pos = flattened_sibling.0.0;
+        let expected_sibling_world_pos = Vec3A::new(2.0, 0.0, 0.0);
+        let actual_sibling_world_pos = flattened_sibling.1.translation;
 
         assert_relative_eq!(
             actual_sibling_world_pos.x,

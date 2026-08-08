@@ -58,7 +58,7 @@ use parry::query::ShapeCastOptions;
 /// ```
 #[derive(SystemParam)]
 pub struct SpatialQuery<'w, 's> {
-    colliders: Query<'w, 's, (&'static Position, &'static Rotation, &'static Collider)>,
+    colliders: Query<'w, 's, (&'static PhysicsTransform, &'static Collider)>,
     aabbs: Query<'w, 's, &'static ColliderAabb>,
     collider_trees: Res<'w, ColliderTrees>,
 }
@@ -193,13 +193,13 @@ impl SpatialQuery<'_, '_> {
                     return f32::MAX;
                 }
 
-                let Ok((position, rotation, collider)) = self.colliders.get(proxy.collider) else {
+                let Ok((transform, collider)) = self.colliders.get(proxy.collider) else {
                     return f32::MAX;
                 };
 
                 let Some((distance, normal)) = collider.cast_ray(
-                    position.0,
-                    *rotation,
+                    transform.translation,
+                    transform.rotation,
                     origin,
                     *direction,
                     max_distance,
@@ -370,13 +370,13 @@ impl SpatialQuery<'_, '_> {
                     return true;
                 }
 
-                let Ok((position, rotation, collider)) = self.colliders.get(proxy.collider) else {
+                let Ok((transform, collider)) = self.colliders.get(proxy.collider) else {
                     return true;
                 };
 
                 let Some((distance, normal)) = collider.cast_ray(
-                    position.0,
-                    *rotation,
+                    transform.translation,
+                    transform.rotation,
                     origin,
                     *direction,
                     max_distance,
@@ -550,12 +550,11 @@ impl SpatialQuery<'_, '_> {
                         return f32::MAX;
                     }
 
-                    let Ok((position, rotation, collider)) = self.colliders.get(proxy.collider)
-                    else {
+                    let Ok((transform, collider)) = self.colliders.get(proxy.collider) else {
                         return f32::MAX;
                     };
 
-                    let pose1 = make_pose(position.0, *rotation);
+                    let pose1 = make_pose(transform.translation, transform.rotation);
                     let pose2 = make_pose(origin, shape_rotation);
 
                     let Ok(Some(hit)) = parry::query::cast_shapes(
@@ -766,12 +765,11 @@ impl SpatialQuery<'_, '_> {
                         return true;
                     }
 
-                    let Ok((position, rotation, collider)) = self.colliders.get(proxy.collider)
-                    else {
+                    let Ok((transform, collider)) = self.colliders.get(proxy.collider) else {
                         return true;
                     };
 
-                    let pose1 = make_pose(position.0, *rotation);
+                    let pose1 = make_pose(transform.translation, transform.rotation);
                     let pose2 = make_pose(origin, shape_rotation);
 
                     let Ok(Some(hit)) = parry::query::cast_shapes(
@@ -795,7 +793,7 @@ impl SpatialQuery<'_, '_> {
                     let toi = hit.time_of_impact.f32();
                     callback(ShapeHitData {
                         entity: proxy.collider,
-                        point1: position.0 + rotation.real() * hit.witness1,
+                        point1: transform * hit.witness1,
                         point2: pose2 * hit.witness2 + (direction * toi).real(),
                         normal1: (pose1.rotation * hit.normal1).f32(),
                         normal2: (pose2.rotation * hit.normal2).f32(),
@@ -910,12 +908,12 @@ impl SpatialQuery<'_, '_> {
                     return f32::INFINITY;
                 }
 
-                let Ok((position, rotation, collider)) = self.colliders.get(proxy.collider) else {
+                let Ok((transform, collider)) = self.colliders.get(proxy.collider) else {
                     return f32::INFINITY;
                 };
 
                 let (projection, is_inside) =
-                    collider.project_point(position.0, *rotation, point, solid);
+                    collider.project_point(transform.translation, transform.rotation, point, solid);
 
                 let distance_squared = (projection - point).length_squared().f32();
                 if distance_squared < closest_distance_squared {
@@ -1030,11 +1028,11 @@ impl SpatialQuery<'_, '_> {
                     return true;
                 }
 
-                let Ok((position, rotation, collider)) = self.colliders.get(proxy.collider) else {
+                let Ok((transform, collider)) = self.colliders.get(proxy.collider) else {
                     return true;
                 };
 
-                if collider.contains_point(position.0, *rotation, point) {
+                if collider.contains_point(transform.translation, transform.rotation, point) {
                     callback(proxy.collider)
                 } else {
                     true
@@ -1260,14 +1258,14 @@ impl SpatialQuery<'_, '_> {
                     return true;
                 }
 
-                let Ok((position, rotation, collider)) = self.colliders.get(proxy.collider) else {
+                let Ok((transform, collider)) = self.colliders.get(proxy.collider) else {
                     return true;
                 };
 
                 if contact_query::intersection_test(
                     collider,
-                    position.0,
-                    *rotation,
+                    transform.translation,
+                    transform.rotation,
                     shape,
                     shape_position,
                     shape_rotation,

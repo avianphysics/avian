@@ -265,8 +265,7 @@ use derive_more::From;
 #[require(
     // TODO: Only dynamic and kinematic bodies need velocity,
     //       and only dynamic bodies need mass and angular inertia.
-    Position::PLACEHOLDER,
-    Rotation::PLACEHOLDER,
+    PhysicsTransform::PLACEHOLDER,
     LinearVelocity,
     AngularVelocity,
     ComputedMass,

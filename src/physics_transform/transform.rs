@@ -2,107 +2,379 @@
 
 #![allow(clippy::unnecessary_cast)]
 
+#[cfg(feature = "3d")]
+use crate::math::QuatExt;
+#[cfg(feature = "2d")]
+use crate::math::Rot2Ext;
 use crate::{math::Real, physics_transform::PhysicsTransformConfig, prelude::*};
 use bevy::{
     ecs::{lifecycle::HookContext, world::DeferredWorld},
     prelude::*,
 };
+use core::ops::*;
 use derive_more::From;
 
-/// The global position of a [rigid body](RigidBody) or a [collider](Collider).
+/// The global physics transform of a [rigid body](RigidBody) or a [collider](Collider).
 ///
-/// # Relation to `Transform` and `GlobalTransform`
+/// # Large Worlds
 ///
-/// [`Position`] is used for physics internally and kept in sync with [`Transform`]
-/// by the [`PhysicsTransformPlugin`]. It rarely needs to be used directly in your own code, as [`Transform`] can still
-/// be used for almost everything. Using [`Position`] should only be required for managing positions
-/// in systems running in the [`SubstepSchedule`]. However, if you prefer, you can also use [`Position`]
-/// for everything.
+/// By default, Avian uses single-precision floating point numbers (`f32`).
+/// However, for large worlds, it is possible to enable double-precision support
+/// for world-space coordinates by enabling the `f64` feature.
 ///
-/// The reasons why the engine uses a separate [`Position`] component can be found
-/// [here](crate#why-are-there-separate-position-and-rotation-components).
+/// For the [`PhysicsTransform`], the translation is stored as an [`RVector`],
+/// whose underlying type is chosen as follows:
 ///
-/// # Example
+/// | Precision | 2D        | 3D        |
+/// |-----------|-----------|-----------|
+/// | `f32`     | [`Vec2`]  | [`Vec3`]  |
+/// | `f64`     | [`DVec2`] | [`DVec3`] |
 ///
-/// ```
-#[cfg_attr(feature = "2d", doc = "use avian2d::prelude::*;")]
-#[cfg_attr(feature = "3d", doc = "use avian3d::prelude::*;")]
-/// use bevy::prelude::*;
+/// While the translation can be stored in double-precision when the `f64`
+/// feature is enabled, the rotation is always stored in single-precision,
+/// since its precision does not depend on the distance from the origin.
 ///
-/// fn setup(mut commands: Commands) {
-///     commands.spawn((
-///         RigidBody::Dynamic,
-#[cfg_attr(feature = "2d", doc = "         Position::from_xy(0.0, 20.0),")]
-#[cfg_attr(feature = "3d", doc = "         Position::from_xyz(0.0, 2.0, 0.0),")]
-///     ));
-/// }
-/// ```
-#[derive(Reflect, Clone, Copy, Component, Debug, Default, Deref, DerefMut, PartialEq, From)]
+/// See the [crate-level documentation](crate#large-worlds) for more information
+/// on large worlds and the `f64` feature.
+///
+/// [`DVec2`]: bevy::math::DVec2
+/// [`DVec3`]: bevy::math::DVec3
+#[derive(Component, Clone, Copy, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
-#[reflect(Debug, Component, Default, PartialEq)]
-pub struct Position(pub RVector);
+#[reflect(Component, Debug, Default, PartialEq)]
+pub struct PhysicsTransform {
+    /// The global translation of a [rigid body](RigidBody) or a [collider](Collider).
+    pub translation: RVector,
+    /// The global rotation of a [rigid body](RigidBody) or a [collider](Collider).
+    pub rotation: Rot,
+}
 
-impl Position {
-    /// A placeholder position. This is an invalid position and should *not*
-    /// be used to an actually position entities in the world, but can be used
-    /// to indicate that a position has not yet been initialized.
-    pub const PLACEHOLDER: Self = Self(RVector::MAX);
+impl PhysicsTransform {
+    /// Identity transform representing no translation and no rotation.
+    pub const IDENTITY: Self = Self {
+        translation: RVector::ZERO,
+        rotation: Rot::IDENTITY,
+    };
 
-    /// Creates a [`Position`] component with the given global `position`.
-    pub fn new(position: RVector) -> Self {
-        Self(position)
+    /// A placeholder transform. This is an invalid transform and should *not*
+    /// be used to an actually position or rotate entities in the world, but can be used
+    /// to indicate that a transform has not yet been initialized.
+    pub const PLACEHOLDER: Self = Self {
+        translation: RVector::MAX,
+        #[cfg(feature = "2d")]
+        rotation: Rot2 {
+            cos: f32::MAX,
+            sin: f32::MAX,
+        },
+        #[cfg(feature = "3d")]
+        rotation: Quat::from_xyzw(f32::MAX, f32::MAX, f32::MAX, f32::MAX),
+    };
+
+    /// Creates a new [`PhysicsTransform`] with the given `translation` and `rotation`.
+    #[inline(always)]
+    pub const fn new(translation: RVector, rotation: Rot) -> Self {
+        Self {
+            translation,
+            rotation,
+        }
     }
 
-    /// Creates a [`Position`] component with the global position `(x, y)`.
+    /// Creates a new [`PhysicsTransform`] with the given `translation` and no rotation.
+    #[inline(always)]
+    pub const fn from_translation(translation: RVector) -> Self {
+        Self {
+            translation,
+            rotation: Rot::IDENTITY,
+        }
+    }
+
+    /// Creates a new [`PhysicsTransform`] with the given `x` and `y` coordinates and no rotation.
     #[cfg(feature = "2d")]
-    pub fn from_xy(x: Real, y: Real) -> Self {
-        Self(RVector::new(x, y))
+    #[inline(always)]
+    pub const fn from_xy(x: Real, y: Real) -> Self {
+        Self {
+            translation: RVector::new(x, y),
+            rotation: Rot::IDENTITY,
+        }
     }
 
-    /// Creates a [`Position`] component with the global position `(x, y, z)`.
+    /// Creates a new [`PhysicsTransform`] with the given `x`, `y`, and `z` coordinates and no rotation.
     #[cfg(feature = "3d")]
-    pub fn from_xyz(x: Real, y: Real, z: Real) -> Self {
-        Self(RVector::new(x, y, z))
+    #[inline(always)]
+    pub const fn from_xyz(x: Real, y: Real, z: Real) -> Self {
+        Self {
+            translation: RVector::new(x, y, z),
+            rotation: Rot::IDENTITY,
+        }
+    }
+
+    /// Creates a new [`PhysicsTransform`] with the given `rotation` and no translation.
+    #[inline(always)]
+    pub const fn from_rotation(rotation: Rot) -> Self {
+        Self {
+            translation: RVector::ZERO,
+            rotation,
+        }
+    }
+
+    /// Returns `true` if both the translation and rotation are neither infinite nor NaN.
+    #[inline]
+    pub fn is_finite(&self) -> bool {
+        self.translation.is_finite() && self.rotation.is_finite()
+    }
+
+    /// Returns the inverse of the [`PhysicsTransform`].
+    #[inline]
+    pub fn inverse(&self) -> Self {
+        let inv_rotation = self.rotation.inverse();
+        Self {
+            translation: inv_rotation.real() * -self.translation,
+            rotation: inv_rotation,
+        }
+    }
+
+    /// Computes `self.inverse() * other` in a more efficient way for one-off calculations.
+    ///
+    /// If the same inverse is needed multiple times, it is more efficient
+    /// to invert `self` once and then use that for each transformation.
+    #[inline]
+    pub fn inverse_mul(&self, other: &Self) -> Self {
+        let inv_rotation = self.rotation.inverse();
+        Self {
+            translation: inv_rotation.real() * (other.translation - self.translation),
+            rotation: inv_rotation * other.rotation,
+        }
+    }
+
+    /// Transforms a point by rotating and then translating it by `self`.
+    #[inline]
+    pub fn transform_point(&self, point: RVector) -> RVector {
+        self.rotation.real() * point + self.translation
+    }
+
+    /// Transforms a point by rotating and then translating it by the inverse of `self`,
+    /// in a more efficient way than `self.inverse().transform_point(point)`.
+    ///
+    /// If the same inverse is needed multiple times, it is more efficient
+    /// to invert `self` once and then use that for each transformation.
+    #[inline]
+    pub fn inverse_transform_point(&self, point: RVector) -> RVector {
+        let inv_rotation = self.rotation.inverse();
+        inv_rotation.real() * (point - self.translation)
     }
 }
 
-impl From<GlobalTransform> for Position {
-    #[cfg(feature = "2d")]
-    fn from(value: GlobalTransform) -> Self {
-        Self::from_xy(value.translation().x.real(), value.translation().y.real())
-    }
-
-    #[cfg(feature = "3d")]
-    fn from(value: GlobalTransform) -> Self {
-        Self::from_xyz(
-            value.translation().x.real(),
-            value.translation().y.real(),
-            value.translation().z.real(),
-        )
+impl Default for PhysicsTransform {
+    #[inline(always)]
+    fn default() -> Self {
+        Self::IDENTITY
     }
 }
 
-impl From<&GlobalTransform> for Position {
-    #[cfg(feature = "2d")]
-    fn from(value: &GlobalTransform) -> Self {
-        Self::from_xy(value.translation().x.real(), value.translation().y.real())
-    }
-
-    #[cfg(feature = "3d")]
-    fn from(value: &GlobalTransform) -> Self {
-        Self::from_xyz(
-            value.translation().x.real(),
-            value.translation().y.real(),
-            value.translation().z.real(),
-        )
+impl From<Isometry> for PhysicsTransform {
+    #[inline]
+    fn from(isometry: Isometry) -> Self {
+        Self {
+            #[cfg(feature = "2d")]
+            translation: isometry.translation.real(),
+            #[cfg(feature = "3d")]
+            translation: Vec3::from(isometry.translation).real(),
+            rotation: isometry.rotation,
+        }
     }
 }
 
-impl Ease for Position {
+impl From<PhysicsTransform> for Isometry {
+    #[inline]
+    fn from(transform: PhysicsTransform) -> Self {
+        Self {
+            #[cfg(feature = "2d")]
+            translation: transform.translation.f32(),
+            #[cfg(feature = "3d")]
+            translation: transform.translation.f32().into(),
+            rotation: transform.rotation,
+        }
+    }
+}
+
+impl From<(RVector, Rot)> for PhysicsTransform {
+    #[inline]
+    fn from((translation, rotation): (RVector, Rot)) -> Self {
+        Self {
+            translation,
+            rotation,
+        }
+    }
+}
+
+impl From<PhysicsTransform> for (RVector, Rot) {
+    #[inline]
+    fn from(transform: PhysicsTransform) -> Self {
+        (transform.translation, transform.rotation)
+    }
+}
+
+impl From<Transform> for PhysicsTransform {
+    #[inline]
+    fn from(transform: Transform) -> Self {
+        Self {
+            #[cfg(feature = "2d")]
+            translation: transform.translation.truncate().real(),
+            #[cfg(feature = "3d")]
+            translation: transform.translation.real(),
+            rotation: Rot::from_quat(transform.rotation),
+        }
+    }
+}
+
+impl From<GlobalTransform> for PhysicsTransform {
+    #[inline]
+    fn from(transform: GlobalTransform) -> Self {
+        Self::from(&transform)
+    }
+}
+
+impl From<&GlobalTransform> for PhysicsTransform {
+    #[inline]
+    fn from(transform: &GlobalTransform) -> Self {
+        let (_, rotation, translation) = transform.to_scale_rotation_translation();
+        Self {
+            #[cfg(feature = "2d")]
+            translation: translation.truncate().real(),
+            #[cfg(feature = "3d")]
+            translation: translation.real(),
+            rotation: Rot::from_quat(rotation),
+        }
+    }
+}
+
+impl Mul for PhysicsTransform {
+    type Output = Self;
+
+    #[inline]
+    fn mul(self, rhs: Self) -> Self::Output {
+        Self {
+            translation: self.rotation.real() * rhs.translation + self.translation,
+            rotation: self.rotation * rhs.rotation,
+        }
+    }
+}
+
+impl Mul<&Self> for PhysicsTransform {
+    type Output = Self;
+
+    #[inline]
+    fn mul(self, rhs: &Self) -> Self::Output {
+        Self {
+            translation: self.rotation.real() * rhs.translation + self.translation,
+            rotation: self.rotation * rhs.rotation,
+        }
+    }
+}
+
+impl Mul<PhysicsTransform> for &PhysicsTransform {
+    type Output = PhysicsTransform;
+
+    #[inline]
+    fn mul(self, rhs: PhysicsTransform) -> Self::Output {
+        PhysicsTransform {
+            translation: self.rotation.real() * rhs.translation + self.translation,
+            rotation: self.rotation * rhs.rotation,
+        }
+    }
+}
+
+impl Mul<&PhysicsTransform> for &PhysicsTransform {
+    type Output = PhysicsTransform;
+
+    #[inline]
+    fn mul(self, rhs: &PhysicsTransform) -> Self::Output {
+        PhysicsTransform {
+            translation: self.rotation.real() * rhs.translation + self.translation,
+            rotation: self.rotation * rhs.rotation,
+        }
+    }
+}
+
+impl MulAssign for PhysicsTransform {
+    #[inline]
+    fn mul_assign(&mut self, rhs: Self) {
+        *self = *self * rhs;
+    }
+}
+
+impl Mul<RVector> for PhysicsTransform {
+    type Output = RVector;
+
+    #[inline]
+    fn mul(self, rhs: RVector) -> Self::Output {
+        self.transform_point(rhs)
+    }
+}
+
+#[cfg(feature = "f64")]
+impl Mul<Vector> for PhysicsTransform {
+    type Output = RVector;
+
+    #[inline]
+    fn mul(self, rhs: Vector) -> Self::Output {
+        self.translation + (self.rotation * rhs).real()
+    }
+}
+
+impl Mul<RVector> for &PhysicsTransform {
+    type Output = RVector;
+
+    #[inline]
+    fn mul(self, rhs: RVector) -> Self::Output {
+        self.transform_point(rhs)
+    }
+}
+
+#[cfg(feature = "f64")]
+impl Mul<Vector> for &PhysicsTransform {
+    type Output = RVector;
+
+    #[inline]
+    fn mul(self, rhs: Vector) -> Self::Output {
+        self.translation + (self.rotation * rhs).real()
+    }
+}
+
+impl Mul<RVector> for &mut PhysicsTransform {
+    type Output = RVector;
+
+    #[inline]
+    fn mul(self, rhs: RVector) -> Self::Output {
+        self.transform_point(rhs)
+    }
+}
+
+#[cfg(feature = "f64")]
+impl Mul<Vector> for &mut PhysicsTransform {
+    type Output = RVector;
+
+    #[inline]
+    fn mul(self, rhs: Vector) -> Self::Output {
+        self.translation + (self.rotation * rhs).real()
+    }
+}
+
+impl Mul<Dir> for PhysicsTransform {
+    type Output = Dir;
+
+    #[inline]
+    fn mul(self, rhs: Dir) -> Self::Output {
+        self.rotation * rhs
+    }
+}
+
+impl Ease for PhysicsTransform {
     fn interpolating_curve_unbounded(start: Self, end: Self) -> impl Curve<Self> {
-        FunctionCurve::new(Interval::UNIT, move |t| {
-            Position(RVector::lerp(start.0, end.0, t as Real))
+        FunctionCurve::new(Interval::UNIT, move |t| PhysicsTransform {
+            translation: RVector::lerp(start.translation, end.translation, t as Real),
+            rotation: Rot::slerp(start.rotation, end.rotation, t),
         })
     }
 }
@@ -121,983 +393,30 @@ pub struct PreSolveDeltaPosition(pub Vector);
 #[reflect(Debug, Component, Default, PartialEq)]
 pub struct PreSolveDeltaRotation(pub Rot);
 
-/// The global counterclockwise physics rotation of a [rigid body](RigidBody)
-/// or a [collider](Collider) in radians.
-///
-/// The rotation angle is wrapped to be within the `(-pi, pi]` range.
-///
-/// # Relation to `Transform` and `GlobalTransform`
-///
-/// [`Rotation`] is used for physics internally and kept in sync with `[Transform`]
-/// by the [`PhysicsTransformPlugin`]. It rarely needs to be used directly in your own code, as `[Transform`] can still
-/// be used for almost everything. Using [`Rotation`] should only be required for managing rotations
-/// in systems running in the [`SubstepSchedule`], but if you prefer, you can also use [`Rotation`]
-/// for everything.
-///
-/// The reasons why the engine uses a separate [`Rotation`] component can be found
-/// [here](crate#why-are-there-separate-position-and-rotation-components).
-///
-/// # Example
-///
-/// ```
-/// use avian2d::prelude::*;
-/// use bevy::prelude::*;
-///
-/// fn setup(mut commands: Commands) {
-///     // Spawn a dynamic rigid body rotated by 90 degrees
-///     commands.spawn((RigidBody::Dynamic, Rotation::degrees(90.0)));
-/// }
-/// ```
-#[derive(Reflect, Clone, Copy, Component, Debug, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
-#[reflect(Debug, Component, PartialEq)]
-#[cfg(feature = "2d")]
-pub struct Rotation {
-    /// The cosine of the rotation angle in radians.
-    ///
-    /// This is the real part of the unit complex number representing the rotation.
-    pub cos: f32,
-    /// The sine of the rotation angle in radians.
-    ///
-    /// This is the imaginary part of the unit complex number representing the rotation.
-    pub sin: f32,
-}
-
-#[cfg(feature = "2d")]
-impl Default for Rotation {
-    fn default() -> Self {
-        Self::IDENTITY
-    }
-}
-
-#[cfg(feature = "2d")]
-impl Rotation {
-    /// A placeholder rotation. This is an invalid rotation and should *not*
-    /// be used to an actually rotate entities in the world, but can be used
-    /// to indicate that a rotation has not yet been initialized.
-    pub const PLACEHOLDER: Self = Self {
-        cos: f32::MAX,
-        sin: f32::MAX,
-    };
-
-    /// No rotation.
-    pub const IDENTITY: Self = Self { cos: 1.0, sin: 0.0 };
-
-    /// A rotation of π radians.
-    pub const PI: Self = Self {
-        cos: -1.0,
-        sin: 0.0,
-    };
-
-    /// A counterclockwise rotation of π/2 radians.
-    pub const FRAC_PI_2: Self = Self { cos: 0.0, sin: 1.0 };
-
-    /// A counterclockwise rotation of π/3 radians.
-    pub const FRAC_PI_3: Self = Self {
-        cos: 0.5,
-        sin: 0.866_025_4,
-    };
-
-    /// A counterclockwise rotation of π/4 radians.
-    pub const FRAC_PI_4: Self = Self {
-        cos: core::f32::consts::FRAC_1_SQRT_2,
-        sin: core::f32::consts::FRAC_1_SQRT_2,
-    };
-
-    /// A counterclockwise rotation of π/6 radians.
-    pub const FRAC_PI_6: Self = Self {
-        cos: 0.866_025_4,
-        sin: 0.5,
-    };
-
-    /// A counterclockwise rotation of π/8 radians.
-    pub const FRAC_PI_8: Self = Self {
-        cos: 0.923_879_5,
-        sin: 0.382_683_43,
-    };
-
-    /// Creates a [`Rotation`] from a counterclockwise angle in radians.
-    #[inline]
-    pub fn radians(radians: f32) -> Self {
-        #[cfg(feature = "enhanced-determinism")]
-        let (sin, cos) = (libm::sinf(radians), libm::cosf(radians));
-        #[cfg(not(feature = "enhanced-determinism"))]
-        let (sin, cos) = radians.sin_cos();
-
-        Self::from_sin_cos(sin, cos)
-    }
-
-    /// Creates a [`Rotation`] from a counterclockwise angle in degrees.
-    #[inline]
-    pub fn degrees(degrees: f32) -> Self {
-        Self::radians(degrees.to_radians())
-    }
-
-    /// Creates a [`Rotation`] from radians.
-    #[deprecated(note = "renamed to just `radians` to match Bevy")]
-    pub fn from_radians(radians: f32) -> Self {
-        Self::radians(radians)
-    }
-
-    /// Creates a [`Rotation`] from degrees.
-    #[deprecated(note = "renamed to just `degrees` to match Bevy")]
-    pub fn from_degrees(degrees: f32) -> Self {
-        Self::degrees(degrees)
-    }
-
-    /// Creates a [`Rotation`] from the sine and cosine of an angle in radians.
-    ///
-    /// The rotation is only valid if `sin * sin + cos * cos == 1.0`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `sin * sin + cos * cos != 1.0` when `debug_assertions` are enabled.
-    #[inline]
-    pub fn from_sin_cos(sin: f32, cos: f32) -> Self {
-        let rotation = Self { sin, cos };
-        debug_assert!(
-            rotation.is_normalized(),
-            "the given sine and cosine produce an invalid rotation: {rotation:?}"
-        );
-        rotation
-    }
-
-    /// Returns the rotation in radians in the `(-pi, pi]` range.
-    #[inline]
-    pub fn as_radians(self) -> f32 {
-        #[cfg(feature = "enhanced-determinism")]
-        {
-            libm::atan2f(self.sin, self.cos)
-        }
-        #[cfg(not(feature = "enhanced-determinism"))]
-        {
-            f32::atan2(self.sin, self.cos)
-        }
-    }
-
-    /// Returns the rotation in degrees in the `(-180, 180]` range.
-    #[inline]
-    pub fn as_degrees(self) -> f32 {
-        self.as_radians().to_degrees()
-    }
-
-    /// Returns the sine and cosine of the rotation angle in radians.
-    #[inline]
-    pub const fn sin_cos(self) -> (f32, f32) {
-        (self.sin, self.cos)
-    }
-
-    /// Computes the length or norm of the complex number used to represent the rotation.
-    ///
-    /// The length is typically expected to be `1.0`. Unexpectedly denormalized rotations
-    /// can be a result of incorrect construction or floating point error caused by
-    /// successive operations.
-    #[inline]
-    #[doc(alias = "norm")]
-    pub fn length(self) -> f32 {
-        Vec2::new(self.sin, self.cos).length()
-    }
-
-    /// Computes the squared length or norm of the complex number used to represent the rotation.
-    ///
-    /// This is generally faster than [`Rotation::length()`], as it avoids a square
-    /// root operation.
-    ///
-    /// The length is typically expected to be `1.0`. Unexpectedly denormalized rotations
-    /// can be a result of incorrect construction or floating point error caused by
-    /// successive operations.
-    #[inline]
-    #[doc(alias = "norm2")]
-    pub fn length_squared(self) -> f32 {
-        Vec2::new(self.sin, self.cos).length_squared()
-    }
-
-    /// Computes `1.0 / self.length()`.
-    ///
-    /// For valid results, `self` must _not_ have a length of zero.
-    #[inline]
-    pub fn length_recip(self) -> f32 {
-        Vec2::new(self.sin, self.cos).length_recip()
-    }
-
-    /// Computes the chord length of the rotation, which is the straight-line
-    /// distance between the start and end points of the rotation on a unit circle.
-    #[inline]
-    pub fn chord_length(self) -> f32 {
-        // The chord length traveled by a point rotated by `θ` on a unit circle
-        // is `2 * sin(θ / 2)`.
-        //
-        // In 2D, `2 * sin(θ / 2) = sqrt(2 * (1 - cos(θ)))`, using the stored cosine.
-        //
-        // TODO: A "2D quaternion" that stores cos(theta / 2) and sin(theta / 2)
-        //       could avoid the sqrt and be more accurate in some places.
-        (2.0 * (1.0 - self.cos)).max(0.0).sqrt()
-    }
-
-    /// Returns `self` with a length of `1.0` if possible, and `None` otherwise.
-    ///
-    /// `None` will be returned if the sine and cosine of `self` are both zero (or very close to zero),
-    /// or if either of them is NaN or infinite.
-    ///
-    /// Note that [`Rotation`] should typically already be normalized by design.
-    /// Manual normalization is only needed when successive operations result in
-    /// accumulated floating point error, or if the rotation was constructed
-    /// with invalid values.
-    #[inline]
-    #[must_use]
-    pub fn try_normalize(self) -> Option<Self> {
-        let recip = self.length_recip();
-        if recip.is_finite() && recip > 0.0 {
-            Some(Self::from_sin_cos(self.sin * recip, self.cos * recip))
-        } else {
-            None
-        }
-    }
-
-    /// Returns `self` with a length of `1.0`.
-    ///
-    /// Note that [`Rotation`] should typically already be normalized by design.
-    /// Manual normalization is only needed when successive operations result in
-    /// accumulated floating point error, or if the rotation was constructed
-    /// with invalid values.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `self` has a length of zero, NaN, or infinity when debug assertions are enabled.
-    #[inline]
-    #[must_use]
-    pub fn normalize(self) -> Self {
-        let length_recip = self.length_recip();
-        Self::from_sin_cos(self.sin * length_recip, self.cos * length_recip)
-    }
-
-    /// Returns `self` after an approximate normalization,
-    /// assuming the value is already nearly normalized.
-    /// Useful for preventing numerical error accumulation.
-    #[inline]
-    #[must_use]
-    pub fn fast_renormalize(self) -> Self {
-        // First-order Tayor approximation
-        // 1/L = (L^2)^(-1/2) ≈ 1 - (L^2 - 1) / 2 = (3 - L^2) / 2
-        let length_squared = self.length_squared();
-        let approx_inv_length = 0.5 * (3.0 - length_squared);
-        Self::from_sin_cos(self.sin * approx_inv_length, self.cos * approx_inv_length)
-    }
-
-    /// Returns `true` if the rotation is neither infinite nor NaN.
-    #[inline]
-    pub fn is_finite(self) -> bool {
-        self.sin.is_finite() && self.cos.is_finite()
-    }
-
-    /// Returns `true` if the rotation is NaN.
-    #[inline]
-    pub fn is_nan(self) -> bool {
-        self.sin.is_nan() || self.cos.is_nan()
-    }
-
-    /// Returns whether `self` has a length of `1.0` or not.
-    ///
-    /// Uses a precision threshold of approximately `1e-4`.
-    #[inline]
-    pub fn is_normalized(self) -> bool {
-        // The allowed length is 1 +/- 1e-4, so the largest allowed
-        // squared length is (1 + 1e-4)^2 = 1.00020001, which makes
-        // the threshold for the squared length approximately 2e-4.
-        (self.length_squared() - 1.0).abs() <= 2e-4
-    }
-
-    /// Returns `true` if the rotation is near [`Rotation::IDENTITY`].
-    #[inline]
-    pub fn is_near_identity(self) -> bool {
-        // Same as `Quat::is_near_identity`, but using sine and cosine
-        let threshold_angle_sin = 0.000_049_692_047; // let threshold_angle = 0.002_847_144_6;
-        self.cos > 0.0 && self.sin.abs() < threshold_angle_sin
-    }
-
-    /// Returns the angle in radians needed to make `self` and `other` coincide.
-    #[inline]
-    pub fn angle_between(self, other: Self) -> f32 {
-        (other * self.inverse()).as_radians()
-    }
-
-    /// Returns the inverse of the rotation. This is also the conjugate
-    /// of the unit complex number representing the rotation.
-    #[inline]
-    #[must_use]
-    #[doc(alias = "conjugate")]
-    pub fn inverse(self) -> Self {
-        Self {
-            cos: self.cos,
-            sin: -self.sin,
-        }
-    }
-
-    #[inline]
-    #[must_use]
-    /// Adds the given counterclockiwise angle in radians to the [`Rotation`].
-    /// Uses small-angle approximation
-    pub fn add_angle_fast(&self, radians: f32) -> Self {
-        let (sin, cos) = (self.sin + radians * self.cos, self.cos - radians * self.sin);
-        let magnitude_squared = sin * sin + cos * cos;
-        let magnitude_recip = if magnitude_squared > 0.0 {
-            magnitude_squared.sqrt().recip()
-        } else {
-            0.0
-        };
-        Rotation::from_sin_cos(sin * magnitude_recip, cos * magnitude_recip)
-    }
-
-    /// Performs a linear interpolation between `self` and `rhs` based on
-    /// the value `s`, and normalizes the rotation afterwards.
-    ///
-    /// When `s == 0.0`, the result will be equal to `self`.
-    /// When `s == 1.0`, the result will be equal to `rhs`.
-    ///
-    /// This is slightly more efficient than [`slerp`](Self::slerp), and produces a similar result
-    /// when the difference between the two rotations is small. At larger differences,
-    /// the result resembles a kind of ease-in-out effect.
-    ///
-    /// If you would like the angular velocity to remain constant, consider using [`slerp`](Self::slerp) instead.
-    ///
-    /// # Details
-    ///
-    /// `nlerp` corresponds to computing an angle for a point at position `s` on a line drawn
-    /// between the endpoints of the arc formed by `self` and `rhs` on a unit circle,
-    /// and normalizing the result afterwards.
-    ///
-    /// Note that if the angles are opposite like 0 and π, the line will pass through the origin,
-    /// and the resulting angle will always be either `self` or `rhs` depending on `s`.
-    /// If `s` happens to be `0.5` in this case, a valid rotation cannot be computed, and `self`
-    /// will be returned as a fallback.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use approx::assert_relative_eq;
-    /// # use avian2d::prelude::Rotation;
-    /// #
-    /// let rot1 = Rotation::IDENTITY;
-    /// let rot2 = Rotation::degrees(135.0);
-    ///
-    /// let result1 = rot1.nlerp(rot2, 1.0 / 3.0);
-    /// assert_relative_eq!(result1.as_degrees(), 28.675055, epsilon = 0.0001);
-    ///
-    /// let result2 = rot1.nlerp(rot2, 0.5);
-    /// assert_relative_eq!(result2.as_degrees(), 67.5);
-    /// ```
-    #[inline]
-    pub fn nlerp(self, end: Self, s: f32) -> Self {
-        Self {
-            sin: self.sin.lerp(end.sin, s),
-            cos: self.cos.lerp(end.cos, s),
-        }
-        .try_normalize()
-        // Fall back to the start rotation.
-        // This can happen when `self` and `end` are opposite angles and `s == 0.5`,
-        // because the resulting rotation would be zero, which cannot be normalized.
-        .unwrap_or(self)
-    }
-
-    /// Performs a spherical linear interpolation between `self` and `end`
-    /// based on the value `s`.
-    ///
-    /// This corresponds to interpolating between the two angles at a constant angular velocity.
-    ///
-    /// When `s == 0.0`, the result will be equal to `self`.
-    /// When `s == 1.0`, the result will be equal to `rhs`.
-    ///
-    /// If you would like the rotation to have a kind of ease-in-out effect, consider
-    /// using the slightly more efficient [`nlerp`](Self::nlerp) instead.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use avian2d::prelude::Rotation;
-    /// #
-    /// let rot1 = Rotation::IDENTITY;
-    /// let rot2 = Rotation::degrees(135.0);
-    ///
-    /// let result1 = rot1.slerp(rot2, 1.0 / 3.0);
-    /// assert_eq!(result1.as_degrees(), 45.0);
-    ///
-    /// let result2 = rot1.slerp(rot2, 0.5);
-    /// assert_eq!(result2.as_degrees(), 67.5);
-    /// ```
-    #[inline]
-    pub fn slerp(self, end: Self, s: f32) -> Self {
-        self * Self::radians(self.angle_between(end) * s)
-    }
-}
-
-#[cfg(feature = "2d")]
-impl From<f32> for Rotation {
-    /// Creates a [`Rotation`] from a counterclockwise angle in radians.
-    fn from(rotation: f32) -> Self {
-        Self::radians(rotation)
-    }
-}
-
-#[cfg(feature = "2d")]
-impl From<Rotation> for Mat2 {
-    /// Creates a [`Mat2`] rotation matrix from a [`Rotation`].
-    fn from(rot: Rotation) -> Self {
-        Mat2::from_cols_array(&[rot.cos, rot.sin, -rot.sin, rot.cos])
-    }
-}
-
-#[cfg(feature = "2d")]
-impl From<Mat2> for Rotation {
-    /// Creates a [`Rotation`] from a [`Mat2`].
-    fn from(mat: Mat2) -> Self {
-        let cos = mat.x_axis.x;
-        let sin = mat.x_axis.y;
-        Self::from_sin_cos(sin, cos)
-    }
-}
-
-#[cfg(feature = "2d")]
-impl From<Rot2> for Rotation {
-    /// Creates a [`Rotation`] from a [`Rot2`].
-    fn from(rot: Rot2) -> Self {
-        Self::from_sin_cos(rot.sin, rot.cos)
-    }
-}
-
-#[cfg(feature = "2d")]
-impl From<Rotation> for Rot2 {
-    /// Creates a [`Rot2`] from a [`Rotation`].
-    fn from(rot: Rotation) -> Self {
-        Self::from_sin_cos(rot.sin, rot.cos)
-    }
-}
-
-#[cfg(feature = "2d")]
-impl core::ops::Mul for Rotation {
-    type Output = Self;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        Self {
-            cos: self.cos * rhs.cos - self.sin * rhs.sin,
-            sin: self.sin * rhs.cos + self.cos * rhs.sin,
-        }
-    }
-}
-
-#[cfg(feature = "2d")]
-impl core::ops::MulAssign for Rotation {
-    fn mul_assign(&mut self, rhs: Self) {
-        *self = *self * rhs;
-    }
-}
-
-#[cfg(feature = "2d")]
-impl core::ops::Mul<Vec2> for Rotation {
-    type Output = Vec2;
-
-    /// Rotates a [`Vec2`] by a [`Rotation`].
-    fn mul(self, rhs: Vec2) -> Self::Output {
-        Vec2::new(
-            rhs.x * self.cos - rhs.y * self.sin,
-            rhs.x * self.sin + rhs.y * self.cos,
-        )
-    }
-}
-
-#[cfg(feature = "2d")]
-impl core::ops::Mul<Vec3> for Rotation {
-    type Output = Vec3;
-
-    fn mul(self, rhs: Vec3) -> Self::Output {
-        Vec3::new(
-            rhs.x * self.cos - rhs.y * self.sin,
-            rhs.x * self.sin + rhs.y * self.cos,
-            rhs.z,
-        )
-    }
-}
-
-#[cfg(feature = "2d")]
-impl core::ops::Mul<&Vec3> for Rotation {
-    type Output = Vec3;
-
-    fn mul(self, rhs: &Vec3) -> Self::Output {
-        self * *rhs
-    }
-}
-
-#[cfg(feature = "2d")]
-impl core::ops::Mul<&mut Vec3> for Rotation {
-    type Output = Vec3;
-
-    fn mul(self, rhs: &mut Vec3) -> Self::Output {
-        self * *rhs
-    }
-}
-
-#[cfg(feature = "2d")]
-impl core::ops::Mul<Vec3> for &Rotation {
-    type Output = Vec3;
-
-    fn mul(self, rhs: Vec3) -> Self::Output {
-        *self * rhs
-    }
-}
-
-#[cfg(feature = "2d")]
-impl core::ops::Mul<&Vec3> for &Rotation {
-    type Output = Vec3;
-
-    fn mul(self, rhs: &Vec3) -> Self::Output {
-        *self * *rhs
-    }
-}
-
-#[cfg(feature = "2d")]
-impl core::ops::Mul<&mut Vec3> for &Rotation {
-    type Output = Vec3;
-
-    fn mul(self, rhs: &mut Vec3) -> Self::Output {
-        *self * *rhs
-    }
-}
-
-#[cfg(feature = "2d")]
-impl core::ops::Mul<Vec3> for &mut Rotation {
-    type Output = Vec3;
-
-    fn mul(self, rhs: Vec3) -> Self::Output {
-        *self * rhs
-    }
-}
-
-#[cfg(feature = "2d")]
-impl core::ops::Mul<&Vec3> for &mut Rotation {
-    type Output = Vec3;
-
-    fn mul(self, rhs: &Vec3) -> Self::Output {
-        *self * *rhs
-    }
-}
-
-#[cfg(feature = "2d")]
-impl core::ops::Mul<&mut Vec3> for &mut Rotation {
-    type Output = Vec3;
-
-    fn mul(self, rhs: &mut Vec3) -> Self::Output {
-        *self * *rhs
-    }
-}
-
-impl Ease for Rotation {
-    fn interpolating_curve_unbounded(start: Self, end: Self) -> impl Curve<Self> {
-        FunctionCurve::new(Interval::UNIT, move |t| Rotation::slerp(start, end, t))
-    }
-}
-
-/// The global physics rotation of a [rigid body](RigidBody) or a [collider](Collider).
-///
-/// # Relation to `Transform` and `GlobalTransform`
-///
-/// [`Rotation`] is used for physics internally and kept in sync with [`Transform`]
-/// by the [`PhysicsTransformPlugin`]. It rarely needs to be used directly in your own code, as [`Transform`] can still
-/// be used for almost everything. Using [`Rotation`] should only be required for managing rotations
-/// in systems running in the [`SubstepSchedule`], but if you prefer, you can also use [`Rotation`]
-/// for everything.
-///
-/// The reasons why the engine uses a separate [`Rotation`] component can be found
-/// [here](crate#why-are-there-separate-position-and-rotation-components).
-///
-/// # Example
-///
-/// ```
-/// use avian3d::prelude::*;
-/// use bevy::prelude::*;
-///
-/// fn setup(mut commands: Commands) {
-///     // Spawn a dynamic rigid body rotated by 1.5 radians around the x axis
-///     commands.spawn((RigidBody::Dynamic, Rotation(Quat::from_rotation_x(1.5))));
-/// }
-/// ```
-#[cfg(feature = "3d")]
-#[derive(Reflect, Clone, Copy, Component, Debug, Default, Deref, DerefMut, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
-#[reflect(Debug, Component, Default, PartialEq)]
-pub struct Rotation(pub Quat);
-
-#[cfg(feature = "3d")]
-impl Rotation {
-    /// A placeholder rotation. This is an invalid rotation and should *not*
-    /// be used to an actually rotate entities in the world, but can be used
-    /// to indicate that a rotation has not yet been initialized.
-    pub const PLACEHOLDER: Self = Self(Quat::from_xyzw(f32::MAX, f32::MAX, f32::MAX, f32::MAX));
-
-    /// No rotation.
-    pub const IDENTITY: Self = Self(Quat::IDENTITY);
-
-    /// Computes the chord length of the rotation, which is the straight-line
-    /// distance between the start and end points of the rotation on a unit sphere.
-    #[inline]
-    pub fn chord_length(self) -> f32 {
-        // The chord length traveled by a point rotated by `θ` on a unit sphere
-        // is `2 * sin(θ / 2)`.
-        //
-        // In 3D, the vector part of the quaternion has length `sin(θ / 2)`,
-        // so doubling it gives the chord length `2 * sin(θ / 2)` directly.
-        2.0 * self.xyz().length()
-    }
-
-    /// Returns the angle (in radians) for the minimal rotation for transforming this rotation into another.
-    #[inline]
-    pub fn angle_between(self, other: Self) -> f32 {
-        self.0.angle_between(other.0)
-    }
-
-    /// Inverts the rotation.
-    #[inline]
-    #[must_use]
-    pub fn inverse(&self) -> Self {
-        Self(self.0.inverse())
-    }
-
-    /// Performs a linear interpolation between `self` and `end` based on
-    /// the value `s`, and normalizes the rotation afterwards.
-    ///
-    /// When `s == 0.0`, the result will be equal to `self`.
-    /// When `s == 1.0`, the result will be equal to `end`.
-    ///
-    /// This is slightly more efficient than [`slerp`](Self::slerp), and produces a similar result
-    /// when the difference between the two rotations is small. At larger differences,
-    /// the result resembles a kind of ease-in-out effect.
-    ///
-    /// If you would like the angular velocity to remain constant, consider using [`slerp`](Self::slerp) instead.
-    #[inline]
-    pub fn nlerp(self, end: Self, t: f32) -> Self {
-        Self(self.0.lerp(end.0, t))
-    }
-
-    /// Performs a spherical linear interpolation between `self` and `end`
-    /// based on the value `s`.
-    ///
-    /// This corresponds to interpolating between the two angles at a constant angular velocity.
-    ///
-    /// When `s == 0.0`, the result will be equal to `self`.
-    /// When `s == 1.0`, the result will be equal to `end`.
-    ///
-    /// If you would like the rotation to have a kind of ease-in-out effect, consider
-    /// using the slightly more efficient [`nlerp`](Self::nlerp) instead.
-    #[inline]
-    pub fn slerp(self, end: Self, t: f32) -> Self {
-        Self(self.0.slerp(end.0, t))
-    }
-
-    /// Returns `self` after an approximate normalization,
-    /// assuming the value is already nearly normalized.
-    /// Useful for preventing numerical error accumulation.
-    #[inline]
-    #[must_use]
-    pub fn fast_renormalize(self) -> Self {
-        // First-order Tayor approximation
-        // 1/L = (L^2)^(-1/2) ≈ 1 - (L^2 - 1) / 2 = (3 - L^2) / 2
-        let length_squared = self.length_squared();
-        let approx_inv_length = 0.5 * (3.0 - length_squared);
-        Self(self.0 * approx_inv_length)
-    }
-}
-
-#[cfg(feature = "3d")]
-impl core::ops::Mul<Vec3> for Rotation {
-    type Output = Vec3;
-
-    fn mul(self, vector: Vec3) -> Self::Output {
-        self.0 * vector
-    }
-}
-
-#[cfg(feature = "3d")]
-impl core::ops::Mul for Rotation {
-    type Output = Rotation;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        Self(self.0 * rhs.0)
-    }
-}
-
-#[cfg(feature = "3d")]
-impl core::ops::MulAssign for Rotation {
-    fn mul_assign(&mut self, rhs: Self) {
-        self.0 *= rhs.0;
-    }
-}
-
-#[cfg(feature = "3d")]
-impl core::ops::Mul<Quat> for Rotation {
-    type Output = Quat;
-
-    fn mul(self, quaternion: Quat) -> Self::Output {
-        self.0 * quaternion
-    }
-}
-
-#[cfg(feature = "3d")]
-impl core::ops::Mul<Quat> for &Rotation {
-    type Output = Quat;
-
-    fn mul(self, quaternion: Quat) -> Self::Output {
-        self.0 * quaternion
-    }
-}
-
-#[cfg(feature = "3d")]
-impl core::ops::Mul<Quat> for &mut Rotation {
-    type Output = Quat;
-
-    fn mul(self, quaternion: Quat) -> Self::Output {
-        self.0 * quaternion
-    }
-}
-
-#[cfg(feature = "3d")]
-impl core::ops::Mul<Rotation> for Quat {
-    type Output = Rotation;
-
-    fn mul(self, rotation: Rotation) -> Self::Output {
-        Rotation(self * rotation.0)
-    }
-}
-
-#[cfg(feature = "3d")]
-impl core::ops::Mul<Rotation> for &Quat {
-    type Output = Rotation;
-
-    fn mul(self, rotation: Rotation) -> Self::Output {
-        Rotation(self * rotation.0)
-    }
-}
-
-#[cfg(feature = "3d")]
-impl core::ops::Mul<Rotation> for &mut Quat {
-    type Output = Rotation;
-
-    fn mul(self, rotation: Rotation) -> Self::Output {
-        Rotation(*self * rotation.0)
-    }
-}
-
-impl core::ops::Mul<Dir> for Rotation {
-    type Output = Dir;
-
-    fn mul(self, direction: Dir) -> Self::Output {
-        Dir::new_unchecked(self * *direction)
-    }
-}
-
-impl core::ops::Mul<Vector> for &Rotation {
-    type Output = Vector;
-
-    fn mul(self, vector: Vector) -> Self::Output {
-        *self * vector
-    }
-}
-
-impl core::ops::Mul<Dir> for &Rotation {
-    type Output = Dir;
-
-    fn mul(self, direction: Dir) -> Self::Output {
-        Dir::new_unchecked(self * *direction)
-    }
-}
-
-impl core::ops::Mul<Vector> for &mut Rotation {
-    type Output = Vector;
-
-    fn mul(self, vector: Vector) -> Self::Output {
-        *self * vector
-    }
-}
-
-impl core::ops::Mul<Dir> for &mut Rotation {
-    type Output = Dir;
-
-    fn mul(self, direction: Dir) -> Self::Output {
-        Dir::new_unchecked(self * *direction)
-    }
-}
-
-impl core::ops::Mul<&Vector> for Rotation {
-    type Output = Vector;
-
-    fn mul(self, vector: &Vector) -> Self::Output {
-        self * *vector
-    }
-}
-
-impl core::ops::Mul<&Dir> for Rotation {
-    type Output = Dir;
-
-    fn mul(self, direction: &Dir) -> Self::Output {
-        Dir::new_unchecked(self * **direction)
-    }
-}
-
-impl core::ops::Mul<&mut Vector> for Rotation {
-    type Output = Vector;
-
-    fn mul(self, vector: &mut Vector) -> Self::Output {
-        self * *vector
-    }
-}
-
-impl core::ops::Mul<&mut Dir> for Rotation {
-    type Output = Dir;
-
-    fn mul(self, direction: &mut Dir) -> Self::Output {
-        Dir::new_unchecked(self * **direction)
-    }
-}
-
-impl core::ops::Mul<&Vector> for &Rotation {
-    type Output = Vector;
-
-    fn mul(self, vector: &Vector) -> Self::Output {
-        *self * *vector
-    }
-}
-
-impl core::ops::Mul<&Dir> for &Rotation {
-    type Output = Dir;
-
-    fn mul(self, direction: &Dir) -> Self::Output {
-        Dir::new_unchecked(self * **direction)
-    }
-}
-
-impl core::ops::Mul<&Vector> for &mut Rotation {
-    type Output = Vector;
-
-    fn mul(self, vector: &Vector) -> Self::Output {
-        *self * *vector
-    }
-}
-
-impl core::ops::Mul<&Dir> for &mut Rotation {
-    type Output = Dir;
-
-    fn mul(self, direction: &Dir) -> Self::Output {
-        Dir::new_unchecked(self * **direction)
-    }
-}
-
-impl core::ops::Mul<&mut Vector> for &Rotation {
-    type Output = Vector;
-
-    fn mul(self, vector: &mut Vector) -> Self::Output {
-        *self * *vector
-    }
-}
-
-impl core::ops::Mul<&mut Dir> for &Rotation {
-    type Output = Dir;
-
-    fn mul(self, direction: &mut Dir) -> Self::Output {
-        Dir::new_unchecked(self * **direction)
-    }
-}
-
-impl core::ops::Mul<&mut Vector> for &mut Rotation {
-    type Output = Vector;
-
-    fn mul(self, vector: &mut Vector) -> Self::Output {
-        *self * *vector
-    }
-}
-
-impl core::ops::Mul<&mut Dir> for &mut Rotation {
-    type Output = Dir;
-
-    fn mul(self, direction: &mut Dir) -> Self::Output {
-        Dir::new_unchecked(self * **direction)
-    }
-}
-
-#[cfg(feature = "2d")]
-impl From<Rotation> for f32 {
-    fn from(rot: Rotation) -> Self {
-        rot.as_radians()
-    }
-}
-
-#[cfg(feature = "2d")]
-impl From<Rotation> for Quat {
-    fn from(rot: Rotation) -> Self {
-        let z = rot.sin.signum() * ((1.0 - rot.cos) / 2.0).abs().sqrt();
-        let w = ((1.0 + rot.cos) / 2.0).abs().sqrt();
-        Quat::from_xyzw(0.0, 0.0, z, w)
-    }
-}
-
-#[cfg(feature = "3d")]
-impl From<Rotation> for Quat {
-    fn from(rot: Rotation) -> Self {
-        rot.0
-    }
-}
-
-impl From<Transform> for Rotation {
-    fn from(value: Transform) -> Self {
-        Self::from(value.rotation)
-    }
-}
-
-impl From<GlobalTransform> for Rotation {
-    fn from(value: GlobalTransform) -> Self {
-        Self::from(value.compute_transform().rotation)
-    }
-}
-
-impl From<&GlobalTransform> for Rotation {
-    fn from(value: &GlobalTransform) -> Self {
-        Self::from(value.compute_transform().rotation)
-    }
-}
-
-#[cfg(feature = "2d")]
-impl From<Quat> for Rotation {
-    fn from(quat: Quat) -> Self {
-        let angle = quat.to_euler(EulerRot::XYZ).2;
-        Self::radians(angle)
-    }
-}
-
-#[cfg(feature = "3d")]
-impl From<Quat> for Rotation {
-    fn from(quat: Quat) -> Self {
-        Self(Quat::from_xyzw(quat.x, quat.y, quat.z, quat.w))
-    }
-}
-
 pub(crate) fn init_physics_transform(world: &mut DeferredWorld, ctx: &HookContext) {
     let entity_ref = world.entity(ctx.entity);
 
-    // Get the global `Position` and `Rotation`.
-    let (mut position, is_pos_placeholder) = entity_ref
-        .get::<Position>()
-        .map_or((default(), true), |p| (*p, *p == Position::PLACEHOLDER));
-    let (mut rotation, is_rot_placeholder) = entity_ref
-        .get::<Rotation>()
-        .map_or((default(), true), |r| (*r, *r == Rotation::PLACEHOLDER));
+    // Get the global `PhysicsTransform`, tracking which parts have not been initialized yet.
+    let (mut physics_transform, is_translation_placeholder, is_rotation_placeholder) = entity_ref
+        .get::<PhysicsTransform>()
+        .map_or((PhysicsTransform::IDENTITY, true, true), |transform| {
+            (
+                *transform,
+                transform.translation == PhysicsTransform::PLACEHOLDER.translation,
+                transform.rotation == PhysicsTransform::PLACEHOLDER.rotation,
+            )
+        });
 
-    if is_pos_placeholder {
-        position.0 = RVector::ZERO;
+    if is_translation_placeholder {
+        physics_transform.translation = RVector::ZERO;
     }
-    if is_rot_placeholder {
-        rotation = Rotation::IDENTITY;
+    if is_rotation_placeholder {
+        physics_transform.rotation = Rot::IDENTITY;
     }
 
-    // If either `Position` or `Rotation` was set manually, we want to set `Transform` to match later.
-    let is_not_placeholder = !is_pos_placeholder || !is_rot_placeholder;
+    // If either the translation or rotation was set manually,
+    // we want to set `Transform` to match later.
+    let is_not_placeholder = !is_translation_placeholder || !is_rotation_placeholder;
 
     let config = world
         .get_resource::<PhysicsTransformConfig>()
@@ -1123,7 +442,7 @@ pub(crate) fn init_physics_transform(world: &mut DeferredWorld, ctx: &HookContex
         global_transform
     });
 
-    // If either `Position` or `Rotation` was not a placeholder,
+    // If either the translation or rotation was not a placeholder,
     // we need to update the `Transform` to match the current values.
     if is_not_placeholder && config.position_to_transform {
         // Get the parent's global transform if it exists.
@@ -1143,16 +462,17 @@ pub(crate) fn init_physics_transform(world: &mut DeferredWorld, ctx: &HookContex
                         parent_global_transform.scale(),
                     );
                     GlobalTransform::from(
-                        Transform::from_translation(position.f32().extend(
+                        Transform::from_translation(physics_transform.translation.f32().extend(
                             parent_translation.z + transform.translation.z * parent_scale.z,
                         ))
-                        .with_rotation(Quat::from(rotation)),
+                        .with_rotation(physics_transform.rotation.to_quat()),
                     )
                     .reparented_to(&parent_global_transform)
                 };
             #[cfg(feature = "3d")]
             let new_transform = GlobalTransform::from(
-                Transform::from_translation(position.f32()).with_rotation(rotation.0),
+                Transform::from_translation(physics_transform.translation.f32())
+                    .with_rotation(physics_transform.rotation),
             )
             .reparented_to(&parent_global_transform);
 
@@ -1163,78 +483,67 @@ pub(crate) fn init_physics_transform(world: &mut DeferredWorld, ctx: &HookContex
             }
         } else if let Some(mut transform) = world.get_mut::<Transform>(ctx.entity) {
             // If the entity has no parent, we can set the transform directly.
-            #[cfg(feature = "2d")]
-            {
-                if !is_pos_placeholder {
-                    transform.translation = position.f32().extend(transform.translation.z);
+            if !is_translation_placeholder {
+                #[cfg(feature = "2d")]
+                {
+                    transform.translation = physics_transform
+                        .translation
+                        .f32()
+                        .extend(transform.translation.z);
                 }
-                if !is_rot_placeholder {
-                    transform.rotation = Quat::from(rotation);
+                #[cfg(feature = "3d")]
+                {
+                    transform.translation = physics_transform.translation.f32();
                 }
             }
-            #[cfg(feature = "3d")]
-            {
-                if !is_pos_placeholder {
-                    transform.translation = position.f32();
-                }
-                if !is_rot_placeholder {
-                    transform.rotation = rotation.0;
-                }
+            if !is_rotation_placeholder {
+                transform.rotation = physics_transform.rotation.to_quat();
             }
         }
     }
 
     if !config.transform_to_position {
-        if is_pos_placeholder && let Some(mut position) = world.get_mut::<Position>(ctx.entity) {
-            position.0 = RVector::ZERO;
+        if (is_translation_placeholder || is_rotation_placeholder)
+            && let Some(mut transform) = world.get_mut::<PhysicsTransform>(ctx.entity)
+        {
+            if is_translation_placeholder {
+                transform.translation = RVector::ZERO;
+            }
+            if is_rotation_placeholder {
+                transform.rotation = Rot::IDENTITY;
+            }
         }
-        if is_rot_placeholder && let Some(mut rotation) = world.get_mut::<Rotation>(ctx.entity) {
-            *rotation = Rotation::IDENTITY;
-        }
-    } else if is_pos_placeholder || is_rot_placeholder {
-        // If either `Position` or `Rotation` is a placeholder, we need to compute the global transform
-        // from the hierarchy and set the `Position` and/or `Rotation` to the computed values.
+    } else if is_translation_placeholder || is_rotation_placeholder {
+        // If either the translation or rotation is a placeholder, we need to compute the global
+        // transform from the hierarchy and set the uninitialized parts to the computed values.
 
         if let Some(global_transform) = global_transform {
-            // Set the computed `position` and `rotation` based on the global transform.
-            let (_, global_rotation, global_translation) =
-                global_transform.to_scale_rotation_translation();
-            #[cfg(feature = "2d")]
-            {
-                position.0 = global_translation.truncate().real();
-                rotation = Rotation::from(global_rotation);
+            let global = PhysicsTransform::from(&global_transform);
+            if is_translation_placeholder {
+                physics_transform.translation = global.translation;
             }
-            #[cfg(feature = "3d")]
-            {
-                position.0 = global_translation.real();
-                rotation.0 = global_rotation;
+            if is_rotation_placeholder {
+                physics_transform.rotation = global.rotation;
             }
         } else {
-            // No transform was set. Set the computed `position` and `rotation` to default values.
-            if is_pos_placeholder {
-                position.0 = RVector::ZERO;
+            // No transform was set. Set the uninitialized parts to default values.
+            if is_translation_placeholder {
+                physics_transform.translation = RVector::ZERO;
             }
-            if is_rot_placeholder {
-                rotation = Rotation::IDENTITY;
+            if is_rotation_placeholder {
+                physics_transform.rotation = Rot::IDENTITY;
             }
         }
 
-        // Now we update the actual component values based on the computed global transform.
-        let mut entity_mut = world.entity_mut(ctx.entity);
-
-        // Set the position unless it was already set.
-        if let Some(mut pos) = entity_mut
-            .get_mut::<Position>()
-            .filter(|pos| **pos == Position::PLACEHOLDER)
-        {
-            *pos = position;
-        }
-        // Set the rotation to the global transform unless it was already set.
-        if let Some(mut rot) = entity_mut
-            .get_mut::<Rotation>()
-            .filter(|rot| **rot == Rotation::PLACEHOLDER)
-        {
-            *rot = rotation;
+        // Now we update the actual component value based on the computed global transform,
+        // leaving any part that was already set explicitly untouched.
+        if let Some(mut transform) = world.get_mut::<PhysicsTransform>(ctx.entity) {
+            if transform.translation == PhysicsTransform::PLACEHOLDER.translation {
+                transform.translation = physics_transform.translation;
+            }
+            if transform.rotation == PhysicsTransform::PLACEHOLDER.rotation {
+                transform.rotation = physics_transform.rotation;
+            }
         }
     }
 }

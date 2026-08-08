@@ -232,8 +232,7 @@ pub struct SpatialQuerySystems;
 
 type RayCasterPositionQueryComponents = (
     &'static mut RayCaster,
-    Option<&'static Position>,
-    Option<&'static Rotation>,
+    Option<&'static PhysicsTransform>,
     Option<&'static ChildOf>,
     Option<&'static GlobalTransform>,
 );
@@ -241,25 +240,22 @@ type RayCasterPositionQueryComponents = (
 #[allow(clippy::type_complexity)]
 fn update_ray_caster_positions(
     mut rays: Query<RayCasterPositionQueryComponents>,
-    parents: Query<
-        (
-            Option<&Position>,
-            Option<&Rotation>,
-            Option<&GlobalTransform>,
-        ),
-        With<Children>,
-    >,
+    parents: Query<(Option<&PhysicsTransform>, Option<&GlobalTransform>), With<Children>>,
 ) {
-    for (mut ray, position, rotation, parent, transform) in &mut rays {
+    for (mut ray, physics_transform, parent, transform) in &mut rays {
         let origin = ray.origin;
         let direction = ray.direction;
 
-        let global_position = position.copied().or(transform.map(Position::from));
-        let global_rotation = rotation.copied().or(transform.map(Rotation::from));
+        let global = physics_transform
+            .copied()
+            .or(transform.map(PhysicsTransform::from));
+        let global_position = global.map(|global| global.translation);
+        let global_rotation = global.map(|global| global.rotation);
 
         if let Some(global_position) = global_position {
             ray.set_global_origin(
-                global_position.0 + rotation.map_or(origin, |rot| rot.real() * origin),
+                global_position
+                    + physics_transform.map_or(origin, |physics| physics.rotation.real() * origin),
             );
         } else if parent.is_none() {
             ray.set_global_origin(origin);
@@ -272,22 +268,21 @@ fn update_ray_caster_positions(
             ray.set_global_direction(direction);
         }
 
-        if let Some(Ok((parent_position, parent_rotation, parent_transform))) =
+        if let Some(Ok((parent_physics_transform, parent_transform))) =
             parent.map(|&ChildOf(parent)| parents.get(parent))
         {
-            let parent_position = parent_position
+            let parent_global = parent_physics_transform
                 .copied()
-                .or(parent_transform.map(Position::from));
-            let parent_rotation = parent_rotation
-                .copied()
-                .or(parent_transform.map(Rotation::from));
+                .or(parent_transform.map(PhysicsTransform::from));
+            let parent_position = parent_global.map(|global| global.translation);
+            let parent_rotation = parent_global.map(|global| global.rotation);
 
             // Apply parent transformations
             if global_position.is_none()
                 && let Some(position) = parent_position
             {
                 let rotation = global_rotation.unwrap_or(parent_rotation.unwrap_or_default());
-                ray.set_global_origin(position.0 + rotation.real() * origin);
+                ray.set_global_origin(position + rotation.real() * origin);
             }
             if global_rotation.is_none()
                 && let Some(rotation) = parent_rotation
@@ -302,8 +297,7 @@ fn update_ray_caster_positions(
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 type ShapeCasterPositionQueryComponents = (
     &'static mut ShapeCaster,
-    Option<&'static Position>,
-    Option<&'static Rotation>,
+    Option<&'static PhysicsTransform>,
     Option<&'static ChildOf>,
     Option<&'static GlobalTransform>,
 );
@@ -312,32 +306,29 @@ type ShapeCasterPositionQueryComponents = (
 #[allow(clippy::type_complexity)]
 fn update_shape_caster_positions(
     mut shape_casters: Query<ShapeCasterPositionQueryComponents>,
-    parents: Query<
-        (
-            Option<&Position>,
-            Option<&Rotation>,
-            Option<&GlobalTransform>,
-        ),
-        With<Children>,
-    >,
+    parents: Query<(Option<&PhysicsTransform>, Option<&GlobalTransform>), With<Children>>,
 ) {
-    for (mut shape_caster, position, rotation, parent, transform) in &mut shape_casters {
+    for (mut shape_caster, physics_transform, parent, transform) in &mut shape_casters {
         let origin = shape_caster.origin;
         let shape_rotation = shape_caster.shape_rotation;
         let direction = shape_caster.direction;
 
-        let global_position = position.copied().or(transform.map(Position::from));
-        let global_rotation = rotation.copied().or(transform.map(Rotation::from));
+        let global = physics_transform
+            .copied()
+            .or(transform.map(PhysicsTransform::from));
+        let global_position = global.map(|global| global.translation);
+        let global_rotation = global.map(|global| global.rotation);
 
         if let Some(global_position) = global_position {
             shape_caster.set_global_origin(
-                global_position.0 + rotation.map_or(origin, |rot| rot.real() * origin),
+                global_position
+                    + physics_transform.map_or(origin, |physics| physics.rotation.real() * origin),
             );
         } else if parent.is_none() {
             shape_caster.set_global_origin(origin);
         }
 
-        if let Some(global_rotation) = global_rotation.map(Rot::from) {
+        if let Some(global_rotation) = global_rotation {
             let global_direction = global_rotation * shape_caster.direction;
             shape_caster.set_global_direction(global_direction);
             #[cfg(feature = "2d")]
@@ -360,25 +351,24 @@ fn update_shape_caster_positions(
             }
         }
 
-        if let Some(Ok((parent_position, parent_rotation, parent_transform))) =
+        if let Some(Ok((parent_physics_transform, parent_transform))) =
             parent.map(|&ChildOf(parent)| parents.get(parent))
         {
-            let parent_position = parent_position
+            let parent_global = parent_physics_transform
                 .copied()
-                .or(parent_transform.map(Position::from));
-            let parent_rotation = parent_rotation
-                .copied()
-                .or(parent_transform.map(Rotation::from));
+                .or(parent_transform.map(PhysicsTransform::from));
+            let parent_position = parent_global.map(|global| global.translation);
+            let parent_rotation = parent_global.map(|global| global.rotation);
 
             // Apply parent transformations
             if global_position.is_none()
                 && let Some(position) = parent_position
             {
                 let rotation = global_rotation.unwrap_or(parent_rotation.unwrap_or_default());
-                shape_caster.set_global_origin(position.0 + rotation.real() * origin);
+                shape_caster.set_global_origin(position + rotation.real() * origin);
             }
             if global_rotation.is_none()
-                && let Some(rotation) = parent_rotation.map(Rot::from)
+                && let Some(rotation) = parent_rotation
             {
                 let global_direction = rotation * shape_caster.direction;
                 shape_caster.set_global_direction(global_direction);

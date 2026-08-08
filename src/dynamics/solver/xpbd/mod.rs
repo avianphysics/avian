@@ -185,7 +185,7 @@
 //!
 //! **Note**: In the following theory, primarily the word "particle" is used, but the same logic applies to normal
 //! [rigid bodies](RigidBody) as well. However, unlike particles, rigid bodies can also have angular quantities such as
-//! [rotation](Rotation) and [angular inertia](AngularInertia), so constraints can also affect their orientation. This is explained
+//! [rotation](PhysicsTransform) and [angular inertia](AngularInertia), so constraints can also affect their orientation. This is explained
 //! in more detail [at the end](#rigid-body-constraints).
 //!
 //! ### Constraint functions
@@ -249,7 +249,7 @@
 //!
 //! ### Rigid body constraints
 //!
-//! Unlike particles, [rigid bodies](RigidBody) also have angular quantities like [rotation](Rotation),
+//! Unlike particles, [rigid bodies](RigidBody) also have angular quantities like [rotation](PhysicsTransform),
 //! [angular velocity](AngularVelocity) and [angular inertia](AngularInertia). In addition, constraints can be applied at specific
 //! points in the body, like contact positions or joint attachment positions, which also affects the orientation.
 //!
@@ -284,7 +284,7 @@
 //! Δq_i = 0.5 * [I_i^-1 * (r_i x (Δλ * ▽C_i)), 0] * q_i
 //! ```
 //!
-//! where `q_i` is the [rotation](Rotation) of body `i` and `r_i` is a vector pointing from the body's center of mass to some
+//! where `q_i` is the [rotation](PhysicsTransform) of body `i` and `r_i` is a vector pointing from the body's center of mass to some
 //! attachment position.
 
 mod plugin;

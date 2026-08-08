@@ -63,8 +63,8 @@ impl XpbdConstraint<2> for FixedJoint {
 
         // Prepare the angular constraint.
         solver_data.angle_constraint.prepare(
-            (*body1.rotation).into(),
-            (*body2.rotation).into(),
+            body1.transform.rotation,
+            body2.transform.rotation,
             local_basis1,
             local_basis2,
         );

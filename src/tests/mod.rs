@@ -57,7 +57,7 @@ fn setup_cubes_simulation(mut commands: Commands) {
     let floor_size = Vec3::new(80.0, 1.0, 80.0);
     commands.spawn((
         RigidBody::Static,
-        Position(RVector::NEG_Y),
+        PhysicsTransform::from_translation(RVector::NEG_Y),
         Collider::cuboid(floor_size.x, floor_size.y, floor_size.z),
     ));
 
@@ -76,7 +76,7 @@ fn setup_cubes_simulation(mut commands: Commands) {
                 commands.spawn((
                     Transform::default(),
                     RigidBody::Dynamic,
-                    Position(pos + RVector::Y * 5.0),
+                    PhysicsTransform::from_translation(pos + RVector::Y * 5.0),
                     Collider::cuboid(radius * 2.0, radius * 2.0, radius * 2.0),
                     Id(next_id),
                 ));

@@ -74,8 +74,7 @@ pub struct MoveAndSlide<'w, 's> {
         's,
         (
             &'static Collider,
-            &'static Position,
-            &'static Rotation,
+            &'static PhysicsTransform,
             Option<&'static CollisionLayers>,
         ),
         (With<ColliderOf>, Without<Sensor>),
@@ -1038,7 +1037,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             .aabb_intersections_with_aabb(expanded_aabb);
 
         'outer: for intersection_entity in aabb_intersections {
-            let Ok((intersection_collider, intersection_pos, intersection_rot, layers)) =
+            let Ok((intersection_collider, intersection_transform, layers)) =
                 self.colliders.get(intersection_entity)
             else {
                 continue;
@@ -1053,8 +1052,8 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
                 shape_position,
                 shape_rotation,
                 intersection_collider,
-                intersection_pos.0,
-                *intersection_rot,
+                intersection_transform.translation,
+                intersection_transform.rotation,
                 prediction_distance,
                 &mut manifolds,
             );

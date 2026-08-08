@@ -167,7 +167,7 @@ fn update_grounded(
         let Some(collider) = &ground_detection.cast_shape else {
             continue;
         };
-        let rotation = Rotation::from(global_transform.rotation());
+        let rotation = PhysicsTransform::from(global_transform).rotation;
 
         // Cast the shape downward to check for ground
         let hit = spatial_query.cast_shape(
@@ -304,7 +304,7 @@ fn move_and_slide(
         } = move_and_slide.move_and_slide(
             collider,
             transform.translation.xy().real(),
-            Rotation::from(transform.rotation),
+            PhysicsTransform::from(*transform).rotation,
             lin_vel.0,
             time.delta(),
             &MoveAndSlideConfig::default(),

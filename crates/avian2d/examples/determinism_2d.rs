@@ -214,7 +214,7 @@ struct Isometry {
 }
 
 fn update_hash(
-    transforms: Query<(&Position, &Rotation), With<RigidBody>>,
+    transforms: Query<&PhysicsTransform, With<RigidBody>>,
     mut step_text: Single<&mut TextSpan, With<StepText>>,
     mut hash_text: Single<&mut TextSpan, (With<HashText>, Without<StepText>)>,
     mut step: ResMut<Step>,
@@ -227,10 +227,10 @@ fn update_hash(
     }
 
     let mut hash = 5381;
-    for (position, rotation) in &transforms {
+    for transform in &transforms {
         let isometry = Isometry {
-            translation: position.0,
-            rotation: rotation.as_radians() as Real,
+            translation: transform.translation,
+            rotation: transform.rotation.as_radians() as Real,
         };
         hash = djb2_hash(hash, bytemuck::bytes_of(&isometry));
     }

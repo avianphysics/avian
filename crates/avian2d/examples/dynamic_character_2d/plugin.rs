@@ -164,16 +164,21 @@ fn gamepad_input(mut movement_writer: MessageWriter<MovementAction>, gamepads: Q
 fn update_grounded(
     mut commands: Commands,
     mut query: Query<
-        (Entity, &ShapeHits, &Rotation, Option<&MaxSlopeAngle>),
+        (
+            Entity,
+            &ShapeHits,
+            &PhysicsTransform,
+            Option<&MaxSlopeAngle>,
+        ),
         With<CharacterController>,
     >,
 ) {
-    for (entity, hits, rotation, max_slope_angle) in &mut query {
+    for (entity, hits, transform, max_slope_angle) in &mut query {
         // The character is grounded if the shape caster has a hit with a normal
         // that isn't too steep.
         let is_grounded = hits.iter().any(|hit| {
             if let Some(angle) = max_slope_angle {
-                (rotation * -hit.normal2).angle_to(Vec2::Y).abs() <= angle.0
+                (transform.rotation * -hit.normal2).angle_to(Vec2::Y).abs() <= angle.0
             } else {
                 true
             }

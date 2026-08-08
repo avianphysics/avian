@@ -165,8 +165,6 @@ pub fn contact_manifolds(
     prediction_distance: f32,
     manifolds: &mut Vec<ContactManifold>,
 ) {
-    let position1: Position = position1.into();
-    let position2: Position = position2.into();
     let rotation1: Rot = rotation1.into();
     let rotation2: Rot = rotation2.into();
     let isometry1 = make_pose(position1, rotation1);
@@ -214,8 +212,8 @@ pub fn contact_manifolds(
         // The anchors are relative to the positions of the colliders.
         let point1 = rotation1 * local_point1;
         let anchor1 = point1 + normal * contact.dist.f32() * 0.5;
-        let anchor2 = anchor1 + (position1.0 - position2.0).f32();
-        let world_point = position1.0 + anchor1.real();
+        let anchor2 = anchor1 + (position1 - position2).f32();
+        let world_point = position1 + anchor1.real();
         let points = [ContactPoint::new(
             anchor1,
             anchor2,
@@ -246,8 +244,8 @@ pub fn contact_manifolds(
             // The anchors are relative to the positions of the colliders.
             let point1 = rotation1 * subpos1.transform_point(contact.local_p1).f32();
             let anchor1 = point1 + normal * contact.dist.f32() * 0.5;
-            let anchor2 = anchor1 + (position1.0 - position2.0).f32();
-            let world_point = position1.0 + anchor1.real();
+            let anchor2 = anchor1 + (position1 - position2).f32();
+            let world_point = position1 + anchor1.real();
             ContactPoint::new(anchor1, anchor2, world_point, -contact.dist.f32())
                 .with_feature_ids(contact.fid1.into(), contact.fid2.into())
         });

@@ -115,8 +115,7 @@ use super::AccumulatedLocalAcceleration;
 #[derive(QueryData)]
 #[query_data(mutable)]
 pub struct Forces {
-    position: Read<Position>,
-    rotation: Read<Rotation>,
+    transform: Read<PhysicsTransform>,
     linear_velocity: Write<LinearVelocity>,
     angular_velocity: Write<AngularVelocity>,
     mass: Read<ComputedMass>,
@@ -141,8 +140,7 @@ impl ForcesItem<'_, '_> {
     #[must_use]
     pub fn reborrow(&mut self) -> ForcesItem<'_, '_> {
         ForcesItem {
-            position: self.position,
-            rotation: self.rotation,
+            transform: self.transform,
             linear_velocity: self.linear_velocity.reborrow(),
             angular_velocity: self.angular_velocity.reborrow(),
             mass: self.mass,
@@ -199,16 +197,10 @@ pub trait RigidBodyForces: ReadRigidBodyForces + WriteRigidBodyForces {}
     reason = "The internal methods should not be publicly accessible."
 )]
 pub trait ReadRigidBodyForces: ReadRigidBodyForcesInternal {
-    /// Returns the [`Position`] of the body.
+    /// Returns the world-space [`PhysicsTransform`] of the body.
     #[inline]
-    fn position(&self) -> RVector {
-        self.pos()
-    }
-
-    /// Returns the [`Rotation`] of the body.
-    #[inline]
-    fn rotation(&self) -> Rot {
-        self.rot()
+    fn transform(&self) -> &PhysicsTransform {
+        self.physics_transform()
     }
 
     /// Returns the [`LinearVelocity`] of the body in world space.
@@ -605,8 +597,10 @@ pub trait WriteRigidBodyForces: ReadRigidBodyForces + WriteRigidBodyForcesIntern
 
 /// A trait to provide internal read-only getters for [`ReadRigidBodyForces`].
 trait ReadRigidBodyForcesInternal {
-    fn pos(&self) -> RVector;
-    fn rot(&self) -> Rot;
+    fn physics_transform(&self) -> &PhysicsTransform;
+    fn rot(&self) -> Rot {
+        self.physics_transform().rotation
+    }
     fn lin_vel(&self) -> Vector;
     fn ang_vel(&self) -> AngularVector;
     fn global_center_of_mass(&self) -> RVector;
@@ -630,12 +624,8 @@ trait WriteRigidBodyForcesInternal: ReadRigidBodyForcesInternal {
 
 impl ReadRigidBodyForcesInternal for ForcesItem<'_, '_> {
     #[inline]
-    fn pos(&self) -> RVector {
-        self.position.0
-    }
-    #[inline]
-    fn rot(&self) -> Rot {
-        Rot::from(*self.rotation)
+    fn physics_transform(&self) -> &PhysicsTransform {
+        self.transform
     }
     #[inline]
     fn lin_vel(&self) -> Vector {
@@ -647,7 +637,7 @@ impl ReadRigidBodyForcesInternal for ForcesItem<'_, '_> {
     }
     #[inline]
     fn global_center_of_mass(&self) -> RVector {
-        self.position.0 + (self.rotation * self.center_of_mass.0).real()
+        self.transform.translation + (self.transform.rotation * self.center_of_mass.0).real()
     }
     #[inline]
     fn locked_axes(&self) -> LockedAxes {
@@ -686,7 +676,7 @@ impl WriteRigidBodyForcesInternal for ForcesItem<'_, '_> {
         #[cfg(feature = "2d")]
         let global_angular_inertia = *self.angular_inertia;
         #[cfg(feature = "3d")]
-        let global_angular_inertia = self.angular_inertia.rotated(self.rotation.0);
+        let global_angular_inertia = self.angular_inertia.rotated(self.transform.rotation);
         self.locked_axes()
             .apply_to_angular_inertia(global_angular_inertia)
             .inverse()
@@ -711,12 +701,8 @@ impl WriteRigidBodyForcesInternal for ForcesItem<'_, '_> {
 
 impl ReadRigidBodyForcesInternal for NonWakingForcesItem<'_, '_> {
     #[inline]
-    fn pos(&self) -> RVector {
-        self.0.position()
-    }
-    #[inline]
-    fn rot(&self) -> Rot {
-        self.0.rot()
+    fn physics_transform(&self) -> &PhysicsTransform {
+        self.0.transform
     }
     #[inline]
     fn lin_vel(&self) -> Vector {
@@ -746,12 +732,8 @@ impl ReadRigidBodyForcesInternal for NonWakingForcesItem<'_, '_> {
 
 impl ReadRigidBodyForcesInternal for ForcesReadOnlyItem<'_, '_> {
     #[inline]
-    fn pos(&self) -> RVector {
-        self.position.0
-    }
-    #[inline]
-    fn rot(&self) -> Rot {
-        Rot::from(*self.rotation)
+    fn physics_transform(&self) -> &PhysicsTransform {
+        self.transform
     }
     #[inline]
     fn lin_vel(&self) -> Vector {
@@ -763,7 +745,7 @@ impl ReadRigidBodyForcesInternal for ForcesReadOnlyItem<'_, '_> {
     }
     #[inline]
     fn global_center_of_mass(&self) -> RVector {
-        self.position.0 + (self.rotation * self.center_of_mass.0).real()
+        *self.transform * self.center_of_mass.0
     }
     #[inline]
     fn locked_axes(&self) -> LockedAxes {

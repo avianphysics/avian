@@ -571,8 +571,7 @@ fn wake_on_changed(
         // We need to ignore non-user changes.
         Query<
             (
-                Ref<Position>,
-                Ref<Rotation>,
+                Ref<PhysicsTransform>,
                 Ref<LinearVelocity>,
                 Ref<AngularVelocity>,
                 Ref<SleepTimer>,
@@ -581,8 +580,7 @@ fn wake_on_changed(
             (
                 With<Sleeping>,
                 Or<(
-                    Changed<Position>,
-                    Changed<Rotation>,
+                    Changed<PhysicsTransform>,
                     Changed<LinearVelocity>,
                     Changed<AngularVelocity>,
                     Changed<SleepTimer>,
@@ -599,9 +597,8 @@ fn wake_on_changed(
 ) {
     let this_run = system_tick.this_run();
 
-    for (pos, rot, lin_vel, ang_vel, sleep_timer, body_island) in &query.p0() {
-        if is_changed_after_tick(pos, last_physics_tick.0, this_run)
-            || is_changed_after_tick(rot, last_physics_tick.0, this_run)
+    for (physics_transform, lin_vel, ang_vel, sleep_timer, body_island) in &query.p0() {
+        if is_changed_after_tick(physics_transform, last_physics_tick.0, this_run)
             || is_changed_after_tick(lin_vel, last_physics_tick.0, this_run)
             || is_changed_after_tick(ang_vel, last_physics_tick.0, this_run)
             || is_changed_after_tick(sleep_timer, last_physics_tick.0, this_run)

@@ -253,7 +253,7 @@ pub(super) fn plugin(app: &mut App) {
 
 fn update_local_frames(
     mut joints: Query<&mut FixedJoint, Changed<FixedJoint>>,
-    bodies: Query<(&Position, &Rotation)>,
+    bodies: Query<&PhysicsTransform>,
 ) {
     for mut joint in &mut joints {
         if matches!(joint.frame1.anchor, JointAnchor::Local(_))
@@ -264,13 +264,13 @@ fn update_local_frames(
             continue;
         }
 
-        let Ok([(pos1, rot1), (pos2, rot2)]) = bodies.get_many(joint.entities()) else {
+        let Ok([transform1, transform2]) = bodies.get_many(joint.entities()) else {
             continue;
         };
 
         // TODO: Use weighted COM average for the anchors of dynamic Auto-Auto pairs.
         let [frame1, frame2] =
-            JointFrame::compute_local(joint.frame1, joint.frame2, pos1.0, pos2.0, *rot1, *rot2);
+            JointFrame::compute_local(joint.frame1, joint.frame2, transform1, transform2);
         joint.frame1 = frame1;
         joint.frame2 = frame2;
     }
@@ -282,14 +282,12 @@ impl DebugRenderConstraint<2> for FixedJoint {
 
     fn debug_render(
         &self,
-        positions: [RVector; 2],
-        rotations: [Rotation; 2],
+        transforms: [PhysicsTransform; 2],
         _context: &mut Self::Context,
         gizmos: &mut Gizmos<PhysicsGizmos>,
         config: &PhysicsGizmos,
     ) {
-        let [pos1, pos2] = positions;
-        let [rot1, rot2] = rotations;
+        let [transform1, transform2] = transforms;
 
         let Some(local_anchor1) = self.local_anchor1() else {
             return;
@@ -298,12 +296,12 @@ impl DebugRenderConstraint<2> for FixedJoint {
             return;
         };
 
-        let anchor1 = pos1 + (rot1 * local_anchor1).real();
-        let anchor2 = pos2 + (rot2 * local_anchor2).real();
+        let anchor1 = transform1 * local_anchor1;
+        let anchor2 = transform2 * local_anchor2;
 
         if let Some(anchor_color) = config.joint_anchor_color {
-            gizmos.draw_line(pos1, anchor1, anchor_color);
-            gizmos.draw_line(pos2, anchor2, anchor_color);
+            gizmos.draw_line(transform1.translation, anchor1, anchor_color);
+            gizmos.draw_line(transform2.translation, anchor2, anchor_color);
         }
 
         if let Some(color) = config.joint_separation_color {

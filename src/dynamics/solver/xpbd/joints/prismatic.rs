@@ -77,20 +77,20 @@ impl XpbdConstraint<2> for PrismaticJoint {
             return;
         };
 
+        let (translation1, rotation1) = (body1.transform.translation, body1.transform.rotation);
+        let (translation2, rotation2) = (body2.transform.translation, body2.transform.rotation);
+
         // Prepare the point-to-point constraint.
-        solver_data.angle_constraint.prepare(
-            (*body1.rotation).into(),
-            (*body2.rotation).into(),
-            local_basis1,
-            local_basis2,
-        );
+        solver_data
+            .angle_constraint
+            .prepare(rotation1, rotation2, local_basis1, local_basis2);
 
         // Prepare the prismatic joint.
-        solver_data.world_r1 = body1.rotation * (local_anchor1 - body1.center_of_mass.0);
-        solver_data.world_r2 = body2.rotation * (local_anchor2 - body2.center_of_mass.0);
-        solver_data.center_difference = (body2.position.0 - body1.position.0).f32()
-            + (body2.rotation * body2.center_of_mass.0 - body1.rotation * body1.center_of_mass.0);
-        solver_data.free_axis1 = Rot::from(*body1.rotation) * local_basis1 * self.slider_axis;
+        solver_data.world_r1 = rotation1 * (local_anchor1 - body1.center_of_mass.0);
+        solver_data.world_r2 = rotation2 * (local_anchor2 - body2.center_of_mass.0);
+        solver_data.center_difference = (translation2 - translation1).f32()
+            + (rotation2 * body2.center_of_mass.0 - rotation1 * body1.center_of_mass.0);
+        solver_data.free_axis1 = rotation1 * local_basis1 * self.slider_axis;
     }
 
     fn solve(

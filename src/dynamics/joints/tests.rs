@@ -43,14 +43,14 @@ fn revolute_motor_spins_body() {
 
     let anchor = app
         .world_mut()
-        .spawn((RigidBody::Static, Position(RVector::ZERO)))
+        .spawn((RigidBody::Static, PhysicsTransform::IDENTITY))
         .id();
 
     let dynamic = app
         .world_mut()
         .spawn((
             RigidBody::Dynamic,
-            Position(RVector::X * 2.0),
+            PhysicsTransform::from_translation(RVector::X * 2.0),
             Mass(1.0),
             #[cfg(feature = "2d")]
             AngularInertia(1.0),
@@ -108,14 +108,14 @@ fn prismatic_motor_moves_body() {
 
     let anchor = app
         .world_mut()
-        .spawn((RigidBody::Static, Position(RVector::ZERO)))
+        .spawn((RigidBody::Static, PhysicsTransform::IDENTITY))
         .id();
 
     let dynamic = app
         .world_mut()
         .spawn((
             RigidBody::Dynamic,
-            Position(RVector::X * 2.0),
+            PhysicsTransform::from_translation(RVector::X * 2.0),
             Mass(1.0),
             #[cfg(feature = "2d")]
             AngularInertia(1.0),
@@ -141,7 +141,13 @@ fn prismatic_motor_moves_body() {
     // Initialize the app.
     app.update();
 
-    let initial_x = app.world().entity(dynamic).get::<Position>().unwrap().0.x;
+    let initial_x = app
+        .world()
+        .entity(dynamic)
+        .get::<PhysicsTransform>()
+        .unwrap()
+        .translation
+        .x;
 
     // Run simulation for 1 second.
     let duration = 1.0;
@@ -152,7 +158,7 @@ fn prismatic_motor_moves_body() {
     }
 
     let body_ref = app.world().entity(dynamic);
-    let final_x = body_ref.get::<Position>().unwrap().0.x;
+    let final_x = body_ref.get::<PhysicsTransform>().unwrap().translation.x;
 
     let displacement = final_x - initial_x;
     assert!(
@@ -170,14 +176,14 @@ fn revolute_motor_respects_max_torque() {
 
     let anchor = app
         .world_mut()
-        .spawn((RigidBody::Static, Position(RVector::ZERO)))
+        .spawn((RigidBody::Static, PhysicsTransform::IDENTITY))
         .id();
 
     let dynamic = app
         .world_mut()
         .spawn((
             RigidBody::Dynamic,
-            Position(RVector::X * 2.0),
+            PhysicsTransform::from_translation(RVector::X * 2.0),
             Mass(100.0), // Heavy body to test torque limiting
             #[cfg(feature = "2d")]
             AngularInertia(100.0),
@@ -235,14 +241,14 @@ fn revolute_motor_position_target() {
 
     let anchor = app
         .world_mut()
-        .spawn((RigidBody::Static, Position(RVector::ZERO)))
+        .spawn((RigidBody::Static, PhysicsTransform::IDENTITY))
         .id();
 
     let dynamic = app
         .world_mut()
         .spawn((
             RigidBody::Dynamic,
-            Position(RVector::X * 2.0),
+            PhysicsTransform::from_translation(RVector::X * 2.0),
             Mass(1.0),
             #[cfg(feature = "2d")]
             AngularInertia(1.0),
@@ -277,7 +283,7 @@ fn revolute_motor_position_target() {
     }
 
     let body_ref = app.world().entity(dynamic);
-    let rotation = body_ref.get::<Rotation>().unwrap();
+    let rotation = body_ref.get::<PhysicsTransform>().unwrap().rotation;
 
     // The body should have rotated towards the target angle (allow some tolerance).
     #[cfg(feature = "2d")]
@@ -309,14 +315,14 @@ fn prismatic_motor_position_target() {
 
     let anchor = app
         .world_mut()
-        .spawn((RigidBody::Static, Position(RVector::ZERO)))
+        .spawn((RigidBody::Static, PhysicsTransform::IDENTITY))
         .id();
 
     let dynamic = app
         .world_mut()
         .spawn((
             RigidBody::Dynamic,
-            Position(RVector::X * 2.0),
+            PhysicsTransform::from_translation(RVector::X * 2.0),
             Mass(1.0),
             #[cfg(feature = "2d")]
             AngularInertia(1.0),
@@ -345,7 +351,12 @@ fn prismatic_motor_position_target() {
     // Initialize the app.
     app.update();
 
-    let initial_pos = app.world().entity(dynamic).get::<Position>().unwrap().0;
+    let initial_pos = app
+        .world()
+        .entity(dynamic)
+        .get::<PhysicsTransform>()
+        .unwrap()
+        .translation;
 
     // Run simulation for 3 seconds to let it settle.
     let duration = 3.0;
@@ -356,7 +367,7 @@ fn prismatic_motor_position_target() {
     }
 
     let body_ref = app.world().entity(dynamic);
-    let final_pos = body_ref.get::<Position>().unwrap().0;
+    let final_pos = body_ref.get::<PhysicsTransform>().unwrap().translation;
 
     assert!(!final_pos.x.is_nan(), "Final position should not be NaN");
     assert!(!final_pos.y.is_nan(), "Final position should not be NaN");
@@ -384,14 +395,14 @@ fn revolute_motor_respects_angle_limits() {
 
     let anchor = app
         .world_mut()
-        .spawn((RigidBody::Static, Position(RVector::ZERO)))
+        .spawn((RigidBody::Static, PhysicsTransform::IDENTITY))
         .id();
 
     let dynamic = app
         .world_mut()
         .spawn((
             RigidBody::Dynamic,
-            Position(RVector::X * 2.0),
+            PhysicsTransform::from_translation(RVector::X * 2.0),
             Mass(1.0),
             #[cfg(feature = "2d")]
             AngularInertia(1.0),
@@ -427,7 +438,7 @@ fn revolute_motor_respects_angle_limits() {
     }
 
     let body_ref = app.world().entity(dynamic);
-    let rotation = body_ref.get::<Rotation>().unwrap();
+    let rotation = body_ref.get::<PhysicsTransform>().unwrap().rotation;
 
     #[cfg(feature = "2d")]
     {
@@ -475,7 +486,7 @@ fn prismatic_motor_respects_limits() {
 
     let anchor = app
         .world_mut()
-        .spawn((RigidBody::Static, Position(RVector::ZERO)))
+        .spawn((RigidBody::Static, PhysicsTransform::IDENTITY))
         .id();
 
     // Start at origin so we can measure displacement clearly.
@@ -483,7 +494,7 @@ fn prismatic_motor_respects_limits() {
         .world_mut()
         .spawn((
             RigidBody::Dynamic,
-            Position(RVector::ZERO),
+            PhysicsTransform::IDENTITY,
             Mass(1.0),
             #[cfg(feature = "2d")]
             AngularInertia(1.0),
@@ -514,11 +525,11 @@ fn prismatic_motor_respects_limits() {
     // Make sure the motor is not near the limit from the start.
     {
         let body_ref = app.world().entity(dynamic);
-        let position = body_ref.get::<Position>().unwrap();
+        let position = body_ref.get::<PhysicsTransform>().unwrap().translation;
         assert!(
-            (position.0.x - distance_limit.real()).abs() > 0.1,
+            (position.x - distance_limit.real()).abs() > 0.1,
             "Displacement {} should not be near the limit {} at the start of the test",
-            position.0.x,
+            position.x,
             distance_limit
         );
     }
@@ -532,7 +543,7 @@ fn prismatic_motor_respects_limits() {
     }
 
     let body_ref = app.world().entity(dynamic);
-    let position = body_ref.get::<Position>().unwrap();
+    let position = body_ref.get::<PhysicsTransform>().unwrap().translation;
 
     // The displacement along the slide axis (X) should be at or near the limit.
     let displacement = position.x.f32();
@@ -560,14 +571,14 @@ fn revolute_motor_force_based() {
 
     let anchor = app
         .world_mut()
-        .spawn((RigidBody::Static, Position(RVector::ZERO)))
+        .spawn((RigidBody::Static, PhysicsTransform::IDENTITY))
         .id();
 
     let dynamic = app
         .world_mut()
         .spawn((
             RigidBody::Dynamic,
-            Position(RVector::X * 2.0),
+            PhysicsTransform::from_translation(RVector::X * 2.0),
             Mass(1.0),
             #[cfg(feature = "2d")]
             AngularInertia(1.0),
@@ -645,14 +656,14 @@ fn revolute_motor_spring_damper() {
 
     let anchor = app
         .world_mut()
-        .spawn((RigidBody::Static, Position(RVector::ZERO)))
+        .spawn((RigidBody::Static, PhysicsTransform::IDENTITY))
         .id();
 
     let dynamic = app
         .world_mut()
         .spawn((
             RigidBody::Dynamic,
-            Position(RVector::X * 2.0),
+            PhysicsTransform::from_translation(RVector::X * 2.0),
             Mass(1.0),
             #[cfg(feature = "2d")]
             AngularInertia(1.0),
@@ -687,7 +698,7 @@ fn revolute_motor_spring_damper() {
     }
 
     let body_ref = app.world().entity(dynamic);
-    let rotation = body_ref.get::<Rotation>().unwrap();
+    let rotation = body_ref.get::<PhysicsTransform>().unwrap().rotation;
 
     // The body should have rotated towards the target.
     #[cfg(feature = "2d")]
@@ -721,14 +732,14 @@ fn revolute_motor_combined_position_velocity() {
 
     let anchor = app
         .world_mut()
-        .spawn((RigidBody::Static, Position(RVector::ZERO)))
+        .spawn((RigidBody::Static, PhysicsTransform::IDENTITY))
         .id();
 
     let dynamic = app
         .world_mut()
         .spawn((
             RigidBody::Dynamic,
-            Position(RVector::X * 2.0),
+            PhysicsTransform::from_translation(RVector::X * 2.0),
             Mass(1.0),
             #[cfg(feature = "2d")]
             AngularInertia(1.0),
@@ -764,7 +775,7 @@ fn revolute_motor_combined_position_velocity() {
     }
 
     let body_ref = app.world().entity(dynamic);
-    let rotation = body_ref.get::<Rotation>().unwrap();
+    let rotation = body_ref.get::<PhysicsTransform>().unwrap().rotation;
 
     // The body should have rotated in the positive direction.
     #[cfg(feature = "2d")]
@@ -796,14 +807,14 @@ fn prismatic_motor_combined_position_velocity() {
 
     let anchor = app
         .world_mut()
-        .spawn((RigidBody::Static, Position(RVector::ZERO)))
+        .spawn((RigidBody::Static, PhysicsTransform::IDENTITY))
         .id();
 
     let dynamic = app
         .world_mut()
         .spawn((
             RigidBody::Dynamic,
-            Position(RVector::X * 2.0),
+            PhysicsTransform::from_translation(RVector::X * 2.0),
             Mass(1.0),
             #[cfg(feature = "2d")]
             AngularInertia(1.0),
@@ -830,7 +841,13 @@ fn prismatic_motor_combined_position_velocity() {
 
     app.update();
 
-    let initial_x = app.world().entity(dynamic).get::<Position>().unwrap().0.x;
+    let initial_x = app
+        .world()
+        .entity(dynamic)
+        .get::<PhysicsTransform>()
+        .unwrap()
+        .translation
+        .x;
 
     // Run for 2 seconds.
     let duration = 2.0;
@@ -841,7 +858,7 @@ fn prismatic_motor_combined_position_velocity() {
     }
 
     let body_ref = app.world().entity(dynamic);
-    let final_x = body_ref.get::<Position>().unwrap().0.x;
+    let final_x = body_ref.get::<PhysicsTransform>().unwrap().translation.x;
 
     // The body should have moved.
     let displacement = final_x - initial_x;

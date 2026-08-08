@@ -70,8 +70,7 @@ impl<C: AnyCollider> Plugin for ColliderTreeUpdatePlugin<C> {
             |trigger: On<Add, C>,
              mut query: Query<(
                 &C,
-                &Position,
-                &Rotation,
+                &PhysicsTransform,
                 Option<&CollisionMargin>,
                 &mut ColliderAabb,
                 &mut EnlargedAabb,
@@ -84,8 +83,7 @@ impl<C: AnyCollider> Plugin for ColliderTreeUpdatePlugin<C> {
 
                 if let Ok((
                     collider,
-                    pos,
-                    rot,
+                    transform,
                     collision_margin,
                     mut aabb,
                     mut enlarged_aabb,
@@ -98,7 +96,12 @@ impl<C: AnyCollider> Plugin for ColliderTreeUpdatePlugin<C> {
                     // Update tight-fitting AABB.
                     let context = ColliderContext::new(trigger.entity, &*collider_context);
                     let growth = contact_tolerance + collision_margin;
-                    *aabb = collider.aabb_with_context(pos.0, *rot, growth, context);
+                    *aabb = collider.aabb_with_context(
+                        transform.translation,
+                        transform.rotation,
+                        growth,
+                        context,
+                    );
 
                     // Compute and cache the size-relative AABB margin for the collider.
                     let context = ColliderContext::new(trigger.entity, &*collider_context);
@@ -660,7 +663,7 @@ impl EnlargedProxiesBitVec {
 fn update_solver_body_aabbs<C: AnyCollider>(
     body_query: Query<
         (
-            &Position,
+            &PhysicsTransform,
             &ComputedCenterOfMass,
             &LinearVelocity,
             &AngularVelocity,
@@ -677,8 +680,7 @@ fn update_solver_body_aabbs<C: AnyCollider>(
                 &mut EnlargedAabb,
                 &mut ColliderAabbMargin,
                 &ColliderTreeProxyKey,
-                &Position,
-                &Rotation,
+                &PhysicsTransform,
                 Option<&CollisionMargin>,
             ),
             Without<ColliderDisabled>,
@@ -720,7 +722,7 @@ fn update_solver_body_aabbs<C: AnyCollider>(
 
     body_query.par_for_each(
         MIN_PAR_ITER_ENTITIES,
-        |(rb_pos, center_of_mass, lin_vel, ang_vel, body_colliders, speculative_ccd)| {
+        |(rb_transform, center_of_mass, lin_vel, ang_vel, body_colliders, speculative_ccd)| {
             for collider_entity in body_colliders.iter() {
                 let Ok((
                     collider,
@@ -728,8 +730,7 @@ fn update_solver_body_aabbs<C: AnyCollider>(
                     mut enlarged_aabb,
                     mut aabb_margin,
                     proxy_key,
-                    pos,
-                    rot,
+                    transform,
                     collision_margin,
                 )) = (unsafe { collider_query.get_unchecked(collider_entity) })
                 else {
@@ -750,7 +751,7 @@ fn update_solver_body_aabbs<C: AnyCollider>(
 
                     // Velocity of this collider. For off-center (child) colliders on a rotating
                     // body, the collider orbits the center of mass, which adds to its velocity.
-                    let offset = (pos.0 - rb_pos.0).f32() - center_of_mass.0;
+                    let offset = (transform.translation - rb_transform.translation).f32() - center_of_mass.0;
                     #[cfg(feature = "2d")]
                     let vel = lin_vel.0 + Vec2::new(-ang_vel.0 * offset.y, ang_vel.0 * offset.x);
                     #[cfg(feature = "3d")]
@@ -760,17 +761,17 @@ fn update_solver_body_aabbs<C: AnyCollider>(
                     let movement = (vel * delta_secs).clamp_length_max(max_distance);
 
                     #[cfg(feature = "2d")]
-                    let end_rot = *rot * Rotation::radians(ang_vel.0 * delta_secs);
+                    let end_rot = transform.rotation * Rot2::radians(ang_vel.0 * delta_secs);
                     #[cfg(feature = "3d")]
                     let end_rot =
-                        (Quat::from_scaled_axis(ang_vel.0 * delta_secs) * rot.0)
+                        (Quat::from_scaled_axis(ang_vel.0 * delta_secs) * transform.rotation)
                             .fast_renormalize();
 
                     collider
-                        .swept_aabb_with_context(pos.0, *rot, pos.0 + movement.real(), end_rot,growth, context)
+                        .swept_aabb_with_context(transform.translation, transform.rotation, transform.translation + movement.real(), end_rot,growth, context)
                 } else {
                     collider
-                        .aabb_with_context(pos.0, *rot, growth, context)
+                        .aabb_with_context(transform.translation, transform.rotation, growth, context)
                 };
 
                 // Recompute the cached AABB margin if the collider shape changed.
@@ -834,8 +835,7 @@ pub fn update_moved_collider_aabbs<C: AnyCollider>(
         Query<
             (
                 Entity,
-                Ref<Position>,
-                Ref<Rotation>,
+                Ref<PhysicsTransform>,
                 &mut ColliderAabb,
                 &mut EnlargedAabb,
                 &mut ColliderAabbMargin,
@@ -886,8 +886,7 @@ pub fn update_moved_collider_aabbs<C: AnyCollider>(
         MIN_PAR_ITER_ENTITIES,
         |(
             entity,
-            pos,
-            rot,
+            transform,
             mut aabb,
             mut enlarged_aabb,
             mut aabb_margin,
@@ -897,8 +896,9 @@ pub fn update_moved_collider_aabbs<C: AnyCollider>(
         )| {
             // Skip if the collider's AABB can't have changed since the last physics tick.
             let collider_changed = collider.last_changed().is_newer_than(last_tick.0, this_run);
-            if !pos.last_changed().is_newer_than(last_tick.0, this_run)
-                && !rot.last_changed().is_newer_than(last_tick.0, this_run)
+            if !transform
+                .last_changed()
+                .is_newer_than(last_tick.0, this_run)
                 && !collider_changed
             {
                 return;
@@ -909,7 +909,12 @@ pub fn update_moved_collider_aabbs<C: AnyCollider>(
             // Update tight-fitting AABB.
             let context = ColliderContext::new(entity, &*collider_context);
             let growth = contact_tolerance + collision_margin;
-            *aabb = collider.aabb_with_context(pos.0, *rot, growth, context);
+            *aabb = collider.aabb_with_context(
+                transform.translation,
+                transform.rotation,
+                growth,
+                context,
+            );
 
             // Recompute the cached AABB margin if the collider shape changed.
             if collider_changed {

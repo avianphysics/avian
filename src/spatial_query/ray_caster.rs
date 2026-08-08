@@ -74,7 +74,7 @@ pub struct RayCaster {
     /// Controls if the ray caster is enabled.
     pub enabled: bool,
 
-    /// The local origin of the ray relative to the [`Position`] and [`Rotation`] of the ray entity or its parent.
+    /// The local origin of the ray relative to the [`PhysicsTransform`] of the ray entity or its parent.
     ///
     /// To get the global origin, use the `global_origin` method.
     pub origin: RVector,
@@ -82,7 +82,7 @@ pub struct RayCaster {
     /// The global origin of the ray.
     global_origin: RVector,
 
-    /// The local direction of the ray relative to the [`Rotation`] of the ray entity or its parent.
+    /// The local direction of the ray relative to the [`PhysicsTransform`] of the ray entity or its parent.
     ///
     /// To get the global direction, use the `global_direction` method.
     pub direction: Dir,

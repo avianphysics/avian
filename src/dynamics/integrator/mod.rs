@@ -338,7 +338,7 @@ pub struct VelocityIntegrationQuery {
     #[cfg(feature = "3d")]
     angular_inertia: &'static ComputedAngularInertia,
     #[cfg(feature = "3d")]
-    rotation: &'static Rotation,
+    transform: &'static PhysicsTransform,
 }
 
 /// Integrates the velocities of bodies by applying velocity increments and damping.
@@ -384,7 +384,7 @@ pub fn integrate_velocities(
                 //       This needs to be done because the gyroscopic torque relies on up-to-date rotations
                 //       and world-space angular inertia tensors. Omitting the change in orientation would
                 //       lead to worse accuracy and angular momentum not being conserved.
-                let rotation = solver_body.delta_rotation * Rot::from(*body.rotation);
+                let rotation = solver_body.delta_rotation * body.transform.rotation;
                 solve_gyroscopic_torque(
                     &mut solver_body.angular_velocity,
                     rotation,
@@ -623,8 +623,9 @@ mod tests {
 
         // Get the body after the simulation.
         let entity_ref = app.world_mut().entity(body_entity);
-        let position = entity_ref.get::<Position>().unwrap().0;
-        let rotation = *entity_ref.get::<Rotation>().unwrap();
+        let transform = *entity_ref.get::<PhysicsTransform>().unwrap();
+        let position = transform.translation;
+        let rotation = transform.rotation;
         let linear_velocity = entity_ref.get::<LinearVelocity>().unwrap().0;
         let angular_velocity = entity_ref.get::<AngularVelocity>().unwrap().0;
 
@@ -634,11 +635,11 @@ mod tests {
         #[cfg(feature = "2d")]
         assert_relative_eq!(
             rotation.as_radians(),
-            Rotation::radians(20.0).as_radians(),
+            Rot2::radians(20.0).as_radians(),
             epsilon = 0.00001
         );
         #[cfg(feature = "3d")]
-        assert_relative_eq!(rotation.0, Quat::from_rotation_z(20.0), epsilon = 0.01);
+        assert_relative_eq!(rotation, Quat::from_rotation_z(20.0), epsilon = 0.01);
 
         assert_relative_eq!(linear_velocity, Vector::NEG_Y * 98.1, epsilon = 0.0001);
         #[cfg(feature = "2d")]

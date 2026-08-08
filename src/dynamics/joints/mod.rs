@@ -874,18 +874,17 @@ impl JointFrame {
     pub fn compute_local(
         frame1: Self,
         frame2: Self,
-        pos1: RVector,
-        pos2: RVector,
-        rot1: impl Into<Rot>,
-        rot2: impl Into<Rot>,
+        transform1: &PhysicsTransform,
+        transform2: &PhysicsTransform,
     ) -> [JointFrame; 2] {
-        let rot1 = rot1.into();
-        let rot2 = rot2.into();
-
         let [local_anchor1, local_anchor2] =
-            JointAnchor::compute_local(frame1.anchor, frame2.anchor, pos1, pos2, rot1, rot2);
-        let [local_basis1, local_basis2] =
-            JointBasis::compute_local(frame1.basis, frame2.basis, rot1, rot2);
+            JointAnchor::compute_local(frame1.anchor, frame2.anchor, transform1, transform2);
+        let [local_basis1, local_basis2] = JointBasis::compute_local(
+            frame1.basis,
+            frame2.basis,
+            transform1.rotation,
+            transform2.rotation,
+        );
 
         [
             JointFrame {
@@ -937,13 +936,13 @@ impl JointAnchor {
     pub fn compute_local(
         anchor1: Self,
         anchor2: Self,
-        pos1: RVector,
-        pos2: RVector,
-        rot1: impl Into<Rot>,
-        rot2: impl Into<Rot>,
+        transform1: &PhysicsTransform,
+        transform2: &PhysicsTransform,
     ) -> [Self; 2] {
-        let rot1 = rot1.into();
-        let rot2 = rot2.into();
+        let pos1 = transform1.translation;
+        let pos2 = transform2.translation;
+        let rot1 = transform1.rotation;
+        let rot2 = transform2.rotation;
 
         let [local_anchor1, local_anchor2] = match [anchor1, anchor2] {
             [JointAnchor::Local(anchor1), JointAnchor::Local(anchor2)] => [anchor1, anchor2],

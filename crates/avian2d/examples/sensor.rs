@@ -152,11 +152,11 @@ fn has_movement(mut reader: MessageReader<MovementAction>) -> bool {
 fn movement(
     time: Res<Time>,
     mut movement_reader: MessageReader<MovementAction>,
-    mut controllers: Query<(&mut LinearVelocity, &mut Position), With<Character>>,
+    mut controllers: Query<(&mut LinearVelocity, &mut PhysicsTransform), With<Character>>,
 ) {
     let delta_time = time.delta_secs();
     for event in movement_reader.read() {
-        for (mut linear_velocity, mut position) in &mut controllers {
+        for (mut linear_velocity, mut transform) in &mut controllers {
             match event {
                 MovementAction::Stop => {
                     linear_velocity.x = 0.0;
@@ -169,8 +169,8 @@ fn movement(
                 }
                 MovementAction::Offset(direction) => {
                     let speed = 100.0;
-                    position.x += (direction.x * speed * delta_time).real();
-                    position.y += (direction.y * speed * delta_time).real();
+                    transform.translation.x += (direction.x * speed * delta_time).real();
+                    transform.translation.y += (direction.y * speed * delta_time).real();
                 }
             }
         }

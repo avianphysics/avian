@@ -211,7 +211,11 @@ fn apply_constant_local_angular_acceleration(
 fn apply_local_acceleration(
     mut solver_bodies: ResMut<SolverBodies>,
     bodies: Query<
-        (&SolverBodyIndex, &AccumulatedLocalAcceleration, &Rotation),
+        (
+            &SolverBodyIndex,
+            &AccumulatedLocalAcceleration,
+            &PhysicsTransform,
+        ),
         Without<CustomVelocityIntegration>,
     >,
     mut diagnostics: ResMut<SolverDiagnostics>,
@@ -223,11 +227,11 @@ fn apply_local_acceleration(
 
     let access = solver_bodies.access();
 
-    bodies.iter().for_each(|(index, acceleration, rotation)| {
+    bodies.iter().for_each(|(index, acceleration, transform)| {
         // SAFETY: Each entity has a unique solver body index, so the accessed bodies are disjoint.
         let body = unsafe { access.body_unchecked_mut(*index) };
 
-        let rotation = body.delta_rotation * Rot::from(*rotation);
+        let rotation = body.delta_rotation * transform.rotation;
         let locked_axes = body.flags.locked_axes();
 
         // Compute the world space velocity increments with locked axes applied.

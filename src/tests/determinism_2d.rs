@@ -56,7 +56,7 @@ fn cross_platform_determinism_2d() {
     }
 
     // Compute the transform hash.
-    let query = app.world_mut().query::<(&Position, &Rotation)>();
+    let query = app.world_mut().query::<&PhysicsTransform>();
     let hash = compute_hash(app.world(), query);
 
     // Update this value if simulation behavior changes.
@@ -77,12 +77,12 @@ struct Isometry {
     rotation: Real,
 }
 
-fn compute_hash(world: &World, mut query: QueryState<(&Position, &Rotation)>) -> u32 {
+fn compute_hash(world: &World, mut query: QueryState<&PhysicsTransform>) -> u32 {
     let mut hash = 5381;
-    for (position, rotation) in query.iter(world) {
+    for transform in query.iter(world) {
         let isometry = Isometry {
-            translation: position.0,
-            rotation: rotation.as_radians() as Real,
+            translation: transform.translation,
+            rotation: transform.rotation.as_radians() as Real,
         };
         hash = djb2_hash(hash, bytemuck::bytes_of(&isometry));
     }
