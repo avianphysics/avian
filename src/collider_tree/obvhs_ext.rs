@@ -723,3 +723,18 @@ pub fn obvhs_ray(ray: &Ray, max_distance: f32) -> obvhs::ray::Ray {
 
     obvhs::ray::Ray::new(origin, direction, 0.0, max_distance)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ObvhsAabbExt;
+    use bevy_math::Vec3A;
+    use obvhs::aabb::Aabb;
+
+    #[test]
+    fn distance_to_point_squared() {
+        let aabb = Aabb::new([0.0, 0.0, 0.0].into(), [1.0, 1.0, 1.0].into());
+        let point = Vec3A::new(2.0, 2.0, 0.5);
+
+        assert_eq!(aabb.distance_to_point_squared(point), 2.0);
+    }
+}
