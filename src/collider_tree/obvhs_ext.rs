@@ -673,11 +673,8 @@ impl ObvhsAabbExt for Aabb {
         // so we convert to our Vec3A type.
         let min: Vec3A = self.min.to_array().into();
         let max: Vec3A = self.max.to_array().into();
-        let point_min = min - point;
-        let point_max = max - point;
-        let dist_min = point_min.max(Vec3A::ZERO);
-        let dist_max = point_max.min(Vec3A::ZERO);
-        dist_min.length_squared().min(dist_max.length_squared())
+        let delta = (min - point).max(Vec3A::ZERO) + (point - max).max(Vec3A::ZERO);
+        delta.length_squared()
     }
 
     #[inline(always)]
