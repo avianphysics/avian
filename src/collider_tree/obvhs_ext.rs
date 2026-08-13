@@ -367,6 +367,10 @@ impl Bvh2Ext for Bvh2 {
             // Tell the sibling's children where their parent went.
             self.parents[sibling.first_index as usize] = new_sibling_id;
             self.parents[sibling.first_index as usize + 1] = new_sibling_id;
+
+            // The sibling was moved to the end of the node list, but its children stayed where they were,
+            // so they now come before their parent.
+            self.children_are_ordered_after_parents = false;
         }
 
         self.nodes.push(sibling);
