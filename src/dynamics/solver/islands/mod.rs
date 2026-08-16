@@ -45,6 +45,9 @@
 mod sleeping;
 pub use sleeping::{IslandSleepingPlugin, SleepBody, SleepIslands, WakeBody, WakeIslands};
 
+#[cfg(test)]
+mod tests;
+
 use bevy::{
     ecs::{
         entity::{ComponentCloneCtx, SourceComponent},
@@ -504,10 +507,17 @@ impl PhysicsIslands {
     }
 
     /// Returns the slice of contact [`IslandNode`]s, indexed by [`ContactId`].
-    #[cfg(feature = "validate")]
+    #[cfg(any(test, feature = "validate"))]
     #[inline]
     pub(crate) fn contact_nodes(&self) -> &[Option<IslandNode<ContactId>>] {
         &self.contact_nodes
+    }
+
+    /// Test accessor for island contact-list validation.
+    #[cfg(test)]
+    #[inline]
+    pub(crate) fn contact_nodes_for_test(&self) -> &[Option<IslandNode<ContactId>>] {
+        self.contact_nodes()
     }
 
     /// Returns the [`IslandNode`] linking the given joint to its island,
@@ -576,8 +586,14 @@ impl PhysicsIslands {
     ) -> Option<&PhysicsIsland> {
         let contact = contact_graph.get_edge_by_id(contact_id).unwrap();
 
-        debug_assert!(self.contact_node(contact_id).is_none());
         debug_assert!(contact.is_touching());
+
+        // ContactIds are recycled when a pair is destroyed. If Stopped was not applied
+        // before this Started, the old island node is still linked. Unlink it first so
+        // we do not overwrite the slot and leave `head_contact` pointing at a taken node.
+        if self.contact_node(contact_id).is_some() {
+            self.remove_contact(contact_id, body_islands);
+        }
 
         let (Some(body1), Some(body2)) = (contact.body1, contact.body2) else {
             return None;

@@ -212,6 +212,9 @@ bitflags::bitflags! {
         const STATIC2 = 1 << 7;
         /// Set if the contact pair should have a custom contact modification hook applied.
         const MODIFY_CONTACTS = 1 << 8;
+        /// Set if the contact pair just stopped generating contact constraints,
+        /// for example because a collider became a sensor or was detached from its rigid body.
+        const STOPPED_GENERATING_CONSTRAINTS = 1 << 9;
     }
 }
 

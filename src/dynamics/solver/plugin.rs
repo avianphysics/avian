@@ -295,13 +295,18 @@ fn apply_contact_status_change(
                 return;
             };
 
-            // Add a contact constraint for each manifold.
-            for _ in 0..contact_pair.manifolds.len() {
-                constraint_graph.push_manifold(contact_pair);
+            // A duplicate Started for a live contact must not push extra manifolds.
+            // Recycled ContactIds should already have been unlinked by Stopped.
+            if constraint_graph.manifold_count(contact) == 0 {
+                for _ in 0..contact_pair.manifolds.len() {
+                    constraint_graph.push_manifold(contact_pair);
+                }
             }
 
             // Link the contact to an island.
-            if let Some(islands) = islands {
+            if let Some(islands) = islands
+                && islands.contact_node(contact).is_none()
+            {
                 let island = islands.add_contact(contact, body_islands, contact_graph);
 
                 if let Some(island) = island

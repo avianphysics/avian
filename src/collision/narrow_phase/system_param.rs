@@ -219,9 +219,10 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                         contact_pair.collider2.index_u32(),
                     );
 
-                    if contact_pair.generates_constraints()
-                        && let (Some(body1), Some(body2)) = (contact_pair.body1, contact_pair.body2)
-                    {
+                    // Unlink solver state even if GENERATE_CONSTRAINTS was already cleared.
+                    // Otherwise the island node and constraint handles outlive the pair,
+                    // and a recycled ContactId can panic with "Head contact has no island".
+                    if let (Some(body1), Some(body2)) = (contact_pair.body1, contact_pair.body2) {
                         self.contact_status_changes.push(
                             ContactStatusChange::StoppedGeneratingConstraints {
                                 contact_id,
@@ -260,8 +261,16 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     contact_pair
                         .flags
                         .set(ContactPairFlags::STARTED_TOUCHING, false);
+                    // Stop-touching already emitted Stopped. A leftover stop flag
+                    // would consume a later start and leave the pair constraintless.
+                    contact_pair
+                        .flags
+                        .set(ContactPairFlags::STOPPED_GENERATING_CONSTRAINTS, false);
 
                     if contact_pair.generates_constraints() {
+                        contact_pair
+                            .flags
+                            .set(ContactPairFlags::STARTED_GENERATING_CONSTRAINTS, false);
                         self.contact_status_changes.push(
                             ContactStatusChange::StartedGeneratingConstraints(contact_id),
                         );
@@ -296,10 +305,14 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     contact_pair
                         .flags
                         .set(ContactPairFlags::STOPPED_TOUCHING, false);
+                    contact_pair
+                        .flags
+                        .set(ContactPairFlags::STOPPED_GENERATING_CONSTRAINTS, false);
+                    contact_pair
+                        .flags
+                        .set(ContactPairFlags::STARTED_GENERATING_CONSTRAINTS, false);
 
-                    if contact_pair.generates_constraints()
-                        && let (Some(body1), Some(body2)) = (contact_pair.body1, contact_pair.body2)
-                    {
+                    if let (Some(body1), Some(body2)) = (contact_pair.body1, contact_pair.body2) {
                         self.contact_status_changes.push(
                             ContactStatusChange::StoppedGeneratingConstraints {
                                 contact_id,
@@ -308,37 +321,58 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                             },
                         );
                     }
-                } else if contact_pair.is_touching()
-                    && contact_pair
+                } else if contact_pair.is_touching() {
+                    let stopped_generating = contact_pair
+                        .flags
+                        .contains(ContactPairFlags::STOPPED_GENERATING_CONSTRAINTS);
+                    if stopped_generating {
+                        contact_pair
+                            .flags
+                            .set(ContactPairFlags::STOPPED_GENERATING_CONSTRAINTS, false);
+
+                        if let (Some(body1), Some(body2)) = (contact_pair.body1, contact_pair.body2)
+                        {
+                            self.contact_status_changes.push(
+                                ContactStatusChange::StoppedGeneratingConstraints {
+                                    contact_id,
+                                    body1,
+                                    body2,
+                                },
+                            );
+                        }
+                    }
+
+                    if contact_pair
                         .flags
                         .contains(ContactPairFlags::STARTED_GENERATING_CONSTRAINTS)
-                {
-                    // The contact pair should start generating constraints.
-                    contact_pair
-                        .flags
-                        .set(ContactPairFlags::STARTED_GENERATING_CONSTRAINTS, false);
+                    {
+                        contact_pair
+                            .flags
+                            .set(ContactPairFlags::STARTED_GENERATING_CONSTRAINTS, false);
 
-                    self.contact_status_changes.push(
-                        ContactStatusChange::StartedGeneratingConstraints(contact_id),
-                    );
-                } else if contact_pair.is_touching()
-                    && contact_pair.generates_constraints()
-                    && contact_pair.manifold_count_change != 0
-                {
-                    // The contact pair is still touching, but the manifold count changed.
-                    // Let the solver add or remove the corresponding constraints.
-                    let delta = contact_pair.manifold_count_change;
-                    contact_pair.manifold_count_change = 0;
-
-                    if let (Some(body1), Some(body2)) = (contact_pair.body1, contact_pair.body2) {
                         self.contact_status_changes.push(
-                            ContactStatusChange::ManifoldCountChanged {
-                                contact: contact_id,
-                                body1,
-                                body2,
-                                delta,
-                            },
+                            ContactStatusChange::StartedGeneratingConstraints(contact_id),
                         );
+                    } else if !stopped_generating
+                        && contact_pair.generates_constraints()
+                        && contact_pair.manifold_count_change != 0
+                    {
+                        // The contact pair is still touching, but the manifold count changed.
+                        // Let the solver add or remove the corresponding constraints.
+                        let delta = contact_pair.manifold_count_change;
+                        contact_pair.manifold_count_change = 0;
+
+                        if let (Some(body1), Some(body2)) = (contact_pair.body1, contact_pair.body2)
+                        {
+                            self.contact_status_changes.push(
+                                ContactStatusChange::ManifoldCountChanged {
+                                    contact: contact_id,
+                                    body1,
+                                    body2,
+                                    delta,
+                                },
+                            );
+                        }
                     }
                 }
 
@@ -703,12 +737,18 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     || body2_bundle.is_none()
                     || collider1.is_sensor
                     || collider2.is_sensor;
+                let was_generating = contacts.generates_constraints();
 
-                if !is_disabled && !contacts.generates_constraints() {
+                if !is_disabled && !was_generating {
                     // This can happen when a sensor is removed, or when a collider is attached to a body.
                     contacts
                         .flags
                         .set(ContactPairFlags::STARTED_GENERATING_CONSTRAINTS, true);
+                    contact_status_bits.set(contact_id);
+                } else if is_disabled && was_generating {
+                    contacts
+                        .flags
+                        .set(ContactPairFlags::STOPPED_GENERATING_CONSTRAINTS, true);
                     contact_status_bits.set(contact_id);
                 }
 
