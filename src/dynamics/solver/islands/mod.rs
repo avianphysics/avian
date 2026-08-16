@@ -590,14 +590,8 @@ impl PhysicsIslands {
     ) -> Option<&PhysicsIsland> {
         let contact = contact_graph.get_edge_by_id(contact_id).unwrap();
 
+        debug_assert!(self.contact_node(contact_id).is_none());
         debug_assert!(contact.is_touching());
-
-        // ContactIds are recycled when a pair is destroyed. If Stopped was not applied
-        // before this Started, the old island node is still linked. Unlink it first so
-        // we do not overwrite the slot and leave `head_contact` pointing at a taken node.
-        if self.contact_node(contact_id).is_some() {
-            self.remove_contact(contact_id, body_islands);
-        }
 
         let (Some(body1), Some(body2)) = (contact.body1, contact.body2) else {
             return None;
