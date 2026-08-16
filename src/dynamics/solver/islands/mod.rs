@@ -45,7 +45,11 @@
 mod sleeping;
 pub use sleeping::{IslandSleepingPlugin, SleepBody, SleepIslands, WakeBody, WakeIslands};
 
-#[cfg(test)]
+#[cfg(all(
+    test,
+    feature = "default-collider",
+    any(feature = "parry-f32", feature = "parry-f64")
+))]
 mod tests;
 
 use bevy::{
@@ -507,17 +511,17 @@ impl PhysicsIslands {
     }
 
     /// Returns the slice of contact [`IslandNode`]s, indexed by [`ContactId`].
-    #[cfg(any(test, feature = "validate"))]
+    #[cfg(any(
+        feature = "validate",
+        all(
+            test,
+            feature = "default-collider",
+            any(feature = "parry-f32", feature = "parry-f64")
+        )
+    ))]
     #[inline]
     pub(crate) fn contact_nodes(&self) -> &[Option<IslandNode<ContactId>>] {
         &self.contact_nodes
-    }
-
-    /// Test accessor for island contact-list validation.
-    #[cfg(test)]
-    #[inline]
-    pub(crate) fn contact_nodes_for_test(&self) -> &[Option<IslandNode<ContactId>>] {
-        self.contact_nodes()
     }
 
     /// Returns the [`IslandNode`] linking the given joint to its island,

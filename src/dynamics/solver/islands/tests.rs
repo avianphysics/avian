@@ -49,7 +49,7 @@ fn tick(app: &mut App) {
     feature = "default-collider",
     any(feature = "parry-f32", feature = "parry-f64")
 ))]
-fn spawn_box(app: &mut App, body: RigidBody, pos: Vector) -> Entity {
+fn spawn_box(app: &mut App, body: RigidBody, pos: RVector) -> Entity {
     #[cfg(feature = "2d")]
     let collider = Collider::rectangle(1.0, 1.0);
     #[cfg(feature = "3d")]
@@ -98,7 +98,7 @@ fn assert_island_contacts_match_graph(app: &App) {
 
     let islands = app.world().resource::<PhysicsIslands>();
     for island in islands.iter() {
-        island.validate_contacts(islands.contact_nodes_for_test());
+        island.validate_contacts(islands.contact_nodes());
     }
 }
 
@@ -124,8 +124,8 @@ fn first_generating_contact_id(app: &App) -> ContactId {
 fn resting_contact_survives_separate_and_recontact() {
     let mut app = create_app();
 
-    spawn_box(&mut app, RigidBody::Static, Vector::ZERO);
-    let dynamic = spawn_box(&mut app, RigidBody::Dynamic, Vector::Y * 0.9);
+    spawn_box(&mut app, RigidBody::Static, RVector::ZERO);
+    let dynamic = spawn_box(&mut app, RigidBody::Dynamic, RVector::Y * 0.9);
 
     for _ in 0..10 {
         tick(&mut app);
@@ -135,7 +135,7 @@ fn resting_contact_survives_separate_and_recontact() {
 
     app.world_mut()
         .entity_mut(dynamic)
-        .insert(Position(Vector::Y * 20.0));
+        .insert(Position(RVector::Y * 20.0));
     for _ in 0..10 {
         tick(&mut app);
     }
@@ -144,7 +144,7 @@ fn resting_contact_survives_separate_and_recontact() {
 
     app.world_mut()
         .entity_mut(dynamic)
-        .insert(Position(Vector::Y * 0.9));
+        .insert(Position(RVector::Y * 0.9));
     for _ in 0..10 {
         tick(&mut app);
     }
@@ -165,8 +165,8 @@ fn resting_contact_survives_separate_and_recontact() {
 fn duplicate_started_then_stopped_does_not_leave_stale_head() {
     let mut app = create_app();
 
-    spawn_box(&mut app, RigidBody::Static, Vector::ZERO);
-    let dynamic = spawn_box(&mut app, RigidBody::Dynamic, Vector::Y * 0.9);
+    spawn_box(&mut app, RigidBody::Static, RVector::ZERO);
+    let dynamic = spawn_box(&mut app, RigidBody::Dynamic, RVector::Y * 0.9);
 
     for _ in 0..10 {
         tick(&mut app);
@@ -184,7 +184,7 @@ fn duplicate_started_then_stopped_does_not_leave_stale_head() {
 
     app.world_mut()
         .entity_mut(dynamic)
-        .insert(Position(Vector::Y * 20.0));
+        .insert(Position(RVector::Y * 20.0));
     for _ in 0..10 {
         tick(&mut app);
     }
@@ -193,7 +193,7 @@ fn duplicate_started_then_stopped_does_not_leave_stale_head() {
 
     app.world_mut()
         .entity_mut(dynamic)
-        .insert(Position(Vector::Y * 0.9));
+        .insert(Position(RVector::Y * 0.9));
     for _ in 0..10 {
         tick(&mut app);
     }
@@ -211,8 +211,8 @@ fn duplicate_started_then_stopped_does_not_leave_stale_head() {
 fn disabled_pair_destroy_unlinks_island_contact() {
     let mut app = create_app();
 
-    spawn_box(&mut app, RigidBody::Static, Vector::ZERO);
-    let dynamic = spawn_box(&mut app, RigidBody::Dynamic, Vector::Y * 0.9);
+    spawn_box(&mut app, RigidBody::Static, RVector::ZERO);
+    let dynamic = spawn_box(&mut app, RigidBody::Dynamic, RVector::Y * 0.9);
 
     for _ in 0..10 {
         tick(&mut app);
@@ -229,14 +229,14 @@ fn disabled_pair_destroy_unlinks_island_contact() {
 
     app.world_mut()
         .entity_mut(dynamic)
-        .insert(Position(Vector::Y * 20.0));
+        .insert(Position(RVector::Y * 20.0));
     for _ in 0..10 {
         tick(&mut app);
     }
     assert_eq!(generating_touching_count(&app), 0);
     assert_island_contacts_match_graph(&app);
 
-    spawn_box(&mut app, RigidBody::Dynamic, Vector::Y * 0.9);
+    spawn_box(&mut app, RigidBody::Dynamic, RVector::Y * 0.9);
     for _ in 0..10 {
         tick(&mut app);
     }
@@ -259,8 +259,8 @@ fn leftover_stop_and_start_in_same_visit_relink() {
         ..default()
     });
 
-    spawn_box(&mut app, RigidBody::Static, Vector::ZERO);
-    spawn_box(&mut app, RigidBody::Dynamic, Vector::Y * 0.9);
+    spawn_box(&mut app, RigidBody::Static, RVector::ZERO);
+    spawn_box(&mut app, RigidBody::Dynamic, RVector::Y * 0.9);
 
     for _ in 0..10 {
         tick(&mut app);
