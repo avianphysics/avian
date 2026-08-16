@@ -154,8 +154,8 @@ fn resting_contact_survives_separate_and_recontact() {
 
 /// A duplicate Started for a live contact must not leave a stale head after Stopped.
 ///
-/// This is the #1025 lifecycle: add_contact used to overwrite the island node for a
-/// ContactId that was already linked, so remove_contact left `head_contact` pointing
+/// This is the #1025 lifecycle: `add_contact` used to overwrite the island node for a
+/// `ContactId` that was already linked, so `remove_contact` left `head_contact` pointing
 /// at a taken slot. The next add then panicked with "Head contact has no island".
 #[test]
 #[cfg(all(
@@ -201,8 +201,8 @@ fn duplicate_started_then_stopped_does_not_leave_stale_head() {
     assert_island_contacts_match_graph(&app);
 }
 
-/// Clearing GENERATE_CONSTRAINTS and then destroying the pair must unlink the island
-/// contact. Otherwise a later pair can reuse the ContactId while `head_contact` is stale.
+/// Clearing `GENERATE_CONSTRAINTS` and then destroying the pair must unlink the island
+/// contact. Otherwise a later pair can reuse the `ContactId` while `head_contact` is stale.
 #[test]
 #[cfg(all(
     feature = "default-collider",
