@@ -695,7 +695,9 @@ fn prepare_contact_constraints(
                 })
                 .1;
             let manifold_index = handle.manifold_index;
-            let Some(manifold) = &contact_pair.manifolds.get(manifold_index) else { continue; };
+            let Some(manifold) = &contact_pair.manifolds.get(manifold_index) else {
+                continue;
+            };
 
             if !contact_pair.generates_constraints() {
                 continue;
