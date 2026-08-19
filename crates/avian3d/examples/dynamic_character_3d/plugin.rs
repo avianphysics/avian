@@ -184,7 +184,7 @@ fn update_grounded(
         // that isn't too steep.
         let is_grounded = hits.iter().any(|hit| {
             if let Some(angle) = max_slope_angle {
-                (rotation * -hit.normal2).angle_between(Vec3::Y).abs() <= angle.0
+                (rotation * hit.normal).angle_between(Vec3::Y).abs() <= angle.0
             } else {
                 true
             }

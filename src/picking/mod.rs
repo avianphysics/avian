@@ -16,6 +16,7 @@ Note that in 3D, only the closest intersection will be reported."
 )]
 
 use crate::{
+    collision::collider::QueryCollider,
     diagnostics::{PhysicsDiagnostics, impl_diagnostic_paths},
     prelude::*,
 };
@@ -28,7 +29,7 @@ use bevy::{
     prelude::*,
 };
 
-use core::time::Duration;
+use core::{marker::PhantomData, time::Duration};
 
 use bevy::{
     diagnostic::DiagnosticPath,
@@ -58,12 +59,12 @@ impl_diagnostic_paths! {
 
 /// Adds the [physics picking](crate::picking) backend to your app, enabling picking for [colliders](Collider).
 #[derive(Clone, Default)]
-pub struct PhysicsPickingPlugin;
+pub struct PhysicsPickingPlugin<C: QueryCollider>(PhantomData<C>);
 
-impl Plugin for PhysicsPickingPlugin {
+impl<C: QueryCollider> Plugin for PhysicsPickingPlugin<C> {
     fn build(&self, app: &mut App) {
         app.init_resource::<PhysicsPickingSettings>()
-            .add_systems(PreUpdate, update_hits.in_set(PickingSystems::Backend));
+            .add_systems(PreUpdate, update_hits::<C>.in_set(PickingSystems::Backend));
     }
 
     fn finish(&self, app: &mut App) {
@@ -150,7 +151,7 @@ const DEFAULT_FILTER_REF: &PhysicsPickingFilter =
     &PhysicsPickingFilter(SpatialQueryFilter::DEFAULT);
 
 /// Queries for collider intersections with pointers using [`PhysicsPickingSettings`] and sends [`PointerHits`] events.
-pub fn update_hits(
+pub fn update_hits<C: QueryCollider>(
     picking_cameras: Query<(
         &Camera,
         Option<&PhysicsPickingFilter>,
@@ -160,7 +161,7 @@ pub fn update_hits(
     pickables: Query<&Pickable>,
     marked_targets: Query<&PhysicsPickable>,
     backend_settings: Res<PhysicsPickingSettings>,
-    spatial_query: SpatialQuery,
+    spatial_query: SpatialQuery<C>,
     mut output_events: MessageWriter<PointerHits>,
     mut diagnostics: ResMut<PhysicsPickingDiagnostics>,
 ) {
