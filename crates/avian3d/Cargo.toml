@@ -67,6 +67,9 @@ diagnostic_ui = ["bevy_diagnostic", "bevy/bevy_ui"]
 # Enables additional correctness checks and validation at the cost of worse performance.
 validate = []
 
+# Exposes internal testing utilities. Only intended for use by benchmarks.
+test = []
+
 [lib]
 name = "avian3d"
 path = "../../src/lib.rs"

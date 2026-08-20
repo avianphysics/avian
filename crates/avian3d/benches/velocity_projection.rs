@@ -1,12 +1,9 @@
-use bevy_math::{Dir3, Vec3};
+use bevy_math::Dir3;
 use core::hint::black_box;
 use criterion::{BenchmarkId, Criterion, PlotConfiguration, criterion_group, criterion_main};
 
-use avian3d::{
-    character_controller::move_and_slide::{
-        project_velocity, project_velocity_bruteforce, test::QuasiRandomDirection,
-    },
-    math::PI,
+use avian3d::character_controller::move_and_slide::{
+    project_velocity, project_velocity_bruteforce, test::QuasiRandomDirection,
 };
 
 fn bench_velocity_projection(c: &mut Criterion) {
