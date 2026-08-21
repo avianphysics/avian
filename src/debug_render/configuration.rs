@@ -1,6 +1,76 @@
 use crate::prelude::*;
 use bevy::{color::palettes::css::*, prelude::*};
 
+#[derive(Resource, Reflect, Clone, Copy)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(Resource)]
+/// A global configuration resource for enabling/disabling debug render systems.
+///
+/// This resource can be used to toggle debug rendering systems at runtime.
+/// For example, to disable AABB rendering:
+///
+/// ```no_run
+#[cfg_attr(feature = "2d", doc = "use avian2d::prelude::*;")]
+#[cfg_attr(feature = "3d", doc = "use avian3d::prelude::*;")]
+/// use bevy::prelude::*;
+///
+/// fn disable_aabb(mut config: ResMut<PhysicsDebugRenderConfig>) {
+///     config.enable_aabb = false;
+/// }
+/// ```
+pub struct PhysicsDebugRenderConfig {
+    /// Enable rendering of rigid body axes.
+    pub enable_axes: bool,
+    /// Enable rendering of collider AABBs.
+    pub enable_aabb: bool,
+    /// Enable rendering of BVH tree nodes.
+    pub enable_bvh: bool,
+    /// Enable rendering of collider wireframes.
+    pub enable_colliders: bool,
+    /// Enable rendering of contact points and normals.
+    pub enable_contacts: bool,
+    /// Enable rendering of joints.
+    pub enable_joints: bool,
+    /// Enable rendering of raycasts.
+    pub enable_raycasts: bool,
+    /// Enable rendering of shapecasts.
+    pub enable_shapecasts: bool,
+    /// Enable rendering of simulation islands.
+    pub enable_islands: bool,
+}
+
+impl Default for PhysicsDebugRenderConfig {
+    fn default() -> Self {
+        Self {
+            enable_axes: true,
+            enable_aabb: true,
+            enable_bvh: true,
+            enable_colliders: true,
+            enable_contacts: true,
+            enable_joints: true,
+            enable_raycasts: true,
+            enable_shapecasts: true,
+            enable_islands: true,
+        }
+    }
+}
+
+impl PhysicsDebugRenderConfig {
+    /// Enable or disable all of the debug rendering systems.
+    pub fn set_all(&mut self, enabled: bool) {
+        self.enable_axes = enabled;
+        self.enable_aabb = enabled;
+        self.enable_bvh = enabled;
+        self.enable_colliders = enabled;
+        self.enable_contacts = enabled;
+        self.enable_joints = enabled;
+        self.enable_raycasts = enabled;
+        self.enable_shapecasts = enabled;
+        self.enable_islands = enabled;
+    }
+}
+
 /// Gizmos used for debug rendering physics. See [`PhysicsDebugPlugin`]
 ///
 /// You can configure what is rendered by inserting the [`PhysicsGizmos`] configuration group
