@@ -2,7 +2,7 @@ use bevy_math::{
     Quat, Vec3,
     primitives::{
         Capsule3d, Cone, Cuboid, Cylinder, InfinitePlane3d, Line3d, Plane3d, Polyline3d, Segment3d,
-        Sphere,
+        Sphere, Triangle3d,
     },
 };
 use parry::shape::SharedShape;
@@ -91,6 +91,16 @@ impl IntoCollider<Collider> for Capsule3d {
 impl IntoCollider<Collider> for Cone {
     fn collider(&self) -> Collider {
         Collider::cone(self.radius, self.height)
+    }
+}
+
+impl IntoCollider<Collider> for Triangle3d {
+    fn collider(&self) -> Collider {
+        Collider::triangle(
+            self.vertices[0].adjust_precision(),
+            self.vertices[1].adjust_precision(),
+            self.vertices[2].adjust_precision(),
+        )
     }
 }
 
