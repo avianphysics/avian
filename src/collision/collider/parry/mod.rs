@@ -272,7 +272,7 @@ pub type TrimeshBuilderError = parry::shape::TriMeshBuilderError;
 /// ```
 ///
 /// Colliders can be further configured using various components like [`Friction`], [`Restitution`],
-/// [`Sensor`], [`CollisionLayers`], [`CollisionMargin`], and [`ColliderDensity`].
+/// [`Sensor`], [`IgnoredCollisions`], [`CollisionLayers`], [`CollisionMargin`], and [`ColliderDensity`].
 ///
 /// If you need to specify the shape of the collider statically, use [`ColliderConstructor`] and build your collider
 /// with the [`Collider::try_from_constructor`] method.
@@ -334,6 +334,7 @@ pub type TrimeshBuilderError = parry::shape::TriMeshBuilderError;
 /// - [Rigid bodies](RigidBody)
 /// - [Density](ColliderDensity)
 /// - [Friction] and [restitution](Restitution) (bounciness)
+/// - [Ignoring collisions](IgnoredCollisions)
 /// - [Collision layers](CollisionLayers)
 /// - [Sensors](Sensor)
 /// - [Collision margins for adding extra thickness to colliders](CollisionMargin)

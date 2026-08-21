@@ -257,6 +257,8 @@ impl Not for LayerMask {
 ///
 /// [bitmasks]: https://en.wikipedia.org/wiki/Mask_(computing)
 ///
+/// See also [`IgnoredCollisions`](crate::dynamics::rigid_body::IgnoredCollisions).
+///
 /// # Creation
 ///
 /// Collision layers store memberships and filters using [`LayerMask`]s. A [`LayerMask`] can be created using
