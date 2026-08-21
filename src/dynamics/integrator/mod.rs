@@ -176,7 +176,7 @@ impl Gravity {
 ///
 /// - Contact impulses and joint impulses for dynamic bodies
 /// - Impulses applied via [`Forces`]
-#[derive(Component, Debug, Default, Reflect)]
+#[derive(Component, Debug, Default, Reflect, Clone, Copy)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Component, Debug, Default)]
@@ -189,7 +189,7 @@ pub struct CustomVelocityIntegration;
 ///
 /// This can be useful for implementing kinematic bodies that are moved according to custom logic,
 /// such as with [`MoveAndSlide`].
-#[derive(Component, Debug, Default, Reflect)]
+#[derive(Component, Debug, Default, Reflect, Clone, Copy)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Component, Debug, Default)]
