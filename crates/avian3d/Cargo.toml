@@ -67,6 +67,10 @@ diagnostic_ui = ["bevy_diagnostic", "bevy/bevy_ui"]
 # Enables additional correctness checks and validation at the cost of worse performance.
 validate = []
 
+# Enables the new gyro solver
+new_gyro = []
+approx_rotation = []
+
 [lib]
 name = "avian3d"
 path = "../../src/lib.rs"
@@ -174,6 +178,10 @@ required-features = ["3d", "default-collider"]
 
 [[example]]
 name = "gyroscopic_motion"
+required-features = ["3d", "default-collider"]
+
+[[example]]
+name = "symmetric_top"
 required-features = ["3d", "default-collider"]
 
 [[example]]
