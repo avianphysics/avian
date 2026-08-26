@@ -257,26 +257,34 @@ impl RayCaster {
         hits.clear();
 
         if self.max_hits == 1 {
-            let first_hit = spatial_query.cast_ray(
+            let first_hit = spatial_query.cast_ray_predicate(
                 self.global_origin(),
                 self.global_direction(),
                 self.max_distance,
                 self.solid,
                 &self.query_filter,
+                &|_| true,
             );
 
             if let Some(hit) = first_hit {
                 hits.push(hit);
             }
         } else {
-            hits.extend(spatial_query.ray_hits(
+            spatial_query.ray_hits_callback(
                 self.global_origin(),
                 self.global_direction(),
                 self.max_distance,
-                self.max_hits,
                 self.solid,
                 &self.query_filter,
-            ));
+                |hit| {
+                    if hits.len() < self.max_hits as usize {
+                        hits.push(hit);
+                        true
+                    } else {
+                        false
+                    }
+                },
+            );
         }
     }
 
@@ -294,6 +302,10 @@ impl RayCaster {
 }
 
 fn on_add_ray_caster(mut world: DeferredWorld, ctx: HookContext) {
+    #[cfg(feature = "debug-plugin")]
+    if world.get::<TempGizmo>(ctx.entity).is_some() {
+        return;
+    }
     let ray_caster = world.get::<RayCaster>(ctx.entity).unwrap();
     let max_hits = if ray_caster.max_hits == u32::MAX {
         10

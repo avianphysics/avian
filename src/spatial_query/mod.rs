@@ -395,9 +395,20 @@ fn update_shape_caster_positions(
     }
 }
 
+#[cfg(all(
+    feature = "debug-plugin",
+    any(feature = "parry-f32", feature = "parry-f64")
+))]
+type TempFilter = Without<TempGizmo>;
+#[cfg(all(
+    not(feature = "debug-plugin"),
+    any(feature = "parry-f32", feature = "parry-f64")
+))]
+type TempFilter = ();
+
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 fn raycast(
-    mut rays: Query<(Entity, &mut RayCaster, &mut RayHits)>,
+    mut rays: Query<(Entity, &mut RayCaster, &mut RayHits), TempFilter>,
     spatial_query: SpatialQuery,
     mut diagnostics: ResMut<SpatialQueryDiagnostics>,
 ) {
@@ -416,7 +427,7 @@ fn raycast(
 
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 fn shapecast(
-    mut shape_casters: Query<(Entity, &mut ShapeCaster, &mut ShapeHits)>,
+    mut shape_casters: Query<(Entity, &mut ShapeCaster, &mut ShapeHits), TempFilter>,
     spatial_query: SpatialQuery,
     mut diagnostics: ResMut<SpatialQueryDiagnostics>,
 ) {

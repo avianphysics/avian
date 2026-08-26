@@ -30,6 +30,7 @@ use bevy::{
     },
     prelude::*,
 };
+use core::time::Duration;
 
 /// A plugin that renders physics objects and properties for debugging purposes.
 /// It is not enabled by default and must be added manually.
@@ -132,7 +133,10 @@ impl Plugin for PhysicsDebugPlugin {
                     any(feature = "parry-f32", feature = "parry-f64")
                 ))]
                 debug_render_shapecasts,
+                debug_render_project_point,
+                debug_render_shape_intersections,
                 debug_render_islands.run_if(resource_exists::<PhysicsIslands>),
+                temp_gizmos,
             )
                 .after(TransformSystems::Propagate)
                 .run_if(|store: Res<GizmoConfigStore>| store.config::<PhysicsGizmos>().0.enabled),
@@ -442,6 +446,23 @@ pub fn debug_render_constraint<T: Component + DebugRenderConstraint<N>, const N:
     }
 }
 
+#[derive(Component, Deref, DerefMut)]
+pub(crate) struct TempGizmo(pub Timer);
+
+impl TempGizmo {
+    pub fn new(lifetime: Duration) -> Self {
+        Self(Timer::new(lifetime, TimerMode::Repeating))
+    }
+}
+
+fn temp_gizmos(query: Query<(Entity, &mut TempGizmo)>, time: Res<Time>, mut commands: Commands) {
+    for (entity, mut temp_gizmo) in query {
+        if temp_gizmo.tick(time.delta()).is_finished() {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
 fn debug_render_raycasts(
     query: Query<(&RayCaster, &RayHits)>,
     mut gizmos: Gizmos<PhysicsGizmos>,
@@ -467,7 +488,6 @@ fn debug_render_raycasts(
         );
     }
 }
-
 #[cfg(all(
     feature = "default-collider",
     any(feature = "parry-f32", feature = "parry-f64")
@@ -499,6 +519,75 @@ fn debug_render_shapecasts(
             normal_color,
             length_unit.0,
         );
+    }
+}
+
+#[derive(Component, Clone)]
+pub(crate) struct ProjectPoint {
+    pub origin: RVector,
+    pub point: RVector,
+}
+fn debug_render_project_point(
+    projections: Query<&ProjectPoint>,
+    mut gizmos: Gizmos<PhysicsGizmos>,
+    store: Res<GizmoConfigStore>,
+    length_unit: Res<PhysicsLengthUnit>,
+) {
+    let config = store.config::<PhysicsGizmos>().1;
+    for projection in projections {
+        let origin_color = config.point_projection_origin_color.unwrap_or(Color::NONE);
+        let arrow_color = config.point_projection_arrow_color.unwrap_or(Color::NONE);
+        let point_color = config.point_projection_point_color.unwrap_or(Color::NONE);
+
+        gizmos.draw_arrow(
+            projection.origin,
+            projection.point,
+            0.1 * **length_unit,
+            arrow_color,
+        );
+
+        #[cfg(feature = "2d")]
+        {
+            gizmos.circle_2d(projection.origin.f32(), 0.1 * **length_unit, origin_color);
+            gizmos.circle_2d(projection.point.f32(), 0.1 * **length_unit, point_color);
+        }
+        #[cfg(feature = "3d")]
+        {
+            gizmos.sphere(projection.origin.f32(), 0.1 * **length_unit, origin_color);
+            gizmos.sphere(projection.point.f32(), 0.1 * **length_unit, point_color);
+        }
+    }
+}
+
+#[derive(Component, Clone)]
+pub(crate) struct ShapeIntersections {
+    pub position: RVector,
+    pub rotation: Rot,
+    pub shape: Collider,
+    pub hits: Vec<(RVector, Rot, Collider)>,
+}
+
+fn debug_render_shape_intersections(
+    intersections: Query<&ShapeIntersections>,
+    mut gizmos: Gizmos<PhysicsGizmos>,
+    store: Res<GizmoConfigStore>,
+) {
+    let config = store.config::<PhysicsGizmos>().1;
+
+    for intersection in intersections {
+        let shape_color = config.shape_intersection_shape_color.unwrap_or(Color::NONE);
+        let hit_color = config.shape_intersection_hit_color.unwrap_or(Color::NONE);
+
+        gizmos.draw_collider(
+            &intersection.shape,
+            intersection.position,
+            intersection.rotation,
+            shape_color,
+        );
+
+        for (position, rotation, collider) in &intersection.hits {
+            gizmos.draw_collider(collider, *position, *rotation, hit_color);
+        }
     }
 }
 

@@ -161,7 +161,7 @@ fn gamepad_input(mut movement_writer: MessageWriter<MovementAction>, gamepads: Q
 fn update_grounded(
     mut commands: Commands,
     mut query: Query<(Entity, &GroundDetection, &GlobalTransform)>,
-    spatial_query: SpatialQuery,
+    mut spatial_query: SpatialQuery,
 ) {
     for (entity, ground_detection, global_transform) in &mut query {
         let Some(collider) = &ground_detection.cast_shape else {

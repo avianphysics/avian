@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use bevy::{color::palettes::css::*, prelude::*};
+use core::time::Duration;
 
 /// Gizmos used for debug rendering physics. See [`PhysicsDebugPlugin`]
 ///
@@ -92,6 +93,17 @@ pub struct PhysicsGizmos {
     pub shapecast_point_color: Option<Color>,
     /// The color used for the hit normals in [shapecasts](spatial_query#shapecasting).
     pub shapecast_normal_color: Option<Color>,
+    /// The color used for the origin in [point projections](spatial_query#point-projection).
+    pub point_projection_origin_color: Option<Color>,
+    /// The color used for the arrow in [point projections](spatial_query#point-projection).
+    pub point_projection_arrow_color: Option<Color>,
+    /// The color used for the projected point in [point projections](spatial_query#point-projection).
+    pub point_projection_point_color: Option<Color>,
+    /// The color used for the shapes in [shape intersections](SpatialQuery::shape_intersections).
+    pub shape_intersection_shape_color: Option<Color>,
+    /// The color used for the intersecting shapes in
+    /// [shape intersections](SpatialQuery::shape_intersections).
+    pub shape_intersection_hit_color: Option<Color>,
     /// The color used for the bounds of [`PhysicsIsland`](dynamics::solver::islands::PhysicsIsland)s.
     pub island_color: Option<Color>,
     /// The color used for [`ColliderTree`](crate::collider_tree) nodes.
@@ -99,6 +111,9 @@ pub struct PhysicsGizmos {
     /// Determines if the visibility of entities with [colliders](Collider) should be set to `Visibility::Hidden`,
     /// which will only show the debug renders.
     pub hide_meshes: bool,
+    /// How long discrete spatial queries (that is, methods called on [`SpatialQuery`]) should be
+    /// rendered.
+    pub temp_gizmo_lifetime: Duration,
 }
 
 impl Default for PhysicsGizmos {
@@ -122,6 +137,14 @@ impl Default for PhysicsGizmos {
             shapecast_shape_color: Some(Color::srgb(0.4, 0.6, 1.0)),
             shapecast_point_color: Some(YELLOW.into()),
             shapecast_normal_color: Some(PINK.into()),
+            // TODO: decide on these
+            point_projection_origin_color: Some(Color::WHITE),
+            point_projection_arrow_color: Some(Color::WHITE),
+            point_projection_point_color: Some(Color::WHITE),
+            shape_intersection_shape_color: Some(Color::WHITE),
+            shape_intersection_hit_color: Some(Color::WHITE),
+            temp_gizmo_lifetime: Duration::from_secs(2),
+            // ---------------------
             island_color: None,
             collider_tree_color: None,
             hide_meshes: false,
@@ -169,6 +192,14 @@ impl PhysicsGizmos {
             shapecast_shape_color: Some(Color::srgb(0.4, 0.6, 1.0)),
             shapecast_point_color: Some(YELLOW.into()),
             shapecast_normal_color: Some(PINK.into()),
+            // TODO: decide on these
+            point_projection_origin_color: Some(Color::WHITE),
+            point_projection_arrow_color: Some(Color::WHITE),
+            point_projection_point_color: Some(Color::WHITE),
+            shape_intersection_shape_color: Some(Color::WHITE),
+            shape_intersection_hit_color: Some(Color::WHITE),
+            temp_gizmo_lifetime: Duration::from_secs(2),
+            // ---------------------
             island_color: Some(RED.into()),
             collider_tree_color: Some(Color::WHITE),
             hide_meshes: true,
@@ -198,6 +229,12 @@ impl PhysicsGizmos {
             shapecast_shape_color: None,
             shapecast_point_color: None,
             shapecast_normal_color: None,
+            point_projection_origin_color: None,
+            point_projection_arrow_color: None,
+            point_projection_point_color: None,
+            shape_intersection_shape_color: None,
+            shape_intersection_hit_color: None,
+            temp_gizmo_lifetime: Duration::ZERO,
             island_color: None,
             collider_tree_color: None,
             hide_meshes: false,

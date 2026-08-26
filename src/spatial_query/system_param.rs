@@ -61,6 +61,10 @@ pub struct SpatialQuery<'w, 's> {
     colliders: Query<'w, 's, (&'static Position, &'static Rotation, &'static Collider)>,
     aabbs: Query<'w, 's, &'static ColliderAabb>,
     collider_trees: Res<'w, ColliderTrees>,
+    #[cfg(feature = "debug-plugin")]
+    commands: Commands<'w, 's>,
+    #[cfg(feature = "debug-plugin")]
+    store: Res<'w, GizmoConfigStore>,
 }
 
 impl SpatialQuery<'_, '_> {
@@ -75,6 +79,12 @@ impl SpatialQuery<'_, '_> {
     /// - `solid`: If true *and* the ray origin is inside of a collider, the hit point will be the ray origin itself.
     ///   Otherwise, the collider will be treated as hollow, and the hit point will be at its boundary.
     /// - `filter`: A [`SpatialQueryFilter`] that determines which entities are included in the cast.
+    ///
+    /// # Mutability
+    ///
+    /// This method takes `&mut self` in order to enable debug rendering. If you need to cast a ray
+    /// with an immutable `SpatialQuery` or want to cast without creating a temporary gizmo, use
+    /// [`cast_ray_predicate`](SpatialQuery::cast_ray_predicate).
     ///
     /// # Example
     ///
@@ -109,14 +119,39 @@ impl SpatialQuery<'_, '_> {
     /// - [`SpatialQuery::ray_hits`]
     /// - [`SpatialQuery::ray_hits_callback`]
     pub fn cast_ray(
-        &self,
+        &mut self,
         origin: RVector,
         direction: Dir,
         max_distance: f32,
         solid: bool,
         filter: &SpatialQueryFilter,
     ) -> Option<RayHitData> {
-        self.cast_ray_predicate(origin, direction, max_distance, solid, filter, &|_| true)
+        let out =
+            self.cast_ray_predicate(origin, direction, max_distance, solid, filter, &|_| true);
+
+        #[cfg(feature = "debug-plugin")]
+        {
+            let (
+                GizmoConfig { enabled, .. },
+                PhysicsGizmos {
+                    temp_gizmo_lifetime,
+                    ..
+                },
+            ) = self.store.config::<PhysicsGizmos>();
+
+            if *enabled && !temp_gizmo_lifetime.is_zero() {
+                self.commands.spawn((
+                    RayCaster::new(origin, direction)
+                        .with_max_distance(max_distance)
+                        .with_solidness(solid)
+                        .with_query_filter(filter.clone()),
+                    RayHits(out.iter().cloned().collect()),
+                    TempGizmo::new(*temp_gizmo_lifetime),
+                ));
+            }
+        }
+
+        out
     }
 
     /// Casts a [ray](spatial_query#raycasting) and computes the closest [hit](RayHitData) with a collider.
@@ -239,6 +274,12 @@ impl SpatialQuery<'_, '_> {
     ///   Otherwise, the collider will be treated as hollow, and the hit point will be at its boundary.
     /// - `filter`: A [`SpatialQueryFilter`] that determines which entities are included in the cast.
     ///
+    /// # Mutability
+    ///
+    /// This method takes `&mut self` in order to enable debug rendering. If you need to cast a ray
+    /// with an immutable `SpatialQuery` or do not want to create a temporary gizmo, use
+    /// [`ray_hits_callback`](SpatialQuery::ray_hits_callback).
+    ///
     /// # Example
     ///
     /// ```
@@ -275,7 +316,7 @@ impl SpatialQuery<'_, '_> {
     /// - [`SpatialQuery::cast_ray_predicate`]
     /// - [`SpatialQuery::ray_hits_callback`]
     pub fn ray_hits(
-        &self,
+        &mut self,
         origin: RVector,
         direction: Dir,
         max_distance: f32,
@@ -293,6 +334,29 @@ impl SpatialQuery<'_, '_> {
                 false
             }
         });
+
+        #[cfg(feature = "debug-plugin")]
+        {
+            let (
+                GizmoConfig { enabled, .. },
+                PhysicsGizmos {
+                    temp_gizmo_lifetime,
+                    ..
+                },
+            ) = self.store.config::<PhysicsGizmos>();
+
+            if *enabled && !temp_gizmo_lifetime.is_zero() {
+                self.commands.spawn((
+                    RayCaster::new(origin, direction)
+                        .with_max_distance(max_distance)
+                        .with_max_hits(max_hits)
+                        .with_solidness(solid)
+                        .with_query_filter(filter.clone()),
+                    RayHits(hits.clone()),
+                    TempGizmo::new(*temp_gizmo_lifetime),
+                ));
+            }
+        }
 
         hits
     }
@@ -408,6 +472,12 @@ impl SpatialQuery<'_, '_> {
     /// - `config`: A [`ShapeCastConfig`] that determines the behavior of the cast.
     /// - `filter`: A [`SpatialQueryFilter`] that determines which entities are included in the cast.
     ///
+    /// # Mutability
+    ///
+    /// This method takes `&mut self` in order to enable debug rendering. If you need to cast a
+    /// shape with an immutable `SpatialQuery` or do not want to create a temporary gizmo, use
+    /// [`cast_shape_predicate`](SpatialQuery::cast_shape_predicate).
+    ///
     /// # Example
     ///
     /// ```
@@ -444,7 +514,7 @@ impl SpatialQuery<'_, '_> {
     /// - [`SpatialQuery::shape_hits_callback`]
     #[allow(clippy::too_many_arguments)]
     pub fn cast_shape(
-        &self,
+        &mut self,
         shape: &Collider,
         origin: RVector,
         shape_rotation: impl Into<Rot>,
@@ -452,7 +522,10 @@ impl SpatialQuery<'_, '_> {
         config: &ShapeCastConfig,
         filter: &SpatialQueryFilter,
     ) -> Option<ShapeHitData> {
-        self.cast_shape_predicate(
+        #[cfg(feature = "debug-plugin")]
+        let shape_rotation = shape_rotation.into();
+
+        let out = self.cast_shape_predicate(
             shape,
             origin,
             shape_rotation,
@@ -460,7 +533,33 @@ impl SpatialQuery<'_, '_> {
             config,
             filter,
             &|_| true,
-        )
+        );
+
+        #[cfg(feature = "debug-plugin")]
+        {
+            let (
+                GizmoConfig { enabled, .. },
+                PhysicsGizmos {
+                    temp_gizmo_lifetime,
+                    ..
+                },
+            ) = self.store.config::<PhysicsGizmos>();
+
+            if *enabled && !temp_gizmo_lifetime.is_zero() {
+                self.commands.spawn((
+                    ShapeCaster::new(shape.clone(), origin, shape_rotation, direction)
+                        .with_max_distance(config.max_distance)
+                        .with_target_distance(config.target_distance)
+                        .with_compute_contact_on_penetration(config.compute_contact_on_penetration)
+                        .with_ignore_origin_penetration(config.ignore_origin_penetration)
+                        .with_query_filter(filter.clone()),
+                    ShapeHits(out.iter().cloned().collect()),
+                    TempGizmo::new(*temp_gizmo_lifetime),
+                ));
+            }
+        }
+
+        out
     }
 
     /// Casts a [shape](spatial_query#shapecasting) with a given rotation and computes the closest [hit](ShapeHitData)
@@ -613,6 +712,12 @@ impl SpatialQuery<'_, '_> {
     /// - `filter`: A [`SpatialQueryFilter`] that determines which entities are included in the cast.
     /// - `callback`: A callback function called for each hit.
     ///
+    /// # Mutability
+    ///
+    /// This method takes `&mut self` in order to enable debug rendering. If you need to cast a
+    /// shape with an immutable `SpatialQuery` or do not want to create a temporary gizmo, use
+    /// [`shape_hits_callback`](SpatialQuery::shape_hits_callback).
+    ///
     /// # Example
     ///
     /// ```
@@ -651,7 +756,7 @@ impl SpatialQuery<'_, '_> {
     /// - [`SpatialQuery::shape_hits_callback`]
     #[allow(clippy::too_many_arguments)]
     pub fn shape_hits(
-        &self,
+        &mut self,
         shape: &Collider,
         origin: RVector,
         shape_rotation: impl Into<Rot>,
@@ -660,6 +765,9 @@ impl SpatialQuery<'_, '_> {
         config: &ShapeCastConfig,
         filter: &SpatialQueryFilter,
     ) -> Vec<ShapeHitData> {
+        #[cfg(feature = "debug-plugin")]
+        let shape_rotation = shape_rotation.into();
+
         let mut hits = Vec::new();
 
         self.shape_hits_callback(
@@ -678,6 +786,31 @@ impl SpatialQuery<'_, '_> {
                 }
             },
         );
+
+        #[cfg(feature = "debug-plugin")]
+        {
+            let (
+                GizmoConfig { enabled, .. },
+                PhysicsGizmos {
+                    temp_gizmo_lifetime,
+                    ..
+                },
+            ) = self.store.config::<PhysicsGizmos>();
+
+            if *enabled && !temp_gizmo_lifetime.is_zero() {
+                self.commands.spawn((
+                    ShapeCaster::new(shape.clone(), origin, shape_rotation, direction)
+                        .with_max_hits(max_hits)
+                        .with_max_distance(config.max_distance)
+                        .with_target_distance(config.target_distance)
+                        .with_compute_contact_on_penetration(config.compute_contact_on_penetration)
+                        .with_ignore_origin_penetration(config.ignore_origin_penetration)
+                        .with_query_filter(filter.clone()),
+                    ShapeHits(hits.clone()),
+                    TempGizmo::new(self.store.config::<PhysicsGizmos>().1.temp_gizmo_lifetime),
+                ));
+            }
+        }
 
         hits
     }
@@ -816,6 +949,12 @@ impl SpatialQuery<'_, '_> {
     ///   Otherwise, the collider will be treated as hollow, and the projection will be at the collider's boundary.
     /// - `query_filter`: A [`SpatialQueryFilter`] that determines which colliders are taken into account in the query.
     ///
+    /// # Mutability
+    ///
+    /// This method takes `&mut self` in order to enable debug rendering. If you need to project a
+    /// point with an immutable `SpatialQuery` or do not want to create a temporary gizmo, use
+    /// [`project_point_predicate`](SpatialQuery::project_point_predicate).
+    ///
     /// # Example
     ///
     /// ```
@@ -842,12 +981,35 @@ impl SpatialQuery<'_, '_> {
     ///
     /// - [`SpatialQuery::project_point_predicate`]
     pub fn project_point(
-        &self,
+        &mut self,
         point: RVector,
         solid: bool,
         filter: &SpatialQueryFilter,
     ) -> Option<PointProjection> {
-        self.project_point_predicate(point, solid, filter, &|_| true)
+        let out = self.project_point_predicate(point, solid, filter, &|_| true)?;
+
+        #[cfg(feature = "debug-plugin")]
+        {
+            let (
+                GizmoConfig { enabled, .. },
+                PhysicsGizmos {
+                    temp_gizmo_lifetime,
+                    ..
+                },
+            ) = self.store.config::<PhysicsGizmos>();
+
+            if *enabled && !temp_gizmo_lifetime.is_zero() {
+                self.commands.spawn((
+                    ProjectPoint {
+                        origin: point,
+                        point: out.point,
+                    },
+                    TempGizmo::new(self.store.config::<PhysicsGizmos>().1.temp_gizmo_lifetime),
+                ));
+            }
+        }
+
+        Some(out)
     }
 
     /// Finds the [projection](spatial_query#point-projection) of a given point on the closest [collider](Collider).
@@ -1146,6 +1308,12 @@ impl SpatialQuery<'_, '_> {
     /// - `shape_rotation`: The rotation of the shape.
     /// - `filter`: A [`SpatialQueryFilter`] that determines which colliders are taken into account in the query.
     ///
+    /// # Mutability
+    ///
+    /// This method takes `&mut self` in order to enable debug rendering. If you need to test intersection
+    /// with an immutable `SpatialQuery` or do not want to create a temporary gizmo, use
+    /// [`shape_intersections_callback`](SpatialQuery::shape_intersections_callback).
+    ///
     /// # Example
     ///
     /// ```
@@ -1174,13 +1342,15 @@ impl SpatialQuery<'_, '_> {
     ///
     /// - [`SpatialQuery::shape_intersections_callback`]
     pub fn shape_intersections(
-        &self,
+        &mut self,
         shape: &Collider,
         shape_position: RVector,
         shape_rotation: impl Into<Rot>,
         filter: &SpatialQueryFilter,
     ) -> Vec<Entity> {
         let mut intersections = vec![];
+        #[cfg(feature = "debug-plugin")]
+        let shape_rotation = shape_rotation.into();
 
         self.shape_intersections_callback(
             shape,
@@ -1192,6 +1362,38 @@ impl SpatialQuery<'_, '_> {
                 true
             },
         );
+
+        #[cfg(feature = "debug-plugin")]
+        {
+            let (
+                GizmoConfig { enabled, .. },
+                PhysicsGizmos {
+                    temp_gizmo_lifetime,
+                    ..
+                },
+            ) = self.store.config::<PhysicsGizmos>();
+
+            if *enabled && !temp_gizmo_lifetime.is_zero() {
+                self.commands.spawn((
+                    ShapeIntersections {
+                        shape: shape.clone(),
+                        position: shape_position,
+                        rotation: shape_rotation,
+                        hits: intersections
+                            .iter()
+                            .flat_map(|entity| {
+                                self.colliders
+                                    .get(*entity)
+                                    .map(|(position, rotation, collider)| {
+                                        (**position, (*rotation).into(), collider.clone())
+                                    })
+                            })
+                            .collect(),
+                    },
+                    TempGizmo::new(self.store.config::<PhysicsGizmos>().1.temp_gizmo_lifetime),
+                ));
+            }
+        }
 
         intersections
     }

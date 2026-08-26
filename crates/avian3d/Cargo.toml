@@ -209,3 +209,7 @@ required-features = ["3d", "debug-plugin"]
 name = "velocity_projection"
 required-features = ["3d", "default-collider", "test"]
 harness = false
+
+[[example]]
+name = "debug_render_3d"
+required-features = ["3d", "debug-plugin", "bevy_scene"]
