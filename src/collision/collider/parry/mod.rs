@@ -28,6 +28,19 @@ impl<T: IntoCollider<Collider>> From<T> for Collider {
     }
 }
 
+/// Returns `true` if the given shape supports CCD sweeps.
+pub(crate) fn shape_supports_sweeps(shape: &dyn parry::shape::Shape) -> bool {
+    !matches!(
+        shape.as_typed_shape(),
+        TypedShape::TriMesh(_)
+            | TypedShape::Polyline(_)
+            | TypedShape::HeightField(_)
+            | TypedShape::Voxels(_)
+            | TypedShape::Segment(_)
+            | TypedShape::Triangle(_)
+    )
+}
+
 /// Parameters controlling the VHACD convex decomposition.
 ///
 /// See <https://github.com/Unity-Technologies/VHACD#parameters> for details.
@@ -442,6 +455,10 @@ impl AnyCollider for Collider {
     }
 
     fn ccd_thickness_with_context(&self, _context: ColliderContext<Self::Context>) -> f32 {
+        if !shape_supports_sweeps(self.shape_scaled().as_ref()) {
+            return f32::INFINITY;
+        }
+
         self.shape_scaled().ccd_thickness().f32()
     }
 
