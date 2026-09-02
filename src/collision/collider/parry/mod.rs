@@ -1543,10 +1543,17 @@ fn extract_mesh_vertices_indices(mesh: &Mesh) -> Option<VerticesIndices> {
 
     let idx = match indices {
         Indices::U16(idx) => idx
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|i| [i[0] as u32, i[1] as u32, i[2] as u32])
             .collect(),
-        Indices::U32(idx) => idx.chunks_exact(3).map(|i| [i[0], i[1], i[2]]).collect(),
+        Indices::U32(idx) => idx
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .map(|i| [i[0], i[1], i[2]])
+            .collect(),
     };
 
     Some((vtx, idx))
