@@ -194,11 +194,11 @@ impl IntoCollider<Collider> for Rectangle {
 
 impl IntoCollider<Collider> for Polygon {
     fn collider(&self) -> Collider {
-        let vertices = self.vertices.iter().map(|v| v.real()).collect();
+        let vertices = self.vertices.iter().map(|v| v.real()).collect::<Vec<_>>();
         let indices = (0..self.vertices.len() as u32 - 1)
             .map(|i| [i, i + 1])
-            .collect();
-        Collider::convex_decomposition(vertices, indices)
+            .collect::<Vec<_>>();
+        Collider::convex_decomposition(&vertices, &indices)
     }
 }
 
