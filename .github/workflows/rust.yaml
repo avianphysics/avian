@@ -96,8 +96,13 @@ jobs:
         timeout-minutes: 60
         steps:
             - uses: actions/checkout@v6
-            - uses: dtolnay/rust-toolchain@nightly
+            # Pinned: nightlies since late August 2026 need several times more memory
+            # to compile `bevy_render` and `bevy_pbr`, which gets the 16 GB runners killed.
+            # See https://github.com/rust-lang/rust/issues/161748.
+            # Unpin once a Bevy release includes https://github.com/bevyengine/bevy/pull/25512.
+            - uses: dtolnay/rust-toolchain@master
               with:
+                  toolchain: nightly-2026-08-16
                   components: llvm-tools-preview
             - uses: cargo-bins/cargo-binstall@main
             - name: Install Linux dependencies
