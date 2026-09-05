@@ -316,28 +316,36 @@ impl ShapeCaster {
         };
 
         if self.max_hits == 1 {
-            let first_hit = spatial_query.cast_shape(
+            let first_hit = spatial_query.cast_shape_predicate(
                 &self.shape,
                 self.global_origin,
                 self.global_shape_rotation,
                 self.global_direction,
                 &config,
                 &self.query_filter,
+                &|_| true,
             );
 
             if let Some(hit) = first_hit {
                 hits.push(hit);
             }
         } else {
-            hits.extend(spatial_query.shape_hits(
+            spatial_query.shape_hits_callback(
                 &self.shape,
                 self.global_origin,
                 self.global_shape_rotation,
                 self.global_direction,
-                self.max_hits,
                 &config,
                 &self.query_filter,
-            ));
+                |hit| {
+                    if hits.len() < self.max_hits as usize {
+                        hits.push(hit);
+                        true
+                    } else {
+                        false
+                    }
+                },
+            );
         }
     }
 }

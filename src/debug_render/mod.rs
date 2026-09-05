@@ -5,10 +5,12 @@
 #![allow(clippy::unnecessary_cast)]
 
 mod configuration;
+mod discrete;
 mod gizmos;
 
 use bevy_math::bounding::Aabb3d;
 pub use configuration::*;
+pub(crate) use discrete::*;
 pub use gizmos::*;
 
 use crate::{
@@ -133,6 +135,7 @@ impl Plugin for PhysicsDebugPlugin {
                 ))]
                 debug_render_shapecasts,
                 debug_render_islands.run_if(resource_exists::<PhysicsIslands>),
+                debug_render_discrete_spatial_queries,
             )
                 .after(TransformSystems::Propagate)
                 .run_if(|store: Res<GizmoConfigStore>| store.config::<PhysicsGizmos>().0.enabled),
@@ -140,7 +143,8 @@ impl Plugin for PhysicsDebugPlugin {
         .add_systems(
             PostUpdate,
             change_mesh_visibility.before(VisibilitySystems::CalculateBounds),
-        );
+        )
+        .init_resource::<SpatialQueries>();
     }
 }
 
@@ -566,6 +570,114 @@ fn debug_render_islands(
                     Transform::IDENTITY,
                     color,
                 );
+            }
+        }
+    }
+}
+
+fn debug_render_discrete_spatial_queries(
+    mut gizmos: Gizmos<PhysicsGizmos>,
+    store: Res<GizmoConfigStore>,
+    mut queries: ResMut<SpatialQueries>,
+    length_unit: Res<PhysicsLengthUnit>,
+) {
+    let config = store.config::<PhysicsGizmos>().1;
+
+    for query in queries.drain() {
+        match query.data {
+            DebugSpatialQueryData::Raycast {
+                direction,
+                max_distance,
+                hits,
+            } => {
+                let arrow_color = config.raycast_color.unwrap_or(Color::NONE);
+                let point_color = config.raycast_point_color.unwrap_or(Color::NONE);
+                let normal_color = config.raycast_normal_color.unwrap_or(Color::NONE);
+
+                gizmos.draw_raycast(
+                    query.position,
+                    direction,
+                    max_distance,
+                    &hits,
+                    arrow_color,
+                    point_color,
+                    normal_color,
+                    **length_unit,
+                );
+            }
+            DebugSpatialQueryData::Shapecast {
+                shape,
+                direction,
+                rotation,
+                max_distance,
+                hits,
+            } => {
+                let arrow_color = config.shapecast_color.unwrap_or(Color::NONE);
+                let shape_color = config.shapecast_shape_color.unwrap_or(Color::NONE);
+                let point_color = config.shapecast_point_color.unwrap_or(Color::NONE);
+                let normal_color = config.shapecast_normal_color.unwrap_or(Color::NONE);
+
+                gizmos.draw_shapecast(
+                    &shape,
+                    query.position,
+                    rotation,
+                    direction,
+                    max_distance,
+                    &hits,
+                    arrow_color,
+                    shape_color,
+                    point_color,
+                    normal_color,
+                    **length_unit,
+                );
+            }
+            DebugSpatialQueryData::PointProjection { projection } => {
+                let origin_color = config.point_projection_origin_color.unwrap_or(Color::NONE);
+                let projection_color = config.point_projection_color.unwrap_or(Color::NONE);
+                let arrow_color = config.point_projection_arrow_color.unwrap_or(Color::NONE);
+
+                gizmos.draw_arrow(query.position, projection, 0.1 * **length_unit, arrow_color);
+
+                #[cfg(feature = "2d")]
+                {
+                    gizmos.circle_2d(
+                        projection.f32(),
+                        0.1 * **length_unit as f32,
+                        projection_color,
+                    );
+                    gizmos.circle_2d(
+                        query.position.f32(),
+                        0.1 * **length_unit as f32,
+                        origin_color,
+                    );
+                }
+
+                #[cfg(feature = "3d")]
+                {
+                    gizmos.sphere(
+                        projection.f32(),
+                        0.1 * **length_unit as f32,
+                        projection_color,
+                    );
+                    gizmos.sphere(
+                        query.position.f32(),
+                        0.1 * **length_unit as f32,
+                        origin_color,
+                    );
+                }
+            }
+            DebugSpatialQueryData::ShapeIntersections {
+                shape,
+                rotation,
+                hits,
+            } => {
+                let shape_color = config.shape_intersection_shape_color.unwrap_or(Color::NONE);
+                let hit_color = config.shape_intersection_color.unwrap_or(Color::NONE);
+
+                gizmos.draw_collider(&shape, query.position, rotation, shape_color);
+                for (position, rotation, collider) in hits {
+                    gizmos.draw_collider(&collider, *position, rotation, hit_color);
+                }
             }
         }
     }

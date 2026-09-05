@@ -205,6 +205,10 @@ required-features = ["3d", "default-collider", "diagnostic_ui"]
 name = "debugdump_3d"
 required-features = ["3d", "debug-plugin"]
 
+[[example]]
+name = "debug_render_3d"
+required-features = ["3d", "debug-plugin", "bevy_scene"]
+
 [[bench]]
 name = "velocity_projection"
 required-features = ["3d", "default-collider", "test"]
