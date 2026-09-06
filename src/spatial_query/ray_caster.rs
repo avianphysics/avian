@@ -257,26 +257,34 @@ impl RayCaster {
         hits.clear();
 
         if self.max_hits == 1 {
-            let first_hit = spatial_query.cast_ray(
+            let first_hit = spatial_query.cast_ray_predicate(
                 self.global_origin(),
                 self.global_direction(),
                 self.max_distance,
                 self.solid,
                 &self.query_filter,
+                &|_| true,
             );
 
             if let Some(hit) = first_hit {
                 hits.push(hit);
             }
         } else {
-            hits.extend(spatial_query.ray_hits(
+            spatial_query.ray_hits_callback(
                 self.global_origin(),
                 self.global_direction(),
                 self.max_distance,
-                self.max_hits,
                 self.solid,
                 &self.query_filter,
-            ));
+                |hit| {
+                    if hits.len() < self.max_hits as usize {
+                        hits.push(hit);
+                        true
+                    } else {
+                        false
+                    }
+                },
+            );
         }
     }
 
