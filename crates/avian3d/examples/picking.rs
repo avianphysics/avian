@@ -17,7 +17,7 @@ fn main() {
             DefaultPlugins,
             PhysicsPlugins::default(),
             // `PhysicsPickingPlugin` is not a default plugin
-            PhysicsPickingPlugin,
+            PhysicsPickingPlugin::<Collider>::default(),
         ))
         .add_systems(Startup, setup_scene)
         .add_systems(Update, draw_pointer_intersections)

@@ -1,13 +1,13 @@
-use crate::prelude::*;
+use crate::{collision::collider::ShapeCastSettings, prelude::*};
 use bevy::{
-    ecs::{
-        entity::{EntityMapper, MapEntities},
-        lifecycle::HookContext,
-        world::DeferredWorld,
-    },
+    ecs::entity::{EntityMapper, MapEntities},
     prelude::*,
 };
 
+#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
+use bevy::ecs::{lifecycle::HookContext, world::DeferredWorld};
+
+#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 /// A component used for [shapecasting](spatial_query#shapecasting).
 ///
 /// **Shapecasting** is a type of [spatial query](spatial_query) where a shape travels along a straight
@@ -142,6 +142,7 @@ pub struct ShapeCaster {
     pub query_filter: SpatialQueryFilter,
 }
 
+#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 impl Default for ShapeCaster {
     fn default() -> Self {
         Self {
@@ -167,6 +168,7 @@ impl Default for ShapeCaster {
     }
 }
 
+#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 impl ShapeCaster {
     /// Creates a new [`ShapeCaster`] with a given shape, origin, shape rotation and direction.
     pub fn new(
@@ -298,7 +300,7 @@ impl ShapeCaster {
         &mut self,
         caster_entity: Entity,
         hits: &mut ShapeHits,
-        spatial_query: &SpatialQuery,
+        spatial_query: &SpatialQuery<Collider>,
     ) {
         if self.ignore_self {
             self.query_filter.excluded_entities.insert(caster_entity);
@@ -342,6 +344,7 @@ impl ShapeCaster {
     }
 }
 
+#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 fn on_add_shape_caster(mut world: DeferredWorld, ctx: HookContext) {
     let shape_caster = world.get::<ShapeCaster>(ctx.entity).unwrap();
     let max_hits = if shape_caster.max_hits == u32::MAX {
@@ -385,6 +388,16 @@ pub struct ShapeCastConfig {
     ///
     /// The default is `false`.
     pub ignore_origin_penetration: bool,
+}
+
+impl ShapeCastSettings for ShapeCastConfig {
+    fn max_distance(&self) -> f32 {
+        self.max_distance
+    }
+
+    fn collision_tolerance(&self) -> f32 {
+        self.target_distance
+    }
 }
 
 impl Default for ShapeCastConfig {
@@ -524,6 +537,33 @@ impl MapEntities for ShapeHits {
 }
 
 /// Data related to a hit during a [shapecast](spatial_query#shapecasting).
+/// See [`ShapeHitData`] for the more common type
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ShapeHitDataWithoutEntity {
+    /// How far the shape travelled before the hit.
+    pub distance: f32,
+    /// The point where the shapes touch
+    pub point: RVector,
+    /// The normal from the collider to the cast shape
+    pub normal: Vector,
+    /// How far the shapes penetrate
+    pub penetration: f32,
+}
+
+impl ShapeHitDataWithoutEntity {
+    /// Convert to a [`ShapeHitData`] by filling in the [`Entity`]
+    pub fn with_entity(self, entity: Entity) -> ShapeHitData {
+        ShapeHitData {
+            entity,
+            distance: self.distance,
+            point: self.point,
+            normal: self.normal,
+            penetration: self.penetration,
+        }
+    }
+}
+
+/// Data related to a hit during a [shapecast](spatial_query#shapecasting).
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
@@ -531,28 +571,15 @@ impl MapEntities for ShapeHits {
 pub struct ShapeHitData {
     /// The entity of the collider that was hit by the shape.
     pub entity: Entity,
-
     /// How far the shape travelled before the initial hit.
     #[doc(alias = "time_of_impact")]
     pub distance: f32,
-
-    /// The closest point on the shape that was hit, expressed in world space.
-    ///
-    /// If the shapes are penetrating or the target distance is greater than zero,
-    /// this will be different from `point2`.
-    pub point1: RVector,
-
-    /// The closest point on the shape that was cast, expressed in world space.
-    ///
-    /// If the shapes are penetrating or the target distance is greater than zero,
-    /// this will be different from `point1`.
-    pub point2: RVector,
-
-    /// The outward surface normal on the hit shape at `point1`, expressed in world space.
-    pub normal1: Vector,
-
-    /// The outward surface normal on the cast shape at `point2`, expressed in world space.
-    pub normal2: Vector,
+    /// The closest point where the shapes touch.
+    pub point: RVector,
+    /// The normal from the collider to the cast shape.
+    pub normal: Vector,
+    /// How far the shapes penetrate.
+    pub penetration: f32,
 }
 
 impl MapEntities for ShapeHitData {

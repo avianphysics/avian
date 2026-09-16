@@ -190,7 +190,7 @@ fn update_grounded(
         // The character is grounded if we hit a surface that isn't too steep
         let is_grounded = hit.is_some_and(|hit| {
             let up = global_transform.up();
-            (rotation * hit.normal1).angle_between(*up) <= ground_detection.max_angle
+            (rotation * hit.normal).angle_between(*up) <= ground_detection.max_angle
         });
 
         // Update grounded state

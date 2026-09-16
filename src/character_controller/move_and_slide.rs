@@ -67,7 +67,7 @@ pub const COS_5_DEGREES: f32 = 0.99619469;
 #[doc(alias = "StepSlide")]
 pub struct MoveAndSlide<'w, 's> {
     /// The [`SpatialQuery`] system parameter used to perform shape casts and other geometric queries.
-    pub spatial_query: SpatialQuery<'w, 's>,
+    pub spatial_query: SpatialQuery<'w, 's, Collider>,
     /// The [`Query`] used to query for colliders.
     pub colliders: Query<
         'w,
@@ -788,10 +788,10 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
             distance: safe_distance,
             collision_distance: distance,
             entity: shape_hit.entity,
-            point1: shape_hit.point1,
-            point2: shape_hit.point2,
-            normal1: shape_hit.normal1,
-            normal2: shape_hit.normal2,
+            point1: shape_hit.point,
+            point2: shape_hit.point,
+            normal1: shape_hit.normal,
+            normal2: -shape_hit.normal,
         })
     }
 
@@ -799,7 +799,7 @@ impl<'w, 's> MoveAndSlide<'w, 's> {
     /// The result will never be negative, so if the hit is already closer than `skin_width`, the returned distance will be zero.
     #[must_use]
     fn pull_back(hit: ShapeHitData, dir: Dir, skin_width: f32) -> f32 {
-        let dot = dir.dot(-hit.normal1).max(DOT_EPSILON);
+        let dot = dir.dot(-hit.normal).max(DOT_EPSILON);
         let skin_distance = skin_width / dot;
         (hit.distance - skin_distance).max(0.0)
     }

@@ -2,7 +2,11 @@
 
 #![allow(clippy::unnecessary_cast)]
 
-use avian2d::{collision::contact_types::PackedFeatureId, math::*, prelude::*};
+use avian2d::{
+    collision::{collider::BoundedCollider, contact_types::PackedFeatureId},
+    math::*,
+    prelude::*,
+};
 use bevy::prelude::*;
 use examples_common_2d::ExampleCommonPlugin;
 
@@ -18,6 +22,8 @@ fn main() {
             // This handles things like initializing and updating required components
             // and managing collider hierarchies.
             ColliderBackendPlugin::<CircleCollider>::default(),
+            // Add collider tree for our custom collider
+            ColliderTreePlugin::<CircleCollider>::default(),
             // Enable collision detection for our custom collider.
             NarrowPhasePlugin::<CircleCollider>::default(),
         ))
@@ -52,10 +58,12 @@ impl CircleCollider {
     }
 }
 
-impl AnyCollider for CircleCollider {
+impl BoundedCollider for CircleCollider {
     // If your collider needs queries or resources to function, you can specify
     // a custom `SystemParam` here. In this case, we don't need any.
     type Context = ();
+    // If your collider needs Entity available, set this to ()
+    type EntityUsage = ();
 
     fn aabb_with_context(
         &self,
@@ -66,7 +74,9 @@ impl AnyCollider for CircleCollider {
     ) -> ColliderAabb {
         ColliderAabb::new(position, Vec2::splat(self.radius + margin))
     }
+}
 
+impl AnyCollider for CircleCollider {
     // This is the actual collision detection part.
     // It computes all contacts between two colliders at the given positions.
     fn contact_manifolds_with_context(
@@ -78,7 +88,7 @@ impl AnyCollider for CircleCollider {
         _rotation2: impl Into<Rot2>,
         prediction_distance: f32,
         manifolds: &mut Vec<ContactManifold>,
-        _: ColliderPairContext<Self::Context>,
+        _: ColliderPairContext<Self::Context, Self::EntityUsage>,
     ) {
         // Clear the previous manifolds.
         manifolds.clear();
