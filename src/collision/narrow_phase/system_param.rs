@@ -261,6 +261,12 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                         .flags
                         .set(ContactPairFlags::STARTED_TOUCHING, false);
 
+                    // The contact pair should start generating constraints.
+                    // Doing this here fixes #1067
+                    contact_pair
+                        .flags
+                        .set(ContactPairFlags::STARTED_GENERATING_CONSTRAINTS, false);
+
                     if contact_pair.generates_constraints() {
                         self.contact_status_changes.push(
                             ContactStatusChange::StartedGeneratingConstraints(contact_id),
