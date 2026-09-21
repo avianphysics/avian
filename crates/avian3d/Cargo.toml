@@ -206,7 +206,7 @@ name = "debugdump_3d"
 required-features = ["3d", "debug-plugin"]
 
 [[example]]
-name = "debug_render_3d"
+name = "debug_render_spatial_query_3d"
 required-features = ["3d", "debug-plugin", "bevy_scene"]
 
 [[bench]]
