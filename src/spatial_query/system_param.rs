@@ -63,11 +63,20 @@ pub struct SpatialQuery<'w, 's> {
     collider_trees: Res<'w, ColliderTrees>,
     #[cfg(feature = "debug-plugin")]
     tracked_queries: Option<Res<'w, TrackedSpatialQueries>>,
-    #[cfg(feature = "debug-plugin")]
-    gizmos: Option<Res<'w, GizmoConfigStore>>,
 }
 
 impl SpatialQuery<'_, '_> {
+    /// Records a spatial query for debug rendering if tracking is enabled.
+    #[cfg(feature = "debug-plugin")]
+    #[inline]
+    fn track(&self, query: impl FnOnce() -> TrackedSpatialQuery) {
+        if let Some(tracked_queries) = &self.tracked_queries
+            && tracked_queries.enabled
+        {
+            tracked_queries.borrow_local_mut().push(query());
+        }
+    }
+
     /// Casts a [ray](spatial_query#raycasting) and computes the closest [hit](RayHitData) with a collider.
     /// If there are no hits, `None` is returned.
     ///
@@ -124,19 +133,12 @@ impl SpatialQuery<'_, '_> {
             self.cast_ray_predicate(origin, direction, max_distance, solid, filter, &|_| true);
 
         #[cfg(feature = "debug-plugin")]
-        if let Some(gizmos) = &self.gizmos
-            && gizmos.config::<PhysicsGizmos>().0.enabled
-            && let Some(tracked_queries) = &self.tracked_queries
-        {
-            tracked_queries
-                .borrow_local_mut()
-                .push(TrackedSpatialQuery::Raycast {
-                    origin,
-                    direction,
-                    max_distance,
-                    hits: out.iter().cloned().collect(),
-                });
-        }
+        self.track(|| TrackedSpatialQuery::Raycast {
+            origin,
+            direction,
+            max_distance,
+            hits: out.iter().cloned().collect(),
+        });
 
         out
     }
@@ -317,19 +319,12 @@ impl SpatialQuery<'_, '_> {
         });
 
         #[cfg(feature = "debug-plugin")]
-        if let Some(gizmos) = &self.gizmos
-            && gizmos.config::<PhysicsGizmos>().0.enabled
-            && let Some(tracked_queries) = &self.tracked_queries
-        {
-            tracked_queries
-                .borrow_local_mut()
-                .push(TrackedSpatialQuery::Raycast {
-                    origin,
-                    direction,
-                    max_distance,
-                    hits: hits.clone(),
-                })
-        }
+        self.track(|| TrackedSpatialQuery::Raycast {
+            origin,
+            direction,
+            max_distance,
+            hits: hits.clone(),
+        });
 
         hits
     }
@@ -503,21 +498,14 @@ impl SpatialQuery<'_, '_> {
         );
 
         #[cfg(feature = "debug-plugin")]
-        if let Some(gizmos) = &self.gizmos
-            && gizmos.config::<PhysicsGizmos>().0.enabled
-            && let Some(tracked_queries) = &self.tracked_queries
-        {
-            tracked_queries
-                .borrow_local_mut()
-                .push(TrackedSpatialQuery::Shapecast {
-                    shape: shape.clone(),
-                    origin,
-                    rotation: shape_rotation,
-                    direction,
-                    max_distance: config.max_distance,
-                    hits: out.iter().cloned().collect(),
-                });
-        }
+        self.track(|| TrackedSpatialQuery::Shapecast {
+            shape: shape.clone(),
+            origin,
+            rotation: shape_rotation,
+            direction,
+            max_distance: config.max_distance,
+            hits: out.iter().cloned().collect(),
+        });
 
         out
     }
@@ -741,21 +729,14 @@ impl SpatialQuery<'_, '_> {
         );
 
         #[cfg(feature = "debug-plugin")]
-        if let Some(gizmos) = &self.gizmos
-            && gizmos.config::<PhysicsGizmos>().0.enabled
-            && let Some(tracked_queries) = &self.tracked_queries
-        {
-            tracked_queries
-                .borrow_local_mut()
-                .push(TrackedSpatialQuery::Shapecast {
-                    shape: shape.clone(),
-                    origin,
-                    rotation: shape_rotation,
-                    direction,
-                    max_distance: config.max_distance,
-                    hits: hits.clone(),
-                })
-        }
+        self.track(|| TrackedSpatialQuery::Shapecast {
+            shape: shape.clone(),
+            origin,
+            rotation: shape_rotation,
+            direction,
+            max_distance: config.max_distance,
+            hits: hits.clone(),
+        });
 
         hits
     }
@@ -928,17 +909,11 @@ impl SpatialQuery<'_, '_> {
         let out = self.project_point_predicate(point, solid, filter, &|_| true);
 
         #[cfg(feature = "debug-plugin")]
-        if let Some(gizmos) = &self.gizmos
-            && gizmos.config::<PhysicsGizmos>().0.enabled
-            && let Some(tracked_queries) = &self.tracked_queries
-            && let Some(out) = &out
-        {
-            tracked_queries
-                .borrow_local_mut()
-                .push(TrackedSpatialQuery::PointProjection {
-                    point,
-                    projection: out.point,
-                })
+        if let Some(projection) = &out {
+            self.track(|| TrackedSpatialQuery::PointProjection {
+                point,
+                projection: projection.point,
+            });
         }
 
         out
@@ -1290,19 +1265,12 @@ impl SpatialQuery<'_, '_> {
         );
 
         #[cfg(feature = "debug-plugin")]
-        if let Some(gizmos) = &self.gizmos
-            && gizmos.config::<PhysicsGizmos>().0.enabled
-            && let Some(tracked_queries) = &self.tracked_queries
-        {
-            tracked_queries
-                .borrow_local_mut()
-                .push(TrackedSpatialQuery::ShapeIntersections {
-                    shape: shape.clone(),
-                    position: shape_position,
-                    rotation: shape_rotation,
-                    hits: intersections.clone(),
-                })
-        }
+        self.track(|| TrackedSpatialQuery::ShapeIntersections {
+            shape: shape.clone(),
+            position: shape_position,
+            rotation: shape_rotation,
+            hits: intersections.clone(),
+        });
 
         intersections
     }

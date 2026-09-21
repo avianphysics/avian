@@ -146,6 +146,7 @@ impl Plugin for PhysicsDebugPlugin {
             PostUpdate,
             change_mesh_visibility.before(VisibilitySystems::CalculateBounds),
         )
+        .add_systems(First, sync_tracked_spatial_queries)
         .init_resource::<TrackedSpatialQueries>()
         .init_resource::<TrackedShapeIntersections>();
     }
@@ -586,6 +587,20 @@ fn debug_render_islands(
             }
         }
     }
+}
+
+/// Caches whether physics gizmos are enabled on [`TrackedSpatialQueries`].
+fn sync_tracked_spatial_queries(
+    store: Res<GizmoConfigStore>,
+    mut queries: ResMut<TrackedSpatialQueries>,
+) {
+    let enabled = store.config::<PhysicsGizmos>().0.enabled;
+
+    if !enabled && queries.enabled {
+        queries.clear();
+    }
+
+    queries.enabled = enabled;
 }
 
 fn debug_render_tracked_spatial_queries(
