@@ -5,13 +5,12 @@
 #![allow(clippy::unnecessary_cast)]
 
 mod configuration;
-mod discrete;
 mod gizmos;
+mod tracked_spatial_query;
 
-use bevy_math::bounding::Aabb3d;
 pub use configuration::*;
-pub(crate) use discrete::*;
 pub use gizmos::*;
+pub(crate) use tracked_spatial_query::*;
 
 use crate::{
     collider_tree::ColliderTrees,
@@ -30,6 +29,7 @@ use bevy::{
         query::Has,
         system::{StaticSystemParam, SystemParam, SystemParamItem},
     },
+    math::bounding::Aabb3d,
     prelude::*,
 };
 
@@ -44,8 +44,7 @@ use bevy::{
 /// - Using different colors for [sleeping](Sleeping) bodies
 /// - [Contacts](ContactPair)
 /// - [Joints](dynamics::joints)
-/// - [`RayCaster`]
-/// - [`ShapeCaster`]
+/// - [Spatial queries](spatial_query)
 /// - [Simulation islands](dynamics::solver::islands)
 /// - [Collider tree](crate::collider_tree) nodes
 /// - Changing the visibility of entities to only show debug rendering
@@ -115,11 +114,15 @@ impl Plugin for PhysicsDebugPlugin {
                 debug_render_axes,
                 debug_render_aabbs,
                 debug_render_bvh,
-                #[cfg(all(
-                    feature = "default-collider",
-                    any(feature = "parry-f32", feature = "parry-f64")
-                ))]
-                debug_render_colliders,
+                (
+                    debug_render_tracked_spatial_queries,
+                    #[cfg(all(
+                        feature = "default-collider",
+                        any(feature = "parry-f32", feature = "parry-f64")
+                    ))]
+                    debug_render_colliders,
+                )
+                    .chain(),
                 debug_render_contacts,
                 // TODO: Refactor joints to allow iterating over all of them without generics
                 debug_render_constraint::<FixedJoint, 2>,
@@ -135,7 +138,6 @@ impl Plugin for PhysicsDebugPlugin {
                 ))]
                 debug_render_shapecasts,
                 debug_render_islands.run_if(resource_exists::<PhysicsIslands>),
-                debug_render_discrete_spatial_queries,
             )
                 .after(TransformSystems::Propagate)
                 .run_if(|store: Res<GizmoConfigStore>| store.config::<PhysicsGizmos>().0.enabled),
@@ -144,7 +146,8 @@ impl Plugin for PhysicsDebugPlugin {
             PostUpdate,
             change_mesh_visibility.before(VisibilitySystems::CalculateBounds),
         )
-        .init_resource::<SpatialQueries>();
+        .init_resource::<TrackedSpatialQueries>()
+        .init_resource::<TrackedShapeIntersections>();
     }
 }
 
@@ -298,6 +301,7 @@ fn debug_render_colliders(
     sleeping: Query<(), With<Sleeping>>,
     body_indices: Query<&SolverBodyIndex>,
     solver_bodies: Res<SolverBodies>,
+    shape_intersection_tests: Res<TrackedShapeIntersections>,
     mut gizmos: Gizmos<PhysicsGizmos>,
     store: Res<GizmoConfigStore>,
 ) {
@@ -305,10 +309,19 @@ fn debug_render_colliders(
     for (entity, collider, transform, collider_rb, render_config) in &mut colliders {
         let position = Position::from(transform);
         let rotation = Rotation::from(transform);
-        if let Some(mut color) = render_config.map_or(config.collider_color, |c| c.collider_color) {
+
+        // Colliders hit by a tracked shape intersection test are drawn using the highlight color.
+        let intersection_color = shape_intersection_tests
+            .contains(&entity)
+            .then_some(config.shape_intersection_color)
+            .flatten();
+
+        if let Some(mut color) = intersection_color
+            .or_else(|| render_config.map_or(config.collider_color, |c| c.collider_color))
+        {
             let collider_rb = collider_rb.map_or(entity, |c| c.body);
 
-            let ccd_color = (render_config.is_none())
+            let ccd_color = (render_config.is_none() && intersection_color.is_none())
                 .then(|| body_indices.get(collider_rb).ok().copied())
                 .flatten()
                 .and_then(|index| solver_bodies.get(index))
@@ -327,7 +340,7 @@ fn debug_render_colliders(
 
             if let Some(ccd_color) = ccd_color {
                 color = ccd_color;
-            } else if sleeping.contains(collider_rb) {
+            } else if intersection_color.is_none() && sleeping.contains(collider_rb) {
                 // If the body is sleeping, multiply the color by the sleeping color multiplier.
                 let hsla = Hsla::from(color).to_vec4();
                 if let Some(mul) = render_config.map_or(config.sleeping_color_multiplier, |c| {
@@ -575,17 +588,21 @@ fn debug_render_islands(
     }
 }
 
-fn debug_render_discrete_spatial_queries(
+fn debug_render_tracked_spatial_queries(
     mut gizmos: Gizmos<PhysicsGizmos>,
     store: Res<GizmoConfigStore>,
-    mut queries: ResMut<SpatialQueries>,
+    mut queries: ResMut<TrackedSpatialQueries>,
+    mut shape_intersections: ResMut<TrackedShapeIntersections>,
     length_unit: Res<PhysicsLengthUnit>,
 ) {
     let config = store.config::<PhysicsGizmos>().1;
 
+    shape_intersections.clear();
+
     for query in queries.drain() {
-        match query.data {
-            DebugSpatialQueryData::Raycast {
+        match query {
+            TrackedSpatialQuery::Raycast {
+                origin,
                 direction,
                 max_distance,
                 hits,
@@ -595,9 +612,10 @@ fn debug_render_discrete_spatial_queries(
                 let normal_color = config.raycast_normal_color.unwrap_or(Color::NONE);
 
                 gizmos.draw_raycast(
-                    query.position,
+                    origin,
                     direction,
-                    max_distance,
+                    // f32::MAX renders nothing, but this number seems to be fine :P
+                    max_distance.min(1_000_000_000_000_000_000.0),
                     &hits,
                     arrow_color,
                     point_color,
@@ -605,10 +623,11 @@ fn debug_render_discrete_spatial_queries(
                     **length_unit,
                 );
             }
-            DebugSpatialQueryData::Shapecast {
+            TrackedSpatialQuery::Shapecast {
                 shape,
-                direction,
+                origin,
                 rotation,
+                direction,
                 max_distance,
                 hits,
             } => {
@@ -619,10 +638,11 @@ fn debug_render_discrete_spatial_queries(
 
                 gizmos.draw_shapecast(
                     &shape,
-                    query.position,
+                    origin,
                     rotation,
                     direction,
-                    max_distance,
+                    // f32::MAX renders nothing, but this number seems to be fine :P
+                    max_distance.min(1_000_000_000_000_000.0),
                     &hits,
                     arrow_color,
                     shape_color,
@@ -631,12 +651,12 @@ fn debug_render_discrete_spatial_queries(
                     **length_unit,
                 );
             }
-            DebugSpatialQueryData::PointProjection { projection } => {
+            TrackedSpatialQuery::PointProjection { point, projection } => {
+                let line_color = config.point_projection_color.unwrap_or(Color::NONE);
                 let origin_color = config.point_projection_origin_color.unwrap_or(Color::NONE);
-                let projection_color = config.point_projection_color.unwrap_or(Color::NONE);
-                let arrow_color = config.point_projection_arrow_color.unwrap_or(Color::NONE);
+                let projection_color = config.point_projection_point_color.unwrap_or(Color::NONE);
 
-                gizmos.draw_arrow(query.position, projection, 0.1 * **length_unit, arrow_color);
+                gizmos.draw_line(point, projection, line_color);
 
                 #[cfg(feature = "2d")]
                 {
@@ -645,11 +665,7 @@ fn debug_render_discrete_spatial_queries(
                         0.1 * **length_unit as f32,
                         projection_color,
                     );
-                    gizmos.circle_2d(
-                        query.position.f32(),
-                        0.1 * **length_unit as f32,
-                        origin_color,
-                    );
+                    gizmos.circle_2d(point.f32(), 0.1 * **length_unit as f32, origin_color);
                 }
 
                 #[cfg(feature = "3d")]
@@ -659,24 +675,21 @@ fn debug_render_discrete_spatial_queries(
                         0.1 * **length_unit as f32,
                         projection_color,
                     );
-                    gizmos.sphere(
-                        query.position.f32(),
-                        0.1 * **length_unit as f32,
-                        origin_color,
-                    );
+                    gizmos.sphere(point.f32(), 0.1 * **length_unit as f32, origin_color);
                 }
             }
-            DebugSpatialQueryData::ShapeIntersections {
+            TrackedSpatialQuery::ShapeIntersections {
                 shape,
+                position,
                 rotation,
                 hits,
             } => {
                 let shape_color = config.shape_intersection_shape_color.unwrap_or(Color::NONE);
-                let hit_color = config.shape_intersection_color.unwrap_or(Color::NONE);
 
-                gizmos.draw_collider(&shape, query.position, rotation, shape_color);
-                for (position, rotation, collider) in hits {
-                    gizmos.draw_collider(&collider, *position, rotation, hit_color);
+                gizmos.draw_collider(&shape, position, rotation, shape_color);
+
+                if config.shape_intersection_color.is_some() {
+                    shape_intersections.extend(hits);
                 }
             }
         }

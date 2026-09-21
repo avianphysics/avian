@@ -92,12 +92,12 @@ pub struct PhysicsGizmos {
     pub shapecast_point_color: Option<Color>,
     /// The color used for the hit normals in [shapecasts](spatial_query#shapecasting).
     pub shapecast_normal_color: Option<Color>,
+    /// The color used for the line between the origin and the projected point when drawing [point projections](spatial_query#point-projection).
+    pub point_projection_color: Option<Color>,
     /// The color used for the origin of [point projections](spatial_query#point-projection).
     pub point_projection_origin_color: Option<Color>,
     /// The color used for the projected points of [point projections](spatial_query#point-projection).
-    pub point_projection_color: Option<Color>,
-    /// The color used for the arrow when drawing [point projections](spatial_query#point-projection).
-    pub point_projection_arrow_color: Option<Color>,
+    pub point_projection_point_color: Option<Color>,
     /// The color used for the shape used for [shape intersection](SpatialQuery::shape_intersections) tests.
     pub shape_intersection_shape_color: Option<Color>,
     /// The color used for the intersecting colliders of [shape intersection](SpatialQuery::shape_intersections) tests.
@@ -132,16 +132,14 @@ impl Default for PhysicsGizmos {
             shapecast_shape_color: Some(Color::srgb(0.4, 0.6, 1.0)),
             shapecast_point_color: Some(YELLOW.into()),
             shapecast_normal_color: Some(PINK.into()),
+            point_projection_color: Some(Color::WHITE),
+            point_projection_origin_color: Some(Color::WHITE),
+            point_projection_point_color: Some(YELLOW.into()),
+            shape_intersection_shape_color: Some(Color::WHITE),
+            shape_intersection_color: Some(YELLOW.into()),
             island_color: None,
             collider_tree_color: None,
             hide_meshes: false,
-            // --- TODO: decide on these ---
-            point_projection_origin_color: Some(Color::WHITE),
-            point_projection_color: Some(Color::WHITE),
-            point_projection_arrow_color: Some(Color::WHITE),
-            shape_intersection_shape_color: Some(Color::WHITE),
-            shape_intersection_color: Some(Color::WHITE),
-            // ------------------------------
         }
     }
 }
@@ -186,16 +184,14 @@ impl PhysicsGizmos {
             shapecast_shape_color: Some(Color::srgb(0.4, 0.6, 1.0)),
             shapecast_point_color: Some(YELLOW.into()),
             shapecast_normal_color: Some(PINK.into()),
+            point_projection_color: Some(Color::WHITE),
+            point_projection_origin_color: Some(Color::WHITE),
+            point_projection_point_color: Some(YELLOW.into()),
+            shape_intersection_shape_color: Some(Color::WHITE),
+            shape_intersection_color: Some(YELLOW.into()),
             island_color: Some(RED.into()),
             collider_tree_color: Some(Color::WHITE),
             hide_meshes: true,
-            // --- TODO: decide on these ---
-            point_projection_origin_color: Some(Color::WHITE),
-            point_projection_color: Some(Color::WHITE),
-            point_projection_arrow_color: Some(Color::WHITE),
-            shape_intersection_shape_color: Some(Color::WHITE),
-            shape_intersection_color: Some(Color::WHITE),
-            // ------------------------------
         }
     }
 
@@ -222,14 +218,14 @@ impl PhysicsGizmos {
             shapecast_shape_color: None,
             shapecast_point_color: None,
             shapecast_normal_color: None,
+            point_projection_color: None,
+            point_projection_origin_color: None,
+            point_projection_point_color: None,
+            shape_intersection_shape_color: None,
+            shape_intersection_color: None,
             island_color: None,
             collider_tree_color: None,
             hide_meshes: false,
-            point_projection_origin_color: None,
-            point_projection_color: None,
-            point_projection_arrow_color: None,
-            shape_intersection_shape_color: None,
-            shape_intersection_color: None,
         }
     }
 

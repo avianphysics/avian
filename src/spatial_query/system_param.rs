@@ -62,7 +62,7 @@ pub struct SpatialQuery<'w, 's> {
     aabbs: Query<'w, 's, &'static ColliderAabb>,
     collider_trees: Res<'w, ColliderTrees>,
     #[cfg(feature = "debug-plugin")]
-    debug: Option<Res<'w, SpatialQueries>>,
+    tracked_queries: Option<Res<'w, TrackedSpatialQueries>>,
     #[cfg(feature = "debug-plugin")]
     gizmos: Option<Res<'w, GizmoConfigStore>>,
 }
@@ -126,16 +126,16 @@ impl SpatialQuery<'_, '_> {
         #[cfg(feature = "debug-plugin")]
         if let Some(gizmos) = &self.gizmos
             && gizmos.config::<PhysicsGizmos>().0.enabled
-            && let Some(debug) = &self.debug
+            && let Some(tracked_queries) = &self.tracked_queries
         {
-            debug.borrow_local_mut().push(DebugSpatialQuery {
-                position: origin,
-                data: DebugSpatialQueryData::Raycast {
+            tracked_queries
+                .borrow_local_mut()
+                .push(TrackedSpatialQuery::Raycast {
+                    origin,
                     direction,
                     max_distance,
                     hits: out.iter().cloned().collect(),
-                },
-            });
+                });
         }
 
         out
@@ -319,16 +319,16 @@ impl SpatialQuery<'_, '_> {
         #[cfg(feature = "debug-plugin")]
         if let Some(gizmos) = &self.gizmos
             && gizmos.config::<PhysicsGizmos>().0.enabled
-            && let Some(debug) = &self.debug
+            && let Some(tracked_queries) = &self.tracked_queries
         {
-            debug.borrow_local_mut().push(DebugSpatialQuery {
-                position: origin,
-                data: DebugSpatialQueryData::Raycast {
+            tracked_queries
+                .borrow_local_mut()
+                .push(TrackedSpatialQuery::Raycast {
+                    origin,
                     direction,
                     max_distance,
                     hits: hits.clone(),
-                },
-            })
+                })
         }
 
         hits
@@ -505,18 +505,18 @@ impl SpatialQuery<'_, '_> {
         #[cfg(feature = "debug-plugin")]
         if let Some(gizmos) = &self.gizmos
             && gizmos.config::<PhysicsGizmos>().0.enabled
-            && let Some(debug) = &self.debug
+            && let Some(tracked_queries) = &self.tracked_queries
         {
-            debug.borrow_local_mut().push(DebugSpatialQuery {
-                position: origin,
-                data: DebugSpatialQueryData::Shapecast {
+            tracked_queries
+                .borrow_local_mut()
+                .push(TrackedSpatialQuery::Shapecast {
                     shape: shape.clone(),
-                    direction,
+                    origin,
                     rotation: shape_rotation,
+                    direction,
                     max_distance: config.max_distance,
                     hits: out.iter().cloned().collect(),
-                },
-            });
+                });
         }
 
         out
@@ -743,18 +743,18 @@ impl SpatialQuery<'_, '_> {
         #[cfg(feature = "debug-plugin")]
         if let Some(gizmos) = &self.gizmos
             && gizmos.config::<PhysicsGizmos>().0.enabled
-            && let Some(debug) = &self.debug
+            && let Some(tracked_queries) = &self.tracked_queries
         {
-            debug.borrow_local_mut().push(DebugSpatialQuery {
-                position: origin,
-                data: DebugSpatialQueryData::Shapecast {
+            tracked_queries
+                .borrow_local_mut()
+                .push(TrackedSpatialQuery::Shapecast {
                     shape: shape.clone(),
-                    direction,
+                    origin,
                     rotation: shape_rotation,
+                    direction,
                     max_distance: config.max_distance,
                     hits: hits.clone(),
-                },
-            })
+                })
         }
 
         hits
@@ -930,15 +930,15 @@ impl SpatialQuery<'_, '_> {
         #[cfg(feature = "debug-plugin")]
         if let Some(gizmos) = &self.gizmos
             && gizmos.config::<PhysicsGizmos>().0.enabled
-            && let Some(debug) = &self.debug
+            && let Some(tracked_queries) = &self.tracked_queries
             && let Some(out) = &out
         {
-            debug.borrow_local_mut().push(DebugSpatialQuery {
-                position: point,
-                data: DebugSpatialQueryData::PointProjection {
+            tracked_queries
+                .borrow_local_mut()
+                .push(TrackedSpatialQuery::PointProjection {
+                    point,
                     projection: out.point,
-                },
-            })
+                })
         }
 
         out
@@ -1292,24 +1292,16 @@ impl SpatialQuery<'_, '_> {
         #[cfg(feature = "debug-plugin")]
         if let Some(gizmos) = &self.gizmos
             && gizmos.config::<PhysicsGizmos>().0.enabled
-            && let Some(debug) = &self.debug
+            && let Some(tracked_queries) = &self.tracked_queries
         {
-            debug.borrow_local_mut().push(DebugSpatialQuery {
-                position: shape_position,
-                data: DebugSpatialQueryData::ShapeIntersections {
+            tracked_queries
+                .borrow_local_mut()
+                .push(TrackedSpatialQuery::ShapeIntersections {
                     shape: shape.clone(),
+                    position: shape_position,
                     rotation: shape_rotation,
-                    hits: intersections
-                        .iter()
-                        .filter_map(|e| {
-                            self.colliders
-                                .get(*e)
-                                .map(|(p, r, c)| (*p, *r, c.clone()))
-                                .ok()
-                        })
-                        .collect(),
-                },
-            })
+                    hits: intersections.clone(),
+                })
         }
 
         intersections
