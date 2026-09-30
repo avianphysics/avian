@@ -213,3 +213,38 @@ fn no_ambiguity_errors() {
     .finish();
     app.update();
 }
+
+// Repro for dangling-proxy-key bug causing `StableVec::index_mut` panic.
+// Removing `RigidBody` frees the collider's kinematic proxy slot but leaves its key
+// pointing there; a new kinematic collider reuses that slot; despawning the first entity
+// then frees the newcomer's slot via the stale key, so the live newcomer's next broad-phase
+// update indexes an empty slot.
+#[cfg(all(feature = "2d", feature = "default-collider"))]
+#[test]
+fn reused_proxy_slot_stays_valid_after_body_removal() {
+    let mut app = create_app();
+
+    // Kinematic collider: its proxy lives in the kinematic tree.
+    let detached = app
+        .world_mut()
+        .spawn((RigidBody::Kinematic, Collider::circle(1.0)))
+        .id();
+    tick_app(&mut app, 1.0 / 60.0);
+
+    // Remove the body: frees the kinematic proxy slot but leaves the key pointing at it.
+    app.world_mut().entity_mut(detached).remove::<RigidBody>();
+    tick_app(&mut app, 1.0 / 60.0);
+
+    // A new moving kinematic collider reuses the freed slot.
+    app.world_mut().spawn((
+        RigidBody::Kinematic,
+        LinearVelocity(Vector::new(0.0, -60.0)),
+        Collider::circle(1.0),
+    ));
+    tick_app(&mut app, 1.0 / 60.0);
+
+    // Despawning it frees the newcomer's slot via the stale key. The newcomer is now
+    // live and tries to move with a key to an empty slot: the next updates hit `index_mut`.
+    app.world_mut().entity_mut(detached).despawn();
+    tick_app(&mut app, 1.0 / 60.0);
+}
