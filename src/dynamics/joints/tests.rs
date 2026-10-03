@@ -1,6 +1,5 @@
 use core::time::Duration;
 
-#[cfg(feature = "2d")]
 use approx::assert_relative_eq;
 use bevy::{mesh::MeshPlugin, prelude::*, time::TimeUpdateStrategy};
 
@@ -850,4 +849,218 @@ fn prismatic_motor_combined_position_velocity() {
         "Combined motor should move the body: {}",
         displacement
     );
+}
+
+#[cfg(feature = "2d")]
+fn z_spin(angular_velocity: &AngularVelocity) -> f32 {
+    angular_velocity.0
+}
+
+#[cfg(feature = "3d")]
+fn z_spin(angular_velocity: &AngularVelocity) -> f32 {
+    angular_velocity.z
+}
+
+/// Tests that angular joint damping between bodies with unequal inertia conserves angular momentum.
+#[test]
+fn joint_damping_conserves_angular_momentum() {
+    let mut app = create_app();
+    app.finish();
+
+    let light = app
+        .world_mut()
+        .spawn((
+            RigidBody::Dynamic,
+            Position(RVector::ZERO),
+            Mass(1.0),
+            #[cfg(feature = "2d")]
+            AngularInertia(1.0),
+            #[cfg(feature = "3d")]
+            AngularInertia::new(Vec3::splat(1.0)),
+            #[cfg(feature = "2d")]
+            AngularVelocity(10.0),
+            #[cfg(feature = "3d")]
+            AngularVelocity(Vector::Z * 10.0),
+        ))
+        .id();
+
+    let heavy = app
+        .world_mut()
+        .spawn((
+            RigidBody::Dynamic,
+            Position(RVector::ZERO),
+            Mass(1.0),
+            #[cfg(feature = "2d")]
+            AngularInertia(10.0),
+            #[cfg(feature = "3d")]
+            AngularInertia::new(Vec3::splat(10.0)),
+        ))
+        .id();
+
+    app.world_mut().spawn((
+        RevoluteJoint::new(light, heavy),
+        JointDamping {
+            linear: 0.0,
+            angular: 20.0,
+        },
+    ));
+
+    app.update();
+
+    let steps = (1.0 / TIMESTEP) as usize;
+    for _ in 0..steps {
+        app.update();
+    }
+
+    let light_spin = z_spin(app.world().get::<AngularVelocity>(light).unwrap());
+    let heavy_spin = z_spin(app.world().get::<AngularVelocity>(heavy).unwrap());
+
+    assert_relative_eq!(light_spin, heavy_spin, epsilon = 1e-3);
+    assert_relative_eq!(1.0 * light_spin + 10.0 * heavy_spin, 10.0, epsilon = 1e-3);
+}
+
+/// Joints a moving kinematic body to a resting dynamic body and returns the kinematic body's
+/// velocities after one second.
+fn kinematic_velocity_after_damping<J: Component>(
+    joint: fn(Entity, Entity) -> J,
+    initial_velocity: (LinearVelocity, AngularVelocity),
+    damping: JointDamping,
+) -> (LinearVelocity, AngularVelocity) {
+    let mut app = create_app();
+    app.finish();
+
+    let kinematic = app
+        .world_mut()
+        .spawn((
+            RigidBody::Kinematic,
+            Position(RVector::ZERO),
+            // Kinematic bodies normally get mass from their colliders.
+            Mass(1.0),
+            #[cfg(feature = "2d")]
+            AngularInertia(1.0),
+            #[cfg(feature = "3d")]
+            AngularInertia::new(Vec3::splat(1.0)),
+            initial_velocity,
+        ))
+        .id();
+
+    let dynamic = app
+        .world_mut()
+        .spawn((
+            RigidBody::Dynamic,
+            Position(RVector::ZERO),
+            Mass(1.0),
+            #[cfg(feature = "2d")]
+            AngularInertia(1.0),
+            #[cfg(feature = "3d")]
+            AngularInertia::new(Vec3::splat(1.0)),
+        ))
+        .id();
+
+    app.world_mut().spawn((joint(kinematic, dynamic), damping));
+
+    app.update();
+
+    let steps = (1.0 / TIMESTEP) as usize;
+    for _ in 0..steps {
+        app.update();
+    }
+
+    let body = app.world().entity(kinematic);
+    (
+        *body.get::<LinearVelocity>().unwrap(),
+        *body.get::<AngularVelocity>().unwrap(),
+    )
+}
+
+/// Tests that angular joint damping does not change the angular velocity of a kinematic body.
+#[test]
+fn joint_damping_does_not_change_kinematic_angular_velocity() {
+    #[cfg(feature = "2d")]
+    let spin = AngularVelocity(2.0);
+    #[cfg(feature = "3d")]
+    let spin = AngularVelocity(Vector::Z * 2.0);
+
+    let (_, undamped) = kinematic_velocity_after_damping(
+        RevoluteJoint::new,
+        (LinearVelocity::ZERO, spin),
+        JointDamping::default(),
+    );
+    assert_eq!(undamped, spin, "control: joint alone changed it");
+
+    let (_, damped) = kinematic_velocity_after_damping(
+        RevoluteJoint::new,
+        (LinearVelocity::ZERO, spin),
+        JointDamping {
+            linear: 0.0,
+            angular: 1.0,
+        },
+    );
+    assert_eq!(damped, spin);
+}
+
+/// Tests that linear joint damping does not change the linear velocity of a kinematic body.
+#[test]
+fn joint_damping_does_not_change_kinematic_linear_velocity() {
+    let velocity = LinearVelocity(Vector::X * 2.0);
+
+    let (undamped, _) = kinematic_velocity_after_damping(
+        PrismaticJoint::new,
+        (velocity, AngularVelocity::ZERO),
+        JointDamping::default(),
+    );
+    assert_eq!(undamped, velocity, "control: joint alone changed it");
+
+    let (damped, _) = kinematic_velocity_after_damping(
+        PrismaticJoint::new,
+        (velocity, AngularVelocity::ZERO),
+        JointDamping {
+            linear: 1.0,
+            angular: 0.0,
+        },
+    );
+    assert_eq!(damped, velocity);
+}
+
+/// Tests that angular joint damping still damps the free axis of a body with locked rotation axes.
+#[cfg(feature = "3d")]
+#[test]
+fn joint_damping_damps_free_axis_of_rotation_locked_body() {
+    let mut app = create_app();
+    app.finish();
+
+    let anchor = app
+        .world_mut()
+        .spawn((RigidBody::Static, Position(RVector::ZERO)))
+        .id();
+
+    let body = app
+        .world_mut()
+        .spawn((
+            RigidBody::Dynamic,
+            Position(RVector::ZERO),
+            Mass(1.0),
+            AngularInertia::new(Vec3::splat(1.0)),
+            LockedAxes::new().lock_rotation_x().lock_rotation_z(),
+            AngularVelocity(Vector::Y * 2.0),
+        ))
+        .id();
+
+    app.world_mut().spawn((
+        SphericalJoint::new(anchor, body),
+        JointDamping {
+            linear: 0.0,
+            angular: 5.0,
+        },
+    ));
+
+    app.update();
+
+    let steps = (1.0 / TIMESTEP) as usize;
+    for _ in 0..steps {
+        app.update();
+    }
+
+    let spin = app.world().get::<AngularVelocity>(body).unwrap().y;
+    assert!(spin.abs() < 0.05, "free axis was not damped: {spin}");
 }
