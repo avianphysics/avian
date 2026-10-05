@@ -308,7 +308,7 @@ impl SimplicialCone {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test"))]
 pub mod test {
     //! Tests for velocity projection, notably the [`QuasiRandomDirection`] type used
     //! in testing and benchmarking functions on uniformly distributed input directions.
@@ -316,6 +316,7 @@ pub mod test {
     //! This is used because the velocity projection edge cases may show up for relatively small
     //! subsets of input directions, both in terms of correctness and performance.
 
+    #[cfg(test)]
     use super::DOT_EPSILON;
     use crate::prelude::*;
     use core::f32::consts::PI;
