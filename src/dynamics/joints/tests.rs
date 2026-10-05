@@ -851,3 +851,66 @@ fn prismatic_motor_combined_position_velocity() {
         displacement
     );
 }
+
+/// Regression test: a revolute joint's angle limit must hold even for bodies with very
+/// low angular inertia. The angular constraint solver used to skip applying a correction
+/// when its Lagrange multiplier fell below `EPSILON`; because that multiplier is the
+/// correction scaled by inertia, low-inertia bodies produced multipliers that underflowed
+/// the threshold and rotated straight through their angle limits.
+#[cfg(feature = "2d")]
+#[test]
+fn revolute_angle_limit_holds_at_low_inertia() {
+    use core::f32::consts::PI;
+
+    let mut app = create_app();
+    app.finish();
+
+    let angle_limit = PI / 6.0; // 30 degrees
+
+    // Very low angular inertia is the regime where the old guard discarded the correction.
+    let inertia: f32 = 1.0e-7;
+
+    let anchor = app
+        .world_mut()
+        .spawn((RigidBody::Static, Position(RVector::ZERO)))
+        .id();
+
+    let dynamic = app
+        .world_mut()
+        .spawn((
+            RigidBody::Dynamic,
+            Position(RVector::ZERO),
+            Mass(1.0),
+            AngularInertia(inertia),
+            // Torque sized for a fixed 2 rad/s^2 angular acceleration, driving the body
+            // continuously into the +limit.
+            ConstantTorque(2.0 * inertia),
+        ))
+        .id();
+
+    app.world_mut()
+        .spawn(RevoluteJoint::new(anchor, dynamic).with_angle_limits(-angle_limit, angle_limit));
+
+    app.update();
+
+    // Run for 2 seconds: long enough to reach the limit and settle against it.
+    let steps = (2.0 / TIMESTEP) as usize;
+    for _ in 0..steps {
+        app.update();
+    }
+
+    let body = app.world().entity(dynamic);
+    let angle = body.get::<Rotation>().unwrap().as_radians();
+    let angular_velocity = body.get::<AngularVelocity>().unwrap().0;
+
+    // The limit must arrest the body. Without the fix it rotates through the limit and
+    // keeps spinning under the constant torque, so its angular velocity stays large.
+    assert!(
+        angular_velocity.abs() < 0.5,
+        "angle limit failed to hold low-inertia body: angular velocity = {angular_velocity} rad/s"
+    );
+    assert!(
+        (angle - angle_limit).abs() < 0.1,
+        "body should rest at the +limit ({angle_limit} rad) but is at {angle} rad"
+    );
+}
