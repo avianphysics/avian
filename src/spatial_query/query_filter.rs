@@ -34,7 +34,7 @@ use crate::prelude::*;
 #[reflect(Debug, PartialEq)]
 pub struct SpatialQueryFilter {
     /// Specifies which [collision layers](CollisionLayers) will be included in the [spatial query](crate::spatial_query).
-    pub mask: LayerMask,
+    pub layers: CollisionLayers,
     /// Entities that will not be included in [spatial queries](crate::spatial_query).
     pub excluded_entities: EntityHashSet,
 }
@@ -49,9 +49,21 @@ impl SpatialQueryFilter {
     /// The default [`SpatialQueryFilter`] configuration that includes all collision layers
     /// and has no excluded entities.
     pub const DEFAULT: Self = Self {
-        mask: LayerMask::ALL,
+        layers: CollisionLayers::ALL,
         excluded_entities: EntityHashSet::new(),
     };
+
+    /// Creates a new [`SpatialQueryFilter`] with the given [`CollisionLayers`] determining
+    /// which [collision layers] will be included in the [spatial query].
+    ///
+    /// [collision layers]: CollisionLayers
+    /// [spatial query]: crate::spatial_query
+    pub fn from_collision_layers(layers: impl Into<CollisionLayers>) -> Self {
+        Self {
+            layers: layers.into(),
+            ..default()
+        }
+    }
 
     /// Creates a new [`SpatialQueryFilter`] with the given [`LayerMask`] determining
     /// which [collision layers] will be included in the [spatial query].
@@ -60,7 +72,7 @@ impl SpatialQueryFilter {
     /// [spatial query]: crate::spatial_query
     pub fn from_mask(mask: impl Into<LayerMask>) -> Self {
         Self {
-            mask: mask.into(),
+            layers: CollisionLayers::new(LayerMask::ALL, mask.into()),
             ..default()
         }
     }
@@ -75,13 +87,23 @@ impl SpatialQueryFilter {
         }
     }
 
+    /// Sets the given [`CollisionLayers`] of the filter configuration, determining
+    /// which [collision layers] will be included in the [spatial query].
+    ///
+    /// [collision layers]: CollisionLayers
+    /// [spatial query]: crate::spatial_query
+    pub fn with_collision_layers(mut self, layers: impl Into<CollisionLayers>) -> Self {
+        self.layers = layers.into();
+        self
+    }
+
     /// Sets the [`LayerMask`] of the filter configuration. Only colliders with the corresponding
     /// [collision layer memberships] will be included in the [spatial query].
     ///
     /// [collision layer memberships]: CollisionLayers
     /// [spatial query]: crate::spatial_query
     pub fn with_mask(mut self, masks: impl Into<LayerMask>) -> Self {
-        self.mask = masks.into();
+        self.layers.filters = masks.into();
         self
     }
 
@@ -95,8 +117,6 @@ impl SpatialQueryFilter {
     ///
     /// [spatial queries]: crate::spatial_query
     pub fn test(&self, entity: Entity, layers: CollisionLayers) -> bool {
-        !self.excluded_entities.contains(&entity)
-            && CollisionLayers::new(LayerMask::ALL, self.mask)
-                .interacts_with(CollisionLayers::new(layers.memberships, LayerMask::ALL))
+        !self.excluded_entities.contains(&entity) && self.layers.interacts_with(layers)
     }
 }
