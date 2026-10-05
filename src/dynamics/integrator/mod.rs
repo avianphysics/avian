@@ -407,6 +407,65 @@ pub fn integrate_velocities(
 /// Gyroscopic motion is important for realistic spinning behavior, and for simulating
 /// gyroscopic phenomena such as the Dzhanibekov effect.
 #[cfg(feature = "3d")]
+#[cfg(feature = "new_gyro")]
+#[inline]
+pub fn solve_gyroscopic_torque(
+    ang_vel: &mut Vec3,
+    rotation: Quat,
+    local_inertia: &ComputedAngularInertia,
+    delta_secs: f32,
+) {
+    // Convert angular velocity to body space so that we can use the local angular inertia.
+    let local_ang_vel = rotation.inverse() * *ang_vel;
+
+    // Compute body-space angular momentum.
+    let local_momentum = local_inertia.tensor() * local_ang_vel;
+
+    // k = ω x L = -dL/dt in body coordinates
+    let local_k = local_ang_vel.cross(local_momentum);
+    let k2 = local_k.length_squared();
+
+    if k2 == 0.0 {
+        // k^2 = 0 means no change to L or ω
+        return;
+    }
+
+    // The body-space change in L is modeled as a rotation by -(ω - Jk L) dt
+    // This is the rotation that matches first and second derivatives with the
+    // Euler equation
+    let local_inverse_inertia = local_inertia.inverse();
+
+    let j_k = local_k.dot(local_inverse_inertia * local_k) / k2;
+    let modified_ang_vel = local_ang_vel - j_k * local_momentum;
+
+    #[cfg(feature = "approx_rotation")]
+    let new_local_momentum = approx_rotation(-modified_ang_vel * delta_secs, local_momentum);
+    #[cfg(not(feature = "approx_rotation"))]
+    let new_local_momentum =
+        Quat::from_scaled_axis(-modified_ang_vel * delta_secs) * local_momentum;
+
+    // Convert back to world-space angular velocity.
+    *ang_vel = rotation * (local_inverse_inertia * new_local_momentum);
+}
+
+#[cfg(feature = "approx_rotation")]
+#[inline]
+fn approx_rotation(scaled_axis: Vec3, vec: Vec3) -> Vec3 {
+    let half_vec = 0.5 * scaled_axis;
+    let k = half_vec.cross(vec);
+    vec + 2.0 * (k + half_vec.cross(k)) / (1.0 + half_vec.length_squared())
+}
+
+/// Applies the effects of gyroscopic motion to the given angular velocity.
+///
+/// Gyroscopic motion is the tendency of a rotating object to maintain its axis of rotation
+/// unless acted upon by an external torque. It manifests as objects with non-uniform angular
+/// inertia tensors seemingly wobbling as they spin in the air or on the ground.
+///
+/// Gyroscopic motion is important for realistic spinning behavior, and for simulating
+/// gyroscopic phenomena such as the Dzhanibekov effect.
+#[cfg(feature = "3d")]
+#[cfg(not(feature = "new_gyro"))]
 #[inline]
 pub fn solve_gyroscopic_torque(
     ang_vel: &mut Vector,
