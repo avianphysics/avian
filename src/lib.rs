@@ -151,6 +151,7 @@
 //!     - [Creation](Collider#creation)
 //!     - [Density](ColliderDensity)
 //!     - [Friction] and [restitution](Restitution) (bounciness)
+//!     - [Ignoring collisions](IgnoredCollisions)
 //!     - [Collision layers](CollisionLayers)
 //!     - [Sensors](Sensor)
 #![cfg_attr(

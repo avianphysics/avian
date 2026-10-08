@@ -52,6 +52,12 @@
 //! [`Event`]: bevy::ecs::event::Event
 //! [observer]: bevy::ecs::observer::Observer
 //!
+//! ## Ignoring collisions
+//!
+//! You can attach an [`IgnoredCollisions`] component to an entity with a
+//! [`Collider`] to completely avoid collision detection between the entity and
+//! the entities contained within the [`IgnoredCollisions`] component.
+//!
 //! # Contact Filtering and Modification
 //!
 //! Some advanced contact scenarios may need to filter or modify contacts
