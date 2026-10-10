@@ -131,7 +131,7 @@
 //! - [Movement](RigidBody#movement)
 //!     - [Linear](LinearVelocity) and [angular](AngularVelocity) velocity
 //!     - [External forces, impulses, and acceleration](dynamics::rigid_body::forces)
-//! - [Gravity] and [gravity scale](GravityScale)
+//! - [Gravity], [gravity scale](GravityScale), and [gravity override](GravityOverride)
 //! - [Mass properties](dynamics::rigid_body::mass_properties)
 //! - [Linear](LinearDamping) and [angular](AngularDamping) velocity damping
 //! - [Lock translational and rotational axes](LockedAxes)
@@ -194,7 +194,7 @@
 //!
 //! ## Configuration
 //!
-//! - [Gravity]
+//! - [Gravity] and/or [GravityOverride]
 //! - [`Transform` interpolation and extrapolation](PhysicsInterpolationPlugin)
 //! - [Physics speed](Physics#physics-speed)
 //! - [Configure simulation fidelity with substeps](SubstepCount)
