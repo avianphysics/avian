@@ -21,7 +21,8 @@ use bevy::{
     text::FontSourceTemplate,
     ui::Checked,
     ui_widgets::{
-        RadioButton, RadioGroup, SliderPrecision, SliderStep, ValueChange, slider_self_update,
+        RadioButton, RadioGroup, SliderPrecision, SliderStep, SliderValue, ValueChange,
+        slider_self_update,
     },
 };
 use examples_common_3d::ExampleCommonPlugin;
@@ -189,274 +190,243 @@ fn setup_ui(mut commands: Commands, settings: Res<BvhExampleSettings>) {
         }
         BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.8))
         Children [
-            (
-                Node {
-                    flex_direction: FlexDirection::Column,
-                    row_gap: Val::Px(5.0),
+            Node {
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(5.0),
+            }
+            Children [
+                Text("Optimization Mode")
+                TextFont {
+                    font: FontSourceTemplate::Handle(BOLD),
+                    font_size: FontSize::Px(14.0),
                 }
-                Children [
-                    (
-                        Text("Optimization Mode")
-                        TextFont {
-                            font: FontSourceTemplate::Handle(BOLD),
-                            font_size: FontSize::Px(14.0),
-                        }
-                        ThemedText
-                    ),
-                    (
-                        Node {
-                            display: Display::Flex,
-                            flex_direction: FlexDirection::Column,
-                            row_gap: px(5),
-                        }
-                        RadioGroup
-                        on(
-                            |value_change: On<ValueChange<Entity>>,
-                             radio_buttons: Query<
-                                (Entity, &OptimizationModeRadio),
-                                With<RadioButton>,
-                            >,
-                             mut settings: ResMut<ColliderTreeOptimization>,
-                             mut commands: Commands| {
-                                for (entity, optimization_mode) in radio_buttons.iter() {
-                                    if entity == value_change.value {
-                                        commands.entity(entity).insert(Checked);
-                                        if optimization_mode.0 == settings.optimization_mode {
-                                            continue;
-                                        }
-                                        settings.optimization_mode = optimization_mode.0;
-                                        commands.run_system_cached(clear_scene);
-                                        commands.run_system_cached(setup_scene);
-                                    } else {
-                                        commands.entity(entity).remove::<Checked>();
-                                    }
+                ThemedText
+                --
+                Node {
+                    display: Display::Flex,
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(5),
+                }
+                RadioGroup
+                on(
+                    |value_change: On<ValueChange<Entity>>,
+                     radio_buttons: Query<
+                        (Entity, &OptimizationModeRadio),
+                        With<RadioButton>,
+                    >,
+                     mut settings: ResMut<ColliderTreeOptimization>,
+                     mut commands: Commands| {
+                        for (entity, optimization_mode) in radio_buttons.iter() {
+                            if entity == value_change.value {
+                                commands.entity(entity).insert(Checked);
+                                if optimization_mode.0 == settings.optimization_mode {
+                                    continue;
                                 }
+                                settings.optimization_mode = optimization_mode.0;
+                                commands.run_system_cached(clear_scene);
+                                commands.run_system_cached(setup_scene);
+                            } else {
+                                commands.entity(entity).remove::<Checked>();
                             }
-                        )
-                        Children [
-                            (
-                                @FeathersRadio {
-                                    @caption: bsn! {
-                                        Text("Reinsert") ThemedText
-                                    }
-                                }
-                                OptimizationModeRadio(TreeOptimizationMode::Reinsert)
-                            ),
-                            (
-                                @FeathersRadio {
-                                    @caption: bsn! {
-                                        Text("Partial Rebuild") ThemedText
-                                    }
-                                }
-                                OptimizationModeRadio(TreeOptimizationMode::PartialRebuild)
-                            ),
-                            (
-                                @FeathersRadio {
-                                    @caption: bsn! {
-                                        Text("Full Rebuild") ThemedText
-                                    }
-                                }
-                                OptimizationModeRadio(TreeOptimizationMode::FullRebuild)
-                            ),
-                            (
-                                @FeathersRadio {
-                                    @caption: bsn! {
-                                        Text("Adaptive") ThemedText
-                                    }
-                                }
-                                Checked
-                                OptimizationModeRadio(TreeOptimizationMode::default())
-                            ),
-                        ]
-                    ),
-                ]
-            ),
-            (
-                Node {
-                    flex_direction: FlexDirection::Column,
-                    row_gap: Val::Px(5.0),
-                }
+                        }
+                    }
+                )
                 Children [
-                    (
-                        Text("Grid Size")
-                        TextFont {
-                            font: FontSourceTemplate::Handle(BOLD),
-                            font_size: FontSize::Px(14.0),
+                    @FeathersRadio {
+                        @caption: bsn! {
+                            Text("Reinsert") ThemedText
                         }
-                        ThemedText
-                    ),
-                    (
-                        Node {
-                            display: Display::Flex,
-                            flex_direction: FlexDirection::Column,
-                            row_gap: px(5),
+                    }
+                    OptimizationModeRadio(TreeOptimizationMode::Reinsert)
+                    --
+                    @FeathersRadio {
+                        @caption: bsn! {
+                            Text("Partial Rebuild") ThemedText
                         }
-                        RadioGroup
-                        on(
-                            |value_change: On<ValueChange<Entity>>,
-                             radio_buttons: Query<(Entity, &GridSizeRadio), With<RadioButton>>,
-                             mut settings: ResMut<BvhExampleSettings>,
-                             mut commands: Commands| {
-                                for (entity, grid_size) in radio_buttons.iter() {
-                                    if entity == value_change.value {
-                                        commands.entity(entity).insert(Checked);
-                                        if grid_size.0 == settings.x_count {
-                                            continue;
-                                        }
-                                        settings.x_count = grid_size.0;
-                                        settings.y_count = grid_size.0;
-                                        commands.run_system_cached(clear_scene);
-                                        commands.run_system_cached(setup_scene);
-                                    } else {
-                                        commands.entity(entity).remove::<Checked>();
-                                    }
+                    }
+                    OptimizationModeRadio(TreeOptimizationMode::PartialRebuild)
+                    --
+                    @FeathersRadio {
+                        @caption: bsn! {
+                            Text("Full Rebuild") ThemedText
+                        }
+                    }
+                    OptimizationModeRadio(TreeOptimizationMode::FullRebuild)
+                    --
+                    @FeathersRadio {
+                        @caption: bsn! {
+                            Text("Adaptive") ThemedText
+                        }
+                    }
+                    Checked
+                    OptimizationModeRadio(TreeOptimizationMode::default())
+                ]
+            ]
+            --
+            Node {
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(5.0),
+            }
+            Children [
+                Text("Grid Size")
+                TextFont {
+                    font: FontSourceTemplate::Handle(BOLD),
+                    font_size: FontSize::Px(14.0),
+                }
+                ThemedText
+                --
+                Node {
+                    display: Display::Flex,
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(5),
+                }
+                RadioGroup
+                on(
+                    |value_change: On<ValueChange<Entity>>,
+                     radio_buttons: Query<(Entity, &GridSizeRadio), With<RadioButton>>,
+                     mut settings: ResMut<BvhExampleSettings>,
+                     mut commands: Commands| {
+                        for (entity, grid_size) in radio_buttons.iter() {
+                            if entity == value_change.value {
+                                commands.entity(entity).insert(Checked);
+                                if grid_size.0 == settings.x_count {
+                                    continue;
                                 }
+                                settings.x_count = grid_size.0;
+                                settings.y_count = grid_size.0;
+                                commands.run_system_cached(clear_scene);
+                                commands.run_system_cached(setup_scene);
+                            } else {
+                                commands.entity(entity).remove::<Checked>();
                             }
-                        )
-                        Children [
-                            (
-                                @FeathersRadio {
-                                    @caption: bsn! { Text("10x10") ThemedText }
-                                }
-                                GridSizeRadio(10)
-                            ),
-                            (
-                                @FeathersRadio {
-                                    @caption: bsn! { Text("50x50") ThemedText }
-                                }
-                                GridSizeRadio(50)
-                            ),
-                            (
-                                @FeathersRadio {
-                                    @caption: bsn! { Text("100x100") ThemedText }
-                                }
-                                Checked
-                                GridSizeRadio(100)
-                            ),
-                        ]
-                    ),
-                ]
-            ),
-            (
-                Node {
-                    flex_direction: FlexDirection::Column,
-                    row_gap: Val::Px(5.0),
-                }
+                        }
+                    }
+                )
                 Children [
-                    (
-                        Text("Move Fraction")
-                        TextFont {
-                            font: FontSourceTemplate::Handle(BOLD),
-                            font_size: FontSize::Px(14.0),
-                        }
-                        ThemedText
-                    ),
-                    (
-                        @FeathersSlider {
-                            @min: 0.0,
-                            @max: 1.0,
-                            @value: {settings.move_fraction},
-                        }
-                        SliderStep(0.05)
-                        SliderPrecision(2)
-                        on(slider_self_update)
-                        on(
-                            |change: On<ValueChange<f32>>,
-                             mut settings: ResMut<BvhExampleSettings>| {
-                                settings.move_fraction = change.value;
-                            },
-                        )
-                    )
+                    @FeathersRadio {
+                        @caption: bsn! { Text("10x10") ThemedText }
+                    }
+                    GridSizeRadio(10)
+                    --
+                    @FeathersRadio {
+                        @caption: bsn! { Text("50x50") ThemedText }
+                    }
+                    GridSizeRadio(50)
+                    --
+                    @FeathersRadio {
+                        @caption: bsn! { Text("100x100") ThemedText }
+                    }
+                    Checked
+                    GridSizeRadio(100)
                 ]
-            ),
-            (
-                Node {
-                    flex_direction: FlexDirection::Column,
-                    row_gap: Val::Px(5.0),
+            ]
+            --
+            Node {
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(5.0),
+            }
+            Children [
+                Text("Move Fraction")
+                TextFont {
+                    font: FontSourceTemplate::Handle(BOLD),
+                    font_size: FontSize::Px(14.0),
                 }
-                Children [
-                    (
-                        Text("Delta Fraction")
-                        TextFont {
-                            font: FontSourceTemplate::Handle(BOLD),
-                            font_size: FontSize::Px(14.0),
-                        }
-                        ThemedText
-                    ),
-                    (
-                        @FeathersSlider {
-                            @min: 0.0,
-                            @max: 1.0,
-                            @value: {settings.delta_fraction},
-                        }
-                        SliderStep(0.05)
-                        SliderPrecision(2)
-                        on(slider_self_update)
-                        on(
-                            |change: On<ValueChange<f32>>,
-                             mut settings: ResMut<BvhExampleSettings>| {
-                                settings.delta_fraction = change.value;
-                            },
-                        )
-                    )
-                ]
-            ),
-            (
-                Node {
-                    flex_direction: FlexDirection::Column,
-                    row_gap: Val::Px(5.0),
+                ThemedText
+                --
+                @FeathersSlider {
+                    @min: 0.0,
+                    @max: 1.0,
                 }
-                Children [
-                    (
-                        Text("BVH Debug Rendering")
-                        TextFont {
-                            font: FontSourceTemplate::Handle(BOLD),
-                            font_size: FontSize::Px(14.0),
+                SliderValue({settings.move_fraction})
+                SliderStep(0.05)
+                SliderPrecision(2)
+                on(slider_self_update)
+                on(
+                    |change: On<ValueChange<f32>>,
+                     mut settings: ResMut<BvhExampleSettings>| {
+                        settings.move_fraction = change.value;
+                    },
+                )
+            ]
+            --
+            Node {
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(5.0),
+            }
+            Children [
+                Text("Delta Fraction")
+                TextFont {
+                    font: FontSourceTemplate::Handle(BOLD),
+                    font_size: FontSize::Px(14.0),
+                }
+                ThemedText
+                --
+                @FeathersSlider {
+                    @min: 0.0,
+                    @max: 1.0,
+                }
+                SliderValue({settings.delta_fraction})
+                SliderStep(0.05)
+                SliderPrecision(2)
+                on(slider_self_update)
+                on(
+                    |change: On<ValueChange<f32>>,
+                     mut settings: ResMut<BvhExampleSettings>| {
+                        settings.delta_fraction = change.value;
+                    },
+                )
+            ]
+            --
+            Node {
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(5.0),
+            }
+            Children [
+                Text("BVH Debug Rendering")
+                TextFont {
+                    font: FontSourceTemplate::Handle(BOLD),
+                    font_size: FontSize::Px(14.0),
+                }
+                ThemedText
+                --
+                @FeathersCheckbox {
+                    @caption: bsn! { Text("Draw Internal Nodes") ThemedText }
+                }
+                Checked
+                on(
+                    |change: On<ValueChange<bool>>,
+                     mut gizmo_store: ResMut<GizmoConfigStore>,
+                     mut commands: Commands| {
+                        let gizmo_config = gizmo_store.config_mut::<PhysicsGizmos>().1;
+                        if change.value {
+                            gizmo_config.collider_tree_color = Some(Color::WHITE);
+                            commands.entity(change.source).insert(Checked);
+                        } else {
+                            gizmo_config.collider_tree_color = None;
+                            commands.entity(change.source).remove::<Checked>();
                         }
-                        ThemedText
-                    ),
-                    (
-                        @FeathersCheckbox {
-                            @caption: bsn! { Text("Draw Internal Nodes") ThemedText }
+                    },
+                )
+                --
+                @FeathersCheckbox {
+                    @caption: bsn! { Text("Draw Leaf Nodes") ThemedText }
+                }
+                Checked
+                on(
+                    |change: On<ValueChange<bool>>,
+                     mut gizmo_store: ResMut<GizmoConfigStore>,
+                     mut commands: Commands| {
+                        let gizmo_config = gizmo_store.config_mut::<PhysicsGizmos>().1;
+                        if change.value {
+                            gizmo_config.aabb_color = Some(GRAY_400.into());
+                            commands.entity(change.source).insert(Checked);
+                        } else {
+                            gizmo_config.aabb_color = None;
+                            commands.entity(change.source).remove::<Checked>();
                         }
-                        Checked
-                        on(
-                            |change: On<ValueChange<bool>>,
-                             mut gizmo_store: ResMut<GizmoConfigStore>,
-                             mut commands: Commands| {
-                                let gizmo_config = gizmo_store.config_mut::<PhysicsGizmos>().1;
-                                if change.value {
-                                    gizmo_config.collider_tree_color = Some(Color::WHITE);
-                                    commands.entity(change.source).insert(Checked);
-                                } else {
-                                    gizmo_config.collider_tree_color = None;
-                                    commands.entity(change.source).remove::<Checked>();
-                                }
-                            },
-                        )
-                    ),
-                    (
-                        @FeathersCheckbox {
-                            @caption: bsn! { Text("Draw Leaf Nodes") ThemedText }
-                        }
-                        Checked
-                        on(
-                            |change: On<ValueChange<bool>>,
-                             mut gizmo_store: ResMut<GizmoConfigStore>,
-                             mut commands: Commands| {
-                                let gizmo_config = gizmo_store.config_mut::<PhysicsGizmos>().1;
-                                if change.value {
-                                    gizmo_config.aabb_color = Some(GRAY_400.into());
-                                    commands.entity(change.source).insert(Checked);
-                                } else {
-                                    gizmo_config.aabb_color = None;
-                                    commands.entity(change.source).remove::<Checked>();
-                                }
-                            },
-                        )
-                    )
-                ]
-            ),
+                    },
+                )
+            ]
         ]
     });
 }

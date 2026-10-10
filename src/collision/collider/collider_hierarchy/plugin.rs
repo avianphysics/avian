@@ -13,7 +13,7 @@ impl Plugin for ColliderHierarchyPlugin {
     fn build(&self, app: &mut App) {
         // Imsert `ColliderOf` for colliders that are added to a rigid body.
         app.add_observer(
-            |trigger: On<Add, (RigidBody, ColliderMarker)>,
+            |trigger: On<Add<(RigidBody, ColliderMarker)>>,
              mut commands: Commands,
              query: Query<(), With<ColliderMarker>>,
              rb_query: Query<Entity, With<RigidBody>>,
@@ -41,7 +41,7 @@ impl Plugin for ColliderHierarchyPlugin {
 
         // Remove `ColliderOf` when the rigid body or collider is removed.
         app.add_observer(
-            |trigger: On<Remove, (RigidBody, ColliderMarker)>,
+            |trigger: On<Remove<(RigidBody, ColliderMarker)>>,
              mut commands: Commands,
              query: Query<(), With<ColliderMarker>>| {
                 let entity = trigger.entity;
@@ -64,7 +64,7 @@ impl Plugin for ColliderHierarchyPlugin {
 /// Updates [`ColliderOf`] components for colliders when their ancestors change
 /// or when a rigid body is added to the hierarchy.
 fn on_collider_body_changed(
-    trigger: On<Insert, (ChildOf, RigidBody, AncestorMarker<ColliderMarker>)>,
+    trigger: On<Insert<(ChildOf, RigidBody, AncestorMarker<ColliderMarker>)>>,
     mut commands: Commands,
     query: Query<
         Has<ColliderMarker>,
@@ -117,7 +117,7 @@ fn on_collider_body_changed(
 
 /// Removes [`ColliderOf`] from colliders when their rigid bodies are removed.
 fn on_body_removed(
-    trigger: On<Remove, RigidBody>,
+    trigger: On<Remove<RigidBody>>,
     mut commands: Commands,
     body_collider_query: Query<&RigidBodyColliders>,
 ) {

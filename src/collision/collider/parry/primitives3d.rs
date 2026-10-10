@@ -1,9 +1,7 @@
-use bevy_math::{
-    Quat, Vec3,
-    primitives::{
-        Capsule3d, Cone, Cuboid, Cylinder, InfinitePlane3d, Line3d, Plane3d, Polyline3d, Segment3d,
-        Sphere,
-    },
+use bevy_math::{Quat, Vec3};
+use bevy_shape::{
+    Capsule3d, Cone, Cuboid, Cylinder, InfinitePlane3d, Line3d, Plane3d, Polyline3d, Segment3d,
+    Sphere,
 };
 use parry::shape::SharedShape;
 

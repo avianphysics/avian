@@ -7,6 +7,7 @@ use bevy::{
     ecs::{lifecycle::HookContext, world::DeferredWorld},
     prelude::*,
 };
+use bevy_curve::{Curve, Ease, FunctionCurve, Interval};
 use derive_more::From;
 
 /// The global position of a [rigid body](RigidBody) or a [collider](Collider).

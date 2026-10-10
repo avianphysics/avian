@@ -189,7 +189,7 @@ impl PhysicsGizmoExt for Gizmos<'_, '_, PhysicsGizmos> {
             }
             #[cfg(feature = "3d")]
             TypedShape::Cuboid(s) => {
-                use bevy_math::bounding::Aabb3d;
+                use bevy_shape::Aabb3d;
 
                 self.aabb_3d(
                     Aabb3d::new(Vec3A::ZERO, s.half_extents.f32()),

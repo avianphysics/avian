@@ -127,8 +127,8 @@ where
 
         if !already_initialized {
             // Remove collision pairs when colliders are disabled or removed.
-            app.add_observer(remove_collider_on::<Add, (Disabled, ColliderDisabled)>);
-            app.add_observer(remove_collider_on::<Remove, ColliderMarker>);
+            app.add_observer(remove_collider_on::<Add<(Disabled, ColliderDisabled)>>);
+            app.add_observer(remove_collider_on::<Remove<ColliderMarker>>);
 
             // Add colliders to the constraint graph when `Sensor` is removed,
             // and remove them when `Sensor` is added.
@@ -142,8 +142,8 @@ where
             app.add_observer(on_disable_body);
 
             // Remove contacts when the body body is disabled or `RigidBody` is replaced or removed.
-            app.add_observer(remove_body_on::<Insert, RigidBody>);
-            app.add_observer(remove_body_on::<Remove, RigidBody>);
+            app.add_observer(remove_body_on::<Insert<RigidBody>>);
+            app.add_observer(remove_body_on::<Remove<RigidBody>>);
 
             // Trigger collision events for colliders that started or stopped touching.
             app.add_systems(
@@ -428,8 +428,8 @@ fn remove_collider(
 }
 
 /// Removes contacts from the [`ContactGraph`] when a body is removed.
-fn remove_body_on<E: EntityEvent, B: Bundle>(
-    trigger: On<E, B>,
+fn remove_body_on<E: EventPattern<Event: EntityEvent>>(
+    trigger: On<E>,
     body_collider_query: Query<&RigidBodyColliders>,
     mut colliding_entities_query: Query<&mut CollidingEntities, Allow<Disabled>>,
     mut message_writer: MessageWriter<CollisionEnd>,
@@ -456,8 +456,8 @@ fn remove_body_on<E: EntityEvent, B: Bundle>(
 ///
 /// Also removes the collider from the [`CollidingEntities`] of the other entity,
 /// wakes up the other body, and writes a [`CollisionEnd`] event.
-fn remove_collider_on<E: EntityEvent, B: Bundle>(
-    trigger: On<E, B>,
+fn remove_collider_on<E: EventPattern<Event: EntityEvent>>(
+    trigger: On<E>,
     mut contact_graph: ResMut<ContactGraph>,
     mut contact_status_changes: ResMut<ContactStatusChangeQueue>,
     mut query: Query<&mut CollidingEntities, Allow<Disabled>>,
@@ -478,7 +478,7 @@ fn remove_collider_on<E: EntityEvent, B: Bundle>(
 /// Removes the touching contacts of a body from the [`ContactGraph`] when the body
 /// is enabled by removing [`RigidBodyDisabled`], so that they are re-created fresh.
 fn on_body_remove_rigid_body_disabled(
-    trigger: On<Remove, RigidBodyDisabled>,
+    trigger: On<Remove<RigidBodyDisabled>>,
     body_collider_query: Query<&RigidBodyColliders>,
     mut contact_status_changes: ResMut<ContactStatusChangeQueue>,
     mut contact_graph: ResMut<ContactGraph>,
@@ -503,7 +503,7 @@ fn on_body_remove_rigid_body_disabled(
 /// Removes the touching contacts of a body from the [`ContactGraph`]
 /// when the body is disabled with [`Disabled`] or [`RigidBodyDisabled`].
 fn on_disable_body(
-    trigger: On<Add, (Disabled, RigidBodyDisabled)>,
+    trigger: On<Add<(Disabled, RigidBodyDisabled)>>,
     body_collider_query: Query<&RigidBodyColliders, Allow<Disabled>>,
     mut contact_status_changes: ResMut<ContactStatusChangeQueue>,
     mut contact_graph: ResMut<ContactGraph>,
@@ -531,7 +531,7 @@ fn on_disable_body(
 /// Removes the touching contacts of a collider from the [`ContactGraph`]
 /// when a collider becomes a [`Sensor`].
 fn on_add_sensor(
-    trigger: On<Add, Sensor>,
+    trigger: On<Add<Sensor>>,
     mut contact_status_changes: ResMut<ContactStatusChangeQueue>,
     mut contact_graph: ResMut<ContactGraph>,
     mut colliding_entities_query: Query<&mut CollidingEntities, Allow<Disabled>>,
@@ -549,7 +549,7 @@ fn on_add_sensor(
 /// Removes the touching contacts of a collider from the [`ContactGraph`]
 /// when a collider stops being a [`Sensor`], so that they are re-created fresh.
 fn on_remove_sensor(
-    trigger: On<Remove, Sensor>,
+    trigger: On<Remove<Sensor>>,
     mut contact_status_changes: ResMut<ContactStatusChangeQueue>,
     mut contact_graph: ResMut<ContactGraph>,
     mut colliding_entities_query: Query<&mut CollidingEntities, Allow<Disabled>>,

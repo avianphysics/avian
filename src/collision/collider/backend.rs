@@ -186,7 +186,7 @@ impl<C: ScalableCollider> Plugin for ColliderBackendPlugin<C> {
 
         // When the `Sensor` component is added to a collider, queue its rigid body for a mass property update.
         app.add_observer(
-            |trigger: On<Add, Sensor>,
+            |trigger: On<Add<Sensor>>,
              mut commands: Commands,
              query: Query<(&ColliderMassProperties, &ColliderOf)>| {
                 if let Ok((collider_mass_properties, &ColliderOf { body })) =
@@ -207,7 +207,7 @@ impl<C: ScalableCollider> Plugin for ColliderBackendPlugin<C> {
 
         // When the `Sensor` component is removed from a collider, update its mass properties.
         app.add_observer(
-            |trigger: On<Remove, Sensor>,
+            |trigger: On<Remove<Sensor>>,
              mut collider_query: Query<(
                 Ref<C>,
                 &ColliderDensity,

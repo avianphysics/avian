@@ -25,7 +25,6 @@ default = [
 f64 = []
 
 debug-plugin = ["bevy/bevy_gizmos", "bevy/bevy_render"]
-simd = ["parry2d?/simd-stable", "parry2d-f64?/simd-stable"]
 parallel = ["bevy/multi_threaded", "parry2d?/parallel", "parry2d-f64?/parallel"]
 enhanced-determinism = [
     "dep:libm",
@@ -73,18 +72,20 @@ bench = false
 
 [dependencies]
 avian_derive = { path = "../avian_derive", version = "0.2" }
-bevy = { version = "0.19.0", default-features = false, features = [
+bevy = { version = "0.20.0-rc.1", default-features = false, features = [
     "std",
     "bevy_log",
 ] }
-bevy_math = { version = "0.19.0", features = ["approx"] }
-glam_matrix_extras = { version = "0.3", features = ["bevy_reflect"] }
-bevy_heavy = { version = "0.5" }
-bevy_transform_interpolation = { version = "0.5" }
+bevy_curve = { version = "0.20.0-rc.1", features = ["approx"] }
+bevy_math = { version = "0.20.0-rc.1", features = ["approx"] }
+bevy_shape = { version = "0.20.0-rc.1", features = ["approx"] }
+glam_matrix_extras = { git = "https://github.com/andriyDev/glam_matrix_extras.git", rev = "2a70128a003b82b906897353da3aa05863e42827", version = "0.4.0-dev", features = ["bevy_reflect"] }
+bevy_heavy = { git = "https://github.com/andriyDev/bevy_heavy.git", rev = "a692ccad7cbfc7e62ebd6c54aff49715eab8c0b0", version = "0.6.0-dev" }
+bevy_transform_interpolation = { git = "https://github.com/andriyDev/bevy_transform_interpolation.git", rev = "4b9ff214bd782e5003da602025c77210abe27545", version = "0.6.0-dev" }
 libm = { version = "0.2", optional = true }
 approx = "0.5"
-parry2d = { version = "0.27", optional = true }
-parry2d-f64 = { version = "0.27", optional = true }
+parry2d = { version = "0.31", optional = true }
+parry2d-f64 = { version = "0.31", optional = true }
 obvhs = { version = "0.3" }
 serde = { version = "1", features = ["derive"], optional = true }
 derive_more = "2"
@@ -98,12 +99,12 @@ disqualified = { version = "1.0" }
 
 [dev-dependencies]
 examples_common_2d = { path = "../examples_common_2d" }
-bevy = { version = "0.19.0", default-features = false, features = ["2d", "ui"] }
-bevy_heavy = { version = "0.5", features = ["approx"] }
-glam = { version = "0.32", features = ["bytemuck"] }
+bevy = { version = "0.20.0-rc.1", default-features = false, features = ["2d", "ui"] }
+bevy_heavy = { git = "https://github.com/andriyDev/bevy_heavy.git", rev = "a692ccad7cbfc7e62ebd6c54aff49715eab8c0b0", version = "0.6.0-dev", features = ["approx"] }
+glam = { version = "0.33", features = ["bytemuck"] }
 bytemuck = "1.19"
 criterion = { version = "0.8", features = ["html_reports"] }
-bevy_mod_debugdump = { version = "0.16" }
+bevy_mod_debugdump = { git = "https://github.com/andriyDev/bevy_mod_debugdump.git", rev = "e4666e57e0b046864f5e446c16ecbeadd9608697", version = "0.16" }
 
 [lints]
 workspace = true

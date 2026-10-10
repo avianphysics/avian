@@ -5,7 +5,8 @@ use crate::{
 
 use super::{Collider, IntoCollider, ToF32Precision};
 use bevy::prelude::{Deref, DerefMut};
-use bevy_math::{bounding::Bounded2d, prelude::*};
+use bevy_math::prelude::*;
+use bevy_shape::*;
 use parry::{
     mass_properties::MassProperties,
     math::Pose,
@@ -15,7 +16,7 @@ use parry::{
     },
     shape::{
         FeatureId, PackedFeatureId, PolygonalFeature, PolygonalFeatureMap, Shape, SharedShape,
-        SupportMap,
+        SubShapeId, SupportMap,
     },
 };
 
@@ -369,7 +370,12 @@ impl Shape for RegularPolygonColliderShape {
         Some((self as &dyn PolygonalFeatureMap, 0.0))
     }
 
-    fn feature_normal_at_point(&self, feature: FeatureId, _point: RVector) -> Option<RVector> {
+    fn feature_normal_at_point(
+        &self,
+        _subshape: SubShapeId,
+        feature: FeatureId,
+        _point: RVector,
+    ) -> Option<RVector> {
         match feature {
             FeatureId::Face(id) => {
                 let external_angle = self.external_angle_radians().real();

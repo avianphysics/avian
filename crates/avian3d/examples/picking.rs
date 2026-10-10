@@ -94,10 +94,10 @@ fn setup_scene(
                 .with_rotation(Quat::from_rotation_x(-PI / 4.)),
                 Shape,
             ))
-            .observe(update_material_on::<Pointer<Over>>(hover_matl.clone()))
-            .observe(update_material_on::<Pointer<Out>>(white_matl.clone()))
-            .observe(update_material_on::<Pointer<Press>>(pressed_matl.clone()))
-            .observe(update_material_on::<Pointer<Release>>(hover_matl.clone()))
+            .observe(update_material_on::<PointerOver>(hover_matl.clone()))
+            .observe(update_material_on::<PointerOut>(white_matl.clone()))
+            .observe(update_material_on::<PointerPress>(pressed_matl.clone()))
+            .observe(update_material_on::<PointerRelease>(hover_matl.clone()))
             .observe(rotate_on_drag);
     }
 
@@ -141,7 +141,7 @@ fn setup_scene(
 }
 
 /// Returns an observer that updates the entity's material to the one specified.
-fn update_material_on<E: EntityEvent>(
+fn update_material_on<E: EventPattern<Event: EntityEvent>>(
     new_material: Handle<StandardMaterial>,
 ) -> impl Fn(On<E>, Query<&mut MeshMaterial3d<StandardMaterial>>) {
     // An observer closure that captures `new_material`. We do this to avoid needing to write four
@@ -167,7 +167,7 @@ fn draw_pointer_intersections(pointers: Query<&PointerInteraction>, mut gizmos: 
 }
 
 /// An observer to rotate an entity when it is dragged.
-fn rotate_on_drag(drag: On<Pointer<Drag>>, mut transforms: Query<&mut Transform>) {
+fn rotate_on_drag(drag: On<PointerDrag>, mut transforms: Query<&mut Transform>) {
     let mut transform = transforms.get_mut(drag.entity).unwrap();
     transform.rotate_y(drag.delta.x * 0.02);
     transform.rotate_x(drag.delta.y * 0.02);

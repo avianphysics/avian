@@ -83,7 +83,7 @@ impl Plugin for IslandPlugin {
         // Add `BodyIslandNode` for each dynamic and kinematic rigid body
         // when the associated rigid body is enabled.
         app.add_observer(
-            |trigger: On<Discard, RigidBodyDisabled>,
+            |trigger: On<Discard<RigidBodyDisabled>>,
              rb_query: Query<&RigidBody>,
              mut commands: Commands| {
                 let Ok(rb) = rb_query.get(trigger.entity) else {
@@ -97,7 +97,7 @@ impl Plugin for IslandPlugin {
             },
         );
         app.add_observer(
-            |trigger: On<Discard, Disabled>,
+            |trigger: On<Discard<Disabled>>,
              rb_query: Query<
                 &RigidBody,
                 (
@@ -124,13 +124,13 @@ impl Plugin for IslandPlugin {
         // 1. `RigidBody` is removed.
         // 2. `Disabled` or `RigidBodyDisabled` is added to the body.
         // 3. The body becomes `RigidBody::Static`.
-        app.add_observer(|trigger: On<Remove, RigidBody>, mut commands: Commands| {
+        app.add_observer(|trigger: On<Remove<RigidBody>>, mut commands: Commands| {
             commands
                 .entity(trigger.entity)
                 .try_remove::<BodyIslandNode>();
         });
         app.add_observer(
-            |trigger: On<Insert, (Disabled, RigidBodyDisabled)>,
+            |trigger: On<Insert<(Disabled, RigidBodyDisabled)>>,
              query: Query<&RigidBody, Or<(With<Disabled>, Without<Disabled>)>>,
              mut commands: Commands| {
                 if query.contains(trigger.entity) {
@@ -141,7 +141,7 @@ impl Plugin for IslandPlugin {
             },
         );
         app.add_observer(
-            |trigger: On<Insert, RigidBody>, query: Query<&RigidBody>, mut commands: Commands| {
+            |trigger: On<Insert<RigidBody>>, query: Query<&RigidBody>, mut commands: Commands| {
                 if let Ok(rb) = query.get(trigger.entity)
                     && rb.is_static()
                 {

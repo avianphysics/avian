@@ -137,7 +137,7 @@ fn setup(
                             Friction::new(0.1),
                         ))
                         .observe(
-                            |over: On<Pointer<Over>>,
+                            |over: On<PointerOver>,
                              mut materials: ResMut<Assets<ColorMaterial>>,
                              balls: Query<&MeshMaterial2d<ColorMaterial>>| {
                                 materials
@@ -147,7 +147,7 @@ fn setup(
                             },
                         )
                         .observe(
-                            move |out: On<Pointer<Out>>,
+                            move |out: On<PointerOut>,
                                   mut materials: ResMut<Assets<ColorMaterial>>,
                                   balls: Query<&MeshMaterial2d<ColorMaterial>>| {
                                 materials

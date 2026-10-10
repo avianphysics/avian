@@ -19,6 +19,7 @@ pub use double::*;
 
 use approx::abs_diff_ne;
 use bevy_math::{prelude::*, *};
+use bevy_shape::*;
 use glam_matrix_extras::{SymmetricDMat2, SymmetricDMat3, SymmetricMat2, SymmetricMat3};
 
 /// The active dimension.

@@ -107,7 +107,7 @@ fn update_body_size_metrics<C: AnyCollider>(
         let mut ccd_thickness: f32 = f32::INFINITY;
         let mut sweep_radius: f32 = 0.0;
 
-        for (entity, collider, collider_transform) in colliders.iter_many(rb_colliders) {
+        for (entity, collider, collider_transform) in colliders.iter_many(rb_colliders).matched() {
             // Compute the CCD thickness
             let ctx = ColliderContext::new(entity, &context);
             let thickness = collider.ccd_thickness_with_context(ctx);

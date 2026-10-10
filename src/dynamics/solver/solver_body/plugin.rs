@@ -55,7 +55,7 @@ impl Plugin for SolverBodyPlugin {
         // Add a solver body for each dynamic and kinematic rigid body
         // when the associated rigid body is enabled or woken up.
         app.add_observer(
-            |trigger: On<Remove, RigidBodyDisabled>,
+            |trigger: On<Remove<RigidBodyDisabled>>,
              rb_query: Query<(&RigidBody, Has<SolverBodyIndex>), Without<Sleeping>>,
              solver_bodies: ResMut<SolverBodies>,
              commands: Commands| {
@@ -68,7 +68,7 @@ impl Plugin for SolverBodyPlugin {
             },
         );
         app.add_observer(
-            |trigger: On<Remove, Disabled>,
+            |trigger: On<Remove<Disabled>>,
              rb_query: Query<
                 (&RigidBody, Has<SolverBodyIndex>),
                 (
@@ -89,7 +89,7 @@ impl Plugin for SolverBodyPlugin {
             },
         );
         app.add_observer(
-            |trigger: On<Remove, Sleeping>,
+            |trigger: On<Remove<Sleeping>>,
              rb_query: Query<(&RigidBody, Has<SolverBodyIndex>), Without<RigidBodyDisabled>>,
              solver_bodies: ResMut<SolverBodies>,
              commands: Commands| {
@@ -104,7 +104,7 @@ impl Plugin for SolverBodyPlugin {
 
         // Remove solver bodies when their associated rigid body is removed.
         app.add_observer(
-            |trigger: On<Remove, RigidBody>,
+            |trigger: On<Remove<RigidBody>>,
              index_query: Query<&mut SolverBodyIndex>,
              solver_bodies: ResMut<SolverBodies>,
              commands: Commands| {
@@ -114,7 +114,7 @@ impl Plugin for SolverBodyPlugin {
 
         // Remove solver bodies when their associated rigid body is disabled or put to sleep.
         app.add_observer(
-            |trigger: On<Add, (Disabled, RigidBodyDisabled, Sleeping)>,
+            |trigger: On<Add<(Disabled, RigidBodyDisabled, Sleeping)>>,
              index_query: Query<&mut SolverBodyIndex>,
              solver_bodies: ResMut<SolverBodies>,
              commands: Commands| {
@@ -154,7 +154,7 @@ impl Plugin for SolverBodyPlugin {
 }
 
 fn on_insert_rigid_body(
-    trigger: On<Insert, RigidBody>,
+    trigger: On<Insert<RigidBody>>,
     bodies: Query<(&RigidBody, Has<SolverBodyIndex>), RigidBodyActiveFilter>,
     index_query: Query<&mut SolverBodyIndex>,
     mut solver_bodies: ResMut<SolverBodies>,

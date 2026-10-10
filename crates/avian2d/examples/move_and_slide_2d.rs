@@ -295,6 +295,7 @@ fn update_debug_text(
         colliding_entities.len(),
         names
             .iter_many(colliding_entities.iter())
+            .matched()
             .map(|name| name
                 .name
                 .map(|n| format!("{} ({})", name.entity, n))
@@ -303,6 +304,7 @@ fn update_debug_text(
         touched.len(),
         names
             .iter_many(touched.iter())
+            .matched()
             .map(|name| name
                 .name
                 .map(|n| format!("{} ({})", name.entity, n))

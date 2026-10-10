@@ -125,7 +125,7 @@ fn wake_on_remove_sleeping(mut world: DeferredWorld, ctx: HookContext) {
 }
 
 fn wake_on_replace_rigid_body(
-    trigger: On<Discard, RigidBody>,
+    trigger: On<Discard<RigidBody>>,
     mut commands: Commands,
     query: Query<&BodyIslandNode>,
 ) {
@@ -137,7 +137,7 @@ fn wake_on_replace_rigid_body(
 }
 
 fn wake_on_enable_rigid_body(
-    trigger: On<Insert, BodyIslandNode>,
+    trigger: On<Insert<BodyIslandNode>>,
     mut commands: Commands,
     mut query: Query<
         (&BodyIslandNode, &mut SleepTimer, Has<Sleeping>),

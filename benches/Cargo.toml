@@ -19,13 +19,11 @@ avian2d = { path = "../crates/avian2d", default-features = false, features = [
     "2d",
     "parry-f32",
     "parallel",
-    "simd",
 ], optional = true }
 avian3d = { path = "../crates/avian3d", default-features = false, features = [
     "3d",
     "parry-f32",
     "parallel",
-    "simd",
 ], optional = true }
 
 # Bevy

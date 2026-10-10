@@ -55,15 +55,15 @@ impl<T: Component + EntityConstraint<2>> Plugin for JointGraphPlugin<T> {
 
         // Add the joint to the joint graph when it is added and the joint is not disabled.
         app.add_observer(
-            add_joint_to_graph::<T, Add, T, (With<JointComponentId>, Without<JointDisabled>)>,
+            add_joint_to_graph::<T, Add<T>, (With<JointComponentId>, Without<JointDisabled>)>,
         );
 
         // Remove the joint from the joint graph when it is removed.
-        app.add_observer(remove_joint_from_graph::<Remove, T>);
+        app.add_observer(remove_joint_from_graph::<Remove<T>>);
 
         if !already_initialized {
             // Remove the joint from the joint graph when it is disabled.
-            app.add_observer(remove_joint_from_graph::<Add, (Disabled, JointDisabled)>);
+            app.add_observer(remove_joint_from_graph::<Add<(Disabled, JointDisabled)>>);
 
             // Remove contacts between bodies when the `JointCollisionDisabled` component is added.
             app.add_observer(on_disable_joint_collision);
@@ -73,8 +73,7 @@ impl<T: Component + EntityConstraint<2>> Plugin for JointGraphPlugin<T> {
         app.add_observer(
             add_joint_to_graph::<
                 T,
-                Remove,
-                Disabled,
+                Remove<Disabled>,
                 (
                     With<JointComponentId>,
                     Or<(With<Disabled>, Without<Disabled>)>,
@@ -84,7 +83,7 @@ impl<T: Component + EntityConstraint<2>> Plugin for JointGraphPlugin<T> {
         );
 
         // Add the joint back to the joint graph when `JointDisabled` is removed.
-        app.add_observer(add_joint_to_graph::<T, Remove, JointDisabled, With<JointComponentId>>);
+        app.add_observer(add_joint_to_graph::<T, Remove<JointDisabled>, With<JointComponentId>>);
 
         app.add_systems(
             PhysicsSchedule,
@@ -127,11 +126,10 @@ impl JointComponentId {
 
 fn add_joint_to_graph<
     T: Component + EntityConstraint<2>,
-    E: EntityEvent,
-    B: Bundle,
+    E: EventPattern<Event: EntityEvent>,
     F: QueryFilter,
 >(
-    trigger: On<E, B>,
+    trigger: On<E>,
     query: Query<(&T, Has<JointCollisionDisabled>), F>,
     mut joint_graph: ResMut<JointGraph>,
     mut joint_graph_changes: MessageWriter<JointGraphChange>,
@@ -159,8 +157,8 @@ fn add_joint_to_graph<
     joint_graph_changes.write(JointGraphChange::Added(joint_id));
 }
 
-fn remove_joint_from_graph<E: EntityEvent, B: Bundle>(
-    trigger: On<E, B>,
+fn remove_joint_from_graph<E: EventPattern<Event: EntityEvent>>(
+    trigger: On<E>,
     mut joint_graph: ResMut<JointGraph>,
     mut joint_graph_changes: MessageWriter<JointGraphChange>,
     #[cfg(feature = "xpbd_joints")] mut commands: Commands,
@@ -240,7 +238,7 @@ fn on_remove_joint(mut world: DeferredWorld, ctx: HookContext) {
 }
 
 fn on_disable_joint_collision(
-    trigger: On<Add, JointCollisionDisabled>,
+    trigger: On<Add<JointCollisionDisabled>>,
     query: Query<&RigidBodyColliders>,
     joint_graph: Res<JointGraph>,
     mut contact_graph: ResMut<ContactGraph>,
