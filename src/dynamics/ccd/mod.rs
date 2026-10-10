@@ -233,7 +233,11 @@ use core::cell::RefCell;
 use dynamics::solver::SolverDiagnostics;
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 use parry::query::{
-    NonlinearRigidMotion, ShapeCastHit, ShapeCastOptions, cast_shapes, cast_shapes_nonlinear,
+    NonlinearRigidMotion, ShapeCastOptions, cast_shapes, cast_shapes_nonlinear,
+    sweep_toi::{
+        CORE_FRACTION, Sweep, SweepCompositeFastShape, SweepToiStatus, ToiProxy,
+        sweep_time_of_impact, sweep_time_of_impact_composite,
+    },
 };
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 use thread_local::ThreadLocal;
@@ -589,12 +593,13 @@ struct CcdImpact {
 /// at the first impact, leaving the next frame's collision detection to resolve the contact.
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 fn solve_continuous(
-    colliders: Query<(&Collider, &Position, &Rotation)>,
+    colliders: Query<(&Collider, &Position, &Rotation, Option<&CollisionLayers>)>,
     ccd_query: Query<CcdBodyQuery>,
     mut bodies: ResMut<SolverBodies>,
     trees: Res<ColliderTrees>,
     mut contact_graph: ResMut<ContactGraph>,
     time: Res<Time>,
+    length_unit: Res<PhysicsLengthUnit>,
     mut diagnostics: ResMut<SolverDiagnostics>,
 ) {
     let start = crate::utils::Instant::now();
@@ -604,6 +609,7 @@ fn solve_continuous(
         return;
     }
     let inv_dt = 1.0 / delta_secs;
+    let linear_slop = 0.005 * length_unit.0;
 
     // Avian's approach to CCD is heavily inspired by Box2D by Erin Catto,
     // with some notable differences (as of Box2D 3.1.0):
@@ -722,10 +728,20 @@ fn solve_continuous(
 
         // Sweep each collider attached to the body.
         for collider_entity in fast.colliders {
-            let Ok((collider1, &collider_pos1, &collider_rot1)) = colliders.get(collider_entity)
+            let Ok((collider1, &collider_pos1, &collider_rot1, layers1)) =
+                colliders.get(collider_entity)
             else {
                 continue;
             };
+
+            let shape1 = collider1.shape_scaled().as_ref();
+
+            // No swept CCD for trimeshes, heightfields, polylines, or voxels.
+            if !crate::collision::collider::shape_supports_sweeps(shape1) {
+                continue;
+            }
+
+            let layers1 = layers1.copied().unwrap_or_default();
 
             let motion1 =
                 collider_sweep_motion(collider_pos1.0, collider_rot1, body_com_world, body, inv_dt);
@@ -743,6 +759,16 @@ fn solve_continuous(
                 0.0,
             );
             let query_aabb = obvhs::aabb::Aabb::from(swept_aabb);
+
+            let fast_shape = CcdFastShape {
+                shape: shape1,
+                swept_aabb: parry::bounding_volume::Aabb::new(
+                    swept_aabb.min.real(),
+                    swept_aabb.max.real(),
+                ),
+                local_centroid: shape1.mass_properties(1.0).local_com,
+                min_extent: shape1.ccd_thickness(),
+            };
 
             // Sweep the collider against the relevant trees.
             for tree in trees_to_query.into_iter().flatten() {
@@ -763,6 +789,11 @@ fn solve_continuous(
                         return true;
                     }
 
+                    // Skip colliders with incompatible collision layers.
+                    if !layers1.interacts_with(proxy.layers) {
+                        return true;
+                    }
+
                     let collider_entity2 = proxy.collider;
 
                     // If the narrow phase already has a touching contact for this pair,
@@ -780,7 +811,8 @@ fn solve_continuous(
                     }
 
                     // Fetch the target collider and its start-of-frame pose.
-                    let Ok((collider2, &target_pos, &target_rot)) = colliders.get(collider_entity2)
+                    let Ok((collider2, &target_pos, &target_rot, _)) =
+                        colliders.get(collider_entity2)
                     else {
                         return true;
                     };
@@ -822,10 +854,17 @@ fn solve_continuous(
                     // Compute the time of impact for this pair of colliders. If it's the earliest
                     // so far, record the details needed to clamp the body's normal motion and hand
                     // the contact off to the discrete solver next frame.
-                    if let Some(hit) = compute_ccd_toi(
-                        sweep_mode, &motion1, collider1, &motion2, collider2, min_toi,
+                    if let Some(toi) = compute_ccd_toi(
+                        sweep_mode,
+                        &motion1,
+                        &fast_shape,
+                        &motion2,
+                        collider2.shape_scaled().as_ref(),
+                        min_toi,
+                        delta_secs,
+                        linear_slop,
                     ) {
-                        min_toi = hit.time_of_impact.f32();
+                        min_toi = toi;
                         best_impact = Some(CcdImpact {
                             collider1: collider_entity,
                             collider2: collider_entity2,
@@ -953,30 +992,190 @@ fn static_motion(pos: RVector, rot: impl Into<Rot>) -> NonlinearRigidMotion {
     NonlinearRigidMotion::constant_position(make_pose(pos, rot))
 }
 
-/// Computes the [`ShapeCastHit`] at which `motion1` (sweeping `collider1`) first touches
-/// `motion2` (sweeping `collider2`), if any, using the specified `mode`.
+/// Returns `true` if the given motion has no linear or angular velocity.
+#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
+fn is_stationary(motion: &NonlinearRigidMotion) -> bool {
+    #[cfg(feature = "2d")]
+    let spinning = motion.angvel != 0.0;
+    #[cfg(feature = "3d")]
+    let spinning = motion.angvel.length_squared() != 0.0;
+
+    motion.linvel.length_squared() == 0.0 && !spinning
+}
+
+/// Computes an upper bound on the maximum distance any point on a shape
+/// moves during a timestep, given its linear and angular motion and its local AABB.
+#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
+fn max_motion_distance(
+    motion: &NonlinearRigidMotion,
+    local_aabb: &parry::bounding_volume::Aabb,
+    t_max: f32,
+) -> f32 {
+    let linear = motion.linvel.length().f32() * t_max;
+
+    #[cfg(feature = "2d")]
+    let angle = motion.angvel.abs().f32() * t_max;
+    #[cfg(feature = "3d")]
+    let angle = motion.angvel.length().f32() * t_max;
+
+    if angle == 0.0 {
+        return linear;
+    }
+
+    let offset = (local_aabb.center() - motion.local_center).abs() + local_aabb.half_extents();
+    let radius = offset.length().f32() + linear;
+
+    linear + angle * radius
+}
+
+#[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
+struct CcdFastShape<'a> {
+    shape: &'a dyn parry::shape::Shape,
+    swept_aabb: parry::bounding_volume::Aabb,
+    local_centroid: parry::math::Vector,
+    min_extent: parry::math::Real,
+}
+
+/// Computes the time of impact at which `motion1` (sweeping `fast`) first
+/// touches `motion2` (sweeping `shape2`), if any, using the specified `mode`.
 ///
 /// Returns `None` if no impact is found within `min_toi`.
 #[cfg(any(feature = "parry-f32", feature = "parry-f64"))]
 fn compute_ccd_toi(
     mode: SweepMode,
     motion1: &NonlinearRigidMotion,
-    collider1: &Collider,
+    fast: &CcdFastShape,
     motion2: &NonlinearRigidMotion,
-    collider2: &Collider,
+    shape2: &dyn parry::shape::Shape,
     min_toi: f32,
-) -> Option<ShapeCastHit> {
-    let shape1 = collider1.shape_scaled();
-    let shape2 = collider2.shape_scaled();
+    delta_secs: f32,
+    linear_slop: f32,
+) -> Option<f32> {
+    if mode == SweepMode::NonLinear
+        && let Some(proxy1) = ToiProxy::from_shape(fast.shape)
+    {
+        let max_fraction = (min_toi / delta_secs).clamp(0.0, 1.0).real();
+        let slop = linear_slop.real();
+        let sweep1 = Sweep::from_poses(
+            &motion1.start,
+            &motion1.position_at_time(delta_secs.real()),
+            motion1.local_center,
+        );
 
+        let eval_toi = |fraction: parry::math::Real| {
+            let toi = fraction.f32() * delta_secs;
+            (toi > 0.0 && toi < min_toi).then_some(toi)
+        };
+
+        if let Some(proxy2) = ToiProxy::from_shape(shape2) {
+            let sweep2 = Sweep::from_poses(
+                &motion2.start,
+                &motion2.position_at_time(delta_secs.real()),
+                motion2.local_center,
+            );
+
+            let output =
+                sweep_time_of_impact(&proxy1, &sweep1, &proxy2, &sweep2, max_fraction, slop);
+
+            if output.status == SweepToiStatus::Hit && output.fraction > 0.0 {
+                return eval_toi(output.fraction);
+            }
+
+            // The shapes already overlap at the start of the timestep.
+            // Retry against a small core ball around the fast shape's centroid.
+            if output.fraction == 0.0 {
+                let core = ToiProxy::point(fast.local_centroid, CORE_FRACTION * fast.min_extent);
+                let sweep2 = Sweep::from_poses(
+                    &motion2.start,
+                    &motion2.position_at_time(delta_secs.real()),
+                    motion2.local_center,
+                );
+                let output =
+                    sweep_time_of_impact(&core, &sweep1, &proxy2, &sweep2, max_fraction, slop);
+                if output.fraction > 0.0 {
+                    return eval_toi(output.fraction);
+                }
+            }
+
+            return None;
+        }
+
+        // The obstacle is a composite shape. If it is stationary,
+        // we can use Parry's composite sweep.
+        if is_stationary(motion2) {
+            #[cfg(feature = "2d")]
+            let one_sided = false;
+            #[cfg(feature = "3d")]
+            let one_sided = matches!(
+                shape2.as_typed_shape(),
+                parry::shape::TypedShape::HeightField(_)
+            );
+
+            if let Some(output) = sweep_time_of_impact_composite(
+                shape2,
+                &motion2.start,
+                SweepCompositeFastShape {
+                    proxy: &proxy1,
+                    sweep: &sweep1,
+                    local_centroid: fast.local_centroid,
+                    min_extent: fast.min_extent,
+                },
+                one_sided,
+                false,
+                max_fraction,
+                slop,
+            ) {
+                return eval_toi(output.fraction);
+            }
+        }
+
+        // Parry doesn't support sweeps against moving composite shapes,
+        // so we have to sweep against each sub-shape individually.
+        if let Some(composite) = shape2.as_composite_shape() {
+            let mut local_aabb = fast.swept_aabb.transform_by(&motion2.start.inverse());
+            let margin = max_motion_distance(motion2, &local_aabb, min_toi).real();
+            local_aabb.mins -= parry::math::Vector::splat(margin);
+            local_aabb.maxs += parry::math::Vector::splat(margin);
+
+            let mut min_toi = min_toi;
+            let mut best_toi = None;
+
+            for part_id in composite.bvh().intersect_aabb(&local_aabb) {
+                composite.map_part_at(part_id, &mut |part_pose, part_shape, _| {
+                    let part_motion = match part_pose {
+                        Some(part_pose) => motion2.prepend(*part_pose),
+                        None => *motion2,
+                    };
+
+                    if let Some(toi) = compute_ccd_toi(
+                        mode,
+                        motion1,
+                        fast,
+                        &part_motion,
+                        part_shape,
+                        min_toi,
+                        delta_secs,
+                        linear_slop,
+                    ) {
+                        min_toi = toi;
+                        best_toi = Some(toi);
+                    }
+                });
+            }
+
+            return best_toi;
+        }
+    }
+
+    // Fall back to a slower time-of-impact query.
     let hit = if mode == SweepMode::Linear {
         cast_shapes(
             &motion1.start,
             motion1.linvel,
-            shape1.as_ref(),
+            fast.shape,
             &motion2.start,
             motion2.linvel,
-            shape2.as_ref(),
+            shape2,
             ShapeCastOptions {
                 max_time_of_impact: min_toi.real(),
                 stop_at_penetration: false,
@@ -987,9 +1186,9 @@ fn compute_ccd_toi(
     } else {
         cast_shapes_nonlinear(
             motion1,
-            shape1.as_ref(),
+            fast.shape,
             motion2,
-            shape2.as_ref(),
+            shape2,
             0.0,
             min_toi.real(),
             false,
@@ -997,5 +1196,6 @@ fn compute_ccd_toi(
         .ok()??
     };
 
-    (hit.time_of_impact > 0.0 && hit.time_of_impact < min_toi.real()).then_some(hit)
+    let toi = hit.time_of_impact.f32();
+    (toi > 0.0 && toi < min_toi).then_some(toi)
 }
