@@ -333,7 +333,7 @@
 //!
 //! If you still have performance issues, consider enabling the [`PhysicsDiagnosticsPlugin`]
 //! and [`PhysicsDiagnosticsUiPlugin`] (requires the `diagnostic_ui` feature) to see where time is being spent.
-//! See the [diagnostics](diagnostics) module for more information.
+//! See the [diagnostics] module for more information.
 //!
 //! ## Why does movement look choppy?
 //!
