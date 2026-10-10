@@ -1130,24 +1130,32 @@ pub fn joint_damping<T: Component + EntityConstraint<2>>(
         //
         // SAFETY: The two jointed bodies are distinct, and joints are processed serially here.
         let (b1, b2) = unsafe { access.get_pair_unchecked_mut(index1, index2) };
+        // Kinematic bodies keep the zero dummy inertia, so damping never changes their velocity.
         if let Some((body, inertia)) = b1 {
+            if !body.flags.is_kinematic() {
+                inertia1 = inertia;
+            }
             body1 = body;
-            inertia1 = inertia;
         }
         if let Some((body, inertia)) = b2 {
+            if !body.flags.is_kinematic() {
+                inertia2 = inertia;
+            }
             body2 = body;
-            inertia2 = inertia;
         }
 
         let delta_omega = (body2.angular_velocity - body1.angular_velocity)
             * (damping.angular * delta_secs).min(1.0);
 
-        if !body1.flags.is_kinematic() {
-            body1.angular_velocity += delta_omega;
-        }
-        if !body2.flags.is_kinematic() {
-            body2.angular_velocity -= delta_omega;
-        }
+        let i1 = inertia1.effective_inv_angular_inertia();
+        let i2 = inertia2.effective_inv_angular_inertia();
+
+        #[cfg(feature = "2d")]
+        let angular_impulse = (i1 + i2).recip_or_zero() * delta_omega;
+        #[cfg(feature = "3d")]
+        let angular_impulse = inverse_on_free_axes(i1 + i2) * delta_omega;
+        body1.angular_velocity += i1 * angular_impulse;
+        body2.angular_velocity -= i2 * angular_impulse;
 
         let delta_v = (body2.linear_velocity - body1.linear_velocity)
             * (damping.linear * delta_secs).min(1.0);
@@ -1160,4 +1168,15 @@ pub fn joint_damping<T: Component + EntityConstraint<2>>(
         body1.linear_velocity += p * w1;
         body2.linear_velocity -= p * w2;
     }
+}
+
+/// Inverts a summed inverse inertia on its non-zero axes, so a locked axis doesn't zero the whole inverse.
+#[cfg(feature = "3d")]
+fn inverse_on_free_axes(inv_inertia: SymmetricTensor) -> SymmetricTensor {
+    let locked = SymmetricTensor::from_diagonal(Vec3::select(
+        inv_inertia.diagonal().cmpeq(Vec3::ZERO),
+        Vec3::ONE,
+        Vec3::ZERO,
+    ));
+    (inv_inertia + locked).inverse_or_zero() - locked
 }
