@@ -21,10 +21,6 @@ pub trait AngularConstraint {
         inv_angular_inertia2: SymmetricTensor,
         delta_lagrange: f32,
     ) -> f32 {
-        if delta_lagrange.abs() <= f32::EPSILON {
-            return 0.0;
-        }
-
         self.apply_angular_impulse(
             body1,
             body2,
@@ -71,10 +67,6 @@ pub trait AngularConstraint {
         delta_lagrange: f32,
         axis: Vector,
     ) -> Vector {
-        if delta_lagrange.abs() <= f32::EPSILON {
-            return Vector::ZERO;
-        }
-
         let impulse = -delta_lagrange * axis;
 
         self.apply_angular_impulse(
@@ -208,10 +200,6 @@ pub trait AngularConstraint {
         delta_lagrange: f32,
         axis: Vec3,
     ) -> f32 {
-        if delta_lagrange.abs() <= f32::EPSILON {
-            return 0.0;
-        }
-
         // Compute angular impulse
         // `axis.z` is 1 or -1 and it controls if the body should rotate counterclockwise or clockwise
         let p = -delta_lagrange * axis.z;
@@ -239,10 +227,6 @@ pub trait AngularConstraint {
         delta_lagrange: f32,
         axis: Vector,
     ) -> Vector {
-        if delta_lagrange.abs() <= f32::EPSILON {
-            return Vector::ZERO;
-        }
-
         // Compute angular impulse
         let p = -delta_lagrange * axis;
 
