@@ -32,6 +32,10 @@ fn main() {
         .insert_resource(Gravity(Vec2::NEG_Y * 1000.0))
         .add_systems(Startup, setup)
         .add_systems(Update, (movement, pass_through_one_way_platform))
+        .add_systems(
+            PhysicsSchedule,
+            clean_up_pass_through_state.in_set(NarrowPhaseSystems::First),
+        )
         .run();
 }
 
@@ -280,24 +284,10 @@ impl CollisionHooks for PlatformerCollisionHooks<'_, '_> {
             };
 
         if one_way_platform.0.contains(&other_entity) {
-            let any_penetrating = contacts.manifolds.iter().any(|manifold| {
-                manifold
-                    .points
-                    .iter()
-                    .any(|contact| contact.penetration > 0.0)
-            });
-
-            if any_penetrating {
-                // If we were already allowing a collision for a particular entity,
-                // and if it is penetrating us still, continue to allow it to do so.
-                return false;
-            } else {
-                // If it's no longer penetrating us, forget it.
-                commands.queue(OneWayPlatformCommand::Remove {
-                    platform_entity,
-                    entity: other_entity,
-                });
-            }
+            // If we were already allowing a collision for a particular entity, and it is
+            // penetrating us still (since `clean_up_pass_through_state` hasn't removed it),
+            // continue to allow it to do so.
+            return false;
         }
 
         match self.other_colliders_query.get(other_entity) {
@@ -306,7 +296,7 @@ impl CollisionHooks for PlatformerCollisionHooks<'_, '_> {
             // Pass-through is set to always, so always ignore this collision
             // and register it as an entity that's currently penetrating.
             Ok(Some(PassThroughOneWayPlatform::Always)) => {
-                commands.queue(OneWayPlatformCommand::Add {
+                commands.queue(OneWayPlatformAddCommand {
                     platform_entity,
                     entity: other_entity,
                 });
@@ -329,7 +319,7 @@ impl CollisionHooks for PlatformerCollisionHooks<'_, '_> {
                 } else {
                     // Otherwise, ignore the collision and register
                     // the other entity as one that's currently penetrating.
-                    commands.queue(OneWayPlatformCommand::Add {
+                    commands.queue(OneWayPlatformAddCommand {
                         platform_entity,
                         entity: other_entity,
                     });
@@ -340,40 +330,44 @@ impl CollisionHooks for PlatformerCollisionHooks<'_, '_> {
     }
 }
 
-/// A command to add/remove entities to/from the set of entities
-/// that are currently in contact with a one-way platform.
-enum OneWayPlatformCommand {
-    Add {
-        platform_entity: Entity,
-        entity: Entity,
-    },
-    Remove {
-        platform_entity: Entity,
-        entity: Entity,
-    },
+fn clean_up_pass_through_state(
+    mut platforms: Query<(&mut OneWayPlatform, Entity)>,
+    colliders: Query<(&Collider, &Position, &Rotation)>,
+) {
+    for (mut platform, entity) in &mut platforms {
+        let Ok((collider, position, rotation)) = colliders.get(entity) else {
+            continue;
+        };
+
+        let aabb = collider.aabb(position.0, *rotation, 0.0);
+
+        // Retain only colliders that still intersect the platform.
+        platform.0.retain(|subject| {
+            if let Ok((subject_collider, subject_position, subject_rotation)) =
+                colliders.get(*subject)
+            {
+                let subject_aabb =
+                    subject_collider.aabb(subject_position.0, *subject_rotation, 0.0);
+                aabb.intersects(&subject_aabb)
+            } else {
+                false
+            }
+        });
+    }
 }
 
-impl Command for OneWayPlatformCommand {
+/// A command to add entities to the set of entities that are currently in contact with a one-way
+/// platform.
+struct OneWayPlatformAddCommand {
+    platform_entity: Entity,
+    entity: Entity,
+}
+
+impl Command for OneWayPlatformAddCommand {
     type Out = ();
     fn apply(self, world: &mut World) {
-        match self {
-            OneWayPlatformCommand::Add {
-                platform_entity,
-                entity,
-            } => {
-                if let Some(mut platform) = world.get_mut::<OneWayPlatform>(platform_entity) {
-                    platform.0.insert(entity);
-                }
-            }
-
-            OneWayPlatformCommand::Remove {
-                platform_entity,
-                entity,
-            } => {
-                if let Some(mut platform) = world.get_mut::<OneWayPlatform>(platform_entity) {
-                    platform.0.remove(&entity);
-                }
-            }
+        if let Some(mut platform) = world.get_mut::<OneWayPlatform>(self.platform_entity) {
+            platform.0.insert(self.entity);
         }
     }
 }
