@@ -255,6 +255,12 @@ impl ContactConstraint {
     }
 
     /// Solves the [`ContactConstraint`], applying an impulse to the given bodies.
+    ///
+    /// Normal impulses are always solved. Friction impulses are solved only if
+    /// `apply_friction` is `true`; the solver passes `true` for the relaxation stage,
+    /// and for the bias stage when [`SolverConfig::friction_in_bias_stage`] is enabled.
+    ///
+    /// [`SolverConfig::friction_in_bias_stage`]: crate::dynamics::solver::SolverConfig::friction_in_bias_stage
     pub fn solve<const USE_BIAS: bool>(
         &mut self,
         body1: &mut SolverBody,
@@ -263,6 +269,7 @@ impl ContactConstraint {
         inertia2: &SolverBodyInertia,
         delta_secs: f32,
         max_overlap_solve_speed: f32,
+        apply_friction: bool,
     ) {
         let inv_mass1 = inertia1.effective_inv_mass();
         let inv_mass2 = inertia2.effective_inv_mass();
@@ -306,9 +313,12 @@ impl ContactConstraint {
             body2.angular_velocity += inv_angular_inertia2 * cross(r2, impulse);
         }
 
-        // Friction impulses, only during the relaxation stage.
-        // Applying friction during the bias stage does not meaningfully improve quality for the cost.
-        if !USE_BIAS {
+        // Friction impulses. Skipping them in the bias stage is cheaper, but any
+        // tangential or angular velocity left at the end of the previous substep
+        // (an XPBD joint's projected correction, the spin a hard speculative impact's
+        // sequential normal impulses leave) is then integrated before any friction
+        // acts on it. See `SolverConfig::friction_in_bias_stage`.
+        if apply_friction {
             let tangent_directions = self.tangent_directions();
 
             for point in self.points.iter_mut() {

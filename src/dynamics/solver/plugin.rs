@@ -585,6 +585,33 @@ pub struct SolverConfig {
     ///
     /// Default: `1`
     pub restitution_iterations: usize,
+
+    /// Whether friction impulses are applied during the
+    /// [bias stage](SubstepSolverSystems::SolveConstraints) of the contact solver
+    /// in addition to the [relaxation stage](SubstepSolverSystems::Relax).
+    ///
+    /// Friction in the bias stage acts on tangential and angular velocity *before*
+    /// the substep's position integration. This matters for velocity that appears
+    /// at the end of a substep and would otherwise be integrated before any friction
+    /// runs:
+    ///
+    /// - the velocity that [XPBD velocity projection](crate::dynamics::solver::xpbd)
+    ///   derives from a joint's position correction — without bias-stage friction,
+    ///   a hinge between two bodies resting on the ground drives an undamped
+    ///   correction/projection cycle, and the bodies creep,
+    /// - the spin and lateral velocity that the sequential per-point normal impulses
+    ///   of a hard impact leave on a body stopped by a
+    ///   [speculative contact](crate::dynamics::ccd#speculative-collision) within
+    ///   a single substep — without bias-stage friction, a cuboid landing flat
+    ///   from a fall is kicked sideways and may tumble off a ledge.
+    ///
+    /// Disabling it skips the friction solve in the bias stage, which is cheaper
+    /// (Box2D made the same optimization), but only safe when neither of the above
+    /// applies: no XPBD joints on resting bodies, and no unbounded
+    /// [`SpeculativeCcd`] margins on fast bodies.
+    ///
+    /// Default: `true`
+    pub friction_in_bias_stage: bool,
 }
 
 impl Default for SolverConfig {
@@ -596,6 +623,7 @@ impl Default for SolverConfig {
             warm_start_coefficient: 1.0,
             restitution_threshold: 1.0,
             restitution_iterations: 1,
+            friction_in_bias_stage: true,
         }
     }
 }
@@ -862,6 +890,10 @@ fn solve_contacts<const USE_BIAS: bool>(
     let delta_secs = time.delta_secs();
     let max_overlap_solve_speed = solver_config.max_overlap_solve_speed * length_unit.0;
 
+    // Friction is always applied in the relaxation stage, and in the bias stage
+    // when configured. See `SolverConfig::friction_in_bias_stage`.
+    let apply_friction = !USE_BIAS || solver_config.friction_in_bias_stage;
+
     let access = solver_bodies.access();
 
     // Solve overflow constraints serially. They have lower priority, so they are solved first.
@@ -874,6 +906,7 @@ fn solve_contacts<const USE_BIAS: bool>(
             constraint,
             max_overlap_solve_speed,
             delta_secs,
+            apply_friction,
         );
     }
 
@@ -890,6 +923,7 @@ fn solve_contacts<const USE_BIAS: bool>(
                 constraint,
                 max_overlap_solve_speed,
                 delta_secs,
+                apply_friction,
             );
         });
     }
@@ -906,6 +940,7 @@ fn solve_contacts_internal<const USE_BIAS: bool>(
     constraint: &mut ContactConstraint,
     max_overlap_solve_speed: f32,
     delta_secs: f32,
+    apply_friction: bool,
 ) {
     let mut dummy_body1 = SolverBody::DUMMY;
     let mut dummy_body2 = SolverBody::DUMMY;
@@ -943,6 +978,7 @@ fn solve_contacts_internal<const USE_BIAS: bool>(
         inertia2,
         delta_secs,
         max_overlap_solve_speed,
+        apply_friction,
     );
 }
 
