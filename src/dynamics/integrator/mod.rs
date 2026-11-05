@@ -124,8 +124,9 @@ pub type IntegrationSet = IntegrationSystems;
 /// acceleration near Earth's surface. Note that if you are using pixels as length units in 2D,
 /// this gravity will be tiny. You should modify the gravity to fit your application.
 ///
-/// You can also control how gravity affects a specific [rigid body](RigidBody) using the [`GravityScale`]
-/// component. The magnitude of the gravity will be multiplied by this scaling factor.
+/// You can also control how gravity affects a specific [rigid body](RigidBody) with components:
+/// - Use [`GravityScale`] to scale the magnitude of the global [`Gravity`].
+/// - Use [`GravityOverride`] to bypass [`Gravity`] and [`GravityScale`] altogether.
 ///
 /// # Example
 ///
@@ -199,7 +200,7 @@ pub struct CustomPositionIntegration;
 ///
 /// This includes:
 ///
-/// - Velocity increments for [`Gravity`].
+/// - Velocity increments for [`Gravity`], [`GravityScale`], and [`GravityOverride`].
 /// - Velocity increments for [`ConstantForce`], [`ConstantTorque`], [`ConstantLinearAcceleration`], and [`ConstantAngularAcceleration`].
 /// - Velocity increments for forces, torques, and accelerations applied using [`Forces`].
 /// - Cached operands for applying linear and angular velocity damping.
@@ -265,6 +266,7 @@ pub fn pre_process_velocity_increments(
         Option<&LinearDamping>,
         Option<&AngularDamping>,
         Option<&GravityScale>,
+        Option<&GravityOverride>,
         Option<&LockedAxes>,
     )>,
     gravity: Res<Gravity>,
@@ -278,7 +280,15 @@ pub fn pre_process_velocity_increments(
     // TODO: Do we want to skip kinematic bodies here?
     bodies.par_for_each_mut(
         MIN_PAR_ITER_ENTITIES,
-        |(rb, mut integration, lin_damping, ang_damping, gravity_scale, locked_axes)| {
+        |(
+            rb,
+            mut integration,
+            lin_damping,
+            ang_damping,
+            gravity_scale,
+            gravity_override,
+            locked_axes,
+        )| {
             if !rb.is_dynamic() {
                 // Skip non-dynamic bodies.
                 return;
@@ -297,7 +307,10 @@ pub fn pre_process_velocity_increments(
             // NOTE: The velocity increments are treated as accelerations at this point.
 
             // Apply gravity.
-            integration.linear_increment += gravity.0 * gravity_scale.map_or(1.0, |scale| scale.0);
+            integration.linear_increment += match gravity_override {
+                Some(&GravityOverride(vec)) => vec,
+                None => gravity.0 * gravity_scale.map_or(1.0, |scale| scale.0),
+            };
 
             // Apply locked axes.
             integration.linear_increment = locked_axes.apply_to_vec(integration.linear_increment);
@@ -645,5 +658,64 @@ mod tests {
         assert_relative_eq!(angular_velocity, 2.0, epsilon = 0.00001);
         #[cfg(feature = "3d")]
         assert_relative_eq!(angular_velocity, Vector::Z * 2.0, epsilon = 0.00001);
+    }
+
+    #[test]
+    fn gravity_override() {
+        let mut app = create_app();
+        app.insert_resource(SubstepCount(1));
+        app.finish();
+
+        let body_entity = app
+            .world_mut()
+            .spawn((
+                GravityScale(3.0), // This should be ignored because of [`GravityOverride`].
+                RigidBody::Dynamic,
+                #[cfg(feature = "2d")]
+                {
+                    (
+                        GravityOverride(Vec2::Y * 5.0),
+                        MassPropertiesBundle::from_shape(&Rectangle::from_length(1.0), 1.0),
+                    )
+                },
+                #[cfg(feature = "3d")]
+                {
+                    (
+                        GravityOverride(Vec3::Y * 5.0),
+                        MassPropertiesBundle::from_shape(&Cuboid::from_length(1.0), 1.0),
+                    )
+                },
+            ))
+            .id();
+
+        // These should be ignored because of [`GravityOverride`].
+        #[cfg(feature = "2d")]
+        app.insert_resource(Gravity(Vec2::NEG_Y * 10.0));
+        #[cfg(feature = "3d")]
+        app.insert_resource(Gravity(Vec3::NEG_Y * 10.0));
+
+        // Step by 100 steps of 0.1 seconds.
+        app.insert_resource(Time::from_hz(10.0));
+        app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
+            1.0 / 10.0,
+        )));
+
+        // Initialize the app.
+        app.update();
+
+        for _ in 0..100 {
+            app.update();
+        }
+
+        // Get the body after the simulation.
+        let entity_ref = app.world_mut().entity(body_entity);
+        let position = entity_ref.get::<Position>().unwrap().0;
+        let linear_velocity = entity_ref.get::<LinearVelocity>().unwrap().0;
+
+        // [`GravityOverride`] should force the body to accelerate `5.0 m/s²` up.
+        // Both the [`GravityScale`] component (`3.0`) and the [`Gravity`] resource
+        // (`10.0 m/s²` down) should be ignored.
+        assert_relative_eq!(position, RVector::Y * 250.0, epsilon = 10.0);
+        assert_relative_eq!(linear_velocity, Vector::Y * 50.0, epsilon = 0.0001);
     }
 }

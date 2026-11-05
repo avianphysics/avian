@@ -24,7 +24,7 @@ use bevy::prelude::*;
 /// - The [`RigidBody`] type of a body is changed.
 /// - A [constant force component](super::forces#constant-forces) of a sleeping body is modified.
 /// - A force, impulse, or acceleration is applied via [`Forces`], without using [`non_waking`].
-/// - The [`Gravity`] resource or [`GravityScale`] component is modified.
+/// - The [`Gravity`] resource, [`GravityScale`] component, or [`GravityOverride`] component is modified.
 ///
 /// A body and all bodies connected to it can also be forced to sleep or wake up
 /// by manually adding or removing the [`Sleeping`] component, or by using
@@ -39,6 +39,7 @@ use bevy::prelude::*;
 /// [`non_waking`]: super::forces::ForcesItem::non_waking
 /// [`Gravity`]: super::Gravity
 /// [`GravityScale`]: super::GravityScale
+/// [`GravityOverride`]: super::GravityOverride
 /// [`SleepBody`]: crate::dynamics::solver::islands::SleepBody
 /// [`WakeBody`]: crate::dynamics::solver::islands::WakeBody
 ///

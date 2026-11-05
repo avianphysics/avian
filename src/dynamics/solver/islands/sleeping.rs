@@ -601,7 +601,14 @@ fn wake_on_changed(
         >,
         // These are not modified by the physics engine
         // and don't need special handling.
-        Query<&BodyIslandNode, Or<(ConstantForceChanges, Changed<GravityScale>)>>,
+        Query<
+            &BodyIslandNode,
+            Or<(
+                ConstantForceChanges,
+                Changed<GravityScale>,
+                Changed<GravityOverride>,
+            )>,
+        >,
     )>,
     mut awake_island_bit_vec: ResMut<AwakeIslandBitVec>,
     last_physics_tick: Res<LastPhysicsTick>,
