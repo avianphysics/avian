@@ -295,6 +295,21 @@ impl Plugin for MassPropertyPlugin {
             },
         );
 
+        // Queue mass property recomputation for the previous rigid body
+        // when a collider is detached from it, e.g. when reparented to another body.
+        app.add_observer(
+            |trigger: On<Discard<ColliderOf>>,
+             query: Query<&ColliderOf>,
+             mut commands: Commands| {
+                let Ok(&ColliderOf { body }) = query.get(trigger.entity) else {
+                    return;
+                };
+                if let Ok(mut entity_commands) = commands.get_entity(body) {
+                    entity_commands.try_insert(RecomputeMassProperties);
+                }
+            },
+        );
+
         // Configure system sets for mass property computation.
         app.configure_sets(
             self.schedule,
@@ -748,6 +763,78 @@ mod tests {
         assert_relative_eq!(mass.value(), collider_mass_props.mass);
         assert_relative_eq!(angular_inertia.value(), collider_mass_props.angular_inertia);
         assert_relative_eq!(center_of_mass.0, Vector::ZERO);
+    }
+
+    #[test]
+    fn mass_properties_reparent_collider() {
+        // `RigidBody`, `Collider`      (A)
+        // - `Collider`                 (child)
+        // `RigidBody`, `Collider`      (B)
+        //
+        // - Check mass properties of A and B
+        // - Reparent child collider from A to B
+        // - Check mass properties of A and B
+
+        let mut app = create_app();
+
+        let body_collider = Collider::circle(1.0);
+        let body_mass_props = body_collider.mass_properties(1.0);
+
+        // Different size than the body colliders, so that the masses are distinguishable.
+        let child_collider = Collider::circle(2.0);
+        let child_mass_props = child_collider.mass_properties(1.0);
+
+        let body_a = app
+            .world_mut()
+            .spawn((
+                RigidBody::Dynamic,
+                body_collider.clone(),
+                Transform::default(),
+            ))
+            .id();
+
+        let body_b = app
+            .world_mut()
+            .spawn((
+                RigidBody::Dynamic,
+                body_collider,
+                Transform::from_xyz(10.0, 0.0, 0.0),
+            ))
+            .id();
+
+        let child = app
+            .world_mut()
+            .spawn((ChildOf(body_a), child_collider, Transform::default()))
+            .id();
+
+        app.world_mut().run_schedule(FixedPostUpdate);
+
+        let mass_a = get_computed_mass_properties(app.world_mut(), body_a)
+            .0
+            .value();
+        let mass_b = get_computed_mass_properties(app.world_mut(), body_b)
+            .0
+            .value();
+
+        assert_relative_eq!(mass_a, body_mass_props.mass + child_mass_props.mass);
+        assert_relative_eq!(mass_b, body_mass_props.mass);
+
+        // Reparent the child collider from A to B
+        app.world_mut().entity_mut(child).insert(ChildOf(body_b));
+
+        app.world_mut().run_schedule(FixedPostUpdate);
+
+        let mass_a = get_computed_mass_properties(app.world_mut(), body_a)
+            .0
+            .value();
+        let mass_b = get_computed_mass_properties(app.world_mut(), body_b)
+            .0
+            .value();
+
+        // The new body gains the child's mass.
+        assert_relative_eq!(mass_b, body_mass_props.mass + child_mass_props.mass);
+        // The old body loses the child's mass.
+        assert_relative_eq!(mass_a, body_mass_props.mass);
     }
 
     #[test]
