@@ -25,6 +25,7 @@ use crate::{
 };
 use bevy::{
     ecs::{lifecycle::HookContext, world::DeferredWorld},
+    platform::collections::HashSet,
     prelude::*,
 };
 use derive_more::From;
@@ -652,3 +653,60 @@ pub struct AngularDamping(pub f32);
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, Component, Default, PartialEq)]
 pub struct Dominance(pub i8);
+
+/// A component containing a set of entities for which any collisions with the
+/// owning entity will be ignored.
+///
+/// ## Example
+///
+/// ```
+/// use bevy::prelude::*;
+/// # #[cfg(feature = "2d")]
+/// # use avian2d::prelude::*;
+/// # #[cfg(feature = "3d")]
+/// use avian3d::prelude::*;
+///
+/// fn setup(mut commands: Commands) {
+///     // Spawn an entity with a collider
+#[cfg_attr(
+    feature = "2d",
+    doc = "    let ent1 = commands",
+    doc = "        .spawn((RigidBody::Dynamic, Collider::circle(0.5)))",
+    doc = "        .id();"
+)]
+#[cfg_attr(
+    feature = "3d",
+    doc = "    let ent1 = commands",
+    doc = "       .spawn((RigidBody::Dynamic, Collider::sphere(0.5)))",
+    doc = "       .id();"
+)]
+///
+///     // Spawn another entity with a collider and configure it to avoid collisions with the first entity.
+#[cfg_attr(
+    feature = "2d",
+    doc = "    let ent1 = commands.spawn((",
+    doc = "        RigidBody::Dynamic,",
+    doc = "        Collider::circle(0.5),",
+    doc = "        IgnoredCollisions::from_iter([ent1]),",
+    doc = "));"
+)]
+#[cfg_attr(
+    feature = "3d",
+    doc = "    let ent1 = commands.spawn((",
+    doc = "        RigidBody::Dynamic,",
+    doc = "        Collider::sphere(0.5),",
+    doc = "        IgnoredCollisions::from_iter([ent1]),",
+    doc = "    ));"
+)]
+/// }
+/// ```
+///
+/// See also [`CollisionLayers`].
+#[derive(Component, Clone, Debug, Default, Deref, DerefMut)]
+pub struct IgnoredCollisions(pub HashSet<Entity>);
+
+impl FromIterator<Entity> for IgnoredCollisions {
+    fn from_iter<T: IntoIterator<Item = Entity>>(iter: T) -> Self {
+        Self(HashSet::from_iter(iter))
+    }
+}
