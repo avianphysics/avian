@@ -24,7 +24,7 @@ use crate::{
     prelude::{forces::AccumulatedLocalAcceleration, *},
 };
 use bevy::{
-    ecs::{lifecycle::HookContext, world::DeferredWorld},
+    ecs::{VariantDefaults, lifecycle::HookContext, world::DeferredWorld},
     prelude::*,
 };
 use derive_more::From;
@@ -258,7 +258,7 @@ use derive_more::From;
 /// - [`Transform` interpolation and extrapolation](PhysicsInterpolationPlugin)
 /// - [Temporarily disabling a rigid body](RigidBodyDisabled)
 /// - [Automatic deactivation with sleeping](Sleeping)
-#[derive(Reflect, Clone, Copy, Component, Debug, Default, PartialEq, Eq)]
+#[derive(Reflect, Clone, Copy, Component, Debug, Default, PartialEq, Eq, VariantDefaults)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
 #[reflect(Debug, Component, Default, PartialEq)]
@@ -622,16 +622,16 @@ pub struct AngularDamping(pub f32);
 
 /// **Dominance** allows [dynamic rigid bodies](RigidBody::Dynamic) to dominate
 /// each other during physical interactions.
-/// 
+///
 /// The body with a higher dominance acts as if it had infinite mass, and will be unaffected during
 /// collisions and other interactions, while the other body will be affected normally.
-/// 
+///
 /// The dominance must be between `-127` and `127`, and the default value is `0`.
 /// Note that static and kinematic bodies will always have a higher dominance value
 /// than dynamic bodies regardless of the value of this component.
-/// 
+///
 /// # Example
-/// 
+///
 /// ```
 #[cfg_attr(feature = "2d", doc = "use avian2d::prelude::*;")]
 #[cfg_attr(feature = "3d", doc = "use avian3d::prelude::*;")]
