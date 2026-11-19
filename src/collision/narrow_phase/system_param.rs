@@ -597,6 +597,12 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                         break 'recycle;
                     }
 
+                    if contacts.flags.contains(ContactPairFlags::MODIFY_CONTACTS) {
+                        // Hooks need to be re-run because their verdicts can change even while the
+                        // bodies involved are stationary.
+                        break 'recycle;
+                    }
+
                     let Some(cache) = contacts.recycling_cache.as_ref() else {
                         // No previous contact data to recycle.
                         break 'recycle;
