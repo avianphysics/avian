@@ -24,7 +24,7 @@ impl IntoCollider<Collider> for InfinitePlane3d {
             rotation * RVector::new(half_size, 0.0, half_size),
         ];
 
-        Collider::trimesh(vertices, vec![[0, 1, 2], [1, 2, 0]])
+        Collider::trimesh(vertices, vec![[0, 1, 2], [0, 2, 3]])
     }
 }
 
@@ -39,7 +39,7 @@ impl IntoCollider<Collider> for Plane3d {
             rotation * RVector::new(half_size.x, 0.0, half_size.y),
         ];
 
-        Collider::trimesh(vertices, vec![[0, 1, 2], [1, 2, 0]])
+        Collider::trimesh(vertices, vec![[0, 1, 2], [0, 2, 3]])
     }
 }
 
