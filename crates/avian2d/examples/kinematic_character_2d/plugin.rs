@@ -206,18 +206,22 @@ fn movement(
 ) {
     let delta_secs = time.delta_secs();
 
-    for event in movement_reader.read() {
-        for (movement, mut linear_velocity, is_grounded) in &mut controllers {
-            match event {
-                MovementAction::Move(direction) => {
-                    linear_velocity.x += *direction * movement.acceleration * delta_secs;
-                }
-                MovementAction::Jump => {
-                    if is_grounded {
-                        linear_velocity.y = movement.jump_impulse;
-                    }
-                }
-            }
+    // Accumulated movement actions to make movement less framerate-dependent.
+    let (jumping, direction): (bool, Scalar) =
+        movement_reader
+            .read()
+            .fold((false, 0.0), |(jumping, dir), action| match action {
+                // For movement actions, use existing jump and add to the existing movement
+                // accumulator.
+                MovementAction::Move(d) => (jumping, (dir + d).clamp(-1.0, 1.0)),
+                // For jump actions, use existing movemnt and set the jump field to true.
+                MovementAction::Jump => (true, dir),
+            });
+
+    for (movement, mut linear_velocity, is_grounded) in &mut controllers {
+        linear_velocity.x += direction * movement.acceleration * delta_secs;
+        if jumping && is_grounded {
+            linear_velocity.y = movement.jump_impulse;
         }
     }
 }
