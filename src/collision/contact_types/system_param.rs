@@ -52,7 +52,7 @@ use super::{ContactGraph, ContactPair};
 #[derive(SystemParam)]
 pub struct Collisions<'w> {
     /// The [`ContactGraph`] that stores all contact edges.
-    contact_graph: ResMut<'w, ContactGraph>,
+    contact_graph: Res<'w, ContactGraph>,
 }
 
 impl Collisions<'_> {
