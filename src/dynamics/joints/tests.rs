@@ -3,7 +3,10 @@ use core::time::Duration;
 use approx::assert_relative_eq;
 use bevy::{mesh::MeshPlugin, prelude::*, time::TimeUpdateStrategy};
 
-use crate::prelude::*;
+use crate::{
+    dynamics::solver::islands::{BodyIslandNode, PhysicsIslands},
+    prelude::*,
+};
 
 const TIMESTEP: f32 = 1.0 / 64.0;
 
@@ -1063,4 +1066,93 @@ fn joint_damping_damps_free_axis_of_rotation_locked_body() {
 
     let spin = app.world().get::<AngularVelocity>(body).unwrap().y;
     assert!(spin.abs() < 0.05, "free axis was not damped: {spin}");
+}
+
+fn spawn_dynamic_body(app: &mut App, position: RVector) -> Entity {
+    app.world_mut()
+        .spawn((
+            RigidBody::Dynamic,
+            Position(position),
+            Mass(1.0),
+            #[cfg(feature = "2d")]
+            AngularInertia(1.0),
+            #[cfg(feature = "3d")]
+            AngularInertia::new(Vec3::splat(1.0)),
+        ))
+        .id()
+}
+
+/// Asserts that every joint is linked to the island of its bodies,
+/// and that the islands contain no other joints.
+fn assert_joints_linked_to_islands(app: &mut App) {
+    let world = app.world_mut();
+    let joints: Vec<(Entity, Entity)> = world
+        .query::<(Entity, &RevoluteJoint)>()
+        .iter(world)
+        .map(|(entity, joint)| (entity, joint.body1))
+        .collect();
+
+    let joint_graph = world.resource::<JointGraph>();
+    let islands = world.resource::<PhysicsIslands>();
+
+    for &(entity, body1) in &joints {
+        let joint_id = joint_graph.get(entity).unwrap().id;
+        let joint_island = islands.joint_node(joint_id).map(|node| node.island_id());
+        let body_island = world
+            .get::<BodyIslandNode>(body1)
+            .map(|node| node.island_id());
+        assert!(
+            joint_island.is_some() && joint_island == body_island,
+            "joint {entity} is linked to island {joint_island:?}, but its body is in island {body_island:?}"
+        );
+    }
+
+    let linked_joint_count: u32 = islands.iter().map(|island| island.joint_count()).sum();
+    assert_eq!(linked_joint_count as usize, joints.len());
+}
+
+/// Tests that joints added and removed while physics is paused
+/// are linked to and unlinked from simulation islands.
+#[test]
+fn joint_changes_while_paused_update_islands() {
+    let mut app = create_app();
+    app.finish();
+
+    let body1 = spawn_dynamic_body(&mut app, RVector::ZERO);
+    let body2 = spawn_dynamic_body(&mut app, RVector::X * 2.0);
+    let body3 = spawn_dynamic_body(&mut app, RVector::X * 4.0);
+    let joint1 = app.world_mut().spawn(RevoluteJoint::new(body1, body2)).id();
+    let joint2 = app.world_mut().spawn(RevoluteJoint::new(body2, body3)).id();
+
+    for _ in 0..5 {
+        app.update();
+    }
+
+    assert_joints_linked_to_islands(&mut app);
+
+    app.world_mut().resource_mut::<Time<Physics>>().pause();
+    app.update();
+
+    // Remove a joint and add another one while paused, and keep physics paused
+    // for longer than Bevy keeps messages around.
+    app.world_mut().despawn(joint2);
+    let body4 = spawn_dynamic_body(&mut app, RVector::X * 10.0);
+    let body5 = spawn_dynamic_body(&mut app, RVector::X * 12.0);
+    let joint3 = app.world_mut().spawn(RevoluteJoint::new(body4, body5)).id();
+
+    for _ in 0..5 {
+        app.update();
+    }
+
+    app.world_mut().resource_mut::<Time<Physics>>().unpause();
+    app.update();
+
+    assert_joints_linked_to_islands(&mut app);
+
+    // Removing the remaining joints should leave no joints in any island.
+    app.world_mut().despawn(joint1);
+    app.world_mut().despawn(joint3);
+    app.update();
+
+    assert_joints_linked_to_islands(&mut app);
 }

@@ -41,7 +41,7 @@ impl<T: Component + EntityConstraint<2>> Plugin for JointGraphPlugin<T> {
             .is_resource_added::<JointGraphPluginInitialized>();
 
         app.init_resource::<JointGraph>();
-        app.add_message::<JointGraphChange>();
+        app.init_resource::<Messages<JointGraphChange>>();
         app.init_resource::<JointGraphPluginInitialized>();
 
         // Automatically add the `JointComponentId` component when the joint is added.
@@ -67,6 +67,12 @@ impl<T: Component + EntityConstraint<2>> Plugin for JointGraphPlugin<T> {
 
             // Remove contacts between bodies when the `JointCollisionDisabled` component is added.
             app.add_observer(on_disable_joint_collision);
+
+            // Clear old joint graph changes once per physics step.
+            app.add_systems(
+                PhysicsSchedule,
+                update_joint_graph_changes.in_set(PhysicsStepSystems::Last),
+            );
         }
 
         // Add the joint back to the joint graph when `Disabled` is removed.
@@ -98,12 +104,23 @@ impl<T: Component + EntityConstraint<2>> Plugin for JointGraphPlugin<T> {
 ///
 /// This is used to communicate changes to the joint graph to the physics solver,
 /// which may need to link and unlink joints from simulation islands or other structures.
+///
+/// Unlike most messages, these are not cleared every frame, but every physics step,
+/// so that changes made while physics is paused are not lost.
 #[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum JointGraphChange {
     /// A joint was added to the [`JointGraph`].
     Added(JointId),
     /// A joint was removed from the [`JointGraph`].
     Removed(JointId),
+}
+
+/// Clears [`JointGraphChange`] messages from before the previous physics step.
+///
+/// The messages are not cleared automatically every frame, so that the solver
+/// can still read changes made while the physics step was not running.
+fn update_joint_graph_changes(mut changes: ResMut<Messages<JointGraphChange>>) {
+    changes.update();
 }
 
 /// A component that holds the [`ComponentId`] of the [joint] component on this entity, if any.
