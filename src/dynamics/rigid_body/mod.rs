@@ -247,7 +247,7 @@ use derive_more::From;
 /// # See More
 ///
 /// - [Colliders](Collider)
-/// - [Gravity] and [gravity scale](GravityScale)
+/// - [Gravity], [gravity scale](GravityScale), and [gravity override](GravityOverride)
 /// - [Linear](LinearDamping) and [angular](AngularDamping) velocity damping
 /// - [Friction] and [restitution](Restitution) (bounciness)
 /// - [Lock translational and rotational axes](LockedAxes)
@@ -548,6 +548,8 @@ impl AngularVelocity {
 /// A gravity scale of `0.0` will disable gravity, while `2.0` will double the gravity.
 /// Using a negative value will flip the direction of the gravity.
 ///
+/// Use [`GravityOverride`] to bypass [this](GravityScale) and [`Gravity`] altogether.
+///
 /// # Example
 ///
 /// ```
@@ -571,6 +573,34 @@ impl Default for GravityScale {
         Self(1.0)
     }
 }
+
+/// Overrides the global [`Gravity`] of a [rigid body](RigidBody) with a precise value.
+/// This also bypasses the [`GravityScale`] component.
+///
+/// # Example
+///
+/// ```
+#[cfg_attr(feature = "2d", doc = "use avian2d::prelude::*;")]
+#[cfg_attr(feature = "3d", doc = "use avian3d::prelude::*;")]
+/// use bevy::prelude::*;
+///
+/// // Spawn a dynamic body that falls upwards.
+/// fn setup(mut commands: Commands) {
+#[cfg_attr(
+    feature = "2d",
+    doc = "    commands.spawn((RigidBody::Dynamic, GravityOverride(Vec2::Y * 9.81)));"
+)]
+#[cfg_attr(
+    feature = "3d",
+    doc = "    commands.spawn((RigidBody::Dynamic, GravityOverride(Vec3::Y * 9.81)));"
+)]
+/// }
+/// ```
+#[derive(Reflect, Component, Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", reflect(Serialize, Deserialize))]
+#[reflect(Debug, Component)]
+pub struct GravityOverride(pub Vector);
 
 /// Automatically slows down a dynamic [rigid body](RigidBody), decreasing its
 /// [linear velocity](LinearVelocity) each frame. This can be used to simulate air resistance.
