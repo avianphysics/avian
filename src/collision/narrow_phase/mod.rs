@@ -129,6 +129,9 @@ where
             // Remove collision pairs when colliders are disabled or removed.
             app.add_observer(remove_collider_on::<Add<(Disabled, ColliderDisabled)>>);
             app.add_observer(remove_collider_on::<Remove<ColliderMarker>>);
+            // Remove collision pairs when colliders are attached to a different rigid body,
+            // so that they are re-created with the new body.
+            app.add_observer(remove_collider_on_body_change);
 
             // Add colliders to the constraint graph when `Sensor` is removed,
             // and remove them when `Sensor` is added.
@@ -466,6 +469,47 @@ fn remove_collider_on<E: EventPattern<Event: EntityEvent>>(
     let entity = trigger.event_target();
 
     // Remove the collider from the contact graph.
+    remove_collider(
+        entity,
+        &mut contact_graph,
+        &mut contact_status_changes,
+        &mut query,
+        &mut message_writer,
+    );
+}
+
+/// Removes the contacts of a collider from the [`ContactGraph`] when it is attached
+/// to a different rigid body, so that they are re-created with the new body.
+fn remove_collider_on_body_change(
+    trigger: On<Insert<ColliderOf>>,
+    collider_query: Query<&ColliderOf>,
+    mut contact_graph: ResMut<ContactGraph>,
+    mut contact_status_changes: ResMut<ContactStatusChangeQueue>,
+    mut query: Query<&mut CollidingEntities, Allow<Disabled>>,
+    mut message_writer: MessageWriter<CollisionEnd>,
+) {
+    let entity = trigger.entity;
+
+    // On insert, `ColliderOf` already contains the new body.
+    let Ok(&ColliderOf { body: new_body }) = collider_query.get(entity) else {
+        return;
+    };
+
+    // Check if any existing contact of the collider still stores a different body.
+    let body_changed = contact_graph.contact_edges_with(entity).any(|edge| {
+        let stored_body = if edge.collider1 == entity {
+            edge.body1
+        } else {
+            edge.body2
+        };
+        stored_body != Some(new_body)
+    });
+
+    if !body_changed {
+        return;
+    }
+
+    // Remove the collider's contacts in the same way as when it is removed or disabled.
     remove_collider(
         entity,
         &mut contact_graph,

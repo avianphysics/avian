@@ -144,6 +144,152 @@ fn body_with_velocity_moves() {
     );
 }
 
+#[test]
+#[cfg(all(
+    feature = "2d",
+    feature = "default-collider",
+    any(feature = "parry-f32", feature = "parry-f64")
+))]
+fn reparented_collider_resting_on_ground_stays_on_it() {
+    // Static ground
+    // Body A (dynamic), resting on the ground
+    // - Collider K, resting on the ground next to A
+    //
+    // - Simulate until everything rests and the contact between K and the ground exists
+    // - Move K to a new body B at the same position
+    // - Simulate for one second
+    // - K must still rest on the ground instead of sinking through it
+
+    let mut app = create_app();
+
+    // Ground with its top surface at y = 0.
+    app.world_mut().spawn((
+        RigidBody::Static,
+        Collider::rectangle(40.0, 1.0),
+        Transform::from_xyz(0.0, -0.5, 0.0),
+    ));
+
+    // Body A, resting on the ground.
+    let body_a = app
+        .world_mut()
+        .spawn((
+            RigidBody::Dynamic,
+            Collider::rectangle(1.0, 1.0),
+            Transform::from_xyz(0.0, 0.5, 0.0),
+            SleepingDisabled,
+        ))
+        .id();
+
+    // Collider K, 3 units to the right of A, also resting on the ground.
+    let child = app
+        .world_mut()
+        .spawn((
+            ChildOf(body_a),
+            Collider::rectangle(1.0, 1.0),
+            Transform::from_xyz(3.0, 0.0, 0.0),
+        ))
+        .id();
+
+    for _ in 0..30 {
+        tick_app(&mut app, 1.0 / 60.0);
+    }
+
+    // Sanity check: K rests on the ground before it is moved.
+    let child_y = app.world().get::<Position>(child).unwrap().y;
+    assert_relative_eq!(child_y, 0.5, epsilon = 0.05);
+
+    // Move K to a new body B at the same global position.
+    let body_b = app
+        .world_mut()
+        .spawn((
+            RigidBody::Dynamic,
+            Transform::from_xyz(3.0, 0.5, 0.0),
+            SleepingDisabled,
+        ))
+        .id();
+    app.world_mut()
+        .entity_mut(child)
+        .insert((ChildOf(body_b), Transform::default()));
+
+    for _ in 0..60 {
+        tick_app(&mut app, 1.0 / 60.0);
+    }
+
+    // B (and K) must still rest on the ground.
+    let body_b_y = app.world().get::<Position>(body_b).unwrap().y;
+    assert_relative_eq!(body_b_y, 0.5, epsilon = 0.05);
+}
+
+#[test]
+#[cfg(all(
+    feature = "2d",
+    feature = "default-collider",
+    any(feature = "parry-f32", feature = "parry-f64")
+))]
+fn reinserting_collider_of_with_same_body_keeps_contacts() {
+    // Static ground
+    // Body A (dynamic), with a child collider K resting on the ground
+    //
+    // - Simulate until the contact between K and the ground exists
+    // - Re-insert `ColliderOf` on K with the same body A
+    // - The contact between K and the ground must still exist
+
+    let mut app = create_app();
+
+    let ground = app
+        .world_mut()
+        .spawn((
+            RigidBody::Static,
+            Collider::rectangle(40.0, 1.0),
+            Transform::from_xyz(0.0, -0.5, 0.0),
+        ))
+        .id();
+
+    let body_a = app
+        .world_mut()
+        .spawn((
+            RigidBody::Dynamic,
+            Collider::rectangle(1.0, 1.0),
+            Transform::from_xyz(0.0, 0.5, 0.0),
+            SleepingDisabled,
+        ))
+        .id();
+
+    let child = app
+        .world_mut()
+        .spawn((
+            ChildOf(body_a),
+            Collider::rectangle(1.0, 1.0),
+            Transform::from_xyz(3.0, 0.0, 0.0),
+        ))
+        .id();
+
+    for _ in 0..30 {
+        tick_app(&mut app, 1.0 / 60.0);
+    }
+
+    // Sanity check: the contact between K and the ground exists.
+    assert!(
+        app.world()
+            .resource::<ContactGraph>()
+            .get(child, ground)
+            .is_some()
+    );
+
+    // Re-insert `ColliderOf` with the same body.
+    app.world_mut()
+        .entity_mut(child)
+        .insert(ColliderOf { body: body_a });
+
+    // The contact must not have been removed.
+    assert!(
+        app.world()
+            .resource::<ContactGraph>()
+            .get(child, ground)
+            .is_some()
+    );
+}
+
 #[derive(Component, Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord)]
 #[cfg(all(feature = "3d", feature = "default-collider"))]
 struct Id(usize);
