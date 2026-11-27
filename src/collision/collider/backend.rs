@@ -305,7 +305,7 @@ fn init_collider_constructors(
         let collider = Collider::try_from_constructor(constructor.clone());
 
         if let Some(collider) = collider {
-            commands.entity(entity).insert(collider);
+            commands.entity(entity).try_insert(collider);
             commands.trigger(ColliderConstructorReady { entity })
         } else {
             error!(
@@ -420,7 +420,7 @@ fn init_collider_constructor_hierarchies(
             let collider = Collider::try_from_constructor(constructor);
 
             if let Some(collider) = collider {
-                commands.entity(child_entity).insert((
+                commands.entity(child_entity).try_insert((
                     collider,
                     collider_data
                         .layers
